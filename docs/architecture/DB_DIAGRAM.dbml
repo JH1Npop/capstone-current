@@ -1,0 +1,650 @@
+// DBML version for https://dbdiagram.io
+// AFN Service Management
+// Documentation-friendly schema, grouped for capstone presentation.
+// This intentionally emphasizes business structure over Django internals.
+
+Project AFN_Service_Management {
+  database_type: "SQLite / PostgreSQL"
+  Note: '''
+  Presentation-focused database diagram.
+  Use this diagram in documentation instead of showing every Django internal table.
+  '''
+}
+
+Table users_user {
+  id int [pk]
+  username varchar
+  email varchar
+  first_name varchar
+  last_name varchar
+  role varchar [note: 'superadmin | admin | technician | client']
+  phone varchar
+  address text
+  status varchar [note: 'active | inactive']
+  is_active boolean
+  is_staff boolean
+  is_superuser boolean
+  date_joined datetime
+  last_login datetime
+  created_at datetime
+  updated_at datetime
+
+  Note: 'Central account table used by all roles.'
+}
+
+Table users_technicianprofile {
+  id int [pk]
+  user_id int [unique]
+  current_latitude decimal
+  current_longitude decimal
+  last_location_update datetime
+  is_available boolean
+  skill_level varchar
+  preferred_work_areas text
+  max_daily_assignments int
+  updated_at datetime
+
+  Note: 'Technician-only operational fields.'
+}
+
+Table users_clientprofile {
+  id int [pk]
+  user_id int [unique]
+  client_type varchar
+  company_name varchar
+  company_registration varchar
+  billing_address text
+  preferred_contact_method varchar
+  credit_limit decimal
+  account_balance decimal
+  updated_at datetime
+
+  Note: 'Client-specific billing and contact details.'
+}
+
+Table users_managementprofile {
+  id int [pk]
+  user_id int [unique]
+  admin_scope varchar
+  updated_at datetime
+
+  Note: 'Management scope for admin and superadmin users.'
+}
+
+Table users_usercapabilitygrant {
+  id int [pk]
+  user_id int
+  capability_code varchar
+  granted_by_id int
+  granted_at datetime
+
+  indexes {
+    (user_id, capability_code) [unique]
+  }
+
+  Note: 'Fine-grained permission extensions beyond role.'
+}
+
+Table users_adminsettings {
+  id int [pk]
+  system_name varchar
+  support_email varchar
+  enable_notifications boolean
+  auto_dispatch_enabled boolean
+  sms_notifications_enabled boolean
+  default_time_zone varchar
+  max_technician_assignments int
+  updated_at datetime
+  updated_by_id int
+
+  Note: 'Single-row global operations settings.'
+}
+
+Table users_changelog {
+  id int [pk]
+  content_type_id int
+  object_id int
+  action varchar
+  field_name varchar
+  old_value text
+  new_value text
+  changed_by_id int
+  changed_at datetime
+  summary varchar
+
+  Note: 'Generic audit trail for important creates, updates, and deletes.'
+}
+
+Table django_content_type {
+  id int [pk]
+  app_label varchar
+  model varchar
+
+  Note: 'Shown only because ChangeLog depends on it.'
+}
+
+Table services_servicetype {
+  id int [pk]
+  name varchar
+  description text
+  estimated_duration int
+  estimated_cost decimal
+  max_daily_assignments int
+  procedures text
+  required_equipment text
+
+  Note: 'Service catalog and operational template.'
+}
+
+Table services_servicerequest {
+  id int [pk]
+  client_id int
+  service_type_id int
+  description text
+  priority varchar
+  status varchar
+  preferred_date date
+  preferred_time_slot varchar
+  scheduling_notes text
+  request_date datetime
+  updated_at datetime
+  auto_ticket_created boolean
+
+  Note: 'Client-submitted request before dispatch.'
+}
+
+Table services_servicelocation {
+  id int [pk]
+  request_id int [unique]
+  address text
+  city varchar
+  province varchar
+  latitude decimal
+  longitude decimal
+
+  Note: 'One location per request.'
+}
+
+Table services_serviceticket {
+  id int [pk]
+  request_id int
+  technician_id int
+  assigned_admin_id int
+  scheduled_date date
+  scheduled_time time
+  scheduled_time_slot varchar
+  start_time datetime
+  end_time datetime
+  completed_date datetime
+  status varchar
+  priority varchar
+  notes text
+  client_rating int
+  client_feedback text
+  auto_assigned boolean
+  assigned_at datetime
+  smart_assignment_score float
+  smart_assignment_summary varchar
+  reschedule_requested boolean
+  reschedule_reason text
+  reschedule_requested_at datetime
+  warranty_status varchar
+  warranty_period_days int
+  warranty_start_date date
+  warranty_end_date date
+  warranty_notes text
+  route_geometry text
+  route_distance float
+  route_duration float
+  completion_proof_images text
+  completion_notes text
+  created_at datetime
+  updated_at datetime
+
+  Note: 'Main execution record for technician dispatch and job tracking.'
+}
+
+Table services_technicianskill {
+  id int [pk]
+  technician_id int
+  service_type_id int
+  skill_level varchar
+
+  indexes {
+    (technician_id, service_type_id) [unique]
+  }
+
+  Note: 'Which technician can perform which service type.'
+}
+
+Table services_ticketcrewassignment {
+  id int [pk]
+  ticket_id int
+  technician_id int
+  created_at datetime
+
+  indexes {
+    (ticket_id, technician_id) [unique]
+  }
+
+  Note: 'Additional crew members assigned to a ticket.'
+}
+
+Table services_servicestatushistory {
+  id int [pk]
+  ticket_id int
+  status varchar
+  changed_by_id int
+  notes text
+  timestamp datetime
+
+  Note: 'Timeline of ticket status changes.'
+}
+
+Table services_inspectionchecklist {
+  id int [pk]
+  ticket_id int [unique]
+  created_at datetime
+  completed_at datetime
+  completed_by_id int
+  submitted_by_id int
+  submitted_at datetime
+  is_completed boolean
+  site_accessible boolean
+  site_accessible_notes text
+  electrical_available boolean
+  electrical_adequate boolean
+  electrical_notes text
+  roof_condition varchar
+  structural_assessment text
+  safety_equipment_present boolean
+  safety_hazards text
+  recommendation varchar
+  additional_notes text
+  maintenance_required boolean
+  maintenance_profile varchar
+  maintenance_interval_days int
+  maintenance_notes text
+  service_type_label varchar
+  procedure_source varchar
+  checklist_items text
+  required_equipment_snapshot text
+  proof_media text
+  warranty_provided boolean
+  warranty_period_days int
+  warranty_notes text
+  follow_up_required boolean
+  follow_up_case_type varchar
+  follow_up_due_date date
+  follow_up_summary varchar
+  follow_up_details text
+
+  Note: 'Inspection, proof, maintenance handoff, and follow-up handoff data.'
+}
+
+Table services_aftersalescase {
+  id int [pk]
+  service_ticket_id int
+  client_id int
+  assigned_to_id int
+  created_by_id int
+  case_type varchar
+  status varchar
+  priority varchar
+  creation_source varchar
+  summary varchar
+  details text
+  resolution_notes text
+  requires_revisit boolean
+  customer_satisfaction int
+  due_date date
+  resolved_at datetime
+  created_at datetime
+  updated_at datetime
+
+  Note: 'After-sales, complaint, revisit, maintenance, and warranty cases.'
+}
+
+Table services_maintenanceschedule {
+  id int [pk]
+  service_ticket_id int [unique]
+  client_id int
+  service_type_id int
+  maintenance_profile varchar
+  interval_days int
+  follow_up_window_days int
+  last_service_date date
+  next_due_date date
+  notify_on_date date
+  status varchar
+  maintenance_notes text
+  due_soon_notified_at datetime
+  due_notified_at datetime
+  client_notified_at datetime
+  risk_level varchar
+  risk_score float
+  prediction_notes text
+  created_at datetime
+  updated_at datetime
+
+  Note: 'Longer-term maintenance and follow-up planning.'
+}
+
+Table services_technicianlocationhistory {
+  id int [pk]
+  technician_id int
+  latitude decimal
+  longitude decimal
+  timestamp datetime
+  accuracy float
+
+  Note: 'GPS location trail for technician tracking.'
+}
+
+Table inventory_inventorycategory {
+  id int [pk]
+  name varchar
+  description text
+  parent_id int
+
+  Note: 'Supports nested inventory grouping.'
+}
+
+Table inventory_inventoryitem {
+  id int [pk]
+  name varchar
+  sku varchar [unique]
+  description text
+  category_id int
+  item_type varchar
+  quantity int
+  minimum_stock int
+  reserved_quantity int
+  warehouse_location varchar
+  unit_price decimal
+  total_value decimal
+  status varchar
+  supplier varchar
+  supplier_contact text
+  purchase_date date
+  warranty_expiry date
+  created_at datetime
+  updated_at datetime
+  low_stock_threshold int
+  notes text
+  last_notification_sent datetime
+
+  Note: 'Main inventory record for parts, tools, and equipment.'
+}
+
+Table inventory_inventorytransaction {
+  id int [pk]
+  item_id int
+  transaction_type varchar
+  quantity int
+  technician_id int
+  service_ticket_id int
+  reference_number varchar
+  notes text
+  transaction_date datetime
+  performed_by_id int
+
+  Note: 'Audit trail of inventory movement.'
+}
+
+Table inventory_inventoryreservation {
+  id int [pk]
+  item_id int
+  technician_id int
+  quantity int
+  required_date date
+  service_ticket_id int
+  notes text
+  status varchar
+  created_at datetime
+
+  Note: 'Stock reserved ahead of service execution.'
+}
+
+Table inventory_servicetypeinventoryrequirement {
+  id int [pk]
+  service_type_id int
+  item_id int
+  quantity int
+  auto_reserve boolean
+  notes text
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    (service_type_id, item_id) [unique]
+  }
+
+  Note: 'Default inventory requirements per service type.'
+}
+
+Table notifications_notification {
+  id int [pk]
+  user_id int
+  ticket_id int
+  request_id int
+  message text
+  title varchar
+  type varchar
+  status varchar
+  created_at datetime
+  read_at datetime
+  send_email boolean
+  send_sms boolean
+  email_sent boolean
+  sms_sent boolean
+
+  Note: 'Main in-app operational notification table.'
+}
+
+Table notifications_firebasetoken {
+  id int [pk]
+  user_id int
+  fcm_token text [unique]
+  device_name varchar
+  device_type varchar
+  is_active boolean
+  created_at datetime
+  last_used datetime
+
+  Note: 'Push notification device registrations.'
+}
+
+Table notifications_notificationtemplate {
+  id int [pk]
+  name varchar [unique]
+  notification_type varchar
+  subject varchar
+  body text
+  variables text
+}
+
+Table notifications_notificationlog {
+  id int [pk]
+  notification_id int [unique]
+  email_status varchar
+  sms_status varchar
+  email_response text
+  sms_response text
+  last_attempt datetime
+  attempt_count int
+}
+
+Table messages_app_message {
+  id int [pk]
+  ticket_id int
+  sender_id int
+  receiver_id int
+  message_text text
+  created_at datetime
+
+  Note: 'Ticket-linked internal communication.'
+}
+
+Table progress_ticketprogress {
+  id int [pk]
+  ticket_id int
+  updated_by_id int
+  progress_status varchar
+  comment text
+  updated_at datetime
+
+  Note: 'Simple progress updates separate from status history.'
+}
+
+Table history_servicehistory {
+  id int [pk]
+  ticket_id int
+  technician_id int
+  service_type_id int
+  completion_date datetime
+  service_duration int
+  customer_rating int
+
+  Note: 'Historical record of completed work.'
+}
+
+Table services_serviceanalytics {
+  id int [pk]
+  date date
+  service_type_id int
+  total_requests int
+  completed_requests int
+  pending_requests int
+  cancelled_requests int
+  avg_response_time_hours float
+  avg_completion_time_hours float
+  technician_utilization_rate float
+  service_area_coverage float
+  popular_locations text
+  satisfaction_score float
+  created_at datetime
+
+  Note: 'Aggregated descriptive analytics.'
+}
+
+Table services_technicianperformance {
+  id int [pk]
+  technician_id int
+  date date
+  tickets_assigned int
+  tickets_completed int
+  tickets_pending int
+  total_work_hours float
+  avg_response_time_hours float
+  avg_completion_time_hours float
+  customer_satisfaction float
+  rework_rate float
+  distance_traveled_km float
+  fuel_efficiency float
+  created_at datetime
+
+  Note: 'Per-technician metrics snapshots.'
+}
+
+Table services_demandforecast {
+  id int [pk]
+  service_type_id int
+  forecast_date date
+  forecast_period varchar
+  predicted_requests int
+  confidence_level float
+  weather_impact float
+  seasonal_trend float
+  historical_average int
+  actual_requests int
+  forecast_accuracy float
+  generated_at datetime
+
+  Note: 'Predictive forecasting support.'
+}
+
+Table services_servicetrend {
+  id int [pk]
+  service_type_id int
+  trend_type varchar
+  period_start date
+  period_end date
+  average_requests float
+  peak_day varchar
+  peak_hour int
+  growth_rate float
+  trend_direction varchar
+  standard_deviation float
+  confidence_interval text
+  created_at datetime
+
+  Note: 'Trend analysis snapshots.'
+}
+
+Ref: users_technicianprofile.user_id > users_user.id
+Ref: users_clientprofile.user_id > users_user.id
+Ref: users_managementprofile.user_id > users_user.id
+Ref: users_usercapabilitygrant.user_id > users_user.id
+Ref: users_usercapabilitygrant.granted_by_id > users_user.id
+Ref: users_adminsettings.updated_by_id > users_user.id
+Ref: users_changelog.changed_by_id > users_user.id
+Ref: users_changelog.content_type_id > django_content_type.id
+
+Ref: services_servicerequest.client_id > users_user.id
+Ref: services_servicerequest.service_type_id > services_servicetype.id
+Ref: services_servicelocation.request_id > services_servicerequest.id
+Ref: services_serviceticket.request_id > services_servicerequest.id
+Ref: services_serviceticket.technician_id > users_user.id
+Ref: services_serviceticket.assigned_admin_id > users_user.id
+Ref: services_technicianskill.technician_id > users_user.id
+Ref: services_technicianskill.service_type_id > services_servicetype.id
+Ref: services_ticketcrewassignment.ticket_id > services_serviceticket.id
+Ref: services_ticketcrewassignment.technician_id > users_user.id
+Ref: services_servicestatushistory.ticket_id > services_serviceticket.id
+Ref: services_servicestatushistory.changed_by_id > users_user.id
+Ref: services_inspectionchecklist.ticket_id > services_serviceticket.id
+Ref: services_inspectionchecklist.completed_by_id > users_user.id
+Ref: services_inspectionchecklist.submitted_by_id > users_user.id
+Ref: services_aftersalescase.service_ticket_id > services_serviceticket.id
+Ref: services_aftersalescase.client_id > users_user.id
+Ref: services_aftersalescase.assigned_to_id > users_user.id
+Ref: services_aftersalescase.created_by_id > users_user.id
+Ref: services_maintenanceschedule.service_ticket_id > services_serviceticket.id
+Ref: services_maintenanceschedule.client_id > users_user.id
+Ref: services_maintenanceschedule.service_type_id > services_servicetype.id
+Ref: services_technicianlocationhistory.technician_id > users_user.id
+
+Ref: inventory_inventorycategory.parent_id > inventory_inventorycategory.id
+Ref: inventory_inventoryitem.category_id > inventory_inventorycategory.id
+Ref: inventory_inventorytransaction.item_id > inventory_inventoryitem.id
+Ref: inventory_inventorytransaction.technician_id > users_user.id
+Ref: inventory_inventorytransaction.service_ticket_id > services_serviceticket.id
+Ref: inventory_inventorytransaction.performed_by_id > users_user.id
+Ref: inventory_inventoryreservation.item_id > inventory_inventoryitem.id
+Ref: inventory_inventoryreservation.technician_id > users_user.id
+Ref: inventory_inventoryreservation.service_ticket_id > services_serviceticket.id
+Ref: inventory_servicetypeinventoryrequirement.service_type_id > services_servicetype.id
+Ref: inventory_servicetypeinventoryrequirement.item_id > inventory_inventoryitem.id
+
+Ref: notifications_notification.user_id > users_user.id
+Ref: notifications_notification.ticket_id > services_serviceticket.id
+Ref: notifications_notification.request_id > services_servicerequest.id
+Ref: notifications_firebasetoken.user_id > users_user.id
+Ref: notifications_notificationlog.notification_id > notifications_notification.id
+
+Ref: messages_app_message.ticket_id > services_serviceticket.id
+Ref: messages_app_message.sender_id > users_user.id
+Ref: messages_app_message.receiver_id > users_user.id
+
+Ref: progress_ticketprogress.ticket_id > services_serviceticket.id
+Ref: progress_ticketprogress.updated_by_id > users_user.id
+
+Ref: history_servicehistory.ticket_id > services_serviceticket.id
+Ref: history_servicehistory.technician_id > users_user.id
+Ref: history_servicehistory.service_type_id > services_servicetype.id
+
+Ref: services_serviceanalytics.service_type_id > services_servicetype.id
+Ref: services_technicianperformance.technician_id > users_user.id
+Ref: services_demandforecast.service_type_id > services_servicetype.id
+Ref: services_servicetrend.service_type_id > services_servicetype.id

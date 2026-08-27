@@ -1,0 +1,122 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="AFN ERD" id="afn-erd">
+    <mxGraphModel dx="1600" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="Entity Relationship Diagram of the Proposed AFN Service Management System" style="text;html=1;strokeColor=none;fillColor=none;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="360" y="20" width="1080" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="user" value="&lt;b&gt;users_user&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;username&lt;br&gt;email&lt;br&gt;role&lt;br&gt;phone&lt;br&gt;status" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DDD6FE;strokeColor=#7C3AED;fontColor=#3B0764;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="210" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="tech_profile" value="&lt;b&gt;users_technicianprofile&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK user_id&lt;br&gt;is_available&lt;br&gt;skill_level&lt;br&gt;current_location" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#7C3AED;fontColor=#3B0764;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="290" width="210" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="client_profile" value="&lt;b&gt;users_clientprofile&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK user_id&lt;br&gt;client_type&lt;br&gt;company_name&lt;br&gt;billing_address" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#7C3AED;fontColor=#3B0764;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="430" width="210" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="management_profile" value="&lt;b&gt;users_managementprofile&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK user_id&lt;br&gt;admin_scope" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#7C3AED;fontColor=#3B0764;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="570" width="210" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="service_type" value="&lt;b&gt;services_servicetype&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;name&lt;br&gt;estimated_duration&lt;br&gt;estimated_cost&lt;br&gt;procedures&lt;br&gt;required_equipment" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDE8C8;strokeColor=#D97706;fontColor=#78350F;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="370" y="100" width="230" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="service_request" value="&lt;b&gt;services_servicerequest&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK client_id&lt;br&gt;FK service_type_id&lt;br&gt;description&lt;br&gt;priority&lt;br&gt;status&lt;br&gt;request_date" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDE8C8;strokeColor=#D97706;fontColor=#78350F;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="370" y="270" width="230" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="request_service" value="&lt;b&gt;services_servicerequestservice&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK request_id&lt;br&gt;FK service_type_id&lt;br&gt;status&lt;br&gt;sort_order" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#D97706;fontColor=#78350F;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="370" y="450" width="230" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="location" value="&lt;b&gt;services_servicelocation&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK request_id&lt;br&gt;address&lt;br&gt;city&lt;br&gt;province&lt;br&gt;latitude / longitude" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#D97706;fontColor=#78350F;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="370" y="600" width="230" height="125" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ticket" value="&lt;b&gt;services_serviceticket&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK request_id&lt;br&gt;FK technician_id&lt;br&gt;FK assigned_admin_id&lt;br&gt;scheduled_date&lt;br&gt;status&lt;br&gt;priority&lt;br&gt;completion_notes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;fontColor=#1E3A8A;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="720" y="250" width="240" height="160" as="geometry"/>
+        </mxCell>
+        <mxCell id="crew" value="&lt;b&gt;services_ticketcrewassignment&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK ticket_id&lt;br&gt;FK technician_id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2563EB;fontColor=#1E3A8A;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="720" y="80" width="240" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="history" value="&lt;b&gt;services_servicestatushistory&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK ticket_id&lt;br&gt;FK changed_by_id&lt;br&gt;status&lt;br&gt;timestamp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2563EB;fontColor=#1E3A8A;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="720" y="450" width="240" height="115" as="geometry"/>
+        </mxCell>
+        <mxCell id="checklist" value="&lt;b&gt;services_inspectionchecklist&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK ticket_id&lt;br&gt;FK completed_by_id&lt;br&gt;is_completed&lt;br&gt;checklist_items&lt;br&gt;proof_media&lt;br&gt;maintenance_required" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2563EB;fontColor=#1E3A8A;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="720" y="600" width="240" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="after_sales" value="&lt;b&gt;services_aftersalescase&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK service_ticket_id&lt;br&gt;FK client_id&lt;br&gt;FK assigned_to_id&lt;br&gt;case_type&lt;br&gt;status&lt;br&gt;priority" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#14532D;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="120" width="245" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="maintenance" value="&lt;b&gt;services_maintenanceschedule&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK service_ticket_id&lt;br&gt;FK client_id&lt;br&gt;FK service_type_id&lt;br&gt;next_due_date&lt;br&gt;status&lt;br&gt;risk_level" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#14532D;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="300" width="245" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="skill" value="&lt;b&gt;services_technicianskill&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK technician_id&lt;br&gt;FK service_type_id&lt;br&gt;skill_level" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#7C3AED;fontColor=#3B0764;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="490" width="245" height="105" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="category" value="&lt;b&gt;inventory_inventorycategory&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK parent_id&lt;br&gt;name" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#CA8A04;fontColor=#713F12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="80" width="245" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="item" value="&lt;b&gt;inventory_inventoryitem&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK category_id&lt;br&gt;name&lt;br&gt;sku&lt;br&gt;quantity&lt;br&gt;reserved_quantity&lt;br&gt;status" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#CA8A04;fontColor=#713F12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="210" width="245" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="reservation" value="&lt;b&gt;inventory_inventoryreservation&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK item_id&lt;br&gt;FK technician_id&lt;br&gt;FK service_ticket_id&lt;br&gt;quantity&lt;br&gt;status" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEFCE8;strokeColor=#CA8A04;fontColor=#713F12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="400" width="245" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="transaction" value="&lt;b&gt;inventory_inventorytransaction&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK item_id&lt;br&gt;FK technician_id&lt;br&gt;FK service_ticket_id&lt;br&gt;FK performed_by_id&lt;br&gt;transaction_type&lt;br&gt;quantity" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEFCE8;strokeColor=#CA8A04;fontColor=#713F12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="570" width="245" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="requirement" value="&lt;b&gt;inventory_servicetypeinventoryrequirement&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK service_type_id&lt;br&gt;FK item_id&lt;br&gt;quantity&lt;br&gt;auto_reserve" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEFCE8;strokeColor=#CA8A04;fontColor=#713F12;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="750" width="245" height="115" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="message" value="&lt;b&gt;messages_app_message&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK ticket_id&lt;br&gt;FK sender_id&lt;br&gt;FK receiver_id&lt;br&gt;room_type&lt;br&gt;message_text" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE7F3;strokeColor=#DB2777;fontColor=#831843;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="720" y="810" width="240" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="notification" value="&lt;b&gt;notifications_notification&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK user_id&lt;br&gt;FK ticket_id&lt;br&gt;FK request_id&lt;br&gt;title&lt;br&gt;message&lt;br&gt;status" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE7F3;strokeColor=#DB2777;fontColor=#831843;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="810" width="245" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="activity" value="&lt;b&gt;users_activitylog&lt;/b&gt;&lt;br&gt;PK id&lt;br&gt;FK actor_id&lt;br&gt;category&lt;br&gt;action&lt;br&gt;target_model&lt;br&gt;target_id&lt;br&gt;message" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E2E8F0;strokeColor=#64748B;fontColor=#0F172A;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="810" width="210" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="analytics" value="&lt;b&gt;analytics / reports&lt;/b&gt;&lt;br&gt;ServiceAnalytics&lt;br&gt;TechnicianPerformance&lt;br&gt;DemandForecast&lt;br&gt;ServiceTrend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E2E8F0;strokeColor=#64748B;fontColor=#0F172A;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="370" y="810" width="230" height="115" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" value="1:1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="user" target="tech_profile"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" value="1:1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="user" target="client_profile"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" value="1:1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="user" target="management_profile"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="client creates" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="user" target="service_request"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" value="service type" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="service_type" target="service_request"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="request items" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="service_request" target="request_service"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="uses type" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="service_type" target="request_service"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" value="has location" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="service_request" target="location"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" value="approved into ticket" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="service_request" target="ticket"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" value="technician / assigned admin" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="user" target="ticket"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" value="crew" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="ticket" target="crew"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" value="status trail" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="ticket" target="history"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" value="inspection proof" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="ticket" target="checklist"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e14" value="after-sales cases" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="ticket" target="after_sales"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e15" value="maintenance plan" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="ticket" target="maintenance"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e16" value="skill matrix" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="user" target="skill"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e17" value="service skill" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="service_type" target="skill"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e18" value="category" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="category" target="item"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e19" value="reserved for job" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="ticket" target="reservation"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e20" value="item reserved" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="item" target="reservation"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e21" value="stock movement" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="item" target="transaction"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e22" value="job usage" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="ticket" target="transaction"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e23" value="default items" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="service_type" target="requirement"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e24" value="required item" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="item" target="requirement"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e25" value="ticket messages" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="ticket" target="message"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e26" value="sender / receiver" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="user" target="message"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e27" value="user alerts" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="user" target="notification"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e28" value="ticket/request notice" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="ticket" target="notification"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e29" value="actor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;" edge="1" parent="1" source="user" target="activity"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e30" value="report inputs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontSize=10;dashed=1;" edge="1" parent="1" source="ticket" target="analytics"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

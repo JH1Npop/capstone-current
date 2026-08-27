@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100" role="img" aria-labelledby="title desc">
+  <title id="title">Accurate Data Flow Diagram for AFN Service Management System</title>
+  <desc id="desc">Level 1 data flow diagram showing clients, technicians, admin users, six system processes, and the main data stores used by the AFN Service Management System codebase.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .title { font: 700 28px Arial, sans-serif; fill: #111827; }
+      .subtitle { font: 400 15px Arial, sans-serif; fill: #475569; }
+      .entity { fill: #ddd6fe; stroke: #7c3aed; stroke-width: 2; }
+      .process { fill: #fdecc8; stroke: #d97706; stroke-width: 2; }
+      .store { fill: #ffffff; stroke: #64748b; stroke-width: 2; }
+      .support { fill: #f8fafc; stroke: #94a3b8; stroke-width: 2; }
+      .label { font: 700 14px Arial, sans-serif; fill: #111827; }
+      .body { font: 400 12px Arial, sans-serif; fill: #334155; }
+      .small { font: 400 11px Arial, sans-serif; fill: #475569; }
+      .edge { stroke: #334155; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+      .edge-light { stroke: #64748b; stroke-width: 1.3; fill: none; marker-end: url(#arrow); }
+      .edge-dash { stroke: #64748b; stroke-width: 1.3; stroke-dasharray: 6 5; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1100" fill="#ffffff"/>
+  <text x="60" y="50" class="title">Data Flow Diagram</text>
+  <text x="60" y="76" class="subtitle">Level 1 DFD of the AFN Service Management System based on the actual codebase</text>
+
+  <!-- Column headers -->
+  <text x="95" y="125" class="label">External Entities</text>
+  <text x="570" y="125" class="label">System Processes</text>
+  <text x="1110" y="125" class="label">Data Stores</text>
+
+  <!-- Entities -->
+  <rect x="80" y="165" width="190" height="58" rx="2" class="entity"/>
+  <text x="135" y="199" class="label">Client</text>
+
+  <rect x="80" y="375" width="190" height="58" rx="2" class="entity"/>
+  <text x="113" y="409" class="label">Admin / Superadmin</text>
+
+  <rect x="80" y="585" width="190" height="58" rx="2" class="entity"/>
+  <text x="122" y="619" class="label">Technician</text>
+
+  <rect x="80" y="815" width="190" height="58" rx="2" class="entity"/>
+  <text x="113" y="849" class="label">Admin / Superadmin</text>
+
+  <!-- Processes -->
+  <rect x="520" y="150" width="270" height="88" rx="2" class="process"/>
+  <text x="626" y="178" class="label">1.0</text>
+  <text x="567" y="199" class="label">Process User Access</text>
+  <text x="555" y="219" class="body">login, role validation, profiles</text>
+
+  <rect x="520" y="285" width="270" height="94" rx="2" class="process"/>
+  <text x="626" y="313" class="label">2.0</text>
+  <text x="546" y="334" class="label">Process Service Requests</text>
+  <text x="550" y="354" class="body">service type, location, priority,</text>
+  <text x="590" y="371" class="body">client request details</text>
+
+  <rect x="520" y="425" width="270" height="98" rx="2" class="process"/>
+  <text x="626" y="453" class="label">3.0</text>
+  <text x="550" y="474" class="label">Process Ticket Dispatch</text>
+  <text x="551" y="494" class="body">approval, ticket creation, schedule,</text>
+  <text x="585" y="511" class="body">technician assignment</text>
+
+  <rect x="520" y="565" width="270" height="104" rx="2" class="process"/>
+  <text x="626" y="593" class="label">4.0</text>
+  <text x="546" y="614" class="label">Process Technician Jobs</text>
+  <text x="545" y="634" class="body">status updates, checklist, proof,</text>
+  <text x="580" y="651" class="body">inventory usage</text>
+
+  <rect x="520" y="715" width="270" height="104" rx="2" class="process"/>
+  <text x="626" y="743" class="label">5.0</text>
+  <text x="531" y="764" class="label">Process After-Sales Support</text>
+  <text x="538" y="784" class="body">cases, maintenance, ticket messages,</text>
+  <text x="590" y="801" class="body">notifications</text>
+
+  <rect x="520" y="875" width="270" height="104" rx="2" class="process"/>
+  <text x="626" y="903" class="label">6.0</text>
+  <text x="527" y="924" class="label">Generate Reports and Logs</text>
+  <text x="555" y="944" class="body">dashboards, analytics, reports,</text>
+  <text x="602" y="961" class="body">activity logs</text>
+
+  <!-- Data stores -->
+  <path d="M1040 166 H1340 M1080 166 V224 M1040 224 H1340 M1040 166 V224" class="store"/>
+  <text x="1094" y="190" class="label">D1 User Records</text>
+  <text x="1094" y="211" class="small">User, profiles, roles, permissions</text>
+
+  <path d="M1040 298 H1370 M1080 298 V356 M1040 356 H1370 M1040 298 V356" class="store"/>
+  <text x="1094" y="322" class="label">D2 Service Request Records</text>
+  <text x="1094" y="343" class="small">ServiceRequest, ServiceType, ServiceLocation</text>
+
+  <path d="M1040 438 H1370 M1080 438 V496 M1040 496 H1370 M1040 438 V496" class="store"/>
+  <text x="1094" y="462" class="label">D3 Service Ticket Records</text>
+  <text x="1094" y="483" class="small">ServiceTicket, ServiceStatusHistory</text>
+
+  <path d="M1040 568 H1390 M1080 568 V626 M1040 626 H1390 M1040 568 V626" class="store"/>
+  <text x="1094" y="592" class="label">D4 Checklist and Proof Records</text>
+  <text x="1094" y="613" class="small">InspectionChecklist, proof media, completion notes</text>
+
+  <path d="M1040 646 H1340 M1080 646 V704 M1040 704 H1340 M1040 646 V704" class="store"/>
+  <text x="1094" y="670" class="label">D5 Inventory Records</text>
+  <text x="1094" y="691" class="small">InventoryItem, reservations, transactions</text>
+
+  <path d="M1040 736 H1420 M1080 736 V794 M1040 794 H1420 M1040 736 V794" class="store"/>
+  <text x="1094" y="760" class="label">D6 After-Sales and Maintenance Records</text>
+  <text x="1094" y="781" class="small">AfterSalesCase, MaintenanceSchedule</text>
+
+  <path d="M1040 814 H1390 M1080 814 V872 M1040 872 H1390 M1040 814 V872" class="store"/>
+  <text x="1094" y="838" class="label">D7 Message and Notification Records</text>
+  <text x="1094" y="859" class="small">Message, Notification</text>
+
+  <path d="M1040 906 H1440 M1080 906 V964 M1040 964 H1440 M1040 906 V964" class="store"/>
+  <text x="1094" y="930" class="label">D8 Report, Analytics, and Activity Log Records</text>
+  <text x="1094" y="951" class="small">dashboard summaries, analytics, ActivityLog</text>
+
+  <!-- operational records box -->
+  <rect x="925" y="985" width="310" height="60" rx="2" class="support"/>
+  <text x="965" y="1010" class="label">Operational Records</text>
+  <text x="950" y="1030" class="small">D1 to D7 records used for reporting</text>
+
+  <!-- Entity to process flows -->
+  <path d="M270 194 H520" class="edge"/>
+  <text x="335" y="185" class="small">User Account Data</text>
+
+  <path d="M175 223 V332 H520" class="edge-light"/>
+  <text x="215" y="316" class="small">Service Request Data</text>
+
+  <path d="M270 404 H395 V474 H520" class="edge-light"/>
+  <text x="302" y="392" class="small">Approval and Assignment Data</text>
+
+  <path d="M270 614 H520" class="edge"/>
+  <text x="310" y="605" class="small">Job Status, Checklist, Proof Data</text>
+
+  <path d="M175 643 V767 H520" class="edge-light"/>
+  <text x="230" y="750" class="small">Message / Concern Data</text>
+
+  <path d="M270 844 H400 V927 H520" class="edge-light"/>
+  <text x="304" y="832" class="small">Report Request Data</text>
+
+  <!-- Process to store flows -->
+  <path d="M790 194 H1040" class="edge"/>
+  <text x="855" y="185" class="small">Validated User Data</text>
+
+  <path d="M790 332 H1040" class="edge"/>
+  <text x="832" y="323" class="small">Service Request Record Data</text>
+
+  <path d="M790 474 H1040" class="edge"/>
+  <text x="848" y="465" class="small">Service Ticket Record Data</text>
+
+  <path d="M790 610 H1040" class="edge"/>
+  <text x="850" y="601" class="small">Checklist and Proof Data</text>
+
+  <path d="M790 638 H910 V675 H1040" class="edge-light"/>
+  <text x="875" y="660" class="small">Inventory Usage Data</text>
+
+  <path d="M790 756 H1040" class="edge"/>
+  <text x="828" y="747" class="small">After-Sales and Maintenance Data</text>
+
+  <path d="M790 790 H910 V843 H1040" class="edge-light"/>
+  <text x="850" y="825" class="small">Message and Notification Data</text>
+
+  <path d="M790 927 H1040" class="edge"/>
+  <text x="835" y="918" class="small">Report, Analytics, Audit Data</text>
+
+  <!-- Store to process flows -->
+  <path d="M1040 327 H900 V474 H790" class="edge-light"/>
+  <text x="910" y="404" class="small">Approved Request Data</text>
+
+  <path d="M1040 467 H880 V617 H790" class="edge-light"/>
+  <text x="885" y="545" class="small">Assigned Ticket Data</text>
+
+  <path d="M1040 486 H860 V767 H790" class="edge-light"/>
+  <text x="865" y="707" class="small">Completed Ticket Data</text>
+
+  <path d="M1080 985 V970 H790" class="edge-dash"/>
+  <text x="885" y="1000" class="small">System Record Data</text>
+
+  <!-- Outputs back to users -->
+  <path d="M520 955 H395 V844 H270" class="edge-light"/>
+  <text x="285" y="910" class="small">Generated Report / Dashboard Data</text>
+
+  <path d="M520 490 H395 V614 H270" class="edge-light"/>
+  <text x="300" y="535" class="small">Assigned Job Data</text>
+
+  <path d="M520 790 H380 V194 H270" class="edge-light"/>
+  <text x="285" y="250" class="small">Service Updates / Notifications</text>
+
+  <!-- Footer note -->
+  <text x="60" y="1060" class="subtitle">Main data path: Client request -> admin dispatch -> technician job completion -> after-sales support -> reports, analytics, and activity logs.</text>
+</svg>

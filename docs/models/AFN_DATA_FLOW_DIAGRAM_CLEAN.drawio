@@ -1,0 +1,118 @@
+<mxfile host="app.diagrams.net" modified="2026-05-31T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="afn-dfd-clean" name="AFN Clean Data Flow Diagram">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="Data Flow Diagram" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="30" width="260" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="AFN Service Management System" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#475569" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="300" height="24" as="geometry"/>
+        </mxCell>
+
+        <!-- External entities duplicated by row to keep lines clean -->
+        <mxCell id="a_client1" value="Client" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#8b5cf6;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="55" y="115" width="145" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_client2" value="Client" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#8b5cf6;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="55" y="225" width="145" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_admin1" value="Admin / Superadmin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#8b5cf6;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="55" y="335" width="145" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_tech1" value="Technician" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#8b5cf6;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="55" y="445" width="145" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_client3" value="Client / Admin / Technician" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#8b5cf6;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="55" y="575" width="145" height="58" as="geometry"/>
+        </mxCell>
+        <mxCell id="a_admin2" value="Admin / Superadmin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#8b5cf6;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="55" y="735" width="145" height="48" as="geometry"/>
+        </mxCell>
+
+        <!-- Processes -->
+        <mxCell id="p1" value="1.0&lt;br&gt;&lt;b&gt;Process User&lt;br&gt;Account Data&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fdecc8;strokeColor=#d97706;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="350" y="105" width="175" height="68" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2" value="2.0&lt;br&gt;&lt;b&gt;Process Service&lt;br&gt;Request Data&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fdecc8;strokeColor=#d97706;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="350" y="215" width="175" height="68" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3" value="3.0&lt;br&gt;&lt;b&gt;Process Ticket&lt;br&gt;Dispatch Data&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fdecc8;strokeColor=#d97706;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="350" y="325" width="175" height="68" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4" value="4.0&lt;br&gt;&lt;b&gt;Process Technician&lt;br&gt;Job Data&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fdecc8;strokeColor=#d97706;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="350" y="435" width="175" height="68" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5" value="5.0&lt;br&gt;&lt;b&gt;Process After-Sales&lt;br&gt;and Communication Data&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fdecc8;strokeColor=#d97706;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="350" y="570" width="175" height="72" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6" value="6.0&lt;br&gt;&lt;b&gt;Generate Reports,&lt;br&gt;Analytics, and Logs&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fdecc8;strokeColor=#d97706;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="350" y="725" width="175" height="68" as="geometry"/>
+        </mxCell>
+
+        <!-- Data stores -->
+        <mxCell id="d1" value="D1&#xa0;&#xa0; User Records" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="119" width="220" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="d2" value="D2&#xa0;&#xa0; Service Request Records" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="229" width="260" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="d3" value="D3&#xa0;&#xa0; Service Ticket Records" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="339" width="250" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="d4" value="D4&#xa0;&#xa0; Checklist and Proof Records" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="430" width="280" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="d5" value="D5&#xa0;&#xa0; Inventory Records" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="485" width="220" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="d6" value="D6&#xa0;&#xa0; After-Sales and Maintenance Records" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="575" width="330" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="d7" value="D7&#xa0;&#xa0; Message and Notification Records" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="630" width="310" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="d8" value="D8&#xa0;&#xa0; Report, Analytics, and Activity Log Records" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="739" width="360" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="oprecords" value="Operational Records&lt;br&gt;(D1 to D7)" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="810" width="220" height="48" as="geometry"/>
+        </mxCell>
+
+        <!-- Return actors for clean outputs -->
+        <mxCell id="r_tech" value="Technician" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#8b5cf6;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1140" y="335" width="145" height="48" as="geometry"/>
+        </mxCell>
+        <mxCell id="r_admin" value="Admin / Superadmin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#8b5cf6;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1140" y="735" width="145" height="48" as="geometry"/>
+        </mxCell>
+
+        <!-- Edges, mostly one horizontal row each -->
+        <mxCell id="e1" value="User Account Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="a_client1" target="p1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" value="Validated User Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="p1" target="d1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e3" value="Service Request Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="a_client2" target="p2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="Service Request Record Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="p2" target="d2"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e5" value="Assignment and Schedule Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="a_admin1" target="p3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="Service Ticket Record Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="p3" target="d3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="Assigned Job Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="d3" target="r_tech"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e8" value="Job Status, Checklist, and Proof Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="a_tech1" target="p4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" value="Checklist and Proof Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="p4" target="d4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" value="Inventory Usage Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="p4" target="d5"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e11" value="After-Sales Concern / Message Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="a_client3" target="p5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" value="After-Sales and Maintenance Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="p5" target="d6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" value="Message and Notification Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="p5" target="d7"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e14" value="Report Request Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="a_admin2" target="p6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e15" value="Generated Report, Analytics, and Audit Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="p6" target="d8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e16" value="Generated Dashboard / Report Data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" edge="1" parent="1" source="d8" target="r_admin"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e17" value="Stored System Records" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2;dashed=1" edge="1" parent="1" source="oprecords" target="p6"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

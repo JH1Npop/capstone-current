@@ -1,0 +1,39 @@
+{
+  "name": "AFN SERVE",
+  "short_name": "AFN SERVE",
+  "description": "Service request, dispatch, technician tracking, inventory, and after-sales management for AFN Solar Power Engineering Services.",
+  "id": "/?app=afn-serve-v2",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/afn-serve-icon-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/afn-serve-icon-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/afn-serve-icon-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/afn-serve-icon-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

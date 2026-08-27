@@ -1,0 +1,233 @@
+// DBML version for https://dbdiagram.io
+// AFN Service Management
+// Capstone presentation ERD
+// This version keeps only the tables that best explain the main system workflow.
+
+Project AFN_Service_Management_Capstone {
+  database_type: "SQLite / PostgreSQL"
+  Note: '''
+  Simplified ERD for capstone documentation and presentation.
+  Focus: user management, service workflow, inventory support, and notifications.
+  '''
+}
+
+Table users_user {
+  id int [pk]
+  username varchar
+  email varchar
+  first_name varchar
+  last_name varchar
+  role varchar [note: 'superadmin | admin | technician | client']
+  phone varchar
+  address text
+  status varchar
+  created_at datetime
+  updated_at datetime
+
+  Note: 'Main account table for all system users.'
+}
+
+Table users_technicianprofile {
+  id int [pk]
+  user_id int [unique]
+  current_latitude decimal
+  current_longitude decimal
+  is_available boolean
+  skill_level varchar
+  max_daily_assignments int
+  updated_at datetime
+
+  Note: 'Operational data for technician users.'
+}
+
+Table users_clientprofile {
+  id int [pk]
+  user_id int [unique]
+  client_type varchar
+  company_name varchar
+  preferred_contact_method varchar
+  billing_address text
+  updated_at datetime
+
+  Note: 'Extended profile data for clients.'
+}
+
+Table services_servicetype {
+  id int [pk]
+  name varchar
+  description text
+  estimated_duration int
+  estimated_cost decimal
+  max_daily_assignments int
+
+  Note: 'Catalog of service types offered by the business.'
+}
+
+Table services_servicerequest {
+  id int [pk]
+  client_id int
+  service_type_id int
+  description text
+  priority varchar
+  status varchar
+  preferred_date date
+  preferred_time_slot varchar
+  request_date datetime
+  auto_ticket_created boolean
+
+  Note: 'Service request submitted by a client.'
+}
+
+Table services_servicelocation {
+  id int [pk]
+  request_id int [unique]
+  address text
+  city varchar
+  province varchar
+  latitude decimal
+  longitude decimal
+
+  Note: 'Service address attached to the request.'
+}
+
+Table services_serviceticket {
+  id int [pk]
+  request_id int
+  technician_id int
+  assigned_admin_id int
+  scheduled_date date
+  scheduled_time time
+  status varchar
+  priority varchar
+  auto_assigned boolean
+  assigned_at datetime
+  start_time datetime
+  end_time datetime
+  completed_date datetime
+  client_rating int
+  created_at datetime
+  updated_at datetime
+
+  Note: 'Main work order and dispatch record.'
+}
+
+Table services_technicianskill {
+  id int [pk]
+  technician_id int
+  service_type_id int
+  skill_level varchar
+
+  indexes {
+    (technician_id, service_type_id) [unique]
+  }
+
+  Note: 'Used for technician-service matching.'
+}
+
+Table services_ticketcrewassignment {
+  id int [pk]
+  ticket_id int
+  technician_id int
+  created_at datetime
+
+  indexes {
+    (ticket_id, technician_id) [unique]
+  }
+
+  Note: 'Additional technicians assigned to a ticket.'
+}
+
+Table services_servicestatushistory {
+  id int [pk]
+  ticket_id int
+  status varchar
+  changed_by_id int
+  notes text
+  timestamp datetime
+
+  Note: 'Tracks ticket lifecycle changes.'
+}
+
+Table services_inspectionchecklist {
+  id int [pk]
+  ticket_id int [unique]
+  created_at datetime
+  completed_at datetime
+  is_completed boolean
+  recommendation varchar
+  maintenance_required boolean
+  maintenance_profile varchar
+  follow_up_required boolean
+  follow_up_case_type varchar
+
+  Note: 'Inspection and completion handoff record.'
+}
+
+Table inventory_inventoryitem {
+  id int [pk]
+  name varchar
+  sku varchar [unique]
+  category_id int
+  item_type varchar
+  quantity int
+  minimum_stock int
+  reserved_quantity int
+  status varchar
+  unit_price decimal
+  total_value decimal
+  updated_at datetime
+
+  Note: 'Inventory items used in service operations.'
+}
+
+Table inventory_inventoryreservation {
+  id int [pk]
+  item_id int
+  technician_id int
+  quantity int
+  required_date date
+  service_ticket_id int
+  status varchar
+  created_at datetime
+
+  Note: 'Reserved items for scheduled work.'
+}
+
+Table notifications_notification {
+  id int [pk]
+  user_id int
+  ticket_id int
+  request_id int
+  message text
+  type varchar
+  status varchar
+  created_at datetime
+  read_at datetime
+
+  Note: 'Operational notifications for users.'
+}
+
+Ref: users_technicianprofile.user_id > users_user.id
+Ref: users_clientprofile.user_id > users_user.id
+
+Ref: services_servicerequest.client_id > users_user.id
+Ref: services_servicerequest.service_type_id > services_servicetype.id
+Ref: services_servicelocation.request_id > services_servicerequest.id
+Ref: services_serviceticket.request_id > services_servicerequest.id
+Ref: services_serviceticket.technician_id > users_user.id
+Ref: services_serviceticket.assigned_admin_id > users_user.id
+Ref: services_technicianskill.technician_id > users_user.id
+Ref: services_technicianskill.service_type_id > services_servicetype.id
+Ref: services_ticketcrewassignment.ticket_id > services_serviceticket.id
+Ref: services_ticketcrewassignment.technician_id > users_user.id
+Ref: services_servicestatushistory.ticket_id > services_serviceticket.id
+Ref: services_servicestatushistory.changed_by_id > users_user.id
+Ref: services_inspectionchecklist.ticket_id > services_serviceticket.id
+
+Ref: inventory_inventoryreservation.item_id > inventory_inventoryitem.id
+Ref: inventory_inventoryreservation.technician_id > users_user.id
+Ref: inventory_inventoryreservation.service_ticket_id > services_serviceticket.id
+
+Ref: notifications_notification.user_id > users_user.id
+Ref: notifications_notification.ticket_id > services_serviceticket.id
+Ref: notifications_notification.request_id > services_servicerequest.id

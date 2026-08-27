@@ -1,0 +1,538 @@
+Project AFN_Service_Management_ERD {
+  database_type: "PostgreSQL"
+  Note: "ERD based on the actual AFN Service Management Django models."
+}
+
+Table users_user {
+  id integer [pk, increment]
+  username varchar [unique]
+  email varchar
+  password varchar
+  first_name varchar
+  last_name varchar
+  role varchar [note: "superadmin, admin, technician, client"]
+  phone varchar
+  address text
+  status varchar [note: "active, inactive"]
+  is_active boolean
+  is_staff boolean
+  is_superuser boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table users_technicianprofile {
+  id integer [pk, increment]
+  user_id integer [unique, ref: > users_user.id]
+  current_latitude decimal
+  current_longitude decimal
+  last_location_update datetime
+  is_available boolean
+  skill_level varchar
+  preferred_work_areas text
+  max_daily_assignments integer
+  updated_at datetime
+}
+
+Table users_clientprofile {
+  id integer [pk, increment]
+  user_id integer [unique, ref: > users_user.id]
+  client_type varchar
+  company_name varchar
+  company_registration varchar
+  billing_address text
+  preferred_contact_method varchar
+  credit_limit decimal
+  account_balance decimal
+  updated_at datetime
+}
+
+Table users_managementprofile {
+  id integer [pk, increment]
+  user_id integer [unique, ref: > users_user.id]
+  admin_scope varchar
+  updated_at datetime
+}
+
+Table services_servicetype {
+  id integer [pk, increment]
+  name varchar
+  description text
+  estimated_duration integer
+  estimated_cost decimal
+  max_daily_assignments integer
+  procedures text
+  required_equipment text
+}
+
+Table services_slarule {
+  id integer [pk, increment]
+  key varchar [unique]
+  warning_minutes integer
+  overdue_minutes integer
+  is_active boolean
+  notes text
+  updated_at datetime
+}
+
+Table services_servicerequest {
+  id integer [pk, increment]
+  client_id integer [ref: > users_user.id]
+  service_type_id integer [ref: > services_servicetype.id]
+  description text
+  priority varchar
+  status varchar
+  preferred_date date
+  preferred_time_slot varchar
+  request_source varchar
+  scheduling_notes text
+  request_date datetime
+  updated_at datetime
+  auto_ticket_created boolean
+}
+
+Table services_servicerequestservice {
+  id integer [pk, increment]
+  request_id integer [ref: > services_servicerequest.id]
+  service_type_id integer [ref: > services_servicetype.id]
+  notes text
+  status varchar
+  sort_order integer
+  created_at datetime
+
+  Indexes {
+    (request_id, service_type_id) [unique]
+  }
+}
+
+Table services_servicelocation {
+  id integer [pk, increment]
+  request_id integer [unique, ref: > services_servicerequest.id]
+  address text
+  city varchar
+  province varchar
+  latitude decimal
+  longitude decimal
+}
+
+Table services_serviceticket {
+  id integer [pk, increment]
+  request_id integer [ref: > services_servicerequest.id]
+  technician_id integer [ref: > users_user.id]
+  assigned_admin_id integer [ref: > users_user.id]
+  scheduled_date date
+  scheduled_time time
+  scheduled_time_slot varchar
+  start_time datetime
+  end_time datetime
+  completed_date datetime
+  status varchar
+  priority varchar
+  notes text
+  client_rating integer
+  client_feedback text
+  auto_assigned boolean
+  assigned_at datetime
+  smart_assignment_score float
+  smart_assignment_summary varchar
+  reschedule_requested boolean
+  reschedule_reason text
+  reschedule_requested_at datetime
+  warranty_status varchar
+  warranty_period_days integer
+  warranty_start_date date
+  warranty_end_date date
+  warranty_notes text
+  route_geometry text
+  route_distance float
+  route_duration float
+  completion_proof_images text
+  completion_notes text
+  created_at datetime
+  updated_at datetime
+}
+
+Table services_ticketcrewassignment {
+  id integer [pk, increment]
+  ticket_id integer [ref: > services_serviceticket.id]
+  technician_id integer [ref: > users_user.id]
+  created_at datetime
+
+  Indexes {
+    (ticket_id, technician_id) [unique]
+  }
+}
+
+Table services_servicestatushistory {
+  id integer [pk, increment]
+  ticket_id integer [ref: > services_serviceticket.id]
+  status varchar
+  changed_by_id integer [ref: > users_user.id]
+  notes text
+  timestamp datetime
+}
+
+Table progress_ticketprogress {
+  id integer [pk, increment]
+  ticket_id integer [ref: > services_serviceticket.id]
+  updated_by_id integer [ref: > users_user.id]
+  progress_status varchar
+  comment text
+  updated_at datetime
+}
+
+Table history_servicehistory {
+  id integer [pk, increment]
+  ticket_id integer [ref: > services_serviceticket.id]
+  technician_id integer [ref: > users_user.id]
+  service_type_id integer [ref: > services_servicetype.id]
+  completion_date datetime
+  service_duration integer
+  customer_rating integer
+}
+
+Table services_inspectionchecklist {
+  id integer [pk, increment]
+  ticket_id integer [unique, ref: > services_serviceticket.id]
+  completed_by_id integer [ref: > users_user.id]
+  submitted_by_id integer [ref: > users_user.id]
+  is_completed boolean
+  site_accessible boolean
+  electrical_available boolean
+  electrical_adequate boolean
+  recommendation varchar
+  checklist_items text
+  required_equipment_snapshot text
+  proof_media text
+  maintenance_required boolean
+  maintenance_profile varchar
+  maintenance_interval_days integer
+  warranty_provided boolean
+  warranty_period_days integer
+  follow_up_required boolean
+  follow_up_case_type varchar
+  follow_up_due_date date
+  created_at datetime
+  completed_at datetime
+  submitted_at datetime
+}
+
+Table services_aftersalescase {
+  id integer [pk, increment]
+  service_ticket_id integer [ref: > services_serviceticket.id]
+  client_id integer [ref: > users_user.id]
+  assigned_to_id integer [ref: > users_user.id]
+  created_by_id integer [ref: > users_user.id]
+  case_type varchar
+  status varchar
+  priority varchar
+  creation_source varchar
+  summary varchar
+  details text
+  resolution_notes text
+  requires_revisit boolean
+  customer_satisfaction integer
+  due_date date
+  resolved_at datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Table services_maintenanceschedule {
+  id integer [pk, increment]
+  service_ticket_id integer [unique, ref: > services_serviceticket.id]
+  client_id integer [ref: > users_user.id]
+  service_type_id integer [ref: > services_servicetype.id]
+  maintenance_profile varchar
+  interval_days integer
+  follow_up_window_days integer
+  last_service_date date
+  next_due_date date
+  notify_on_date date
+  status varchar
+  maintenance_notes text
+  risk_level varchar
+  risk_score float
+  prediction_notes text
+  created_at datetime
+  updated_at datetime
+}
+
+Table services_technicianskill {
+  id integer [pk, increment]
+  technician_id integer [ref: > users_user.id]
+  service_type_id integer [ref: > services_servicetype.id]
+  skill_level varchar
+
+  Indexes {
+    (technician_id, service_type_id) [unique]
+  }
+}
+
+Table inventory_inventorycategory {
+  id integer [pk, increment]
+  parent_id integer [ref: > inventory_inventorycategory.id]
+  name varchar
+  description text
+}
+
+Table inventory_inventoryitem {
+  id integer [pk, increment]
+  category_id integer [ref: > inventory_inventorycategory.id]
+  name varchar
+  sku varchar [unique]
+  description text
+  item_type varchar
+  quantity integer
+  minimum_stock integer
+  reserved_quantity integer
+  warehouse_location varchar
+  unit_price decimal
+  total_value decimal
+  status varchar
+  supplier varchar
+  supplier_contact text
+  purchase_date date
+  warranty_expiry date
+  low_stock_threshold integer
+  notes text
+  last_notification_sent datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Table inventory_inventoryreservation {
+  id integer [pk, increment]
+  item_id integer [ref: > inventory_inventoryitem.id]
+  technician_id integer [ref: > users_user.id]
+  service_ticket_id integer [ref: > services_serviceticket.id]
+  quantity integer
+  required_date date
+  notes text
+  status varchar
+  created_at datetime
+}
+
+Table inventory_inventorytransaction {
+  id integer [pk, increment]
+  item_id integer [ref: > inventory_inventoryitem.id]
+  technician_id integer [ref: > users_user.id]
+  service_ticket_id integer [ref: > services_serviceticket.id]
+  performed_by_id integer [ref: > users_user.id]
+  transaction_type varchar
+  quantity integer
+  reference_number varchar
+  notes text
+  transaction_date datetime
+}
+
+Table inventory_servicetypeinventoryrequirement {
+  id integer [pk, increment]
+  service_type_id integer [ref: > services_servicetype.id]
+  item_id integer [ref: > inventory_inventoryitem.id]
+  quantity integer
+  auto_reserve boolean
+  notes text
+  created_at datetime
+  updated_at datetime
+
+  Indexes {
+    (service_type_id, item_id) [unique]
+  }
+}
+
+Table messages_app_message {
+  id integer [pk, increment]
+  ticket_id integer [ref: > services_serviceticket.id]
+  sender_id integer [ref: > users_user.id]
+  receiver_id integer [ref: > users_user.id]
+  room_type varchar
+  group_key varchar
+  message_text text
+  created_at datetime
+}
+
+Table notifications_notification {
+  id integer [pk, increment]
+  user_id integer [ref: > users_user.id]
+  ticket_id integer [ref: > services_serviceticket.id]
+  request_id integer [ref: > services_servicerequest.id]
+  title varchar
+  message text
+  type varchar
+  status varchar
+  send_email boolean
+  send_sms boolean
+  email_sent boolean
+  sms_sent boolean
+  created_at datetime
+  read_at datetime
+}
+
+Table notifications_notificationtemplate {
+  id integer [pk, increment]
+  name varchar [unique]
+  notification_type varchar
+  subject varchar
+  body text
+  variables text
+}
+
+Table notifications_notificationlog {
+  id integer [pk, increment]
+  notification_id integer [unique, ref: > notifications_notification.id]
+  email_status varchar
+  sms_status varchar
+  email_response text
+  sms_response text
+  last_attempt datetime
+  attempt_count integer
+}
+
+Table notifications_firebasetoken {
+  id integer [pk, increment]
+  user_id integer [ref: > users_user.id]
+  fcm_token text [unique]
+  device_name varchar
+  device_type varchar
+  is_active boolean
+  created_at datetime
+  last_used datetime
+}
+
+Table users_activitylog {
+  id integer [pk, increment]
+  actor_id integer [ref: > users_user.id]
+  actor_role varchar
+  category varchar
+  action varchar
+  target_app_label varchar
+  target_model varchar
+  target_id integer
+  target_label varchar
+  message varchar
+  metadata text
+  ip_address varchar
+  user_agent text
+  created_at datetime
+}
+
+Table users_changelog {
+  id integer [pk, increment]
+  content_type_id integer
+  object_id integer
+  action varchar
+  field_name varchar
+  old_value text
+  new_value text
+  changed_by_id integer [ref: > users_user.id]
+  changed_at datetime
+  summary varchar
+}
+
+Table services_serviceanalytics {
+  id integer [pk, increment]
+  date date
+  service_type_id integer [ref: > services_servicetype.id]
+  total_requests integer
+  completed_requests integer
+  pending_requests integer
+  cancelled_requests integer
+  avg_response_time_hours float
+  avg_completion_time_hours float
+  technician_utilization_rate float
+  service_area_coverage float
+  popular_locations text
+  satisfaction_score float
+  created_at datetime
+
+  Indexes {
+    (date, service_type_id) [unique]
+  }
+}
+
+Table services_technicianperformance {
+  id integer [pk, increment]
+  technician_id integer [ref: > users_user.id]
+  date date
+  tickets_assigned integer
+  tickets_completed integer
+  tickets_pending integer
+  total_work_hours float
+  avg_response_time_hours float
+  avg_completion_time_hours float
+  customer_satisfaction float
+  rework_rate float
+  distance_traveled_km float
+  fuel_efficiency float
+  created_at datetime
+
+  Indexes {
+    (technician_id, date) [unique]
+  }
+}
+
+Table services_demandforecast {
+  id integer [pk, increment]
+  service_type_id integer [ref: > services_servicetype.id]
+  forecast_date date
+  forecast_period varchar
+  predicted_requests integer
+  confidence_level float
+  weather_impact float
+  seasonal_trend float
+  historical_average integer
+  actual_requests integer
+  forecast_accuracy float
+  generated_at datetime
+}
+
+Table services_servicetrend {
+  id integer [pk, increment]
+  service_type_id integer [ref: > services_servicetype.id]
+  trend_type varchar
+  period_start date
+  period_end date
+  average_requests float
+  peak_day varchar
+  peak_hour integer
+  growth_rate float
+  trend_direction varchar
+  standard_deviation float
+  confidence_interval text
+  created_at datetime
+}
+
+Table services_technicianlocationhistory {
+  id integer [pk, increment]
+  technician_id integer [ref: > users_user.id]
+  latitude decimal
+  longitude decimal
+  timestamp datetime
+  accuracy float
+}
+
+Table users_usercapabilitygrant {
+  id integer [pk, increment]
+  user_id integer [ref: > users_user.id]
+  granted_by_id integer [ref: > users_user.id]
+  capability_code varchar
+  granted_at datetime
+
+  Indexes {
+    (user_id, capability_code) [unique]
+  }
+}
+
+Table users_adminsettings {
+  id integer [pk, increment]
+  updated_by_id integer [ref: > users_user.id]
+  system_name varchar
+  support_email varchar
+  enable_notifications boolean
+  auto_dispatch_enabled boolean
+  sms_notifications_enabled boolean
+  default_time_zone varchar
+  max_technician_assignments integer
+  updated_at datetime
+}

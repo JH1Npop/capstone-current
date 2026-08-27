@@ -1,0 +1,60 @@
+from django.conf import settings
+import django.db.models.deletion
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('services', '0035_remove_arrivalvalidationlog_services_ar_ticket__286470_idx_and_more'),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name='serviceticket',
+            name='status',
+            field=models.CharField(choices=[('Not Started', 'Not Started'), ('For Inspection', 'For Inspection'), ('Inspection Completed', 'Inspection Completed'), ('Ready for Service', 'Ready for Service'), ('Awaiting Materials', 'Awaiting Materials'), ('Navigating', 'Navigating'), ('Arrived on Site', 'Arrived on Site'), ('In Progress', 'In Progress'), ('Completed', 'Completed'), ('On Hold', 'On Hold'), ('Cancelled', 'Cancelled')], default='Not Started', max_length=50),
+        ),
+        migrations.CreateModel(
+            name='ArrivalValidationLog',
+            fields=[
+                ('id', models.BigAutoField(db_column='arrival_validation_log_id', primary_key=True, serialize=False)),
+                ('action', models.CharField(choices=[('navigate', 'Navigate'), ('arrival_attempt', 'Arrival Attempt'), ('arrival_success', 'Arrival Success'), ('arrival_blocked', 'Arrival Blocked'), ('arrival_bypassed', 'Arrival Bypassed'), ('job_started', 'Job Started'), ('job_completed', 'Job Completed')], max_length=30)),
+                ('technician_latitude', models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True)),
+                ('technician_longitude', models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True)),
+                ('service_latitude', models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True)),
+                ('service_longitude', models.DecimalField(blank=True, decimal_places=6, max_digits=9, null=True)),
+                ('distance_meters', models.FloatField(blank=True, null=True)),
+                ('validation_result', models.CharField(choices=[('passed', 'Passed'), ('failed', 'Failed'), ('bypassed', 'Bypassed'), ('not_required', 'Not Required')], default='not_required', max_length=20)),
+                ('validation_enabled', models.BooleanField(default=True, help_text='Snapshot of whether location validation was enabled at time of action.')),
+                ('radius_meters', models.PositiveSmallIntegerField(default=30, help_text='Snapshot of the allowed radius at time of action.')),
+                ('remarks', models.TextField(blank=True, default='')),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('performed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='performed_arrival_logs', to=settings.AUTH_USER_MODEL)),
+                ('technician', models.ForeignKey(blank=True, limit_choices_to={'role': 'technician'}, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='arrival_validation_logs', to=settings.AUTH_USER_MODEL)),
+                ('ticket', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='arrival_logs', to='services.serviceticket')),
+            ],
+            options={
+                'verbose_name': 'Arrival Validation Log',
+                'verbose_name_plural': 'Arrival Validation Logs',
+                'ordering': ['-created_at'],
+            },
+        ),
+        migrations.AddIndex(
+            model_name='arrivalvalidationlog',
+            index=models.Index(fields=['ticket', '-created_at'], name='services_arrival_ticket_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='arrivalvalidationlog',
+            index=models.Index(fields=['technician', '-created_at'], name='services_arrival_tech_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='arrivalvalidationlog',
+            index=models.Index(fields=['action', '-created_at'], name='services_arrival_action_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='arrivalvalidationlog',
+            index=models.Index(fields=['validation_result', '-created_at'], name='services_arrival_result_idx'),
+        ),
+    ]

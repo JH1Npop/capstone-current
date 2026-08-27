@@ -1,0 +1,18 @@
+{
+  "name": "capstone-full-stack",
+  "version": "1.0.0",
+  "description": "Unified AFN Service Management Dashboard",
+  "scripts": {
+    "build": "npm --prefix frontend run build && node -e \"const fs=require('fs'); fs.rmSync('dist',{recursive:true,force:true}); fs.cpSync('frontend/dist','dist',{recursive:true});\"",
+    "build:pythonanywhere": "npm --prefix frontend run build:pythonanywhere",
+    "dev": "npm --prefix frontend run dev",
+    "dev:full": "npm --prefix frontend run dev:full",
+    "check:backend": "cd backend && ..\\venv\\Scripts\\python.exe manage.py check",
+    "test:backend": "cd backend && ..\\venv\\Scripts\\python.exe manage.py test",
+    "build:frontend": "cd frontend && npm run build"
+  },
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}
