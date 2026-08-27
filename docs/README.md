@@ -2,6 +2,27 @@
 
 Documentation is grouped by purpose so implementation notes do not get mixed with deployment instructions or academic deliverables.
 
+## Document status convention
+
+- **Current contract** - must match the running code and tests.
+- **Active plan** - approved work that may include incomplete checklist items.
+- **Snapshot** - accurate only for the date in its filename or heading.
+- **Academic/reference** - useful capstone material, but not an operational setup guide.
+- **Historical** - retained under `archive/` and not authoritative.
+
+When documents disagree, use the current contracts below, then the code and
+automated tests. Dated reports must not be treated as current test results.
+
+## Current contracts
+
+| Area | Authoritative document |
+| --- | --- |
+| Whole-system delivery | [System end-to-end implementation plan](SYSTEM_END_TO_END_IMPLEMENTATION_PLAN.md) |
+| Request, ticket, and progress behavior | [Workflow state machines](security/WORKFLOW_STATE_MACHINES.md) |
+| Route and API authorization | [Route/API capability matrix](security/ROUTE_API_CAPABILITY_MATRIX.md) |
+| Current validation | [Implementation baseline - 2026-08-27](quality/IMPLEMENTATION_BASELINE_2026-08-27.md) |
+| Solar workflow | [Solar workflow implementation subplan](SOLAR_SYSTEM_IMPLEMENTATION_PLAN.md) |
+
 ## Sections
 
 - `architecture/` — data models, database diagrams, context diagrams, DFDs, and system design.

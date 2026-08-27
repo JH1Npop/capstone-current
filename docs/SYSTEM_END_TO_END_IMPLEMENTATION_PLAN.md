@@ -413,3 +413,7 @@ Exit criteria:
   and `audit.view` capabilities. Enforced them across admin routes, navigation,
   analytics/forecast APIs, operational report data, activity logs, and
   browser-side print/CSV controls, with direct-API regression coverage.
+- 2026-08-27: Recorded a fresh repository baseline and made ticket progress an
+  append-only operational record. Clients retain owned read access, assigned
+  lead/crew technicians and admins can append entries, and direct API tests
+  enforce ownership, assignment, immutability, and server-controlled actors.

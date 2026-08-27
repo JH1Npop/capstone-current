@@ -42,6 +42,7 @@ Status meanings:
 | Schedule | `/technician/schedule` | `technician.schedule.view` | Own schedule | Parity |
 | Navigation | `/technician/map-navigation` | `technician.navigation.view` | Assigned jobs | Parity |
 | Checklists | `/technician/checklist`, `/technician/inspection-checklist` | `technician.checklist.view` | Assigned jobs | Parity |
+| Ticket progress | API used by assigned job workflows | Technician role | Lead or crew assignment; append-only | Parity and directly tested |
 | Messages | `/technician/messages` | `technician.messages.view` | Conversation membership | Partial; WebSocket parity audit remains |
 | History | `/technician/job-history` | `technician.history.view` | Own completed jobs | Parity |
 | Profile | `/technician/profile` | `technician.profile.view` | Own profile | Parity |
@@ -57,6 +58,7 @@ messages, notifications, documents, support cases, and history.
 | --- | --- | --- |
 | Solar estimates | `/client/solar-estimates` | Enforced and tested |
 | Requests and request detail | `/client/requests`, `/client/requests/:id` | Enforced; transition audit remains |
+| Ticket progress | Used by request detail/timeline consumers | Owned tickets are read-only; create, edit, and delete are blocked |
 | Service history | `/client/service-history` | Enforced |
 | Support | `/client/support` | Enforced; attachment audit remains |
 | Notifications | `/client/notifications` | Enforced |

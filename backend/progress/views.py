@@ -5,12 +5,17 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import TicketProgress
 from .serializers import TicketProgressSerializer, TicketProgressReportSerializer
+from users.permissions import IsAdmin, IsAdminOrSupervisorOrTechnician
 from users.rbac import is_admin_workspace_role
+
 
 class TicketProgressViewSet(viewsets.ModelViewSet):
     queryset = TicketProgress.objects.all()
     serializer_class = TicketProgressSerializer
     permission_classes = [permissions.IsAuthenticated]
+    # Progress is an append-only operational record. Corrections should be
+    # represented by a new progress entry instead of rewriting history.
+    http_method_names = ['get', 'post', 'head', 'options']
 
     def get_queryset(self):
         user = self.request.user
@@ -37,10 +42,11 @@ class TicketProgressViewSet(viewsets.ModelViewSet):
         return queryset.none()
 
     def get_permissions(self):
-        """Return appropriate permissions based on action"""
+        """Allow owned reads while limiting progress creation to field staff."""
         if self.action == 'report':
-            from users.permissions import IsAdmin
-            return [IsAdmin()]  # Only superadmin and admin can access reports
+            return [IsAdmin()]
+        if self.action == 'create':
+            return [IsAdminOrSupervisorOrTechnician()]
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):

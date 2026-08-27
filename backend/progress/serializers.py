@@ -64,3 +64,4 @@ class TicketProgressSerializer(serializers.ModelSerializer):
     class Meta:
         model = TicketProgress
         fields = '__all__'
+        read_only_fields = ['id', 'updated_by', 'updated_at']

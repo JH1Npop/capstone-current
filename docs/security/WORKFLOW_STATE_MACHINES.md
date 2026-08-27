@@ -51,3 +51,17 @@ arrival, work start, status updates, and completion lock the ticket row before
 mutation. Dispatch also locks all selected technician rows in deterministic ID
 order and revalidates availability and daily capacity after acquiring the lock.
 Release 1 still needs consistent reason capture on every ticket transition.
+
+## Ticket progress records
+
+`TicketProgress` is an append-only operational timeline:
+
+- Clients may read progress only for tickets belonging to their own requests.
+- Assigned lead and crew technicians may append progress for their tickets.
+- Admin and superadmin users may append progress for operational support.
+- The API sets `updated_by` from the authenticated user; callers cannot choose it.
+- Existing progress entries cannot be edited or deleted through the API. A
+  correction must be represented by a new progress entry so the earlier event
+  remains auditable.
+
+These rules are enforced by direct API tests in `backend/progress/tests.py`.
