@@ -44,15 +44,19 @@ from services.views.helpers import (
     clear_reschedule_request,
     create_notification,
     ensure_ticket_checklist_completed,
+    ensure_ticket_completion_proof,
     get_eligible_technician_ids_for_service,
     get_technician_service_skill,
     get_technician_ticket_queryset,
+    get_default_time_for_slot,
+    get_ticket_team_members,
     get_ticket_team_member_ids,
     get_visible_service_requests_queryset,
     get_visible_service_tickets_queryset,
     is_admin_workspace_role,
     logger,
     normalize_proof_media_payload,
+    normalize_ticket_status,
     normalize_time_slot,
     parse_date,
     parse_technician_id_list,
@@ -76,6 +80,7 @@ from services.views.helpers import (
     user_can_manage_service_requests,
     user_has_any_capability,
     validate_technician_daily_capacity,
+    validate_technician_schedule_overlap,
     validate_ticket_transition,
     viewsets,
 )
@@ -85,10 +90,15 @@ from services.serializers import (
     ServiceTicketReportSerializer,
     SolarCommissioningChecklistSerializer,
 )
-from services.models import GeneratedDocument
+from services.models import GeneratedDocument, ServiceRequest
 from services.sla import evaluate_service_ticket_sla, get_ticket_dispatch_state
 from inventory.automation import apply_ticket_equipment_plan, create_pending_reservation
-from inventory.models import InventoryItem
+from inventory.models import (
+    EquipmentReturnRequest,
+    EquipmentReturnRequestItem,
+    InventoryItem,
+    InventoryTransaction,
+)
 from services.user_display import client_technician_label
 
 
@@ -109,6 +119,98 @@ def _notify_admin_ticket_progress(*, ticket, actor, title, body, notification_ty
             request=ticket.request,
             send_email=False,
         )
+
+
+def _serialize_equipment_reconciliation(ticket):
+    item_totals = {}
+    movements = InventoryTransaction.objects.filter(
+        service_ticket=ticket,
+        transaction_type__in=['issue', 'return'],
+    ).select_related('item').order_by('id')
+
+    for movement in movements:
+        item = item_totals.setdefault(movement.item_id, {
+            'item_id': movement.item_id,
+            'item_name': movement.item.name,
+            'item_sku': movement.item.sku,
+            'issued_quantity': 0,
+            'returned_quantity': 0,
+        })
+        if movement.transaction_type == 'issue':
+            item['issued_quantity'] += movement.quantity
+        else:
+            item['returned_quantity'] += movement.quantity
+
+    pending_quantities = {}
+    pending_lines = EquipmentReturnRequestItem.objects.filter(
+        return_request__service_ticket=ticket,
+        return_request__status='pending',
+    )
+    for line in pending_lines:
+        pending_quantities[line.item_id] = pending_quantities.get(line.item_id, 0) + line.quantity
+
+    items = []
+    for item in item_totals.values():
+        item['pending_quantity'] = pending_quantities.get(item['item_id'], 0)
+        item['outstanding_quantity'] = max(item['issued_quantity'] - item['returned_quantity'], 0)
+        item['returnable_quantity'] = max(
+            item['outstanding_quantity'] - item['pending_quantity'],
+            0,
+        )
+        if item['issued_quantity'] > 0:
+            items.append(item)
+
+    technician_name = ''
+    if ticket.technician:
+        technician_name = ticket.technician.get_full_name().strip() or ticket.technician.username
+
+    return_requests = []
+    requests = EquipmentReturnRequest.objects.filter(service_ticket=ticket).select_related(
+        'technician',
+        'submitted_by',
+        'reviewed_by',
+    ).prefetch_related('items__item')
+    for return_request in requests:
+        submitted_name = ''
+        if return_request.submitted_by:
+            submitted_name = return_request.submitted_by.get_full_name().strip() or return_request.submitted_by.username
+        reviewed_name = ''
+        if return_request.reviewed_by:
+            reviewed_name = return_request.reviewed_by.get_full_name().strip() or return_request.reviewed_by.username
+        return_requests.append({
+            'id': return_request.id,
+            'return_code': f'RET-{return_request.id:06d}',
+            'status': return_request.status,
+            'condition': return_request.condition,
+            'notes': return_request.notes,
+            'created_at': return_request.created_at,
+            'submitted_by_id': return_request.submitted_by_id,
+            'submitted_by_name': submitted_name,
+            'reviewed_by_id': return_request.reviewed_by_id,
+            'reviewed_by_name': reviewed_name,
+            'reviewed_at': return_request.reviewed_at,
+            'reviewed_condition': return_request.reviewed_condition,
+            'review_notes': return_request.review_notes,
+            'items': [
+                {
+                    'item_id': line.item_id,
+                    'item_name': line.item.name,
+                    'item_sku': line.item.sku,
+                    'quantity': line.quantity,
+                }
+                for line in return_request.items.all()
+            ],
+        })
+
+    return {
+        'ticket_id': ticket.id,
+        'technician_id': ticket.technician_id,
+        'technician_name': technician_name,
+        'items': sorted(items, key=lambda item: (item['item_name'].lower(), item['item_id'])),
+        'total_returnable_quantity': sum(item['returnable_quantity'] for item in items),
+        'return_requests': return_requests,
+    }
+
 
 class ServiceLocationViewSet(viewsets.ModelViewSet):
     queryset = ServiceLocation.objects.select_related('request__client', 'request__service_type')
@@ -146,11 +248,13 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         """Return appropriate permissions based on action"""
         if self.action in ['assign', 'auto_assign']:
             return [CanViewSupervisorDispatch()]
+        if self.action == 'equipment_reconciliation':
+            return [permissions.IsAuthenticated()]
         if self.action == 'document_draft':
             return [CanManageDocuments()] if self.request.method == 'POST' else [CanViewDocuments()]
         if self.action == 'document_prefill':
             return [CanViewDocuments()]
-        if self.action in ['generate_document', 'update_project_details']:
+        if self.action in ['generate_document', 'update_project_details', 'promote_to_project_profile']:
             return [CanManageDocuments()]
         if self.action in ['create', 'update', 'partial_update', 'destroy', 'update_status', 'reschedule', 'inspection_decision']:
             return [CanManageServiceTickets()]
@@ -169,6 +273,12 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 'status': 'Use the update-status action to change ticket status.'
             })
         serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {'error': 'Service tickets cannot be deleted. Use the status action to cancel the ticket.'},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
 
     def get_locked_ticket(self):
         """Lock one ticket before assignment or workflow-state mutation."""
@@ -209,7 +319,9 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 user_has_any_capability(self.request.user, AFTER_SALES_VIEW_CAPABILITIES)
             )
         ):
-            return base_queryset.filter(status='Completed').order_by('-completed_date', '-id')
+            return base_queryset.filter(
+                status__in=['Completed', 'Turned Over / Accepted'],
+            ).order_by('-completed_date', '-id')
 
         qs = get_visible_service_tickets_queryset(self.request.user, base_queryset=base_queryset)
         
@@ -274,6 +386,225 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             'sla_overdue': overdue_count,
             'sla_risk': warning_count + overdue_count,
         })
+
+    @action(detail=True, methods=['get', 'post'], url_path='equipment-reconciliation')
+    def equipment_reconciliation(self, request, pk=None):
+        """Submit and verify ticket equipment returns without self-approval."""
+        ticket = self.get_object()
+        can_review = CanViewSupervisorDispatch().has_permission(request, self)
+        is_ticket_technician = (
+            request.user.role == 'technician'
+            and ticket.technician_id == request.user.id
+        )
+        if not can_review and not is_ticket_technician:
+            raise PermissionDenied('You cannot access equipment returns for this ticket.')
+
+        if request.method == 'GET':
+            return Response(_serialize_equipment_reconciliation(ticket))
+
+        requested_action = str(request.data.get('action') or 'submit').strip().lower()
+        if requested_action in {'verify', 'reject'}:
+            if not can_review:
+                raise PermissionDenied('Dispatch authority is required to review equipment returns.')
+
+            try:
+                return_request_id = int(request.data.get('return_request_id'))
+            except (TypeError, ValueError):
+                return Response(
+                    {'return_request_id': 'Select a pending return request.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            review_notes = str(request.data.get('review_notes') or '').strip()
+            reviewed_condition = str(request.data.get('reviewed_condition') or '').strip().lower()
+            valid_conditions = {value for value, _label in EquipmentReturnRequest.CONDITION_CHOICES}
+            if reviewed_condition not in valid_conditions:
+                return Response(
+                    {'reviewed_condition': 'Record the condition observed by the receiving staff member.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if len(review_notes) < 3:
+                return Response(
+                    {'review_notes': 'Record the receiving decision and any discrepancy.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if requested_action == 'verify' and reviewed_condition not in {'sealed', 'usable'}:
+                return Response(
+                    {'reviewed_condition': 'Damaged or incomplete equipment cannot be restored to available stock. Reject it and record the discrepancy.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            with transaction.atomic():
+                locked_ticket = self.get_locked_ticket()
+                return_request = get_object_or_404(
+                    EquipmentReturnRequest.objects.select_for_update().prefetch_related('items__item'),
+                    pk=return_request_id,
+                    service_ticket=locked_ticket,
+                )
+                if return_request.status != 'pending':
+                    return Response(
+                        {'return_request_id': 'This return request has already been reviewed.'},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if return_request.submitted_by_id == request.user.id:
+                    raise PermissionDenied('The person who submitted a return cannot verify it.')
+
+                if requested_action == 'verify':
+                    reconciliation = _serialize_equipment_reconciliation(locked_ticket)
+                    outstanding_by_item = {
+                        item['item_id']: item['outstanding_quantity']
+                        for item in reconciliation['items']
+                    }
+                    request_lines = list(return_request.items.all())
+                    inventory_items = InventoryItem.objects.select_for_update().in_bulk(
+                        line.item_id for line in request_lines
+                    )
+                    for line in request_lines:
+                        if line.quantity > outstanding_by_item.get(line.item_id, 0):
+                            return Response(
+                                {'return_request_id': f'{line.item.name} no longer has enough outstanding issued quantity.'},
+                                status=status.HTTP_409_CONFLICT,
+                            )
+                    reference = f'RET-{return_request.id:06d}'
+                    for line in request_lines:
+                        InventoryTransaction.objects.create(
+                            item=inventory_items[line.item_id],
+                            transaction_type='return',
+                            quantity=line.quantity,
+                            technician=return_request.technician,
+                            service_ticket=locked_ticket,
+                            reference_number=reference,
+                            notes=f'Warehouse-verified unused equipment return: {review_notes}',
+                            performed_by=request.user,
+                        )
+                    return_request.status = 'verified'
+                else:
+                    return_request.status = 'rejected'
+
+                return_request.reviewed_by = request.user
+                return_request.reviewed_at = timezone.now()
+                return_request.reviewed_condition = reviewed_condition
+                return_request.review_notes = review_notes
+                return_request.save(update_fields=[
+                    'status',
+                    'reviewed_by',
+                    'reviewed_at',
+                    'reviewed_condition',
+                    'review_notes',
+                ])
+
+            send_user_notification(
+                user=return_request.technician,
+                title=f'Equipment return {return_request.status}',
+                body=f'RET-{return_request.id:06d} for ticket #{ticket.id} was {return_request.status}.',
+                notification_type='success' if return_request.status == 'verified' else 'warning',
+                ticket=ticket,
+                request=ticket.request,
+                send_email=False,
+            )
+            return Response(_serialize_equipment_reconciliation(ticket))
+
+        if requested_action != 'submit':
+            return Response({'action': 'Use submit, verify, or reject.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not is_ticket_technician:
+            raise PermissionDenied('Only the assigned technician can submit this equipment return.')
+        if ticket.status not in {'Completed', 'Turned Over / Accepted'}:
+            return Response(
+                {'ticket': 'Equipment returns can be submitted after the job is completed.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return_rows = request.data.get('returns')
+        notes = str(request.data.get('notes') or '').strip()
+        condition = str(request.data.get('condition') or '').strip().lower()
+        if not isinstance(return_rows, list) or not return_rows:
+            return Response(
+                {'returns': 'Provide at least one equipment item to return.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(notes) < 3:
+            return Response(
+                {'notes': 'Record where the unused equipment came from and its condition.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        valid_conditions = {value for value, _label in EquipmentReturnRequest.CONDITION_CHOICES}
+        if condition not in valid_conditions:
+            return Response(
+                {'condition': 'Record the equipment condition before submitting the return.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        requested_quantities = {}
+        for row in return_rows:
+            try:
+                item_id = int(row.get('item_id') or row.get('item'))
+                quantity = int(row.get('quantity'))
+            except (AttributeError, TypeError, ValueError):
+                return Response(
+                    {'returns': 'Each return needs a valid inventory item and quantity.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if quantity <= 0:
+                return Response(
+                    {'returns': 'Returned quantities must be greater than zero.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            requested_quantities[item_id] = requested_quantities.get(item_id, 0) + quantity
+
+        with transaction.atomic():
+            ticket = self.get_locked_ticket()
+            if ticket.technician_id != request.user.id:
+                raise PermissionDenied('Only the assigned technician can submit this equipment return.')
+            reconciliation = _serialize_equipment_reconciliation(ticket)
+            returnable_by_item = {
+                item['item_id']: item['returnable_quantity']
+                for item in reconciliation['items']
+            }
+            inventory_items = InventoryItem.objects.in_bulk(requested_quantities.keys())
+
+            for item_id, quantity in requested_quantities.items():
+                if item_id not in inventory_items or item_id not in returnable_by_item:
+                    return Response(
+                        {'returns': 'One or more items were not issued for this ticket.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if quantity > returnable_by_item[item_id]:
+                    return Response(
+                        {
+                            'returns': (
+                                f"Only {returnable_by_item[item_id]} unit(s) of "
+                                f"{inventory_items[item_id].name} remain returnable for this ticket."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            return_request = EquipmentReturnRequest.objects.create(
+                service_ticket=ticket,
+                technician=request.user,
+                submitted_by=request.user,
+                condition=condition,
+                notes=notes,
+            )
+            EquipmentReturnRequestItem.objects.bulk_create([
+                EquipmentReturnRequestItem(
+                    return_request=return_request,
+                    item=inventory_items[item_id],
+                    quantity=quantity,
+                )
+                for item_id, quantity in requested_quantities.items()
+            ])
+
+        _notify_admin_ticket_progress(
+            ticket=ticket,
+            actor=request.user,
+            title='Equipment return awaiting verification',
+            body=f'{request.user.get_full_name().strip() or request.user.username} submitted RET-{return_request.id:06d} for ticket #{ticket.id}.',
+            notification_type='warning',
+        )
+        return Response(
+            _serialize_equipment_reconciliation(ticket),
+            status=status.HTTP_201_CREATED,
+        )
 
     def _build_document_defaults(self):
         return {
@@ -557,25 +888,43 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        defaults = {
-            'title': str(request.data.get('title') or self.DOCUMENT_TITLES.get(document_type, document_type)).strip(),
-            'status': status_value,
-            'data_json': data_json,
-            'source_snapshot_json': source_snapshot_json,
-            'generated_by': request.user,
-        }
-        document, _ = GeneratedDocument.objects.update_or_create(
-            ticket=ticket,
-            document_type=document_type,
-            defaults=defaults,
-        )
+        with transaction.atomic():
+            ticket = ServiceTicket.objects.select_for_update().get(pk=ticket.pk)
+            document = GeneratedDocument.objects.select_for_update().filter(
+                ticket=ticket,
+                document_type=document_type,
+            ).first()
+            if document and document.status == 'finalized':
+                return Response(
+                    {'detail': 'Finalized documents are immutable.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            defaults = {
+                'title': str(request.data.get('title') or self.DOCUMENT_TITLES.get(document_type, document_type)).strip(),
+                'status': status_value,
+                'data_json': data_json,
+                'source_snapshot_json': source_snapshot_json,
+                'generated_by': request.user,
+            }
+            if document:
+                for field, value in defaults.items():
+                    setattr(document, field, value)
+                document.save(update_fields=[*defaults.keys(), 'updated_at'])
+            else:
+                document = GeneratedDocument.objects.create(
+                    ticket=ticket,
+                    document_type=document_type,
+                    **defaults,
+                )
 
         serializer = GeneratedDocumentSerializer(document, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], url_path='update-project-details')
+    @transaction.atomic
     def update_project_details(self, request, pk=None):
-        ticket = self.get_object()
+        ticket = self.get_locked_ticket()
         project_details = request.data.get('project_details')
         if not isinstance(project_details, dict):
             return Response({'detail': 'project_details must be an object.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -634,7 +983,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         Unified assignment endpoint - replaces assign_technician and old assign.
         Accepts: technician_id (required), auto_assign (bool), calculate_route (bool)
         """
-        ticket = self.get_object()
+        ticket = self.get_locked_ticket()
         technician_id = request.data.get('technician_id')
         dispatch_stage = str(request.data.get('dispatch_stage') or 'service').strip().lower()
         crew_ids_value = (
@@ -695,7 +1044,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             technician = locked_technicians.get(primary_technician_id)
             if technician is None:
                 raise User.DoesNotExist
-            if technician.status != 'active':
+            if technician.status != 'active' or not technician.is_active:
                 return Response({'error': 'Technician must be active before assignment.'}, status=status.HTTP_400_BAD_REQUEST)
 
             scheduled_date = None
@@ -715,6 +1064,11 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'scheduled_time_slot must be a supported time slot'}, status=status.HTTP_400_BAD_REQUEST)
 
             effective_scheduled_date = scheduled_date or ticket.scheduled_date
+            effective_scheduled_time = (
+                scheduled_time
+                or (get_default_time_for_slot(requested_time_slot) if requested_time_slot not in [None, ''] else None)
+                or ticket.scheduled_time
+            )
 
             # Enforce daily assignment limit per service type
             service_type = ticket.request.service_type
@@ -741,6 +1095,12 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 )
             try:
                 validate_technician_daily_capacity(technician, effective_scheduled_date, ticket)
+                validate_technician_schedule_overlap(
+                    technician,
+                    effective_scheduled_date,
+                    effective_scheduled_time,
+                    ticket,
+                )
             except ValueError as exc:
                 return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -760,7 +1120,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             inactive_crew_members = [
                 crew_member.username
                 for crew_member in crew_lookup.values()
-                if crew_member.status != 'active'
+                if crew_member.status != 'active' or not crew_member.is_active
             ]
             if inactive_crew_members:
                 return Response(
@@ -777,6 +1137,12 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             for crew_member in crew_members:
                 try:
                     validate_technician_daily_capacity(crew_member, effective_scheduled_date, ticket)
+                    validate_technician_schedule_overlap(
+                        crew_member,
+                        effective_scheduled_date,
+                        effective_scheduled_time,
+                        ticket,
+                    )
                 except ValueError as exc:
                     return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -921,9 +1287,9 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
 
         target_status, default_note = decision_map[decision]
 
-        if decision in ['cancel', 'reject'] and not notes:
+        if decision in ['awaiting_materials', 'cancel', 'reject'] and not notes:
             return Response(
-                {'error': 'A reason (notes) is required when cancelling or rejecting a ticket after inspection.'},
+                {'error': 'A reason (notes) is required when materials are pending or the ticket is cancelled after inspection.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1022,9 +1388,10 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def auto_assign(self, request, pk=None):
         """Auto-assign the best available technician using skill, distance, and workload."""
+        from services.auto_dispatch import MIN_SCORE_THRESHOLD, rank_technician_candidates
+
         ticket = self.get_locked_ticket()
-        service_type = ticket.request.service_type
-        current_tech_id = ticket.technician_id  # Remember current technician for comparison
+        current_tech_id = ticket.technician_id
 
         if ticket.status not in ASSIGNABLE_TICKET_STATUSES:
             return Response(
@@ -1032,76 +1399,68 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get location of the service request
         try:
             location = ticket.request.location
-            request_lat = location.latitude
-            request_lon = location.longitude
         except ServiceLocation.DoesNotExist:
             return Response({'error': 'Service location not found'}, status=status.HTTP_400_BAD_REQUEST)
+        if location.latitude is None or location.longitude is None:
+            return Response({'error': 'Service location coordinates are incomplete'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Find technicians with the exact service skill, or General Services as fallback.
-        skilled_technicians = get_eligible_technician_ids_for_service(service_type)
-
-        # Get available technicians with required skills
-        # Exclude the CURRENT technician from this query to allow reassignment
-        available_technicians = User.objects.filter(
-            id__in=skilled_technicians,
-            role='technician',
-            status='active',
-            technician_profile__is_available=True
-        ).exclude(
-            id=current_tech_id  # Exclude ONLY the current technician
-        ).exclude(
-            # Exclude technicians already deeply overloaded (3+ active tickets)
-            assigned_tickets__status__in=['Not Started', 'In Progress']
-        ).distinct()
-
-        # If no one else available, allow current technician to stay
-        if not available_technicians:
-            if current_tech_id:
-                available_technicians = User.objects.filter(id=current_tech_id)
-            else:
-                return Response(
-                    {'error': 'No available technicians with required skills', 'success': False},
-                    status=status.HTTP_409_CONFLICT
-                )
-
-        ranked_candidates = []
-        for tech in available_technicians:
-            # Set default location if missing
-            if not tech.current_latitude or not tech.current_longitude:
-                tech.current_latitude = 14.5995
-                tech.current_longitude = 120.9842
-                tech.save()
-
-            candidate = score_technician_fit(ticket, tech, request_lat, request_lon)
-            if candidate is not None:
-                candidate['technician'] = tech
-                ranked_candidates.append(candidate)
+        ranked_candidates = rank_technician_candidates(ticket)
 
         if not ranked_candidates:
             return Response(
-                {'error': 'No technicians have enough routing and skill data for smart assignment', 'success': False},
+                {
+                    'error': (
+                        'No available technician meets the skill, schedule, capacity, location, '
+                        f'and minimum score ({MIN_SCORE_THRESHOLD:g}) requirements.'
+                    ),
+                    'success': False,
+                },
                 status=status.HTTP_409_CONFLICT
             )
 
-        ranked_candidates.sort(
-            key=lambda item: (
-                item.get('daily_assigned_minutes', 0),
-                -item['score'],
-            )
-        )
         best_candidate = ranked_candidates[0]
         selected_technician = User.objects.select_for_update().get(
             pk=best_candidate['technician'].pk,
             role='technician',
         )
-        if selected_technician.status != 'active' or not selected_technician.is_available:
+        if (
+            selected_technician.status != 'active'
+            or not selected_technician.is_active
+            or not selected_technician.is_available
+        ):
             return Response(
                 {'error': 'The selected technician is no longer available. Refresh and try again.', 'success': False},
                 status=status.HTTP_409_CONFLICT,
             )
+
+        try:
+            validate_technician_daily_capacity(selected_technician, ticket.scheduled_date, ticket)
+            validate_technician_schedule_overlap(
+                selected_technician,
+                ticket.scheduled_date,
+                ticket.scheduled_time,
+                ticket,
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc), 'success': False}, status=status.HTTP_409_CONFLICT)
+
+        locked_fitness = score_technician_fit(
+            ticket,
+            selected_technician,
+            float(location.latitude),
+            float(location.longitude),
+        )
+        if locked_fitness is None or locked_fitness['score'] <= MIN_SCORE_THRESHOLD:
+            return Response(
+                {
+                    'error': 'The selected technician no longer meets smart-assignment requirements. Refresh and try again.',
+                    'success': False,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        best_candidate = {**locked_fitness, 'technician': selected_technician}
 
         if selected_technician:
             previous_team_ids = get_ticket_team_member_ids(ticket)
@@ -1120,7 +1479,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             assignment_status = None
             if ticket.ticket_type == 'inspection' and ticket.status != 'For Inspection':
                 assignment_status = 'For Inspection'
-            elif ticket.ticket_type == 'service' and ticket.status in {'Awaiting Materials', 'On Hold', 'Not Started'}:
+            elif ticket.ticket_type == 'installation' and ticket.status in {'Awaiting Materials', 'On Hold', 'Not Started'}:
                 assignment_status = 'Ready for Service'
 
             if assignment_status:
@@ -1225,20 +1584,37 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         """Update ticket status with history tracking"""
         ticket = self.get_locked_ticket()
         new_status = request.data.get('status')
-        notes = request.data.get('notes', '')
+        notes = str(request.data.get('reason') or request.data.get('notes') or '').strip()
 
         if not new_status:
             return Response({'error': 'status is required'}, status=status.HTTP_400_BAD_REQUEST)
+        normalized_requested_status = normalize_ticket_status(new_status)
+        if not notes:
+            return Response(
+                {'error': 'A reason (notes) is required for a manual ticket status change.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if normalized_requested_status == 'Completed':
+            try:
+                ensure_ticket_checklist_completed(ticket)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             resolved_status = apply_ticket_status_change(
                 ticket,
                 new_status,
                 changed_by=request.user,
-                notes=notes or f'Status updated to {new_status}',
+                notes=notes,
             )
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if resolved_status == 'Completed':
+            from ..maintenance import sync_completion_follow_up_case
+
+            sync_completion_follow_up_case(ticket)
+            _notify_ticket_completion_recipients(ticket=ticket, technician=request.user)
 
         send_user_notification(
             user=ticket.request.client,
@@ -1339,6 +1715,11 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         elif not isinstance(proof_images, list):
             proof_images = [proof_images]
 
+        try:
+            ensure_ticket_completion_proof(ticket, proof_images)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
         completion_notes = request.data.get('completion_notes') or ''
         ticket.completion_proof_images = proof_images
         ticket.completion_notes = completion_notes
@@ -1390,12 +1771,13 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         })
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def submit_feedback(self, request, pk=None):
         """Allow clients to rate and provide feedback for completed tickets"""
-        ticket = self.get_object()
+        ticket = self.get_locked_ticket()
         if request.user.role != 'client' or ticket.request.client_id != request.user.id:
             raise PermissionDenied('You can only rate your own completed tickets.')
-        if ticket.status != 'Completed':
+        if ticket.status not in {'Completed', 'Turned Over / Accepted'}:
             return Response({'error': 'Feedback can only be submitted for completed tickets'}, status=status.HTTP_400_BAD_REQUEST)
 
         rating = request.data.get('rating', request.data.get('client_rating'))
@@ -1430,11 +1812,13 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         })
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def upload_photos(self, request, pk=None):
-        ticket = self.get_object()
+        ticket = self.get_locked_ticket()
         photos = request.data.get('photos', []) or []
         videos = request.data.get('videos', []) or []
         media = request.data.get('media', []) or []
+        proof_media = normalize_proof_media_payload(photos=photos, videos=videos, media=media)
         uploaded_media = []
         if hasattr(request.FILES, 'getlist'):
             uploaded_media.extend(
@@ -1454,7 +1838,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 )
             )
 
-        proof_media = normalize_proof_media_payload(photos=photos, videos=videos, media=media) + uploaded_media
+        proof_media += uploaded_media
         if not proof_media:
             return Response({'error': 'At least one photo or video proof entry is required'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1666,7 +2050,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
     def request_reschedule(self, request, pk=None):
         """Allow client to request rescheduling of their ticket"""
         with transaction.atomic():
-            ticket = self.get_object()
+            ticket = self.get_locked_ticket()
             if request.user.role != 'client' or ticket.request.client_id != request.user.id:
                 raise PermissionDenied('Only the client can request a reschedule.')
 
@@ -1686,16 +2070,40 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            normalized_preferred_date = None
+            if preferred_date not in [None, '']:
+                normalized_preferred_date = parse_date(str(preferred_date))
+                if normalized_preferred_date is None:
+                    return Response(
+                        {'error': 'preferred_date must be a valid date.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if normalized_preferred_date < timezone.localdate():
+                    return Response(
+                        {'error': 'preferred_date cannot be in the past.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            normalized_preferred_time_slot = None
+            if preferred_time_slot not in [None, '']:
+                normalized_preferred_time_slot = normalize_time_slot(preferred_time_slot)
+                if normalized_preferred_time_slot is None:
+                    return Response(
+                        {'error': 'preferred_time_slot must be a supported time slot.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
             ticket.reschedule_requested = True
             ticket.reschedule_reason = reason
             ticket.reschedule_requested_at = timezone.now()
             ticket.save(update_fields=['reschedule_requested', 'reschedule_reason', 'reschedule_requested_at', 'updated_at'])
 
-            if preferred_date or preferred_time_slot:
-                if preferred_date:
-                    ticket.request.preferred_date = preferred_date
-                if preferred_time_slot:
-                    ticket.request.preferred_time_slot = preferred_time_slot
+            if normalized_preferred_date or normalized_preferred_time_slot:
+                ServiceRequest.objects.select_for_update().get(pk=ticket.request_id)
+                if normalized_preferred_date:
+                    ticket.request.preferred_date = normalized_preferred_date
+                if normalized_preferred_time_slot:
+                    ticket.request.preferred_time_slot = normalized_preferred_time_slot
                 ticket.request.save(update_fields=['preferred_date', 'preferred_time_slot', 'updated_at'])
 
             admins = User.objects.filter(role__in=['superadmin', 'admin'])
@@ -1719,7 +2127,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
     def reschedule(self, request, pk=None):
         """Allow staff/admin to confirm rescheduling of a ticket"""
         with transaction.atomic():
-            ticket = self.get_object()
+            ticket = self.get_locked_ticket()
             if not user_can_manage_service_requests(request.user) and not CanManageServiceTickets().has_permission(request, self):
                 raise PermissionDenied('You do not have permission to reschedule tickets.')
 
@@ -1728,39 +2136,78 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             scheduled_time = request.data.get('scheduled_time')
             notes = str(request.data.get('notes') or '').strip()
 
+            if not notes:
+                return Response(
+                    {'error': 'A reason (notes) is required when rescheduling a ticket.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if scheduled_date in [None, ''] and scheduled_time_slot in [None, ''] and scheduled_time in [None, '']:
+                return Response(
+                    {'error': 'Provide a scheduled date, time slot, or time.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            normalized_scheduled_date = None
+            if scheduled_date not in [None, '']:
+                normalized_scheduled_date = parse_date(str(scheduled_date))
+                if normalized_scheduled_date is None:
+                    return Response({'error': 'scheduled_date must be a valid date.'}, status=status.HTTP_400_BAD_REQUEST)
+                if normalized_scheduled_date < timezone.localdate():
+                    return Response({'error': 'scheduled_date cannot be in the past.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            normalized_time_slot = None
+            if scheduled_time_slot not in [None, '']:
+                normalized_time_slot = normalize_time_slot(scheduled_time_slot)
+                if normalized_time_slot is None:
+                    return Response(
+                        {'error': 'scheduled_time_slot must be a supported time slot.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            normalized_scheduled_time = None
+            if scheduled_time not in [None, '']:
+                normalized_scheduled_time = parse_time(str(scheduled_time))
+                if normalized_scheduled_time is None:
+                    return Response({'error': 'scheduled_time must be a valid time.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            effective_scheduled_date = normalized_scheduled_date or ticket.scheduled_date
+            effective_scheduled_time = (
+                normalized_scheduled_time
+                or (get_default_time_for_slot(normalized_time_slot) if normalized_time_slot else None)
+                or ticket.scheduled_time
+            )
+            for technician in get_ticket_team_members(ticket):
+                try:
+                    validate_technician_daily_capacity(technician, effective_scheduled_date, ticket)
+                    validate_technician_schedule_overlap(
+                        technician,
+                        effective_scheduled_date,
+                        effective_scheduled_time,
+                        ticket,
+                    )
+                except ValueError as exc:
+                    return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
             update_fields = ['updated_at']
-            if scheduled_date:
-                ticket.scheduled_date = parse_date(scheduled_date) if isinstance(scheduled_date, str) else scheduled_date
+            if normalized_scheduled_date:
+                ticket.scheduled_date = normalized_scheduled_date
                 update_fields.append('scheduled_date')
-            if scheduled_time_slot:
-                ticket.scheduled_time_slot = normalize_time_slot(scheduled_time_slot)
+            if normalized_time_slot:
+                ticket.scheduled_time_slot = normalized_time_slot
                 update_fields.append('scheduled_time_slot')
 
-            if scheduled_time:
-                from datetime import datetime as dt
-                if isinstance(scheduled_time, str):
-                    ticket.scheduled_time = dt.strptime(scheduled_time, '%H:%M').time()
-                else:
-                    ticket.scheduled_time = scheduled_time
+            if normalized_scheduled_time:
+                ticket.scheduled_time = normalized_scheduled_time
                 update_fields.append('scheduled_time')
-            elif ticket.scheduled_time_slot and not ticket.scheduled_time:
-                slot_times = {'morning': '09:00', 'afternoon': '15:00', 'evening': '18:00'}
-                time_str = slot_times.get(ticket.scheduled_time_slot, '09:00')
-                from datetime import datetime as dt
-                ticket.scheduled_time = dt.strptime(time_str, '%H:%M').time()
-                update_fields.append('scheduled_time')
-            elif ticket.scheduled_time_slot and scheduled_date:
-                slot_times = {'morning': '09:00', 'afternoon': '15:00', 'evening': '18:00'}
-                time_str = slot_times.get(ticket.scheduled_time_slot, '09:00')
-                from datetime import datetime as dt
-                ticket.scheduled_time = dt.strptime(time_str, '%H:%M').time()
+            elif normalized_time_slot:
+                apply_schedule_fields(ticket, scheduled_time_slot=normalized_time_slot)
                 update_fields.append('scheduled_time')
 
             clear_reschedule_request(ticket)
             update_fields.extend(['reschedule_requested', 'reschedule_reason', 'reschedule_requested_at'])
 
-            if notes:
-                ticket._activity_reason = notes
+            ticket._activity_reason = notes
 
             ticket.save(update_fields=list(dict.fromkeys(update_fields)))
             sync_ticket_team_availability(ticket)
@@ -1769,7 +2216,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 ticket=ticket,
                 status=ticket.status,
                 changed_by=request.user,
-                notes=notes or f"Ticket rescheduled to {ticket.scheduled_date} ({ticket.scheduled_time_slot})."
+                notes=notes,
             )
 
             send_user_notification(
@@ -1866,50 +2313,17 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         from services.models import SolarEstimate
         from services.models.documents import SolarProjectProfile
         from services.serializers import SolarProjectProfileSerializer
+        from services.views.solar_estimates import build_solar_profile_defaults
 
         location = getattr(ticket.request, 'location', None)
         if not location:
             return Response({'detail': 'A service location is required to create a project profile.'}, status=status.HTTP_400_BAD_REQUEST)
 
         estimate = SolarEstimate.objects.filter(service_request=ticket.request).first()
-        if not estimate and ticket.request.client_id:
-            estimate = SolarEstimate.objects.filter(client_id=ticket.request.client_id, status='converted').order_by('-converted_at').first()
-
-        snapshot = (estimate.result_snapshot or {}) if estimate else {}
-        promo = (estimate.selected_promotion or {}) if estimate else {}
-
-        number_of_panels = int(snapshot.get('panelCount') or getattr(estimate, 'panelCount', 0) or 0)
-        panel_brand = promo.get('panelBrand') or 'Standard High-Efficiency PV'
-        inverter_brand = promo.get('inverterBrand') or 'Grid-Tie Inverter'
-        number_of_inverters = int(snapshot.get('inverterCount') or 1)
-        battery_brand = promo.get('batteryBrand') or ''
-        mounting_structure = 'Rooftop / Standard Flush Mount'
-
-        cap = snapshot.get('installedCapacity')
-        if cap is not None:
-            system_capacity = f"{float(cap):.2f} kWp"
-        elif estimate and getattr(estimate, 'panel_wattage', None) and number_of_panels:
-            system_capacity = f"{(number_of_panels * estimate.panel_wattage) / 1000:.2f} kWp"
-        else:
-            system_capacity = "3.50 kWp"
-
-        if hasattr(ticket, 'technical_data_sheet') and ticket.technical_data_sheet:
-            tds = ticket.technical_data_sheet
-            if tds.rooftop_type:
-                mounting_structure = tds.rooftop_type
 
         profile, created = SolarProjectProfile.objects.update_or_create(
             location=location,
-            defaults={
-                'original_ticket': ticket,
-                'system_capacity': system_capacity,
-                'panel_brand': panel_brand,
-                'number_of_panels': number_of_panels,
-                'inverter_brand': inverter_brand,
-                'number_of_inverters': number_of_inverters,
-                'battery_brand': battery_brand,
-                'mounting_structure': mounting_structure,
-            }
+            defaults=build_solar_profile_defaults(estimate=estimate, ticket=ticket),
         )
         return Response(SolarProjectProfileSerializer(profile).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
@@ -1973,6 +2387,27 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(ticket_id=ticket_id)
         return queryset
 
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        ticket_id = request.data.get('ticket')
+        try:
+            ticket_id = int(ticket_id)
+        except (TypeError, ValueError):
+            return Response({'ticket': ['A valid ticket is required.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            ServiceTicket.objects.select_for_update().get(pk=ticket_id)
+        except ServiceTicket.DoesNotExist:
+            return Response({'ticket': ['Service ticket not found.']}, status=status.HTTP_404_NOT_FOUND)
+        existing = self.get_queryset().filter(ticket_id=ticket_id).first()
+        serializer = self.get_serializer(existing, data=request.data, partial=bool(existing))
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK if existing else status.HTTP_201_CREATED,
+        )
+
     def perform_create(self, serializer):
         serializer.save()
 
@@ -1986,7 +2421,7 @@ class SolarProjectProfileViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'promote_estimate']:
             return [CanManageDocuments()]
         return [CanAccessDocuments()]
 
@@ -2009,6 +2444,7 @@ class SolarProjectProfileViewSet(viewsets.ModelViewSet):
     def promote_estimate(self, request):
         from services.models import ServiceTicket, SolarEstimate
         from services.models.documents import SolarProjectProfile
+        from services.views.solar_estimates import build_solar_profile_defaults
 
         ticket_id = request.data.get('ticket_id') or request.data.get('ticket')
         estimate_id = request.data.get('estimate_id') or request.data.get('estimate')
@@ -2034,47 +2470,16 @@ class SolarProjectProfileViewSet(viewsets.ModelViewSet):
 
         if not estimate and ticket:
             estimate = SolarEstimate.objects.filter(service_request=ticket.request).first()
-            if not estimate and ticket.request.client_id:
-                estimate = SolarEstimate.objects.filter(client_id=ticket.request.client_id, status='converted').order_by('-converted_at').first()
 
         if not location:
             return Response({'detail': 'A service location is required to promote into SolarProjectProfile.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        snapshot = (estimate.result_snapshot or {}) if estimate else {}
-        promo = (estimate.selected_promotion or {}) if estimate else {}
-
-        number_of_panels = int(snapshot.get('panelCount') or getattr(estimate, 'panelCount', 0) or 0)
-        panel_brand = promo.get('panelBrand') or 'Standard High-Efficiency PV'
-        inverter_brand = promo.get('inverterBrand') or 'Grid-Tie Inverter'
-        number_of_inverters = int(snapshot.get('inverterCount') or 1)
-        battery_brand = promo.get('batteryBrand') or ''
-        mounting_structure = 'Rooftop / Standard Flush Mount'
-
-        cap = snapshot.get('installedCapacity')
-        if cap is not None:
-            system_capacity = f"{float(cap):.2f} kWp"
-        elif estimate and getattr(estimate, 'panel_wattage', None) and number_of_panels:
-            system_capacity = f"{(number_of_panels * estimate.panel_wattage) / 1000:.2f} kWp"
-        else:
-            system_capacity = "3.50 kWp"
-
-        if ticket and hasattr(ticket, 'technical_data_sheet') and ticket.technical_data_sheet:
-            tds = ticket.technical_data_sheet
-            if tds.rooftop_type:
-                mounting_structure = tds.rooftop_type
+        if ticket is None:
+            ticket = location.request.serviceticket_set.order_by('-created_at', '-id').first()
 
         profile, created = SolarProjectProfile.objects.update_or_create(
             location=location,
-            defaults={
-                'original_ticket': ticket or getattr(location.request, 'ticket', None),
-                'system_capacity': system_capacity,
-                'panel_brand': panel_brand,
-                'number_of_panels': number_of_panels,
-                'inverter_brand': inverter_brand,
-                'number_of_inverters': number_of_inverters,
-                'battery_brand': battery_brand,
-                'mounting_structure': mounting_structure,
-            }
+            defaults=build_solar_profile_defaults(estimate=estimate, ticket=ticket),
         )
         return Response(self.get_serializer(profile).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 

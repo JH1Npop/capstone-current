@@ -4,6 +4,16 @@ import { API_BASE_URL, api, clearStoredAuth, getApiErrorMessage } from '../api/c
 
 const AuthContext = createContext(null);
 
+const normalizeRegisterErrors = (data) => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+  return Object.fromEntries(
+    Object.entries(data).map(([field, value]) => [
+      field,
+      Array.isArray(value) ? value.map(String).join(' ') : String(value),
+    ]),
+  );
+};
+
 const formatRegisterError = (error) => {
   const data = error?.response?.data;
 
@@ -202,6 +212,22 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, [token]);
 
+  const updateCurrentUser = useCallback((nextUser) => {
+    setUser((currentUser) => {
+      const resolvedUser = typeof nextUser === 'function'
+        ? nextUser(currentUser)
+        : { ...currentUser, ...nextUser };
+
+      if (resolvedUser) {
+        sessionStorage.setItem('afn_user', JSON.stringify(resolvedUser));
+      } else {
+        sessionStorage.removeItem('afn_user');
+      }
+
+      return resolvedUser;
+    });
+  }, []);
+
   /**
    * Register a new user account.
    * Returns { success: true } or { success: false, message: string }
@@ -212,14 +238,31 @@ export const AuthProvider = ({ children }) => {
       setToken(null);
       setUser(null);
 
-      const response = await axios.post(`${API_BASE_URL}/users/register/`, userData);
+      const response = await axios.post(`${API_BASE_URL}/users/register/`, userData, { timeout: 15_000 });
       const { user: newUser, message } = response.data;
 
       return { success: true, user: newUser, message };
     } catch (err) {
       return {
         success: false,
-        message: formatRegisterError(err)
+        message: formatRegisterError(err),
+        errors: normalizeRegisterErrors(err?.response?.data),
+      };
+    }
+  }, []);
+
+  const resendVerification = useCallback(async (email) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/users/resend_verification/`,
+        { email },
+        { timeout: 15_000 },
+      );
+      return { success: true, message: response.data?.message || 'Verification email requested.' };
+    } catch (error) {
+      return {
+        success: false,
+        message: getApiErrorMessage(error, 'Unable to resend the verification email. Please try again.'),
       };
     }
   }, []);
@@ -233,8 +276,10 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout,
-    register
-  }), [user, token, isAuthenticated, loading, login, logout, register]);
+    register,
+    resendVerification,
+    updateCurrentUser
+  }), [user, token, isAuthenticated, loading, login, logout, register, resendVerification, updateCurrentUser]);
 
   return (
     <AuthContext.Provider value={contextValue}>
@@ -247,7 +292,7 @@ export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === null) {
     // Fallback for cases where hook is called outside provider or during initialization
-    return { user: null, token: null, isAuthenticated: false, loading: false, login: async () => {}, logout: () => {}, register: async () => {} };
+    return { user: null, token: null, isAuthenticated: false, loading: false, login: async () => {}, logout: () => {}, register: async () => {}, resendVerification: async () => {}, updateCurrentUser: () => {} };
   }
   return context;
 };

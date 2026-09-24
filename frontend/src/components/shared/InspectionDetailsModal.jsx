@@ -6,6 +6,11 @@ import { formatTicketId } from '../../utils/roleIds';
 
 const formatField = (value) => (value ? 'Yes' : 'No');
 
+const isVideoProof = (media, url) => (
+  String(media?.type || '').toLowerCase() === 'video'
+  || /\.(mp4|webm|ogg|mov)(?:$|[?#])/i.test(url || '')
+);
+
 const TONE_CLASS_MAP = {
   slate: 'text-slate-900',
   emerald: 'text-emerald-700',
@@ -175,7 +180,7 @@ export default function InspectionDetailsModal({ ticket, onClose }) {
                 <section>
                   <div className="mb-4 flex items-center gap-2">
                     <FiCamera className="text-brand-600" />
-                    <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-600">Proof Photos</h4>
+                    <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-600">Proof Media</h4>
                     <span className="text-xs text-slate-400">({inspection.proof_media.length})</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -188,17 +193,21 @@ export default function InspectionDetailsModal({ ticket, onClose }) {
                           key={index}
                           className="group relative aspect-square overflow-hidden rounded-2xl border border-surface-200 bg-slate-100 shadow-sm"
                         >
-                          <img
-                            src={url}
-                            alt={`Inspection photo ${index + 1}`}
-                            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = 'https://placehold.co/400x400/f8fafc/94a3b8?text=Image+Not+Found';
-                            }}
-                          />
+                          {isVideoProof(media, url) ? (
+                            <video src={url} controls preload="metadata" className="h-full w-full object-cover" />
+                          ) : (
+                            <img
+                              src={url}
+                              alt={`Inspection photo ${index + 1}`}
+                              className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = 'https://placehold.co/400x400/f8fafc/94a3b8?text=Image+Not+Found';
+                              }}
+                            />
+                          )}
                           <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/70 to-transparent px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/90">
-                            Photo {index + 1}
+                            {isVideoProof(media, url) ? 'Video' : 'Photo'} {index + 1}
                           </figcaption>
                         </figure>
                       );

@@ -1,7 +1,7 @@
 # After-Sales Data Flow and Audit
 
 Date: May 4, 2026
-Updated: May 30, 2026
+Updated: August 29, 2026
 
 ## Purpose
 
@@ -33,6 +33,7 @@ Client creates service request
 | `ServiceTicket` | Scheduled/assigned job created from a request | `request`, `technician`, `status`, `scheduled_date`, `completed_date`, `warranty_end_date` |
 | `InspectionChecklist` | Technician checklist submission | `ticket`, `checklist_items`, `warranty_provided`, `warranty_period_days`, `follow_up_required`, `follow_up_case_type` |
 | `AfterSalesCase` | After-sales work queue record | `service_ticket`, `client`, `case_type`, `status`, `priority`, `creation_source`, `due_date` |
+| `AfterSalesCaseEvent` | Append-only case activity timeline | `case`, `actor`, `event_type`, `from_status`, `to_status`, `notes`, `metadata` |
 | `MaintenanceSchedule` | Planned future maintenance reminder | `service_ticket`, `client`, `next_due_date`, `notify_on_date`, `status`, `risk_level` |
 | `Message` | Ticket-linked after-sales conversation | `ticket`, `sender`, `receiver`, `room_type`, `group_key`, `message_text` |
 | `Notification` | In-app alert for admins/clients/technicians | `user`, `ticket`, `request`, `title`, `message`, `type`, `status` |
@@ -103,6 +104,25 @@ The case queue is now table-based and supports:
 | Priority | `priority` |
 | Source | `creation_source` |
 
+The queue also uses server-side pagination, exposes active admin/superadmin case
+owners, requires resolution notes before a case can be resolved or closed, and
+requires a reason before a resolved or closed case can be reopened. The case
+detail view shows its append-only activity timeline. Both `Completed` and
+`Turned Over / Accepted` tickets are eligible for a manual follow-up.
+
+Allowed status transitions are:
+
+```text
+Open -> In Progress, Resolved, Closed
+In Progress -> Open, Resolved, Closed
+Resolved -> Open, Closed
+Closed -> Open
+```
+
+New cases must start as `Open`. Warranty coverage expiry remains on the service
+ticket; the case `due_date` is an operational response deadline and must not be
+used as the warranty-expiration date.
+
 ## Scalability Audit
 
 | Area | Status | Notes |
@@ -110,7 +130,7 @@ The case queue is now table-based and supports:
 | Database table exists | Passed | `AfterSalesCase` is a real Django model with migrations. |
 | Frontend connected to backend | Passed | Dashboard and queue call API helpers instead of mock data. |
 | Backend connected to database | Passed | Viewsets/querysets read `AfterSalesCase`, `MaintenanceSchedule`, and `ServiceTicket`. |
-| Filtering scalability | Improved | Filters now run through backend query params instead of only React-side filtering. |
+| Filtering scalability | Passed | Filters and pagination now run through backend query params. |
 | Search usability | Improved | Queue search is available from the UI and maps to backend search. |
 | Table usability | Improved | Dashboard and queue use tables for scan-friendly case management. |
 | Empty-state clarity | Improved | UI explains that after-sales is populated after completed ticket handoff/warranty/maintenance/manual case creation. |
@@ -118,7 +138,8 @@ The case queue is now table-based and supports:
 | Role access | Passed | Access is controlled by after-sales/admin capability permissions. |
 | Client ticket messages | Passed | Clients can message only on their own tickets; admins can see ticket rooms. |
 | Message notifications | Passed | Client ticket messages create `customer_inquiry` notifications for admin/superadmin. |
-| Automated tests | Passed | Backend tests verify creation, rejection, database filters, search behavior, and ticket message access. |
+| Automated tests | Passed | Backend tests verify creation, eligibility, filters, search, lifecycle notes, activity events, warranty response deadlines, maintenance handoffs, and capability access. A focused browser journey exercises real case creation and resolution; the local runner still has a known teardown delay after the successful workflow. |
+| Reminder automation | Passed | The daily operational group processes maintenance alerts. A scheduler that first runs inside the three-day window sends the more urgent three-day stage first instead of a stale seven-day stage. |
 
 ## Demo Checklist
 
@@ -142,13 +163,14 @@ Use this sequence to prove the full flow:
 
 The after-sales module is connected across frontend, backend, and database. The main workflow is intentionally completion-based: client requests do not directly appear as after-sales cases until the service work is completed or a manual after-sales case is created.
 
-The current implementation is acceptable for a professor demo because it shows:
+The current implementation is suitable for a professor demo because it shows:
 
 - Real database-backed records.
 - Clear lifecycle from client request to after-sales case.
 - API endpoints that read and write real models.
 - Search and filters that scale better than frontend-only filtering.
 - UI tables that make stored data visible and easier to explain.
+- Accountable case ownership, resolution evidence, and a case-specific activity trail.
 
 ## Lifecycle Boundary
 
@@ -156,7 +178,7 @@ After-sales and maintenance records keep the service lifecycle active after tick
 
 ## Next Discussion: Client Visibility
 
-Question to revisit: should clients see after-sales tickets directly on the client dashboard?
+Remaining product decision: should clients see after-sales tickets directly on the client dashboard?
 
 Current state:
 

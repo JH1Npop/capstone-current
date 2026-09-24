@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FiActivity, FiChevronDown, FiClock, FiDatabase, FiSearch, FiUser } from 'react-icons/fi';
+import { Link } from 'react-router-dom';
+import { FiActivity, FiChevronDown, FiClock, FiCopy, FiDatabase, FiDownload, FiExternalLink, FiRefreshCw, FiUser } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
-import { fetchActivityLogs } from '../../api/api';
+import { downloadActivityLogs, fetchActivityLogs, fetchActivityLogSummary } from '../../api/api';
+import SearchFilterBar from '../../components/shared/SearchFilterBar';
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
 
 const actionTone = {
   create: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -109,6 +111,21 @@ const formatDateTime = (value) => {
   });
 };
 
+const formatExactDateTime = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+  });
+};
+
 const formatModelLabel = (value = '') =>
   String(value)
     .replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -152,6 +169,23 @@ const formatValue = (value) => {
 const getActorName = (log) => log.changedByName || 'System';
 
 const getTargetLabel = (log) => log.objectLabel || formatTargetLabel(log.model, log.objectId, log.objectLabel);
+
+const getRelatedWorkspace = (model = '') => {
+  const normalizedModel = String(model || '').toLowerCase();
+  if (['serviceticket', 'service_ticket', 'servicerequest', 'service_request'].includes(normalizedModel)) {
+    return { to: '/admin/service-tickets', label: 'Open Service Tickets' };
+  }
+  if (['inventoryitem', 'inventory_item', 'inventorytransaction'].includes(normalizedModel)) {
+    return { to: '/admin/inventory', label: 'Open Inventory' };
+  }
+  if (['user', 'technicianprofile', 'technician_profile'].includes(normalizedModel)) {
+    return { to: '/admin/user-management', label: 'Open User Management' };
+  }
+  if (['servicetype', 'service_type'].includes(normalizedModel)) {
+    return { to: '/admin/services', label: 'Open Services' };
+  }
+  return null;
+};
 
 const displayFieldValue = (field, value) => {
   const formatted = formatValue(value);
@@ -359,6 +393,7 @@ export default function AdminActivityLogs() {
   const [expandedLogs, setExpandedLogs] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [summary, setSummary] = useState({ total: 0, today: 0, attention: 0, userActions: 0 });
   const requestSeq = useRef(0);
   const [filters, setFilters] = useState({
     search: '',
@@ -368,21 +403,29 @@ export default function AdminActivityLogs() {
     dateTo: ''
   });
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [lastRefreshed, setLastRefreshed] = useState(null);
 
   const loadLogs = async (nextFilters = filters, nextPage = currentPage) => {
     const requestId = requestSeq.current + 1;
     requestSeq.current = requestId;
     try {
       setLoading(true);
-      const data = await fetchActivityLogs({
-        ...nextFilters,
-        page: nextPage,
-        pageSize: ITEMS_PER_PAGE
-      });
+      const [data, nextSummary] = await Promise.all([
+        fetchActivityLogs({
+          ...nextFilters,
+          page: nextPage,
+          pageSize: ITEMS_PER_PAGE
+        }),
+        fetchActivityLogSummary(nextFilters),
+      ]);
       if (requestId !== requestSeq.current) return;
       setLogs(Array.isArray(data?.rows) ? data.rows : []);
       setTotalCount(Number(data?.count || 0));
+      setSummary(nextSummary);
+      setLastRefreshed(new Date());
       setError('');
     } catch (loadError) {
       if (requestId !== requestSeq.current) return;
@@ -414,13 +457,6 @@ export default function AdminActivityLogs() {
   const pageStartIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedLogs = visibleLogs;
 
-  const counts = useMemo(() => ({
-    total: totalCount,
-    security: visibleLogs.filter((log) => log.category === 'security').length,
-    tickets: visibleLogs.filter((log) => log.category === 'tickets').length,
-    inventory: visibleLogs.filter((log) => log.category === 'inventory').length
-  }), [totalCount, visibleLogs]);
-
   const updateFilter = (field, value) => {
     setFilters((current) => ({ ...current, [field]: value }));
     setCurrentPage(1);
@@ -439,88 +475,95 @@ export default function AdminActivityLogs() {
     }));
   };
 
+  const exportLogs = async () => {
+    try {
+      setExporting(true);
+      const filename = await downloadActivityLogs(filters);
+      setStatusMessage(`Exported ${filename}`);
+      setError('');
+    } catch (exportError) {
+      setError(exportError.message || 'Unable to export activity logs.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const copyEventReference = async (logId) => {
+    try {
+      await navigator.clipboard.writeText(`ACT-${logId}`);
+      setStatusMessage(`Copied event reference ACT-${logId}`);
+    } catch {
+      setStatusMessage(`Event reference: ACT-${logId}`);
+    }
+  };
+
   return (
     <Layout>
       <section className="space-y-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Activity Logs</h1>
           <p className="text-sm text-slate-500">Activity timeline for user actions, ticket updates, and system events.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Events found</p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">{counts.total}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filtered results</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{summary.total}</p>
           </div>
           <div className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Security shown</p>
-            <p className="mt-2 text-2xl font-bold text-indigo-600">{counts.security}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recorded today</p>
+            <p className="mt-2 text-2xl font-bold text-indigo-600">{summary.today}</p>
           </div>
           <div className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tickets shown</p>
-            <p className="mt-2 text-2xl font-bold text-sky-600">{counts.tickets}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Needs attention</p>
+            <p className="mt-2 text-2xl font-bold text-rose-600">{summary.attention}</p>
           </div>
           <div className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventory shown</p>
-            <p className="mt-2 text-2xl font-bold text-emerald-600">{counts.inventory}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">User actions</p>
+            <p className="mt-2 text-2xl font-bold text-emerald-600">{summary.userActions}</p>
           </div>
         </div>
 
-        <div className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(16rem,1.5fr)_minmax(10rem,0.8fr)_minmax(10rem,0.8fr)_minmax(9rem,0.7fr)_minmax(9rem,0.7fr)]">
-            <label className="block">
-              <span className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <FiSearch /> Search
-              </span>
-              <input
-                value={filters.search}
-                onChange={(event) => updateFilter('search', event.target.value)}
-                placeholder="Name, action, ticket, request, or item"
-                className="w-full rounded-lg border border-surface-200 px-3 py-2 text-sm text-slate-900 focus:border-brand-400 focus:outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Area</span>
-              <select
-                value={filters.category}
-                onChange={(event) => updateFilter('category', event.target.value)}
-                className="w-full rounded-lg border border-surface-200 px-3 py-2 text-sm text-slate-900 focus:border-brand-400 focus:outline-none"
+        <SearchFilterBar
+          searchValue={filters.search}
+          onSearchChange={(value) => updateFilter('search', value)}
+          searchLabel="Find an activity"
+          searchPlaceholder="Search user, action, ticket, request, or item"
+          filters={[
+            { key: 'area', label: 'System area', value: filters.category, defaultValue: '', onChange: (value) => updateFilter('category', value), options: categoryOptions.map((option) => ({ ...option, label: option.value ? option.label : 'Any system area' })) },
+            { key: 'action', label: 'Action type', value: filters.action, defaultValue: '', onChange: (value) => updateFilter('action', value), options: actionOptions.map((option) => ({ ...option, label: option.value ? option.label : 'Any action type' })) },
+            { key: 'from', label: 'From date', type: 'date', value: filters.dateFrom, defaultValue: '', onChange: (value) => updateFilter('dateFrom', value) },
+            { key: 'to', label: 'To date', type: 'date', value: filters.dateTo, defaultValue: '', min: filters.dateFrom || undefined, onChange: (value) => updateFilter('dateTo', value) },
+          ]}
+          onClear={() => {
+            setFilters({ search: '', category: '', action: '', dateFrom: '', dateTo: '' });
+            setCurrentPage(1);
+          }}
+          toolbarContent={(
+            <>
+              <button
+                type="button"
+                onClick={() => loadLogs(filters, currentPage)}
+                disabled={loading}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {categoryOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Action</span>
-              <select
-                value={filters.action}
-                onChange={(event) => updateFilter('action', event.target.value)}
-                className="w-full rounded-lg border border-surface-200 px-3 py-2 text-sm text-slate-900 focus:border-brand-400 focus:outline-none"
+                <FiRefreshCw className={loading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={exportLogs}
+                disabled={loading || exporting || summary.total === 0}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {actionOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Start date</span>
-              <input
-                type="date"
-                value={filters.dateFrom}
-                onChange={(event) => updateFilter('dateFrom', event.target.value)}
-                className="w-full rounded-lg border border-surface-200 px-3 py-2 text-sm text-slate-900 focus:border-brand-400 focus:outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">End date</span>
-              <input
-                type="date"
-                value={filters.dateTo}
-                onChange={(event) => updateFilter('dateTo', event.target.value)}
-                className="w-full rounded-lg border border-surface-200 px-3 py-2 text-sm text-slate-900 focus:border-brand-400 focus:outline-none"
-              />
-            </label>
-          </div>
+                <FiDownload />
+                {exporting ? 'Exporting...' : 'Export CSV'}
+              </button>
+            </>
+          )}
+        />
+
+        <div className="flex min-h-5 flex-wrap items-center justify-between gap-2 text-xs text-slate-500" aria-live="polite">
+          <span>{lastRefreshed ? `Last refreshed ${formatDateTime(lastRefreshed)}` : 'Loading audit evidence...'}</span>
+          {statusMessage ? <span role="status" className="font-medium text-emerald-700">{statusMessage}</span> : null}
         </div>
 
         {error && (
@@ -544,6 +587,7 @@ export default function AdminActivityLogs() {
                 const expanded = Boolean(expandedLogs[log.id]);
                 const targetLabel = getTargetLabel(log);
                 const hasContext = hasServiceContext(log);
+                const relatedWorkspace = getRelatedWorkspace(log.model);
                 return (
                   <article key={log.id} className="px-4 py-4 transition hover:bg-surface-50/70 sm:px-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -614,7 +658,18 @@ export default function AdminActivityLogs() {
                         ) : null}
 
                         <div className={hasContext ? 'mt-4 border-t border-surface-200 pt-4' : ''}>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Change Details</p>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Change Details</p>
+                            {relatedWorkspace ? (
+                              <Link
+                                to={relatedWorkspace.to}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                              >
+                                {relatedWorkspace.label}
+                                <FiExternalLink />
+                              </Link>
+                            ) : null}
+                          </div>
                           <div className="mt-3 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
                             <DetailItem label="Record affected" value={targetLabel} strong />
                             <DetailItem label="Record ID" value={`${formatModelLabel(log.model)}${log.objectId ? ` #${log.objectId}` : ''}`} />
@@ -623,6 +678,33 @@ export default function AdminActivityLogs() {
                             <DetailItem label="After" value={shortValue(displayFieldValue(log.fieldName, log.newValue))} />
                           </div>
                           <p className="mt-3 text-xs text-slate-500">Change summary: {detailText(log)}</p>
+                        </div>
+
+                        <div className="mt-4 border-t border-surface-200 pt-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Technical Context</p>
+                            <button
+                              type="button"
+                              onClick={() => copyEventReference(log.id)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-surface-50"
+                            >
+                              <FiCopy />
+                              Copy event ID
+                            </button>
+                          </div>
+                          <div className="mt-3 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                            <DetailItem label="Event ID" value={`ACT-${log.id}`} strong />
+                            <DetailItem label="Exact time" value={formatExactDateTime(log.changedAt)} />
+                            <DetailItem label="Actor account ID" value={log.changedBy ? `USR-${log.changedBy}` : 'System process'} />
+                            <DetailItem label="IP address" value={log.ipAddress || 'Not captured'} />
+                          </div>
+                          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                            <DetailItem label="Browser / device" value={log.userAgent || 'Not captured'} />
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Event metadata</p>
+                              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-surface-200 bg-white p-3 text-xs text-slate-700">{metadataText(log.metadata)}</pre>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}

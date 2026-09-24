@@ -42,6 +42,9 @@ class ChangeLogUserMiddleware:
         try:
             from rest_framework.authtoken.models import Token
 
-            return Token.objects.select_related('user').get(key=token_key).user
+            user = Token.objects.select_related('user').get(key=token_key).user
+            if not user.is_active or getattr(user, 'status', None) != 'active':
+                return None
+            return user
         except Exception:
             return None

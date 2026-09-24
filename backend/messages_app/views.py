@@ -10,11 +10,26 @@ from .models import CustomerSupportCase, Message
 from .serializers import CustomerSupportCaseSerializer, MessageSerializer
 from notifications.models import Notification
 from users.models import User
+from users.permissions import CanAccessClientSupport, CanAccessMessages
+from users.rbac import (
+    COMMUNICATIONS_STAFF_VIEW_CAPABILITIES,
+    COMMUNICATIONS_SUPPORT_MANAGE_CAPABILITIES,
+    COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES,
+    user_has_any_capability,
+)
 from .serializers import CUSTOMER_SUPPORT_PREFIX
 
 
 STAFF_MESSAGE_ROLES = {'superadmin', 'admin', 'technician'}
 ADMIN_MESSAGE_ROLES = {'superadmin', 'admin'}
+
+
+def active_admins_with_capability(capability_codes):
+    return [
+        user
+        for user in User.objects.filter(role__in=ADMIN_MESSAGE_ROLES, is_active=True, status='active')
+        if user_has_any_capability(user, capability_codes)
+    ]
 
 
 def notify_admins_of_client_ticket_message(message):
@@ -24,8 +39,10 @@ def notify_admins_of_client_ticket_message(message):
         return
 
     client_name = sender.get_full_name().strip() or sender.username
-    recipients = User.objects.filter(role__in=ADMIN_MESSAGE_ROLES, is_active=True).exclude(id=sender.id)
+    recipients = active_admins_with_capability(COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES)
     for recipient in recipients:
+        if recipient.id == sender.id:
+            continue
         Notification.objects.create(
             user=recipient,
             ticket=ticket,
@@ -44,8 +61,10 @@ def notify_admins_of_customer_support_message(message):
         return
 
     client_name = sender.get_full_name().strip() or sender.username
-    recipients = User.objects.filter(role__in=ADMIN_MESSAGE_ROLES, is_active=True).exclude(id=sender.id)
+    recipients = active_admins_with_capability(COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES)
     for recipient in recipients:
+        if recipient.id == sender.id:
+            continue
         Notification.objects.create(
             user=recipient,
             title='New customer service message',
@@ -58,8 +77,8 @@ def notify_admins_of_customer_support_resolution(case, actor):
     actor_name = actor.get_full_name().strip() or actor.username
     client_name = case.client.get_full_name().strip() or case.client.username
     status_label = case.get_status_display().lower()
-    recipients = User.objects.filter(role__in=ADMIN_MESSAGE_ROLES, is_active=True)
-    for recipient in recipients.distinct():
+    recipients = active_admins_with_capability(COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES)
+    for recipient in recipients:
         Notification.objects.create(
             user=recipient,
             title='Customer support case updated',
@@ -72,7 +91,7 @@ def notify_admins_of_customer_support_resolution(case, actor):
 
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [CanAccessMessages]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_throttles(self):
@@ -86,6 +105,34 @@ class MessageViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('Only service participants can send messages.')
         group_key = str(request.data.get('group_key') or '')
         is_customer_support = group_key.startswith(CUSTOMER_SUPPORT_PREFIX)
+        try:
+            receiver_id = int(request.data.get('receiver')) if request.data.get('receiver') else None
+        except (TypeError, ValueError):
+            receiver_id = None
+        receiver_is_client = bool(
+            receiver_id
+            and User.objects.filter(
+                id=receiver_id,
+                role='client',
+                is_active=True,
+                status='active',
+            ).exists()
+        )
+        is_ticket_support = bool(request.data.get('ticket')) and (
+            group_key.startswith('after_sales_ticket_') or receiver_is_client
+        )
+        if (
+            getattr(request.user, 'role', None) in ADMIN_MESSAGE_ROLES
+            and (is_customer_support or is_ticket_support)
+            and not user_has_any_capability(request.user, COMMUNICATIONS_SUPPORT_MANAGE_CAPABILITIES)
+        ):
+            raise PermissionDenied('You need the Manage client support capability to reply to this thread.')
+        if (
+            getattr(request.user, 'role', None) in ADMIN_MESSAGE_ROLES
+            and not (is_customer_support or is_ticket_support)
+            and not user_has_any_capability(request.user, COMMUNICATIONS_STAFF_VIEW_CAPABILITIES)
+        ):
+            raise PermissionDenied('You need the View staff messages capability to send staff messages.')
         if getattr(request.user, 'role', None) == 'client' and not request.data.get('ticket') and not is_customer_support:
             raise PermissionDenied('Clients can only send ticket messages.')
         return super().create(request, *args, **kwargs)
@@ -100,13 +147,18 @@ class MessageViewSet(viewsets.ModelViewSet):
                 Q(room_type='group', group_key__startswith=f'{CUSTOMER_SUPPORT_PREFIX}{user.id}')
             )
         elif role in ADMIN_MESSAGE_ROLES:
-            base_q = (
-                Q(room_type='group', group_key='staff') |
-                Q(room_type='group', group_key__startswith=CUSTOMER_SUPPORT_PREFIX) |
-                Q(room_type='direct', sender=user) |
-                Q(room_type='direct', receiver=user) |
-                Q(ticket__isnull=False)
-            )
+            base_q = Q(pk__in=[])
+            if user_has_any_capability(user, COMMUNICATIONS_STAFF_VIEW_CAPABILITIES):
+                base_q |= (
+                    Q(room_type='group', group_key='staff') |
+                    Q(room_type='direct', sender=user) |
+                    Q(room_type='direct', receiver=user)
+                )
+            if user_has_any_capability(user, COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES):
+                base_q |= (
+                    Q(room_type='group', group_key__startswith=CUSTOMER_SUPPORT_PREFIX) |
+                    Q(ticket__isnull=False)
+                )
         elif role == 'technician':
             base_q = (
                 Q(room_type='group', group_key='staff') |
@@ -171,10 +223,16 @@ class MessageViewSet(viewsets.ModelViewSet):
     def participants(self, request):
         if getattr(request.user, 'role', None) not in STAFF_MESSAGE_ROLES:
             raise PermissionDenied('Only admins, superadmins, and technicians can view staff message participants.')
+        if (
+            getattr(request.user, 'role', None) in ADMIN_MESSAGE_ROLES
+            and not user_has_any_capability(request.user, COMMUNICATIONS_STAFF_VIEW_CAPABILITIES)
+        ):
+            raise PermissionDenied('You need the View staff messages capability to list participants.')
 
         users = User.objects.filter(
             role__in=STAFF_MESSAGE_ROLES,
             status='active',
+            is_active=True,
         ).exclude(id=request.user.id).order_by('role', 'first_name', 'username')
 
         return Response([
@@ -191,7 +249,7 @@ class MessageViewSet(viewsets.ModelViewSet):
 
 class CustomerSupportCaseViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerSupportCaseSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [CanAccessClientSupport]
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
 
     def get_throttles(self):
@@ -210,11 +268,18 @@ class CustomerSupportCaseViewSet(viewsets.ModelViewSet):
         return CustomerSupportCase.objects.none()
 
     def perform_create(self, serializer):
+        if (
+            self.request.user.role in ADMIN_MESSAGE_ROLES
+            and not user_has_any_capability(self.request.user, COMMUNICATIONS_SUPPORT_MANAGE_CAPABILITIES)
+        ):
+            raise PermissionDenied('You need the Manage client support capability to create support cases.')
         case = serializer.save()
         if self.request.user.role == 'client':
             client_name = self.request.user.get_full_name().strip() or self.request.user.username
-            recipients = User.objects.filter(role__in=ADMIN_MESSAGE_ROLES, is_active=True).exclude(id=self.request.user.id)
+            recipients = active_admins_with_capability(COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES)
             for recipient in recipients:
+                if recipient.id == self.request.user.id:
+                    continue
                 Notification.objects.create(
                     user=recipient,
                     title='New customer service case',
@@ -223,6 +288,11 @@ class CustomerSupportCaseViewSet(viewsets.ModelViewSet):
                 )
 
     def perform_update(self, serializer):
+        if (
+            self.request.user.role not in ADMIN_MESSAGE_ROLES
+            or not user_has_any_capability(self.request.user, COMMUNICATIONS_SUPPORT_MANAGE_CAPABILITIES)
+        ):
+            raise PermissionDenied('You need the Manage client support capability to update support cases.')
         previous_status = serializer.instance.status
         case = serializer.save()
         final_statuses = {'resolved', 'closed'}

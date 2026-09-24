@@ -8,7 +8,7 @@ import { FiArrowLeft, FiClock, FiImage, FiStar, FiX } from 'react-icons/fi';
 import { api, fetchRequestDetail, fetchTicketTimeline, requestTicketReschedule, submitRequestRating } from '../../api/api';
 import { getLocalDateInputValue } from '../../utils/date';
 import { clientTechnicianDisplayString } from '../../utils/clientTechnicianDisplay';
-import { formatTicketId } from '../../utils/roleIds';
+import { formatRequestId, formatTicketId } from '../../utils/roleIds';
 
 const TIME_SLOT_LABELS = {
   morning: 'Morning (8 AM - 11 AM)',
@@ -275,7 +275,7 @@ export default function ClientRequestDetail() {
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold text-slate-900">
-                Service Request #{request.request_id || request.id}
+                Service Request {formatRequestId(request.request_id || request.id)}
               </h1>
               <StatusBadge status={request.status} size="lg" />
               <span className="rounded-full bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">
@@ -320,15 +320,26 @@ export default function ClientRequestDetail() {
             </div>
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Progress</p>
-              {request.progress ? (
+              {request.has_ticket || request.progress > 0 ? (
                 <div className="space-y-2">
                   <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden shadow-inner">
                     <div
                       className="h-full rounded-full bg-brand-500 transition-all duration-500"
                       style={{ width: `${request.progress}%` }}
+                      role="progressbar"
+                      aria-label={request.progress_label || 'Current workflow stage'}
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      aria-valuenow={request.progress}
                     ></div>
                   </div>
-                  <p className="text-sm font-semibold text-slate-700">{request.progress}% Complete</p>
+                  <p className="text-sm font-semibold text-slate-700">
+                    {request.progress_track_label && `${request.progress_track_label} · `}
+                    {request.progress_label || 'Current workflow stage'} · {request.progress}%
+                  </p>
+                  {request.has_ticket && (
+                    <p className="text-xs text-slate-500">This marker follows the recorded job status; 100% means the work is completed.</p>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm font-semibold text-slate-700">Waiting for progress update</p>

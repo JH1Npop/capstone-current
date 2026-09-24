@@ -54,6 +54,11 @@ export const STATUS_META = {
     tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
     dot: 'bg-emerald-500'
   },
+  turned_over_accepted: {
+    label: 'Turned Over / Accepted',
+    tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+    dot: 'bg-emerald-500'
+  },
   on_hold: {
     label: 'On Hold',
     tone: 'bg-rose-50 text-rose-800 ring-rose-200',
@@ -118,6 +123,16 @@ export const STATUS_META = {
     label: 'Available',
     tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
     dot: 'bg-emerald-500'
+  },
+  online: {
+    label: 'Online',
+    tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+    dot: 'bg-emerald-500'
+  },
+  busy: {
+    label: 'Busy',
+    tone: 'bg-amber-50 text-amber-800 ring-amber-200',
+    dot: 'bg-amber-500'
   },
   on_job: {
     label: 'On Job',
@@ -222,7 +237,10 @@ const SIZE_MAP = {
   lg: 'px-4 py-2 text-sm'
 };
 
-const normalizeStatus = (status) => String(status || '').toLowerCase().replace(/[\s-]+/g, '_');
+const normalizeStatus = (status) => String(status || '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '');
 
 export const formatStatusLabel = (status) => {
   const normalizedStatus = normalizeStatus(status);

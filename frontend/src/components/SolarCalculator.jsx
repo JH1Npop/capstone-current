@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { createSolarEstimate } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_SOLAR_CALCULATOR_SETTINGS } from '../utils/landingSettings';
+import { formatEstimateId } from '../utils/roleIds';
 
 const APPLIANCE_PRESETS = [
   ['Air conditioner', 1200, 1.5],
@@ -45,7 +46,13 @@ const InputField = ({ label, suffix, ...inputProps }) => (
 
 const PENDING_ESTIMATE_KEY = 'afn_pending_solar_estimate';
 
-export default function SolarCalculator({ settings = DEFAULT_SOLAR_CALCULATOR_SETTINGS, presetPanelWattage = null, selectedPromotion = null }) {
+export default function SolarCalculator({
+  settings = DEFAULT_SOLAR_CALCULATOR_SETTINGS,
+  presetPanelWattage = null,
+  selectedPromotion = null,
+  embedded = false,
+  onEstimateSaved = null,
+}) {
   const configured = { ...DEFAULT_SOLAR_CALCULATOR_SETTINGS, ...settings };
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
@@ -185,17 +192,18 @@ export default function SolarCalculator({ settings = DEFAULT_SOLAR_CALCULATOR_SE
       setSaveState({
         loading: false,
         error: '',
-        message: `Estimate #${estimate.id} saved to your account.`,
+        message: `${estimate.estimate_code || formatEstimateId(estimate.id)} saved to your account.`,
         estimateId: estimate.id,
       });
+      onEstimateSaved?.(estimate);
     } catch (error) {
       setSaveState((current) => ({ ...current, loading: false, error: error.message || 'Unable to save estimate.' }));
     }
   };
 
   return (
-    <section id="solar-calculator" className="scroll-mt-24 bg-slate-950 py-16 text-white">
-      <div className="mx-auto max-w-7xl px-6 lg:px-10">
+    <section id="solar-calculator" className={`scroll-mt-24 bg-slate-950 text-white ${embedded ? 'overflow-hidden rounded-2xl py-8 sm:py-10' : 'py-16'}`}>
+      <div className={`mx-auto max-w-7xl ${embedded ? 'px-4 sm:px-6' : 'px-6 lg:px-10'}`}>
         <div className="mb-8 max-w-3xl">
           <span className="inline-flex items-center gap-2 rounded-full bg-amber-400/10 px-3 py-1 text-sm font-semibold text-amber-300"><Calculator className="h-4 w-4" /> Free preliminary estimate</span>
           <h2 className="mt-4 text-3xl font-bold sm:text-4xl">{configured.title}</h2>

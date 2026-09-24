@@ -119,6 +119,7 @@ class ServiceRequest(models.Model):
     scheduling_notes = models.TextField(blank=True, null=True)
     request_date = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+    idempotency_key = models.CharField(max_length=128, null=True, blank=True)
 
     # Auto-ticket will be created when request is approved
     auto_ticket_created = models.BooleanField(default=False)
@@ -128,6 +129,12 @@ class ServiceRequest(models.Model):
             models.Index(fields=['client_id', 'status']),
             models.Index(fields=['status', 'request_date']),
             models.Index(fields=['request_source', 'request_date']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['client', 'idempotency_key'],
+                name='unique_service_request_idempotency_key_per_client',
+            ),
         ]
         ordering = ['-request_date']
 

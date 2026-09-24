@@ -11,10 +11,11 @@ from django.db import transaction
 from django.db.models import Q, Count, Sum, Avg, F
 from django.core.mail import send_mail
 from django.conf import settings
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta
 import math
 import logging
 from pathlib import Path
+from urllib.parse import urlsplit
 import uuid
 from threading import Thread
 from typing import Optional, Dict, Any, List
@@ -36,6 +37,7 @@ __all__ = ['record_arrival_validation_log', 'compute_arrival_validation_result',
     '_default_ticket_admin_for_actor',
     # Constants
     'ACTIVE_TICKET_STATUSES',
+    'BUSY_TECHNICIAN_TICKET_STATUSES',
     'TICKET_REQUEST_STATUS_MAP',
     'ALLOWED_TICKET_TRANSITIONS',
     'ASSIGNABLE_TICKET_STATUSES',
@@ -65,6 +67,7 @@ __all__ = ['record_arrival_validation_log', 'compute_arrival_validation_result',
     'get_technician_daily_scheduled_minutes',
     'get_technician_daily_capacity',
     'validate_technician_daily_capacity',
+    'validate_technician_schedule_overlap',
     'get_general_service_type',
     'get_technician_service_skill',
     'get_eligible_technician_ids_for_service',
@@ -79,11 +82,13 @@ __all__ = ['record_arrival_validation_log', 'compute_arrival_validation_result',
     'get_visible_service_requests_queryset',
     'get_visible_service_tickets_queryset',
     'sync_technician_availability',
+    'get_expected_technician_availability',
     'normalize_ticket_status',
     'clear_reschedule_request',
     'sync_request_status_from_ticket',
     'validate_ticket_transition',
     'ensure_ticket_checklist_completed',
+    'ensure_ticket_completion_proof',
     'apply_ticket_status_change',
     # Re-exported imports (models, serializers, permissions, etc.)
     'viewsets', 'permissions', 'status', 'action', 'Response', 'api_view',
@@ -209,19 +214,11 @@ from inventory.automation import (
     serialize_ticket_inventory,
     sync_ticket_reservations,
 )
+from services.job_progress import ACTIVE_TICKET_STATUSES
 from notifications.notification_utils import send_team_notification, send_user_notification
 
-ACTIVE_TICKET_STATUSES = [
-    'Not Started',
-    'For Inspection',
-    'Inspection Completed',
-    'Ready for Service',
-    'Awaiting Materials',
-    'Navigating',
-    'Arrived on Site',
-    'In Progress',
-    'On Hold',
-]
+BUSY_TECHNICIAN_TICKET_STATUSES = ('Navigating', 'Arrived on Site', 'In Progress')
+
 TICKET_REQUEST_STATUS_MAP = {
     'Not Started': 'Approved',
     'For Inspection': 'Approved',
@@ -245,7 +242,8 @@ ALLOWED_TICKET_TRANSITIONS = {
     'Arrived on Site': {'In Progress', 'On Hold', 'Cancelled'},
     'In Progress': {'Inspection Completed', 'Awaiting Materials', 'On Hold', 'Completed', 'Cancelled'},
     'On Hold': {'Ready for Service', 'In Progress', 'Cancelled'},
-    'Completed': set(),
+    'Completed': {'Turned Over / Accepted'},
+    'Turned Over / Accepted': set(),
     'Cancelled': set(),
 }
 ASSIGNABLE_TICKET_STATUSES = {'Not Started', 'For Inspection', 'Ready for Service', 'Awaiting Materials', 'Navigating', 'On Hold'}
@@ -681,33 +679,54 @@ def _default_ticket_admin_for_actor(actor):
 def normalize_proof_media_payload(*, photos=None, videos=None, media=None):
     normalized_media = []
 
-    for item in media or []:
+    def as_entries(value):
+        if value in (None, ''):
+            return []
+        return value if isinstance(value, list) else [value]
+
+    def normalize_reference(value):
+        reference = str(value or '').strip()
+        if not reference or len(reference) > 2048 or any(ord(char) < 32 for char in reference):
+            raise ValidationError({'media': 'Proof media references must be non-empty and at most 2048 characters.'})
+        parsed = urlsplit(reference)
+        if parsed.scheme and parsed.scheme.lower() not in {'http', 'https'}:
+            raise ValidationError({'media': 'Proof media URLs must use HTTP or HTTPS.'})
+        if not parsed.scheme and reference.startswith('//'):
+            raise ValidationError({'media': 'Protocol-relative proof media URLs are not supported.'})
+        return reference
+
+    for item in as_entries(media):
         if isinstance(item, dict):
             media_type = str(item.get('type') or 'photo').strip().lower()
+            if media_type not in {'photo', 'video'}:
+                raise ValidationError({'media': 'Proof media type must be photo or video.'})
+            reference = normalize_reference(item.get('url') or item.get('name'))
             normalized_media.append({
-                'type': 'video' if media_type == 'video' else 'photo',
-                'name': str(item.get('name') or item.get('url') or f'{media_type}-proof').strip(),
-                'url': str(item.get('url') or item.get('name') or '').strip(),
+                'type': media_type,
+                'name': str(item.get('name') or reference).strip()[:255],
+                'url': reference,
             })
         else:
-            value = str(item).strip()
-            if value:
-                normalized_media.append({'type': 'photo', 'name': value, 'url': value})
+            reference = normalize_reference(item)
+            normalized_media.append({'type': 'photo', 'name': reference[:255], 'url': reference})
 
-    for entry in photos or []:
-        value = str(entry).strip()
-        if value:
-            normalized_media.append({'type': 'photo', 'name': value, 'url': value})
+    for entry in as_entries(photos):
+        reference = normalize_reference(entry)
+        normalized_media.append({'type': 'photo', 'name': reference[:255], 'url': reference})
 
-    for entry in videos or []:
-        value = str(entry).strip()
-        if value:
-            normalized_media.append({'type': 'video', 'name': value, 'url': value})
+    for entry in as_entries(videos):
+        reference = normalize_reference(entry)
+        normalized_media.append({'type': 'video', 'name': reference[:255], 'url': reference})
+
+    if len(normalized_media) > 50:
+        raise ValidationError({'media': 'No more than 50 proof media references may be submitted at once.'})
 
     return normalized_media
 
 
 def save_uploaded_proof_media(*, ticket, uploaded_files, request=None, media_type='photo'):
+    from afn_service_management.upload_validation import validate_image_upload, validate_video_upload
+
     normalized_media = []
     upload_directory = f'checklists/ticket-{ticket.id}'
 
@@ -720,24 +739,38 @@ def save_uploaded_proof_media(*, ticket, uploaded_files, request=None, media_typ
         'video': 50 * 1024 * 1024,
     }
 
-    for uploaded_file in uploaded_files or []:
+    uploaded_files = list(uploaded_files or [])
+    if len(uploaded_files) > 20:
+        raise ValidationError({f'{media_type}_files': 'Upload no more than 20 files at a time.'})
+
+    validated_extensions = []
+    for uploaded_file in uploaded_files:
         content_type = str(getattr(uploaded_file, 'content_type', '') or '').lower()
         if content_type not in allowed_content_types.get(media_type, set()):
             allowed_label = 'JPG, PNG, or WebP' if media_type == 'photo' else 'MP4, WebM, or MOV'
             raise ValidationError({
                 f'{media_type}_files': f'Unsupported {media_type} file. Upload {allowed_label} files only.'
             })
-        if getattr(uploaded_file, 'size', 0) > max_sizes[media_type]:
-            max_label = '10 MB' if media_type == 'photo' else '50 MB'
-            raise ValidationError({
-                f'{media_type}_files': f'Each {media_type} file must be {max_label} or smaller.'
-            })
+        if media_type == 'photo':
+            _format, _content_type, safe_extension, _stem = validate_image_upload(
+                uploaded_file,
+                max_bytes=max_sizes[media_type],
+                allowed_formats={'JPEG', 'PNG', 'WEBP'},
+                field_name='photo_files',
+            )
+        else:
+            safe_extension = validate_video_upload(
+                uploaded_file,
+                max_bytes=max_sizes[media_type],
+                field_name='video_files',
+            )
+        validated_extensions.append(safe_extension)
 
+    for uploaded_file, safe_extension in zip(uploaded_files, validated_extensions):
         original_name = Path(getattr(uploaded_file, 'name', '') or f'{media_type}-proof').name
-        suffix = Path(original_name).suffix
         stem = slugify(Path(original_name).stem) or f'{media_type}-proof'
         stored_name = default_storage.save(
-            f'{upload_directory}/{uuid.uuid4().hex}-{stem}{suffix}',
+            f'{upload_directory}/{uuid.uuid4().hex}-{stem}{safe_extension}',
             uploaded_file,
         )
         file_url = default_storage.url(stored_name)
@@ -753,14 +786,15 @@ def save_uploaded_proof_media(*, ticket, uploaded_files, request=None, media_typ
     return normalized_media
 
 
-def build_ticket_daily_duration_allocations(ticket, *, limit_minutes=None):
-    if not ticket or not getattr(ticket, 'scheduled_date', None):
+def build_ticket_daily_duration_allocations(ticket, *, limit_minutes=None, scheduled_date=None):
+    effective_scheduled_date = scheduled_date or getattr(ticket, 'scheduled_date', None)
+    if not ticket or not effective_scheduled_date:
         return {}
 
     daily_limit = int(limit_minutes or get_daily_capacity_limit_minutes())
     daily_limit = max(1, daily_limit)
     remaining_minutes = max(0, int(ticket.request.service_type.estimated_duration or 0))
-    current_date = ticket.scheduled_date
+    current_date = effective_scheduled_date
     allocations = {}
 
     while remaining_minutes > 0:
@@ -819,7 +853,11 @@ def get_daily_capacity_limit_minutes():
 
 def get_technician_daily_capacity(technician, scheduled_date, ticket):
     limit_minutes = get_daily_capacity_limit_minutes()
-    candidate_allocations = build_ticket_daily_duration_allocations(ticket, limit_minutes=limit_minutes)
+    candidate_allocations = build_ticket_daily_duration_allocations(
+        ticket,
+        limit_minutes=limit_minutes,
+        scheduled_date=scheduled_date,
+    )
     if not candidate_allocations:
         return {
             'assigned_minutes': 0,
@@ -887,6 +925,41 @@ def validate_technician_daily_capacity(technician, scheduled_date, ticket):
         f'{technician.username} already has {assigned_hours:g} scheduled hour(s){date_label}. '
         f'Adding this {ticket_hours:g}-hour job would exceed the {limit_hours:g}-hour daily limit.'
     )
+
+
+def validate_technician_schedule_overlap(technician, scheduled_date, scheduled_time, ticket):
+    """Reject an exact-time overlap for a lead technician or crew member.
+
+    Tickets without a concrete time remain governed by the daily-duration
+    capacity check because there is no honest interval to compare.
+    """
+    if not technician or not scheduled_date or not scheduled_time or not ticket:
+        return None
+
+    duration_minutes = max(1, int(ticket.request.service_type.estimated_duration or 60))
+    candidate_start = datetime.combine(scheduled_date, scheduled_time)
+    candidate_end = candidate_start + timedelta(minutes=duration_minutes)
+    conflicts = get_technician_ticket_queryset(technician).filter(
+        scheduled_date=scheduled_date,
+        scheduled_time__isnull=False,
+    ).exclude(
+        pk=ticket.pk,
+    ).exclude(
+        status='Cancelled',
+    ).select_related('request__service_type').order_by('scheduled_time', 'id')
+
+    for existing_ticket in conflicts:
+        existing_start = datetime.combine(existing_ticket.scheduled_date, existing_ticket.scheduled_time)
+        existing_duration = max(1, int(existing_ticket.request.service_type.estimated_duration or 60))
+        existing_end = existing_start + timedelta(minutes=existing_duration)
+        if candidate_start < existing_end and existing_start < candidate_end:
+            name = _display_name(technician) or technician.username
+            raise ValueError(
+                f'{name} has an overlapping appointment with ticket #{existing_ticket.id} '
+                f'on {scheduled_date} at {existing_ticket.scheduled_time.strftime("%H:%M")}.'
+            )
+
+    return None
 
 
 def get_general_service_type():
@@ -1005,7 +1078,8 @@ def score_technician_fit(
         else ""
     )
     summary = (
-        f"{skill.get_skill_level_display()} skill, {distance_km:.1f} km away (~{estimated_minutes:.0f} min), "
+        f"{skill.get_skill_level_display()} skill, ~{distance_km:.1f} km straight-line distance "
+        f"(~{estimated_minutes:.0f} min estimated travel), "
         f"{active_load} active job(s), {same_day_load} job(s) on this date, {days_text}"
         f"{capacity['projected_minutes'] / 60:g}/{capacity['limit_minutes'] / 60:g} scheduled hour(s)."
     )
@@ -1059,23 +1133,33 @@ def get_visible_service_tickets_queryset(user, base_queryset=None):
     return base_queryset.none()
 
 
+def get_expected_technician_availability(technician):
+    if not technician or technician.role != 'technician':
+        return None
+
+    has_active_field_work = get_technician_ticket_queryset(
+        technician,
+    ).filter(
+        status__in=BUSY_TECHNICIAN_TICKET_STATUSES,
+    ).exists()
+    return not has_active_field_work
+
+
 def sync_technician_availability(technician, *, force_available=False):
     if not technician or technician.role != 'technician':
-        return
+        return False
 
     if force_available:
         desired_availability = True
     else:
-        has_active_tickets = get_technician_ticket_queryset(
-            technician,
-        ).filter(
-            status__in=ACTIVE_TICKET_STATUSES,
-        ).exists()
-        desired_availability = not has_active_tickets
+        desired_availability = get_expected_technician_availability(technician)
 
     if technician.is_available != desired_availability:
         technician.is_available = desired_availability
         technician.save(update_fields=['is_available'])
+        return True
+
+    return False
 
 
 def normalize_ticket_status(value):
@@ -1133,8 +1217,26 @@ def ensure_ticket_checklist_completed(ticket):
     return checklist
 
 
+def ensure_ticket_completion_proof(ticket, proof_images):
+    """Require meaningful post-service evidence for non-inspection tickets."""
+    if ticket.ticket_type == 'inspection':
+        return
+
+    has_proof = any(
+        bool(item.strip()) if isinstance(item, str) else bool(item)
+        for item in proof_images
+    )
+    if not has_proof:
+        raise ValueError('Upload at least one completion photo before finishing this job.')
+
+
 def apply_ticket_status_change(ticket, new_status, *, changed_by, notes='', extra_update_fields=None, inventory_usage=None):
     normalized_status = validate_ticket_transition(ticket, new_status)
+    transition_notes = str(notes or '').strip()
+    if not transition_notes:
+        raise ValueError('Transition notes are required for every ticket status change.')
+    if len(transition_notes) > 2000:
+        raise ValueError('Transition notes must be 2000 characters or fewer.')
     now = timezone.now()
     update_fields = ['status', 'updated_at']
 
@@ -1167,8 +1269,7 @@ def apply_ticket_status_change(ticket, new_status, *, changed_by, notes='', extr
     if extra_update_fields:
         update_fields.extend(extra_update_fields)
 
-    if notes:
-        ticket._activity_reason = notes
+    ticket._activity_reason = transition_notes
 
     ticket.save(update_fields=list(dict.fromkeys(update_fields)))
     sync_request_status_from_ticket(ticket)
@@ -1200,7 +1301,7 @@ def apply_ticket_status_change(ticket, new_status, *, changed_by, notes='', extr
         ticket=ticket,
         status=normalized_status,
         changed_by=changed_by,
-        notes=notes,
+        notes=transition_notes,
     )
 
     return normalized_status

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FiUser, FiAlertCircle, FiFilter, FiCheckCircle, FiClipboard } from 'react-icons/fi';
+import { FiUser, FiAlertCircle, FiArrowRight, FiFilter, FiCheckCircle, FiClipboard, FiRefreshCw, FiX } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import StatusBadge from '../../components/ui/StatusBadge';
 import SLABadge, { formatSlaSummary } from '../../components/ui/SLABadge';
@@ -62,6 +62,27 @@ const technicianMatchesService = (technician, serviceTypeId) => {
   ));
 };
 
+const getDispatchPresence = (technician) => {
+  if (!technician.active) {
+    return {
+      status: 'offline',
+      description: 'Account is inactive and cannot receive assignments.'
+    };
+  }
+  if (!technician.isAvailable) {
+    return {
+      status: 'busy',
+      description: 'Currently navigating, on site, or working another job.'
+    };
+  }
+  return {
+    status: 'online',
+    description: 'Active and available for dispatch.'
+  };
+};
+
+const DISPATCH_PRESENCE_ORDER = { online: 0, busy: 1, offline: 2 };
+
 const sortByDispatchUrgency = (firstTicket, secondTicket) => {
   if (firstTicket.isMissedDispatch !== secondTicket.isMissedDispatch) {
     return firstTicket.isMissedDispatch ? -1 : 1;
@@ -71,7 +92,7 @@ const sortByDispatchUrgency = (firstTicket, secondTicket) => {
 
 export default function AdminDispatchBoard() {
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 15;
+  const ITEMS_PER_PAGE = 10;
   const [tickets, setTickets] = useState([]);
   const [technicians, setTechnicians] = useState([]);
   const [serviceTypes, setServiceTypes] = useState([]);
@@ -276,15 +297,18 @@ const paginatedAssignedTickets = assignedTickets.slice(
   const filterServiceTypeId = String(filterSkill).startsWith('service:')
     ? Number(String(filterSkill).replace('service:', ''))
     : null;
-  const activeTechnicians = technicians.filter((tech) => tech.active || tech.isAvailable);
-  const filteredTechs = activeTechnicians.filter((tech) => (
+  const filteredTechs = technicians.filter((tech) => (
     filterServiceTypeId
       ? technicianMatchesService(tech, filterServiceTypeId)
       : technicianMatchesSkill(tech, filterSkill)
   ));
-  const serviceMatchedTechs = filterSkill === 'all' || filterServiceTypeId
-    ? filteredTechs
-    : filteredTechs.filter((tech) => technicianMatchesService(tech, selectedTicket?.serviceTypeId));
+  const serviceMatchedTechs = (selectedTicket
+    ? filteredTechs.filter((tech) => technicianMatchesService(tech, selectedTicket.serviceTypeId))
+    : filteredTechs
+  ).sort((firstTech, secondTech) => (
+    DISPATCH_PRESENCE_ORDER[getDispatchPresence(firstTech).status]
+    - DISPATCH_PRESENCE_ORDER[getDispatchPresence(secondTech).status]
+  ));
   const selectedCrew = technicians.filter((tech) => selectedCrewIds.includes(tech.id));
   const selectedServiceMaterials = selectedTicket
     ? materialTemplates.filter((requirement) => Number(requirement.service_type) === Number(selectedTicket.serviceTypeId))
@@ -292,20 +316,31 @@ const paginatedAssignedTickets = assignedTickets.slice(
   const selectedTicketReservations = Array.isArray(selectedTicket?.inventoryReservations)
     ? selectedTicket.inventoryReservations.filter((reservation) => reservation.status !== 'cancelled')
     : [];
+  const pendingTicketReservations = selectedTicketReservations.filter((reservation) => reservation.status === 'pending');
   const selectedEquipmentItems = equipmentPlan
     .map((entry) => ({
       ...entry,
       itemDetails: inventoryItems.find((item) => Number(item.id) === Number(entry.item))
     }))
     .filter((entry) => entry.item);
+  const selectedEquipmentIds = new Set(equipmentPlan.map((entry) => Number(entry.item)).filter(Boolean));
+  const nextEquipmentItem = inventoryItems.find((item) => (
+    !selectedEquipmentIds.has(Number(item.id))
+    && Number(item.available_quantity ?? item.availableQuantity ?? item.quantity ?? 0) > 0
+  ));
+  const equipmentPlanValid = equipmentPlan.every((entry) => (
+    Number(entry.item) > 0 && Number.isInteger(Number(entry.quantity)) && Number(entry.quantity) > 0
+  ));
+  const completedTicketReservations = selectedTicketReservations.filter((reservation) => reservation.status !== 'pending');
 
   const addEquipmentPlanRow = () => {
-    const firstAvailable = inventoryItems.find((item) => Number(item.available_quantity ?? item.availableQuantity ?? item.quantity ?? 0) > 0) || inventoryItems[0];
-    if (!firstAvailable) {
-      setMessage('Add inventory items first before adding equipment to bring.');
+    if (!nextEquipmentItem) {
+      setMessage(inventoryItems.length
+        ? 'Every in-stock inventory item is already in this plan.'
+        : 'Add inventory items before building an equipment plan.');
       return;
     }
-    setEquipmentPlan((currentPlan) => [...currentPlan, { item: Number(firstAvailable.id), quantity: '1' }]);
+    setEquipmentPlan((currentPlan) => [...currentPlan, { item: Number(nextEquipmentItem.id), quantity: '1' }]);
   };
 
   const updateEquipmentPlanRow = (index, updates) => {
@@ -317,19 +352,29 @@ const paginatedAssignedTickets = assignedTickets.slice(
   const removeEquipmentPlanRow = (index) => {
     setEquipmentPlan((currentPlan) => currentPlan.filter((_, entryIndex) => entryIndex !== index));
   };
-  const totalTicketsCount = ticketSummary?.totalTickets ?? tickets.length;
+  const activeQueueCount = ticketSummary?.activeQueue ?? tickets.filter((ticket) => !['completed', 'cancelled'].includes(ticket.status)).length;
   const unassignedActiveCount = ticketSummary?.unassignedActive ?? tickets.filter((ticket) => !ticket.assignedTech && !['completed', 'cancelled'].includes(ticket.status)).length;
   const missedDispatchCount = ticketSummary?.missedDispatch ?? missedDispatchTickets.length;
   const dispatchableCount = ticketSummary?.dispatchable ?? dispatchableTickets.length;
   const assignedActiveCount = ticketSummary?.assignedActive ?? assignedTickets.length;
-  const canSubmitAssignment = Boolean(selectedTicket && selectedTech && !isSubmitting);
+  const canSubmitAssignment = Boolean(selectedTicket && selectedTech && equipmentPlanValid && !isSubmitting);
+  const workflowStep = !selectedTicket ? 1 : !selectedTech ? 2 : 3;
 
   return (
     <Layout>
       <div className="space-y-5">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold text-slate-900">Dispatch Board</h1>
-          <p className="text-sm text-slate-500">Dispatch and assignment workspace for active service tickets.</p>
+        <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Dispatch workflow</p>
+            <p className="mt-0.5 text-xs text-slate-500">Assign eligible active tickets, prepare equipment, and maintain current technician assignments.</p>
+          </div>
+          <button
+            type="button"
+            onClick={loadData}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            <FiRefreshCw className="h-4 w-4" /> Refresh board
+          </button>
         </div>
         {assignmentInsight && (
           <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
@@ -337,31 +382,55 @@ const paginatedAssignedTickets = assignedTickets.slice(
           </div>
         )}
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: 'Total Tickets', value: totalTicketsCount, tone: 'text-brand-600' },
-            { label: 'Unassigned Active', value: unassignedActiveCount, tone: 'text-orange-600' },
-            { label: 'Dispatch Queue', value: dispatchableCount, tone: 'text-amber-600' },
-            { label: 'Needs Reschedule', value: missedDispatchCount, tone: 'text-rose-600' },
-            { label: 'Assigned Active', value: assignedActiveCount, tone: 'text-emerald-600' },
-            { label: 'Matching Techs', value: serviceMatchedTechs.length, tone: 'text-sky-600' }
+            { label: 'All Active Tickets', value: activeQueueCount, tone: 'text-brand-600', helper: `${unassignedActiveCount} unassigned` },
+            { label: 'Ready to Assign', value: dispatchableCount, tone: 'text-amber-600', helper: 'Eligible unassigned work' },
+            { label: 'Assigned Active', value: assignedActiveCount, tone: 'text-emerald-600', helper: 'Current field assignments' },
+            { label: 'Needs Reschedule', value: missedDispatchCount, tone: 'text-rose-600', helper: 'Missed dispatch window' }
           ].map((item) => (
             <div key={item.label} className="stat-card p-4">
               <p className="text-[13px] font-medium text-slate-500">{item.label}</p>
               <p className={`mt-1 text-3xl font-bold ${item.tone}`}>{item.value}</p>
+              {item.helper && <p className="mt-1 text-[11px] text-slate-400">{item.helper}</p>}
             </div>
           ))}
         </section>
 
-        <section id="assignment-control" className="grid gap-4 scroll-mt-24 xl:grid-cols-[1fr_1.15fr_1fr]">
-          <div className="card overflow-hidden">
+        <section aria-label="Assignment steps" className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <ol className="grid gap-2 sm:grid-cols-3">
+            {[
+              { number: 1, label: 'Select a ticket', helper: 'Choose eligible work' },
+              { number: 2, label: 'Choose the team', helper: 'Set lead and crew' },
+              { number: 3, label: 'Review and confirm', helper: 'Check equipment first' },
+            ].map((step, index) => {
+              const complete = workflowStep > step.number;
+              const active = workflowStep === step.number;
+              return (
+                <li key={step.number} className={`relative flex items-center gap-3 rounded-lg px-3 py-2 ${active ? 'bg-brand-50 text-brand-800' : complete ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-50 text-slate-500'}`}>
+                  <span className={`grid h-7 w-7 flex-none place-items-center rounded-full text-xs font-bold ${active ? 'bg-brand-600 text-white' : complete ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200'}`}>
+                    {complete ? <FiCheckCircle aria-hidden="true" /> : step.number}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-xs font-semibold">{step.label}</span>
+                    <span className="block text-[11px] opacity-70">{step.helper}</span>
+                  </span>
+                  {index < 2 && <FiArrowRight className="absolute -right-3 top-1/2 z-10 hidden -translate-y-1/2 text-slate-300 sm:block" aria-hidden="true" />}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <section id="assignment-control" className="grid gap-4 scroll-mt-24 xl:grid-cols-[1fr_1fr_1.15fr]">
+          <div className="card order-1 overflow-hidden">
             <div className="flex items-center justify-between gap-3 border-b border-surface-200 px-4 py-3">
               <div>
                 <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                   <FiAlertCircle className="text-amber-500" />
-                  Dispatch Queue
+                  <span><span className="mr-2 text-xs font-bold uppercase tracking-wider text-amber-600">1</span>Ready to Assign</span>
                 </h2>
-                <p className="text-xs text-slate-500">{dispatchableTickets.length} tickets waiting for assignment</p>
+                <p className="text-xs text-slate-500">{dispatchableTickets.length} of {activeQueueCount} active tickets are eligible and waiting for assignment</p>
               </div>
             </div>
             <div className="max-h-[34rem] space-y-2 overflow-y-auto p-3">
@@ -373,6 +442,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                       key={ticket.id}
                       type="button"
                       onClick={() => setSelectedTicket(ticket)}
+                      aria-pressed={active}
                       className={`w-full rounded-xl border p-3 text-left transition ${
                         active
                           ? 'border-brand-300 bg-brand-50 shadow-sm'
@@ -405,17 +475,17 @@ const paginatedAssignedTickets = assignedTickets.slice(
                 })
               ) : (
                 <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 p-8 text-center text-sm text-slate-500">
-                  No dispatchable jobs right now.
+                  No tickets are ready to assign right now.
                 </div>
               )}
             </div>
           </div>
 
-          <div className="card overflow-hidden">
+          <div className="card order-3 overflow-hidden">
             <div className="border-b border-surface-200 px-4 py-3">
               <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                 <FiClipboard className="text-brand-500" />
-                Assignment Workspace
+                <span><span className="mr-2 text-xs font-bold uppercase tracking-wider text-brand-600">3</span>Assignment Review</span>
               </h2>
               <p className="text-xs text-slate-500">Review the selected job, equipment, lead technician, and crew before dispatch.</p>
             </div>
@@ -429,7 +499,17 @@ const paginatedAssignedTickets = assignedTickets.slice(
                         <h3 className="mt-1 text-lg font-bold text-slate-950">{formatTicketId(selectedTicket.id)} {selectedTicket.service}</h3>
                         <p className="mt-1 text-sm text-slate-600">{selectedTicket.clientFullname || selectedTicket.client}</p>
                       </div>
-                      <StatusBadge status={selectedTicket.status} />
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={selectedTicket.status} />
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTicket(null)}
+                          aria-label="Clear selected ticket"
+                          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white hover:text-slate-700"
+                        >
+                          <FiX aria-hidden="true" />
+                        </button>
+                      </div>
                     </div>
                     {selectedTicket.assignedTechnicianId && (
                       <p className="mt-3 rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-medium text-brand-700">
@@ -456,37 +536,35 @@ const paginatedAssignedTickets = assignedTickets.slice(
                   <div className="rounded-xl border border-surface-200 bg-surface-50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-sm font-semibold text-slate-900">Equipment to Bring</h3>
-                        <p className="mt-1 text-xs text-slate-500">Review or adjust materials before confirming dispatch.</p>
+                        <h3 className="text-sm font-semibold text-slate-900">Equipment Reservation Plan</h3>
+                        <p className="mt-1 text-xs text-slate-500">These quantities will be reserved for this ticket when the assignment is confirmed.</p>
                       </div>
                       <button
                         type="button"
                         onClick={addEquipmentPlanRow}
-                        className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-600"
+                        disabled={!nextEquipmentItem}
+                        title={!nextEquipmentItem ? 'No additional in-stock inventory items are available.' : undefined}
+                        className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
                       >
-                        Add
+                        Add item
                       </button>
                     </div>
 
-                    {selectedServiceMaterials.length > 0 && (
-                      <div className="mt-3 rounded-lg border border-surface-200 bg-white p-3 text-xs text-slate-600">
-                        <div className="font-semibold text-slate-800">Service-linked materials</div>
-                        <div className="mt-2 space-y-1">
-                          {selectedServiceMaterials.map((requirement) => (
-                            <div key={requirement.id} className="flex justify-between gap-3">
-                              <span>{requirement.item_name}</span>
-                              <span className="font-medium">Need {requirement.quantity}, available {requirement.available_quantity}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                    {pendingTicketReservations.length > 0 ? (
+                      <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
+                        Loaded the ticket's current reservation plan. Adjusting it will update pending reservations when you confirm.
+                      </p>
+                    ) : selectedServiceMaterials.length > 0 && (
+                      <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
+                        Pre-filled from {selectedServiceMaterials.length} service requirement{selectedServiceMaterials.length === 1 ? '' : 's'}. Review the quantities below.
+                      </p>
                     )}
 
-                    {selectedTicketReservations.length > 0 && (
+                    {completedTicketReservations.length > 0 && (
                       <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
-                        <div className="font-semibold">Current ticket reservations</div>
+                        <div className="font-semibold">Already issued or completed</div>
                         <div className="mt-1">
-                          {selectedTicketReservations.map((reservation) => (
+                          {completedTicketReservations.map((reservation) => (
                             `${reservation.item_name} x${reservation.quantity} (${reservation.status})`
                           )).join(', ')}
                         </div>
@@ -502,44 +580,79 @@ const paginatedAssignedTickets = assignedTickets.slice(
                             entry.itemDetails?.quantity ??
                             0
                           );
+                          const currentReservationQuantity = pendingTicketReservations
+                            .filter((reservation) => Number(reservation.item || reservation.item_id) === Number(entry.item))
+                            .reduce((total, reservation) => total + Number(reservation.quantity || 0), 0);
+                          const availableForPlan = availableQuantity + currentReservationQuantity;
+                          const requestedQuantity = Number(entry.quantity || 0);
+                          const shortageQuantity = Math.max(requestedQuantity - availableForPlan, 0);
                           return (
-                            <div key={`${entry.item}-${index}`} className="rounded-lg border border-surface-200 bg-white p-3">
-                              <div className="grid gap-2 sm:grid-cols-[1fr_84px_auto]">
-                                <select
-                                  value={entry.item}
-                                  onChange={(event) => updateEquipmentPlanRow(index, { item: Number(event.target.value) })}
-                                  className="rounded-lg border border-surface-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                                >
-                                  {inventoryItems.map((item) => (
-                                    <option key={item.id} value={item.id}>
-                                      {item.name} {item.sku ? `(${item.sku})` : ''}
-                                    </option>
-                                  ))}
-                                </select>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={entry.quantity}
-                                  onChange={(event) => updateEquipmentPlanRow(index, { quantity: event.target.value.replace(/[^\d]/g, '') })}
-                                  className="rounded-lg border border-surface-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                                />
+                            <div key={`${entry.item}-${index}`} className={`rounded-lg border bg-white p-3 ${shortageQuantity ? 'border-amber-300' : 'border-surface-200'}`}>
+                              <div className="flex items-center justify-between gap-3">
+                                <label htmlFor={`equipment-item-${index}`} className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Inventory item</label>
                                 <button
                                   type="button"
                                   onClick={() => removeEquipmentPlanRow(index)}
-                                  className="rounded-lg border border-surface-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-surface-50"
+                                  className="text-xs font-semibold text-slate-500 transition hover:text-rose-600"
                                 >
                                   Remove
                                 </button>
                               </div>
-                              <p className="mt-2 text-[11px] text-slate-500">Available now: {availableQuantity}</p>
+                              <select
+                                id={`equipment-item-${index}`}
+                                value={entry.item}
+                                onChange={(event) => updateEquipmentPlanRow(index, { item: Number(event.target.value) })}
+                                className="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                              >
+                                {inventoryItems.map((item) => {
+                                  const itemAvailable = Number(item.available_quantity ?? item.availableQuantity ?? item.quantity ?? 0);
+                                  const usedElsewhere = selectedEquipmentIds.has(Number(item.id)) && Number(item.id) !== Number(entry.item);
+                                  return (
+                                    <option key={item.id} value={item.id} disabled={usedElsewhere || (itemAvailable <= 0 && Number(item.id) !== Number(entry.item))}>
+                                      {item.name} {item.sku ? `(${item.sku})` : ''} · {itemAvailable} available
+                                    </option>
+                                  );
+                                })}
+                              </select>
+
+                              <div className="mt-3 grid gap-3 sm:grid-cols-[112px_1fr] sm:items-end">
+                                <div>
+                                  <label htmlFor={`equipment-quantity-${index}`} className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Quantity</label>
+                                  <input
+                                    id={`equipment-quantity-${index}`}
+                                    aria-describedby={`equipment-stock-${index}`}
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={entry.quantity}
+                                    onChange={(event) => updateEquipmentPlanRow(index, { quantity: event.target.value.replace(/[^\d]/g, '') })}
+                                    className="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                                  />
+                                </div>
+                                <div id={`equipment-stock-${index}`} className={`rounded-lg px-3 py-2 text-xs ${shortageQuantity ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>
+                                  <p className="font-semibold">{availableForPlan} available for this plan</p>
+                                  <p className="mt-0.5">
+                                    {shortageQuantity
+                                      ? `Short by ${shortageQuantity}; only available stock will be reserved.`
+                                      : currentReservationQuantity
+                                        ? `${currentReservationQuantity} already reserved for this ticket.`
+                                        : 'Stock is sufficient for this quantity.'}
+                                  </p>
+                                </div>
+                              </div>
                             </div>
                           );
                         })}
                       </div>
                     ) : (
                       <div className="mt-3 rounded-lg border border-dashed border-surface-200 bg-white px-3 py-3 text-xs text-slate-500">
-                        No equipment listed. Add items if this deployment needs materials.
+                        No equipment in this plan. You can confirm without a reservation or add an in-stock item.
                       </div>
+                    )}
+                    {!equipmentPlanValid && (
+                      <p role="alert" className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                        Every equipment row needs an inventory item and a quantity of at least 1.
+                      </p>
                     )}
                   </div>
 
@@ -558,25 +671,29 @@ const paginatedAssignedTickets = assignedTickets.slice(
                       disabled={!selectedTicket}
                       className="inline-flex flex-1 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-surface-200 disabled:bg-surface-100 disabled:text-slate-400"
                     >
-                      Auto-Assign Match
+                      Find Best Match
                     </button>
                   </div>
+                  <p className="text-xs text-slate-500">
+                    Manual action. It checks skill, schedule conflicts, daily capacity, availability, and location score even when automatic dispatch is turned off.
+                  </p>
                 </>
               ) : (
                 <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 p-8 text-center text-sm text-slate-500">
-                  Select a ticket from the dispatch queue to start an assignment.
+                  Select a ticket from the ready-to-assign queue to start an assignment.
                 </div>
               )}
             </div>
           </div>
 
-          <div className="card overflow-hidden">
+          <div className="card order-2 overflow-hidden">
             <div className="border-b border-surface-200 px-4 py-3">
               <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                 <FiUser className="text-emerald-500" />
-                {selectedTicket ? `Technicians for ${selectedTicket.service}` : 'Active Technicians'}
+                <span><span className="mr-2 text-xs font-bold uppercase tracking-wider text-emerald-600">2</span>{selectedTicket ? `Team for ${selectedTicket.service}` : 'Choose a Team'}</span>
               </h2>
-              <p className="text-xs text-slate-500">{serviceMatchedTechs.length} matching technicians</p>
+              <p className="text-xs text-slate-500">{selectedTicket ? `${serviceMatchedTechs.length} technicians match this service` : 'Select a ticket before choosing technicians'}</p>
+              <p className="mt-1 text-[11px] text-slate-400">Online means active and dispatch-ready, not live device connectivity.</p>
             </div>
             <div className="border-b border-surface-200 p-3">
               <label className="mb-1 flex items-center gap-1 text-xs font-semibold text-slate-600">
@@ -597,6 +714,11 @@ const paginatedAssignedTickets = assignedTickets.slice(
                 serviceMatchedTechs.map((tech) => {
                   const isLead = selectedTech?.id === tech.id;
                   const isCrew = selectedCrewIds.includes(tech.id);
+                  const dispatchPresence = getDispatchPresence(tech);
+                  const canSelectTechnician = Boolean(
+                    selectedTicket
+                    && ((tech.active && tech.isAvailable) || selectedTicket.assignedTechnicianId === tech.id)
+                  );
                   return (
                     <div
                       key={tech.id}
@@ -612,7 +734,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-slate-900">{tech.name}</p>
                           <div className="mt-1">
-                            <StatusBadge status={tech.technicianStatus || 'available'} size="sm" />
+                            <StatusBadge status={dispatchPresence.status} size="sm" />
                           </div>
                           <p className="mt-2 text-xs text-slate-500">Skill: {(tech.skill || 'general').replace('_', ' ')}</p>
                         </div>
@@ -620,10 +742,11 @@ const paginatedAssignedTickets = assignedTickets.slice(
                           <button
                             type="button"
                             onClick={() => selectLeadTechnician(tech)}
+                            disabled={!canSelectTechnician}
                             className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                               isLead
                                 ? 'bg-brand-600 text-white'
-                                : 'bg-slate-900 text-white hover:bg-slate-800'
+                                : 'bg-slate-900 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400'
                             }`}
                           >
                             {isLead ? 'Lead' : 'Set Lead'}
@@ -632,10 +755,11 @@ const paginatedAssignedTickets = assignedTickets.slice(
                             <button
                               type="button"
                               onClick={() => toggleCrewMember(tech.id)}
+                              disabled={!canSelectTechnician}
                               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                                 isCrew
                                   ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                  : 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:ring-slate-200'
                               }`}
                             >
                               {isCrew ? 'Crew' : 'Add Crew'}
@@ -644,14 +768,14 @@ const paginatedAssignedTickets = assignedTickets.slice(
                         </div>
                       </div>
                       <p className="mt-2 text-xs text-slate-500">
-                        {tech.isAvailable ? 'Ready for dispatch' : 'Occupied or offline from queue work'}
+                        {dispatchPresence.description}
                       </p>
                     </div>
                   );
                 })
               ) : (
                 <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 p-8 text-center text-sm text-slate-500">
-                  {selectedTicket ? 'No active technicians match this service.' : 'No matching active technicians.'}
+                  {selectedTicket ? 'No technicians match this service.' : 'No matching technicians.'}
                 </div>
               )}
             </div>
@@ -662,7 +786,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
         <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <h3 className="flex items-center gap-2 text-lg font-semibold">
             <FiCheckCircle className="text-emerald-500" />
-            Assigned Tickets ({assignedTickets.length})
+            Current Assignments ({assignedTickets.length})
           </h3>
         </div>
 
@@ -808,9 +932,10 @@ const paginatedAssignedTickets = assignedTickets.slice(
                       <button
                         type="button"
                         onClick={() => editAssignment(ticket)}
+                        aria-label="Edit assignment"
                         className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-800"
                       >
-                        Edit
+                          Edit
                       </button>
                     </td>
                   </tr>
@@ -841,7 +966,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
           </table>
           <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
             <p className="text-sm text-slate-500">
-              Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}
+              Showing {assignedTickets.length ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0}
               -
               {Math.min(currentPage * ITEMS_PER_PAGE, assignedTickets.length)}
               of {assignedTickets.length}

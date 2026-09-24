@@ -2,8 +2,6 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 
-from afn_service_management.fields import StructuredTextField
-
 class Notification(models.Model):
     id = models.BigAutoField(primary_key=True, db_column='notification_id')
     NOTIFICATION_TYPES = [
@@ -60,34 +58,4 @@ class Notification(models.Model):
     
     class Meta:
         ordering = ['-created_at']
-
-
-class NotificationTemplate(models.Model):
-    id = models.BigAutoField(primary_key=True, db_column='notification_template_id')
-    """Pre-defined notification message templates"""
-    name = models.CharField(max_length=100, unique=True)
-    notification_type = models.CharField(max_length=50)
-    subject = models.CharField(max_length=255)
-    body = models.TextField()
-    variables = StructuredTextField(
-        structure='list',
-        default=list,
-        help_text="e.g., ['technician_name', 'service_type']",
-    )
-    
-    def __str__(self):
-        return self.name
-
-
-class NotificationLog(models.Model):
-    id = models.BigAutoField(primary_key=True, db_column='notification_log_id')
-    """Track all notification sending attempts"""
-    notification = models.OneToOneField(Notification, on_delete=models.CASCADE, related_name='log')
-    email_status = models.CharField(max_length=50, default='pending')  # pending, sent, failed
-    email_response = models.TextField(blank=True, null=True)
-    last_attempt = models.DateTimeField(auto_now=True)
-    attempt_count = models.IntegerField(default=0)
-    
-    def __str__(self):
-        return f"Log for Notification {self.notification.id}"
 

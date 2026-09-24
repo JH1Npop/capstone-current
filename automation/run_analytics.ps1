@@ -5,10 +5,10 @@ param(
     [string]$Action = "daily"
 )
 
-# Set working directory
-$ProjectRoot = "D:\Caps - Copy"
-$BackendDir = "$ProjectRoot\backend"
-$VenvPython = "$ProjectRoot\venv\Scripts\python.exe"
+# Resolve paths from this repository instead of depending on one workstation.
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$BackendDir = Join-Path $ProjectRoot 'backend'
+$VenvPython = Join-Path $ProjectRoot 'venv\Scripts\python.exe'
 
 # Log file
 $LogDir = "$ProjectRoot\logs"
@@ -28,6 +28,14 @@ function Log-Message {
     Write-Host $LogEntry
 }
 
+function Invoke-ManagementCommand {
+    param([string[]]$Arguments)
+    & $VenvPython manage.py @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Management command failed with exit code ${LASTEXITCODE}: $($Arguments -join ' ')"
+    }
+}
+
 Log-Message "Starting analytics generation (Action: $Action)"
 
 try {
@@ -37,30 +45,39 @@ try {
     if ($Action -eq "daily") {
         # Daily analytics (yesterday)
         Log-Message "Generating daily analytics..."
-        & $VenvPython manage.py generate_daily_analytics
+        Invoke-ManagementCommand @('generate_daily_analytics')
         
         Log-Message "Generating technician performance..."
-        & $VenvPython manage.py generate_technician_performance
+        Invoke-ManagementCommand @('generate_technician_performance')
+
+        Log-Message "Validating and refreshing demand forecasts..."
+        Invoke-ManagementCommand @('generate_demand_forecasts')
         
         Log-Message "Analytics generation completed successfully"
     }
     elseif ($Action -eq "backfill") {
         # Backfill last 90 days
         Log-Message "Backfilling last 90 days of analytics..."
-        & $VenvPython manage.py generate_daily_analytics --backfill 90
+        Invoke-ManagementCommand @('generate_daily_analytics', '--backfill', '90')
         
         Log-Message "Backfilling last 90 days of technician performance..."
-        & $VenvPython manage.py generate_technician_performance --backfill 90
+        Invoke-ManagementCommand @('generate_technician_performance', '--backfill', '90')
+
+        Log-Message "Validating demand forecasts after backfill..."
+        Invoke-ManagementCommand @('generate_demand_forecasts')
         
         Log-Message "Backfill completed successfully"
     }
     elseif ($Action -eq "force") {
         # Force regenerate yesterday
         Log-Message "Force regenerating yesterday's analytics..."
-        & $VenvPython manage.py generate_daily_analytics --force
+        Invoke-ManagementCommand @('generate_daily_analytics', '--force')
         
         Log-Message "Force regenerating yesterday's technician performance..."
-        & $VenvPython manage.py generate_technician_performance --force
+        Invoke-ManagementCommand @('generate_technician_performance', '--force')
+
+        Log-Message "Revalidating demand forecasts..."
+        Invoke-ManagementCommand @('generate_demand_forecasts')
         
         Log-Message "Force regeneration completed successfully"
     }

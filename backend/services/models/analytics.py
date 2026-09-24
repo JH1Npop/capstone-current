@@ -97,10 +97,12 @@ class DemandForecast(models.Model):
 
     # Forecasted demand
     predicted_requests = models.IntegerField()
-    confidence_level = models.FloatField(default=0.8)  # 0-1 confidence score
+    # Legacy column retained for schema compatibility. New validated runs store
+    # a 0-1 holdout validation score here, not a statistical confidence level.
+    confidence_level = models.FloatField(default=0.8)
 
     # Factors influencing forecast
-    weather_impact = models.FloatField(default=0)  # -1 to 1 (negative/positive impact)
+    weather_impact = models.FloatField(default=0)  # Unsupported; validated runs always keep this at zero.
     seasonal_trend = models.FloatField(default=0)  # Seasonal adjustment factor
     historical_average = models.IntegerField(default=0)  # Base historical average
 
@@ -111,6 +113,12 @@ class DemandForecast(models.Model):
     generated_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['service_type', 'forecast_date', 'forecast_period'],
+                name='unique_demand_forecast_service_date_period',
+            ),
+        ]
         indexes = [
             models.Index(fields=['service_type', 'forecast_period', 'forecast_date']),
             models.Index(fields=['forecast_date']),

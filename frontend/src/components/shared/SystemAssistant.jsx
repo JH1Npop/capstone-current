@@ -5,23 +5,21 @@ import { api } from '../../api/core';
 
 const QUICK_QUESTIONS = [
   'Analytics summary',
-  'How is forecast calculated?',
-  'Forecast accuracy',
-  'Trend-based 7-day forecast',
-  'Future demand by location',
-  'Forecasted demand by service type',
+  'Is forecasting ready?',
+  'How will item demand be forecast?',
+  'Historical demand by location',
+  'Historical item consumption',
   'Requests created vs completed',
   'Busiest months',
   'Request count by service type',
   'Request count by source',
   'Ticket count by workflow status',
   'City completion trends',
-  'Highest forecast day',
+  'Peak historical month',
   'Technician performance',
   'Most active technician',
   'SLA risks',
   'Inventory demand',
-  'Projected request count by location',
   'Scheduling and warranty counts',
   'Coverage heatmap',
   'Operational issue counts',
@@ -29,7 +27,7 @@ const QUICK_QUESTIONS = [
 ];
 
 const OUT_OF_SCOPE_RESPONSE =
-  'I only answer from the loaded analytics and dashboard data. Ask about request counts, created vs completed request trends, request count by source or service type, ticket count by workflow status, 7-day trend-based forecasts, forecast formula and confidence, projected request count by location, busiest months or weeks, city or province completion trends, technician workload and performance, SLA risks, inventory demand, scheduling counts, warranty counts, or coverage heatmap insights.';
+  'I only answer from loaded analytics and dashboard data. Ask about request counts, created versus completed trends, service or status counts, historical service-location density, forecast readiness, ticket-linked item consumption, technician performance, SLA risks, inventory, scheduling, maintenance, or coverage insights.';
 
 const ANALYTICS_SCOPE_TERMS = [
   'analytics',
@@ -151,11 +149,11 @@ const SYSTEM_KNOWLEDGE = [
   },
   {
     keywords: ['analytics', 'forecast', 'demand forecasting', 'predictive', 'trend'],
-    answer: 'Analytics, demand forecast, and predictive analytics are one connected module. It combines descriptive metrics with trend-based prediction from historical records: service request counts, completion trends, service demand, weekday patterns, technician capacity, risk levels, location demand, and inventory demand. It should be described as trend-based predictive analytics from recorded system data, not advanced AI or a trained machine-learning model.'
+    answer: 'Analytics provides descriptive trends, readiness evidence, and a seasonal-trend forecast only when genuine history and holdout validation pass. Otherwise it withholds future quantities. Service-location density and ticket-linked item consumption remain clearly identified as historical evidence.'
   },
   {
     keywords: ['formula', 'calculated', 'calculation', 'how did you get', 'accuracy', 'confidence', 'method'],
-    answer: 'Forecast formula: Predicted requests = recent daily average x weekday demand factor x trend factor. The trend factor compares recent demand with the previous comparable period and is bounded so one unusual spike does not dominate the forecast. Technician capacity is estimated as recommended technicians = ceiling(predicted next 7 days / jobs per technician). Confidence is based on available historical volume and whether recent and previous periods both have data. True accuracy is measured later by comparing predicted requests with actual requests.'
+    answer: 'The forecast blends calendar-month seasonality with a damped 12-month linear trend. It is published only after rolling holdout validation, with MAE, WAPE, bias, and baseline comparison stored. Item demand then uses genuine ticket-linked usage and configured service-item mappings.'
   },
   {
     keywords: ['map', 'gps', 'tracking', 'technician tracking', 'location'],
@@ -163,7 +161,7 @@ const SYSTEM_KNOWLEDGE = [
   },
   {
     keywords: ['coverage heatmap', 'heatmap', 'coverage', 'service density'],
-    answer: 'Coverage Heatmap visualizes completed-service density and technician coverage by location. The demand forecast can combine this heatmap density with recent analytics trends to estimate which areas may need more service in the next 7 days.'
+    answer: 'Coverage Heatmap visualizes completed-service density and technician coverage by location. Forecasting uses genuine city/province history to allocate a validated 30-day service outlook, while clearly stating that this is a historical-share allocation rather than a separate geographic model.'
   },
   {
     keywords: ['message', 'messages', 'chat', 'communication'],
@@ -223,7 +221,7 @@ const SYSTEM_KNOWLEDGE = [
   },
   {
     keywords: ['machine learning', 'ml', 'does it learn', 'learns', 'adaptive', 'ai assistant', 'real ai'],
-    answer: 'The current Analytics Assistant is not a trained machine-learning model. It is a rule-based analytics helper that reads live dashboard and forecast data, then answers from computed trends and curated analytics knowledge. Describe the forecast as trend-based predictive analytics, not trained ML.'
+    answer: 'The Analytics Assistant is not the forecasting model. It explains live aggregates, readiness, and any stored validated seasonal-trend run. It never creates predictions itself.'
   },
   {
     keywords: ['database', 'schema', 'erd', 'json', 'jsonfield', 'foreign key', 'fk', '_id'],
@@ -246,7 +244,7 @@ const ROUTE_HELP = [
   { keywords: ['tracking', 'gps'], answer: 'Open /admin/technician-tracking for admin tracking, or /technician/map-navigation for technician navigation.' },
   { keywords: ['inventory'], answer: 'Open /admin/inventory for stock, items, summaries, and service inventory requirements.' },
   { keywords: ['services'], answer: 'Open /admin/services to manage service types, procedures, duration, cost, and required equipment.' },
-  { keywords: ['analytics', 'forecast'], answer: 'Open /admin/analytics for trends, demand forecast, risk, technician capacity, and inventory demand signals.' },
+  { keywords: ['analytics', 'forecast'], answer: 'Open /admin/analytics for operational trends, comparisons, historical service-location density, ticket-linked item usage, and forecast readiness.' },
   { keywords: ['reports'], answer: 'Open /admin/reports or /admin/operations-report for management reports.' },
   { keywords: ['users', 'user management', 'accounts'], answer: 'Open /admin/user-management. Superadmin controls full user and capability management.' },
   { keywords: ['after sales', 'after-sales', 'follow up'], answer: 'Open /admin/after-sales-cases for follow-up, complaint, warranty, revisit, and feedback cases.' },
@@ -297,19 +295,19 @@ function AssistantMessageText({ text }) {
               <p className="text-[0.72rem] font-bold uppercase tracking-wide text-slate-500">
                 {clean(headingMatch[2])}
               </p>
-              <p className="text-sm leading-6 text-slate-700">{clean(headingMatch[3])}</p>
+              <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-6 text-slate-700">{clean(headingMatch[3])}</p>
             </div>
           );
         }
 
         return (
-          <p key={`${paragraph}-${index}`} className="text-sm leading-6 text-slate-700">
+          <p key={`${paragraph}-${index}`} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-6 text-slate-700">
             {clean(paragraph)}
           </p>
         );
       })}
       {source ? (
-        <p className="border-t border-slate-100 pt-2 text-[0.72rem] font-medium text-slate-500">
+        <p className="break-words [overflow-wrap:anywhere] border-t border-slate-100 pt-2 text-[0.72rem] font-medium text-slate-500">
           Source: {clean(source)}
         </p>
       ) : null}
@@ -320,7 +318,7 @@ function AssistantMessageText({ text }) {
 function dataAvailabilityNote(analytics, dashboardStats) {
   if (analytics && dashboardStats) return '';
   if (analytics) return ' Dashboard snapshot is not loaded, so live dashboard counters may be incomplete.';
-  if (dashboardStats) return ' Analytics forecast is not loaded, so trend-based predictions may be incomplete.';
+  if (dashboardStats) return ' Analytics evidence is not loaded, so historical trends and forecast readiness may be incomplete.';
   return ' Live system data is not loaded yet.';
 }
 
@@ -495,12 +493,18 @@ async function answerDateRecordQuestion(question) {
 
 function buildAssistantAnswer(question, analytics, technicianPerformance = [], dashboardStats = null, technicianPerformanceAllTime = []) {
   const normalizedQuestion = String(question || '').toLowerCase();
-  const dailyForecast = Array.isArray(analytics?.dailyForecast) ? analytics.dailyForecast.slice(0, 7) : [];
-  const serviceForecast = Array.isArray(analytics?.serviceForecasts) ? analytics.serviceForecasts : [];
+  const forecasting = analytics?.forecasting || {};
+  const forecastReadiness = forecasting.forecast || analytics?.forecast || {};
+  const demandForecast = forecasting.demand_forecast || analytics?.demandForecast || {};
+  const modelStatus = forecasting.model_status || analytics?.modelStatus || {};
+  const forecastAvailable = Boolean(modelStatus.predictions_available && demandForecast.available);
+  const itemDemandReadiness = forecasting.item_demand_readiness || {};
+  const forecastHistory = forecasting.historical_charts || {};
+  const historySummary = forecasting.history_summary || {};
+  const historicalServiceMix = Array.isArray(forecastHistory.service_mix) ? forecastHistory.service_mix : [];
+  const historicalLocations = Array.isArray(forecastHistory.service_location_density) ? forecastHistory.service_location_density : [];
+  const historicalItems = Array.isArray(forecastHistory.historical_item_usage) ? forecastHistory.historical_item_usage : [];
   const monthlyServiceBreakdown = Array.isArray(analytics?.monthlyServiceBreakdown) ? analytics.monthlyServiceBreakdown : [];
-  const predictiveSummary = analytics?.predictiveSummary || {};
-  const locationDemandForecast = analytics?.locationDemandForecast || {};
-  const locationHotspots = Array.isArray(locationDemandForecast?.hotspots) ? locationDemandForecast.hotspots : [];
   const inventoryDemand = analytics?.seasonalInventoryDemand || {};
   const busiestMonths = Array.isArray(analytics?.busiestMonths) ? analytics.busiestMonths : [];
   const busiestWeeks = Array.isArray(analytics?.busiestWeeks) ? analytics.busiestWeeks : [];
@@ -520,14 +524,6 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
   const afterSalesCases = Array.isArray(dashboardStats?.after_sales?.recent_cases)
     ? dashboardStats.after_sales.recent_cases
     : [];
-  const totalPredicted = dailyForecast.reduce((sum, item) => sum + Number(item.predictedRequests || 0), 0);
-  const busiestDay = [...dailyForecast].sort((a, b) => Number(b.predictedRequests || 0) - Number(a.predictedRequests || 0))[0];
-  const highRiskServices = serviceForecast.filter((item) => item.riskLevel === 'high');
-  const topService = [...serviceForecast].sort((a, b) => Number(b.predictedNext7Days || 0) - Number(a.predictedNext7Days || 0))[0];
-  const totalCapacityGap = serviceForecast.reduce((sum, item) => sum + Number(item.capacityGap || 0), 0);
-  const averageForecastConfidence = serviceForecast.length
-    ? Math.round(serviceForecast.reduce((sum, item) => sum + Number(item.confidence || 0), 0) / serviceForecast.length)
-    : 0;
   const topInventoryItem = [...(inventoryDemand?.topItems || [])].sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0))[0];
   const topInventoryCategory = [...(inventoryDemand?.categoryDemand || [])].sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0))[0];
   const wantsAllTimePerformance = includesAny(normalizedQuestion, ['all time', 'of all time', 'ever', 'lifetime', 'all recorded', 'entire history']);
@@ -571,7 +567,7 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
 
   if (includesAny(normalizedQuestion, ['help', 'what can you answer', 'what can you analyze', 'what can you analyse', 'topics', 'questions', 'guide'])) {
     return withSource(
-      'I answer only from the loaded analytics and dashboard data: total, pending, and completed requests; requests created vs completed by period; request count by source, priority, and service type; ticket count by workflow status; busiest months and weeks; trend-based 7-day demand forecast; forecast formula, confidence, and highest forecast day; forecasted demand by service type; projected request count by location; city and province completion trends; technician workload and performance; SLA risks; inventory demand; scheduling counts; warranty counts; and coverage heatmap or hotspot insights. I do not answer general workflow, PWA, email, schema, routing, or account-management questions in this assistant.',
+      'I answer from loaded analytics and dashboard data: request and completion trends, service and status counts, comparisons, historical service-location density, forecast readiness, ticket-linked item consumption, technician performance, SLA risks, inventory, scheduling, maintenance, and coverage insights. I do not invent future quantities, confidence, or accuracy while forecasting is unavailable.',
       'analytics assistant scope',
       'high'
     );
@@ -612,21 +608,24 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
   }
 
   if (includesAny(normalizedQuestion, ['formula', 'calculated', 'calculation', 'how did you get', 'how is it calculated', 'how calculated', 'method'])) {
-    const servicePart = topService
-      ? ` Example from the current data: ${topService.serviceType} has ${topService.recentRequests || 0} recent request(s), ${topService.previousRequests || 0} previous-period request(s), ${topService.predictedNext7Days || 0} predicted request(s), ${topService.projectedGrowthRate || 0}% projected growth, and ${topService.confidence || 0}% confidence.`
-      : '';
     return withSource(
-      `The system treats analytics, demand forecast, and predictive analytics as one module. Formula: predicted requests = recent daily average x weekday demand factor x trend factor. The trend factor comes from recent demand compared with the previous comparable period or broader history, then it is bounded so an unusual spike does not overtake the forecast. Technician capacity uses recommended technicians = ceiling(predicted next 7 days / jobs per technician).${servicePart}${availabilityNote}`,
-      'predictive analytics formula and live forecast data',
-      analytics ? 'high' : 'medium'
+      forecastAvailable
+        ? `The published method is ${demandForecast.method}. It combines calendar-month seasonality with a damped 12-month linear trend, then must pass a rolling holdout backtest before display. The current outlook is ${getNumber(demandForecast.next_7_days).toFixed(1)} requests for 7 days and ${getNumber(demandForecast.next_30_days).toFixed(1)} for 30 days. Item demand uses only configured service-item mappings and average genuine issued quantity per ticket.${availabilityNote}`
+        : `No future quantity is currently calculated because no model has passed every validation gate. The planned method forecasts service demand by service, validates it on unseen historical months, and then translates it through genuine ticket-linked item usage and configured service-item requirements. Current evidence includes ${getNumber(forecastReadiness.request_count)} genuine requests, ${getNumber(forecastReadiness.history_months).toFixed(1)} months of service history, ${getNumber(itemDemandReadiness.ticket_linked_issue_transactions)} ticket-linked issue transactions, and ${getNumber(itemDemandReadiness.requirement_mappings)} service-item mappings.${availabilityNote}`,
+      'forecasting readiness contract',
+      forecasting?.workspace ? 'high' : 'medium'
     );
   }
 
   if (includesAny(normalizedQuestion, ['accuracy', 'accurate', 'confidence', 'error rate', 'forecast error'])) {
+    const publishedModels = (demandForecast.service_models || []).filter((row) => row.published);
+    const accuracySummary = publishedModels.map((row) => `${row.service_type}: WAPE ${row.metrics?.wape_percent}% across ${row.holdout_months} holdout months`).join('; ');
     return withSource(
-      `Current forecast confidence averages about ${averageForecastConfidence || 0}% across service forecasts. This is not a promise of perfect accuracy; it is a data-quality confidence signal based on historical volume and whether recent and previous periods both have usable data. Actual accuracy should be evaluated after the forecast window with: accuracy = 100 - (absolute actual minus predicted / actual x 100). Current next-7-day prediction: ${plural(totalPredicted, 'request')}.${availabilityNote}`,
-      'predictive analytics confidence method',
-      analytics ? 'high' : 'medium'
+      forecastAvailable
+        ? `The system reports holdout error, not invented confidence. ${accuracySummary || 'Validated error evidence is stored for the published service models.'} Lower WAPE is better, and every published model must stay within the configured error and baseline-comparison limits.${availabilityNote}`
+        : `Forecast accuracy and confidence are unavailable because no current model has passed training, backtesting, freshness, and publication checks. ${forecastReadiness.reason || 'The service-history gate is not met'} ${itemDemandReadiness.reason || ''}`.trim(),
+      'forecasting model status',
+      forecasting?.workspace ? 'high' : 'medium'
     );
   }
 
@@ -657,8 +656,8 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
     const completed = analytics?.completedRequests ?? overview.completedRequests ?? 0;
     const pending = analytics?.pendingRequests ?? overview.pendingRequests ?? 0;
     return withSource(
-      `Current system snapshot: ${plural(total, 'request')}, ${completed} completed, ${pending} pending, ${plural(activeTickets, 'active ticket')}, and ${plural(availableTechnicians, 'available technician')}. The 7-day forecast expects ${plural(totalPredicted, 'upcoming request')}.${availabilityNote}`,
-      'live dashboard data and analytics trend',
+      `Current system snapshot: ${plural(total, 'request')}, ${completed} completed, ${pending} pending, ${plural(activeTickets, 'active ticket')}, and ${plural(availableTechnicians, 'available technician')}. ${forecastAvailable ? `The validated outlook estimates ${getNumber(demandForecast.next_30_days).toFixed(1)} requests over the next 30 days.` : 'Forecast quantities are unavailable until the evidence and model-validation gates are met.'}${availabilityNote}`,
+      'live dashboard data and forecasting readiness',
       analytics && dashboardStats ? 'high' : 'medium'
     );
   }
@@ -739,34 +738,42 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
 
   if (includesAny(normalizedQuestion, ['busiest', 'peak'])) {
     return withSource(
-      busiestDay
-        ? `The busiest forecasted day is ${busiestDay.label}, with ${busiestDay.predictedRequests || 0} expected service request${Number(busiestDay.predictedRequests || 0) === 1 ? '' : 's'}.${availabilityNote}`
-        : `There is no clear busiest day yet because the forecast has no predicted request volume.${availabilityNote}`,
-      'analytics trend forecast',
-      analytics ? 'medium' : 'low'
+      historySummary.peak_month
+        ? `The highest historical month in the genuine request evidence is ${historySummary.peak_month}, with ${plural(historySummary.peak_month_requests || 0, 'request')}. This is historical, not a prediction.${availabilityNote}`
+        : `There is no historical peak month available yet.${availabilityNote}`,
+      'historical genuine service requests',
+      forecasting?.workspace ? 'high' : 'low'
     );
   }
 
   if (includesAny(normalizedQuestion, ['future demand by area', 'area demand', 'location demand', 'hotspot', 'hotspots', 'heatmap forecast', 'demand heatmap', 'where demand', 'which area', 'what area'])) {
-    const topHotspot = locationHotspots[0];
+    const projectedLocations = demandForecast.location_outlook || [];
+    if (forecastAvailable && projectedLocations.length) {
+      const allocation = projectedLocations.slice(0, 3).map((item) => `${item.city}${item.province ? `, ${item.province}` : ''} · ${item.service_type}: ${getNumber(item.allocated_30_day_requests).toFixed(1)} allocated requests`).join('; ');
+      return withSource(
+        `The validated 30-day service outlook, allocated using each area's latest genuine historical share, is: ${allocation}. This is a historical-share allocation of the service forecast, not a separately trained geographic model.${availabilityNote}`,
+        'validated service forecast and historical location density',
+        'high'
+      );
+    }
+    const topHotspot = historicalLocations[0];
     if (!topHotspot) {
       return withSource(
-        `I do not have enough mapped service history to project future demand by area yet.${availabilityNote}`,
-        'location demand forecast from analytics and coverage heatmap density',
+        `I do not have enough service-location history to describe demand concentration, and no validated area forecast exists.${availabilityNote}`,
+        'historical service-location density',
         analytics ? 'low' : 'low'
       );
     }
 
-    const visibleHotspots = locationHotspots.slice(0, 3).map((item) => {
-      const projected = Number(item.projectedNext7Days || 0);
-      const service = item.topServiceType ? `, mostly ${item.topServiceType}` : '';
-      return `${item.label}: ${projected} projected request${projected === 1 ? '' : 's'}${service}`;
+    const visibleHotspots = historicalLocations.slice(0, 3).map((item) => {
+      const label = [item.location__city, item.location__province].filter(Boolean).join(', ');
+      return `${label || 'Unspecified location'} — ${item.service_type__name || 'Unspecified service'}: ${plural(item.requests || 0, 'historical request')}`;
     });
 
     return withSource(
-      `Projected area demand for the next ${locationDemandForecast.forecastWindowDays || 7} days: ${visibleHotspots.join('; ')}. Highest hotspot is ${topHotspot.label}, with risk level ${topHotspot.riskLevel || 'low'} and confidence ${topHotspot.confidence || 0}%. This uses service forecast trends plus completed-service heatmap density, so it is predictive analytics from recorded system data, not trained ML.${availabilityNote}`,
-      'location demand forecast from analytics and coverage heatmap density',
-      analytics ? 'medium' : 'low'
+      `Historical service-location concentration: ${visibleHotspots.join('; ')}. These are recorded requests, not projected future demand. ${forecastReadiness.reason || 'No validated location forecast exists.'}${availabilityNote}`,
+      'historical service-location density and forecasting readiness',
+      forecasting?.workspace ? 'high' : 'low'
     );
   }
 
@@ -846,17 +853,10 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
   }
 
   if (includesAny(normalizedQuestion, ['technician', 'capacity', 'staff', 'available'])) {
-    if (totalCapacityGap > 0) {
-      return withSource(
-        `The forecast shows a capacity gap of ${plural(totalCapacityGap, 'technician')}. Available technicians: ${availableTechnicians}. Review dispatch assignments before demand increases.${availabilityNote}`,
-        'analytics trend forecast',
-        analytics ? 'medium' : 'low'
-      );
-    }
     return withSource(
-      `Current technician capacity is enough for the 7-day forecast. Available technicians: ${availableTechnicians}. The system estimates ${plural(totalPredicted, 'upcoming request')} with no capacity gap.${availabilityNote}`,
-      'analytics trend forecast',
-      analytics ? 'medium' : 'low'
+      `There are ${plural(availableTechnicians, 'available technician')} in the current dashboard snapshot. The assistant cannot claim a future staffing gap because no validated demand forecast exists.${availabilityNote}`,
+      'live technician availability and forecasting readiness',
+      analytics && dashboardStats ? 'high' : 'medium'
     );
   }
 
@@ -902,23 +902,25 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
   }
 
   if (includesAny(normalizedQuestion, ['service', 'highest', 'demand', 'forecast'])) {
+    const topForecastService = (demandForecast.by_service || [])[0];
+    if (forecastAvailable && topForecastService) {
+      return withSource(
+        `${topForecastService.service_type} has the highest published 30-day outlook at ${getNumber(topForecastService.next_30_days).toFixed(1)} expected requests, with ${getNumber(topForecastService.next_7_days).toFixed(1)} expected in the next 7 days. Its holdout WAPE is ${topForecastService.wape_percent}%. These values are estimates from a validated seasonal-trend model, not guaranteed sales.${availabilityNote}`,
+        'validated demand forecast by service',
+        'high'
+      );
+    }
+    const topHistoricalService = historicalServiceMix[0];
     return withSource(
-      topService
-        ? `${topService.serviceType} has the highest projected demand with ${topService.predictedNext7Days || 0} expected request${Number(topService.predictedNext7Days || 0) === 1 ? '' : 's'} in the next 7 days. Risk level: ${topService.riskLevel || 'low'}.${availabilityNote}`
-        : `The forecast estimates ${totalPredicted} total request${totalPredicted === 1 ? '' : 's'} in the next 7 days, but no service type is currently standing out.${availabilityNote}`,
-      'analytics trend forecast',
-      analytics ? 'medium' : 'low'
+      topHistoricalService
+        ? `${topHistoricalService.service_type__name || 'The leading service'} has the most genuine historical demand with ${plural(topHistoricalService.requests || 0, 'request')}. This is not a future forecast. ${forecastReadiness.reason || 'No validated forecast exists.'}${availabilityNote}`
+        : `No genuine historical service-demand evidence is available, and no future forecast is generated.${availabilityNote}`,
+      'historical service demand and forecasting readiness',
+      forecasting?.workspace ? 'high' : 'low'
     );
   }
 
   if (includesAny(normalizedQuestion, ['risk', 'problem', 'warning', 'attention', 'issue'])) {
-    if (highRiskServices.length) {
-      return withSource(
-        `${highRiskServices.length} service type${highRiskServices.length === 1 ? '' : 's'} are marked high risk: ${highRiskServices.map((item) => item.serviceType).join(', ')}. This usually means forecasted demand may exceed available capacity.${availabilityNote}`,
-        'analytics trend forecast',
-        'medium'
-      );
-    }
     if (overdueSla || warningSla || lowStock || dueMaintenance || overdueCases) {
       return withSource(
         `Current attention signals: ${plural(overdueSla, 'overdue SLA item')}, ${plural(warningSla, 'SLA warning')}, ${plural(lowStock, 'low-stock item')}, ${plural(dueMaintenance, 'due maintenance item')}, and ${plural(overdueCases, 'overdue after-sales case')}.${availabilityNote}`,
@@ -934,11 +936,12 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
   }
 
   if (includesAny(normalizedQuestion, ['inventory', 'stock', 'item', 'parts', 'materials'])) {
-    if (topInventoryItem) {
+    const linkedItem = historicalItems[0];
+    if (linkedItem) {
       return withSource(
-        `${topInventoryItem.item} is the top inventory demand signal, with ${plural(topInventoryItem.quantity || 0, 'unit')} used in the selected period. Dashboard stock alerts: ${plural(lowStock, 'low-stock item')} and ${plural(outOfStock, 'out-of-stock item')}.${availabilityNote}`,
-        'analytics inventory demand and dashboard stock data',
-        analytics && dashboardStats ? 'high' : 'medium'
+        `${linkedItem.item__name || linkedItem.item__sku || 'The leading item'} has the highest recorded ticket-linked consumption with ${plural(linkedItem.quantity || 0, 'unit')} issued across ${plural(linkedItem.transactions || 0, 'transaction')}. Future item quantities are unavailable. Readiness currently has ${getNumber(itemDemandReadiness.ticket_linked_issue_transactions)} linked issues, ${getNumber(itemDemandReadiness.linked_issue_active_months)} active usage months, and ${getNumber(itemDemandReadiness.requirement_mappings)} requirement mappings. Dashboard stock alerts: ${plural(lowStock, 'low-stock item')} and ${plural(outOfStock, 'out-of-stock item')}.${availabilityNote}`,
+        'ticket-linked historical item consumption and demand readiness',
+        forecasting?.workspace && dashboardStats ? 'high' : 'medium'
       );
     }
     if (topInventoryCategory) {
@@ -949,8 +952,8 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
       );
     }
     return withSource(
-      `Inventory demand is still light in the recorded data. Current stock alerts: ${plural(lowStock, 'low-stock item')} and ${plural(outOfStock, 'out-of-stock item')}.${availabilityNote}`,
-      'analytics inventory demand and dashboard stock data',
+      `No ticket-linked issued-item history is available for a reliable consumption breakdown. Future quantities remain unavailable. Current stock alerts: ${plural(lowStock, 'low-stock item')} and ${plural(outOfStock, 'out-of-stock item')}.${availabilityNote}`,
+      'ticket-linked item consumption readiness and dashboard stock data',
       analytics && dashboardStats ? 'high' : 'medium'
     );
   }
@@ -994,18 +997,18 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
   }
 
   if (includesAny(normalizedQuestion, ['summary', 'week'])) {
-    const growth = predictiveSummary.projectedGrowthRate;
-    const pressure = predictiveSummary.staffingPressure || 'low';
     return withSource(
-      `For the next 7 days, the system forecasts ${totalPredicted} service request${totalPredicted === 1 ? '' : 's'}. ${busiestDay ? `Peak day is ${busiestDay.label}. ` : ''}${topService ? `Top service is ${topService.serviceType}. ` : ''}Staffing pressure is ${pressure}${growth != null ? ` with projected growth at ${growth}%` : ''}.${availabilityNote}`,
-      'analytics trend forecast',
-      analytics ? 'medium' : 'low'
+      forecastAvailable
+        ? `The validated outlook estimates ${getNumber(demandForecast.next_7_days).toFixed(1)} service requests in the next 7 days and ${getNumber(demandForecast.next_30_days).toFixed(1)} in the next 30 days. Historical evidence contains ${plural(forecastReadiness.request_count || 0, 'genuine request')} across ${getNumber(forecastReadiness.history_months).toFixed(1)} months${historySummary.peak_month ? `, with ${historySummary.peak_month} as the highest recorded month` : ''}.${availabilityNote}`
+        : `Forecast quantities are unavailable because the evidence and model-validation gates are not met. Historical evidence contains ${plural(forecastReadiness.request_count || 0, 'genuine request')} across ${getNumber(forecastReadiness.history_months).toFixed(1)} months${historySummary.peak_month ? `, with ${historySummary.peak_month} as the highest recorded month` : ''}. ${itemDemandReadiness.reason || forecastReadiness.reason || ''}${availabilityNote}`,
+      'forecasting readiness and historical evidence',
+      forecasting?.workspace ? 'high' : 'medium'
     );
   }
 
   return withSource(
-    `I do not have a prepared analytics answer for that exact question. Try asking about requests created vs completed, request count by source or service type, ticket count by workflow status, trend-based 7-day forecast, forecast confidence, projected request count by location, city or province completion trends, technician performance, SLA risks, inventory demand, scheduling counts, warranty counts, or coverage heatmap insights. Current analytics snapshot: ${plural(totalPredicted, 'forecasted request')} for the next 7 days, ${plural(overdueSla, 'overdue SLA item')}, ${plural(warningSla, 'SLA warning')}, and ${plural(lowStock, 'low-stock item')}.${availabilityNote}`,
-    'analytics fallback plus loaded dashboard/forecast snapshot',
+    `I do not have a prepared answer for that exact question. Try asking about request trends, service or status counts, comparisons, historical service-location density, forecast readiness, ticket-linked item consumption, technician performance, SLA risk, inventory, scheduling, maintenance, or coverage. Current attention: ${plural(overdueSla, 'overdue SLA item')}, ${plural(warningSla, 'SLA warning')}, and ${plural(lowStock, 'low-stock item')}. ${forecastAvailable ? `A validated 30-day outlook of ${getNumber(demandForecast.next_30_days).toFixed(1)} requests is available.` : 'Future quantities are unavailable until a model is validated.'}${availabilityNote}`,
+    'analytics fallback plus loaded dashboard and readiness data',
     analytics || dashboardStats ? 'medium' : 'low'
   );
 }
@@ -1021,20 +1024,21 @@ export default function SystemAssistant() {
   const [messages, setMessages] = useState([
     {
       sender: 'assistant',
-      text: 'Ask me about AFN analytics: request counts, created vs completed trends, ticket status counts, trend-based forecasts, forecast formula and confidence, projected request count by location, technician performance, SLA risk, inventory demand, scheduling counts, warranty counts, or coverage heatmap insights.'
+      text: 'Ask me about AFN analytics: request and completion trends, comparisons, historical service-location density, forecast readiness, ticket-linked item consumption, technician performance, SLA risk, inventory, scheduling, maintenance, or coverage insights.'
     }
   ]);
 
   const loadAnalytics = async () => {
     setLoading(true);
     try {
-      const [data, dashboardData, performanceResponse, allTimePerformanceResponse] = await Promise.all([
+      const [data, forecastingData, dashboardData, performanceResponse, allTimePerformanceResponse] = await Promise.all([
         fetchAdminAnalytics(30),
+        fetchAdminAnalytics({ days: 30, workspace: 'forecasting' }),
         fetchDashboardStats('admin'),
         api.get('/services/technician-performance/performance_breakdown/', { params: { days: 30 } }),
         api.get('/services/technician-performance/performance_breakdown/', { params: { period: 'all' } })
       ]);
-      setAnalytics(data || {});
+      setAnalytics({ ...(data || {}), forecasting: forecastingData || {} });
       setDashboardStats(dashboardData || {});
       setTechnicianPerformance(Array.isArray(performanceResponse?.data) ? performanceResponse.data : []);
       setTechnicianPerformanceAllTime(Array.isArray(allTimePerformanceResponse?.data) ? allTimePerformanceResponse.data : []);
@@ -1156,7 +1160,7 @@ export default function SystemAssistant() {
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="text-base font-semibold text-slate-900">Analytics Assistant</h3>
-          <p className="mt-1 text-xs text-slate-500">Request counts, trend-based forecasts, technician performance, SLA risk, and location demand insights.</p>
+          <p className="mt-1 text-xs text-slate-500">Trends, comparisons, forecast readiness, item usage, technician performance, and SLA risk.</p>
         </div>
         <button
           type="button"
@@ -1184,7 +1188,8 @@ export default function SystemAssistant() {
               key={question}
               type="button"
               onClick={() => askQuestion(question)}
-              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+              disabled={loading}
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-wait disabled:opacity-60"
             >
               {question}
             </button>
@@ -1194,7 +1199,7 @@ export default function SystemAssistant() {
         <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto rounded-xl bg-slate-50 p-3">
           {messages.map((message, index) => (
             <div key={`${message.sender}-${index}`} className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[92%] overflow-hidden rounded-2xl px-4 py-3 text-sm leading-6 ${
+              <div className={`min-w-0 max-w-[92%] break-words [overflow-wrap:anywhere] rounded-2xl px-4 py-3 text-sm leading-6 ${
                 message.sender === 'user'
                   ? 'bg-brand-500 text-white'
                   : 'border border-slate-200 bg-white text-slate-700'
@@ -1202,7 +1207,7 @@ export default function SystemAssistant() {
                 {message.sender === 'assistant' ? (
                   <AssistantMessageText text={message.text} />
                 ) : (
-                  <span className="whitespace-pre-line break-words">{message.text}</span>
+                  <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.text}</span>
                 )}
               </div>
             </div>
@@ -1224,7 +1229,7 @@ export default function SystemAssistant() {
           />
           <button
             type="submit"
-            disabled={!input.trim()}
+            disabled={!input.trim() || loading}
             className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-brand-500 text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300"
             aria-label="Ask analytics assistant"
           >

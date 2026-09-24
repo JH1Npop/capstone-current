@@ -41,4 +41,7 @@ export const mergeLandingSettings = (payload = {}) => ({
   landingPagePromotions: Array.isArray(payload.landingPagePromotions)
     ? payload.landingPagePromotions
     : [],
+  landingPageProjects: Array.isArray(payload.landingPageProjects)
+    ? payload.landingPageProjects
+    : [],
 });

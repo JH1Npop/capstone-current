@@ -1,6 +1,6 @@
 # ERD Accuracy Recheck
 
-Rechecked against the Django model files on 2026-05-31.
+Rechecked against the Django model files on 2026-08-31.
 
 ## Verification
 
@@ -59,7 +59,6 @@ The snowflake draw.io ERD is accurate for the main operational system flow:
 - `Notification`
 - `ActivityLog`
 - `TicketProgress`
-- `ServiceHistory`
 - Analytics records
 
 The DBML file is more complete for the full physical database because it also includes supporting/admin tables:
@@ -68,8 +67,6 @@ The DBML file is more complete for the full physical database because it also in
 - `AdminSettings`
 - `UserCapabilityGrant`
 - `ChangeLog`
-- `NotificationTemplate`
-- `NotificationLog`
 - `TechnicianLocationHistory`
 - `ServiceAnalytics`
 - `TechnicianPerformance`
@@ -97,14 +94,11 @@ User -> ServiceRequest -> ServiceTicket
 
 That is the correct system flow.
 
-## Legacy But Real Models
+## Retained Legacy API Model
 
-Two older apps still exist in the codebase and were added to the ERD materials:
-
-- `progress.TicketProgress`
-- `history.ServiceHistory`
-
-They are marked as legacy/support records in the snowflake ERD because the newer main flow mostly uses:
+`progress.TicketProgress` remains because it provides a secured append-only API.
+The disconnected `history.ServiceHistory`, `notifications.NotificationTemplate`,
+and `notifications.NotificationLog` models were retired. The main flow uses:
 
 - `ServiceStatusHistory`
 - `InspectionChecklist`
@@ -113,4 +107,6 @@ They are marked as legacy/support records in the snowflake ERD because the newer
 
 ## Final Recommendation
 
-For Chapter III, use the snowflake draw.io diagram as the clean visual ERD. Keep the DBML file as backup evidence that the diagram was based on the real Django database structure.
+For Chapter III, regenerate the visual draw.io ERD from the current DBML before
+submission. The DBML is the maintained physical-schema source; older draw.io
+exports can still contain retired legacy nodes.

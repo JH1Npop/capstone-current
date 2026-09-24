@@ -25,14 +25,23 @@ TECHNICIAN_SCHEDULE_VIEW = 'technician.schedule.view'
 TECHNICIAN_NAVIGATION_VIEW = 'technician.navigation.view'
 TECHNICIAN_CHECKLIST_VIEW = 'technician.checklist.view'
 TECHNICIAN_MESSAGES_VIEW = 'technician.messages.view'
+TECHNICIAN_INVENTORY_VIEW = 'technician.inventory.view'
 TECHNICIAN_HISTORY_VIEW = 'technician.history.view'
 TECHNICIAN_PROFILE_VIEW = 'technician.profile.view'
 ADMIN_JOB_HISTORY_VIEW = 'admin.job_history.view'
+COMMUNICATIONS_STAFF_VIEW = 'communications.staff.view'
+COMMUNICATIONS_SUPPORT_VIEW = 'communications.support.view'
+COMMUNICATIONS_SUPPORT_MANAGE = 'communications.support.manage'
+SYSTEM_SETTINGS_VIEW = 'system.settings.view'
+SYSTEM_SETTINGS_MANAGE = 'system.settings.manage'
 MANAGE_STAFF_CAPABILITIES = 'users.capabilities.manage_staff'
 USER_DIRECTORY_VIEW = 'users.directory.view'
 USER_MANAGEMENT_MANAGE = 'users.directory.manage'
 PUBLIC_SITE_VIEW = 'public_site.view'
 PUBLIC_SITE_MANAGE = 'public_site.manage'
+PUBLIC_SITE_PUBLISH = 'public_site.publish'
+PUBLIC_SITE_ASSET_UPLOAD = 'public_site.assets.upload'
+PUBLIC_SITE_ASSET_DELETE = 'public_site.assets.delete'
 INVENTORY_VIEW = 'inventory.view'
 INVENTORY_MANAGE = 'inventory.manage'
 SERVICE_CATALOG_VIEW = 'services.catalog.view'
@@ -228,6 +237,60 @@ CAPABILITY_DEFINITIONS = OrderedDict([
         },
     ),
     (
+        TECHNICIAN_INVENTORY_VIEW,
+        {
+            'label': 'View field inventory',
+            'description': 'Read the inventory catalog and the technician\'s own transactions and reservations.',
+            'category': 'Technician',
+            'assignable': True,
+        },
+    ),
+    (
+        COMMUNICATIONS_STAFF_VIEW,
+        {
+            'label': 'View staff messages',
+            'description': 'Open staff conversations and ticket-participant messages.',
+            'category': 'Communications',
+            'assignable': True,
+        },
+    ),
+    (
+        COMMUNICATIONS_SUPPORT_VIEW,
+        {
+            'label': 'View client support',
+            'description': 'Review client support conversations and cases.',
+            'category': 'Communications',
+            'assignable': True,
+        },
+    ),
+    (
+        COMMUNICATIONS_SUPPORT_MANAGE,
+        {
+            'label': 'Manage client support',
+            'description': 'Reply to client support threads and update support cases.',
+            'category': 'Communications',
+            'assignable': True,
+        },
+    ),
+    (
+        SYSTEM_SETTINGS_VIEW,
+        {
+            'label': 'View system settings',
+            'description': 'Review operational system configuration.',
+            'category': 'Administration',
+            'assignable': True,
+        },
+    ),
+    (
+        SYSTEM_SETTINGS_MANAGE,
+        {
+            'label': 'Manage system settings',
+            'description': 'Update operational system configuration.',
+            'category': 'Administration',
+            'assignable': True,
+        },
+    ),
+    (
         SERVICE_REQUEST_REVIEW,
         {
             'label': 'Review service requests',
@@ -249,7 +312,34 @@ CAPABILITY_DEFINITIONS = OrderedDict([
         PUBLIC_SITE_MANAGE,
         {
             'label': 'Manage public site',
+            'description': 'Legacy umbrella access to publish content and manage landing-page assets.',
+            'category': 'Public Site',
+            'assignable': True,
+        },
+    ),
+    (
+        PUBLIC_SITE_PUBLISH,
+        {
+            'label': 'Publish public site',
             'description': 'Publish landing-page content, promotions, and solar calculator settings.',
+            'category': 'Public Site',
+            'assignable': True,
+        },
+    ),
+    (
+        PUBLIC_SITE_ASSET_UPLOAD,
+        {
+            'label': 'Upload public-site assets',
+            'description': 'Upload validated images for landing-page content.',
+            'category': 'Public Site',
+            'assignable': True,
+        },
+    ),
+    (
+        PUBLIC_SITE_ASSET_DELETE,
+        {
+            'label': 'Delete public-site assets',
+            'description': 'Delete unreferenced landing-page images.',
             'category': 'Public Site',
             'assignable': True,
         },
@@ -364,6 +454,7 @@ STAFF_ROLE_CAPABILITY_MAP = {
         TECHNICIAN_NAVIGATION_VIEW,
         TECHNICIAN_CHECKLIST_VIEW,
         TECHNICIAN_MESSAGES_VIEW,
+        TECHNICIAN_INVENTORY_VIEW,
         TECHNICIAN_HISTORY_VIEW,
         TECHNICIAN_PROFILE_VIEW,
     },
@@ -386,8 +477,16 @@ ADMIN_ASSIGNABLE_CAPABILITIES = {
     USER_DIRECTORY_VIEW,
     USER_MANAGEMENT_MANAGE,
     ADMIN_JOB_HISTORY_VIEW,
+    COMMUNICATIONS_STAFF_VIEW,
+    COMMUNICATIONS_SUPPORT_VIEW,
+    COMMUNICATIONS_SUPPORT_MANAGE,
+    SYSTEM_SETTINGS_VIEW,
+    SYSTEM_SETTINGS_MANAGE,
     PUBLIC_SITE_VIEW,
     PUBLIC_SITE_MANAGE,
+    PUBLIC_SITE_PUBLISH,
+    PUBLIC_SITE_ASSET_UPLOAD,
+    PUBLIC_SITE_ASSET_DELETE,
     INVENTORY_VIEW,
     INVENTORY_MANAGE,
     SERVICE_CATALOG_VIEW,
@@ -473,6 +572,10 @@ TECHNICIAN_MESSAGES_CAPABILITIES = {
     TECHNICIAN_MESSAGES_VIEW,
 }
 
+TECHNICIAN_INVENTORY_CAPABILITIES = {
+    TECHNICIAN_INVENTORY_VIEW,
+}
+
 TECHNICIAN_HISTORY_CAPABILITIES = {
     TECHNICIAN_HISTORY_VIEW,
 }
@@ -493,13 +596,53 @@ ADMIN_JOB_HISTORY_CAPABILITIES = {
     ADMIN_JOB_HISTORY_VIEW,
 }
 
+COMMUNICATIONS_STAFF_VIEW_CAPABILITIES = {
+    COMMUNICATIONS_STAFF_VIEW,
+}
+
+COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES = {
+    COMMUNICATIONS_SUPPORT_VIEW,
+    COMMUNICATIONS_SUPPORT_MANAGE,
+}
+
+COMMUNICATIONS_SUPPORT_MANAGE_CAPABILITIES = {
+    COMMUNICATIONS_SUPPORT_MANAGE,
+}
+
+SYSTEM_SETTINGS_VIEW_CAPABILITIES = {
+    SYSTEM_SETTINGS_VIEW,
+    SYSTEM_SETTINGS_MANAGE,
+}
+
+SYSTEM_SETTINGS_MANAGE_CAPABILITIES = {
+    SYSTEM_SETTINGS_MANAGE,
+}
+
 PUBLIC_SITE_VIEW_CAPABILITIES = {
     PUBLIC_SITE_VIEW,
     PUBLIC_SITE_MANAGE,
+    PUBLIC_SITE_PUBLISH,
+    PUBLIC_SITE_ASSET_UPLOAD,
+    PUBLIC_SITE_ASSET_DELETE,
 }
 
 PUBLIC_SITE_MANAGE_CAPABILITIES = {
     PUBLIC_SITE_MANAGE,
+}
+
+PUBLIC_SITE_PUBLISH_CAPABILITIES = {
+    PUBLIC_SITE_MANAGE,
+    PUBLIC_SITE_PUBLISH,
+}
+
+PUBLIC_SITE_ASSET_UPLOAD_CAPABILITIES = {
+    PUBLIC_SITE_MANAGE,
+    PUBLIC_SITE_ASSET_UPLOAD,
+}
+
+PUBLIC_SITE_ASSET_DELETE_CAPABILITIES = {
+    PUBLIC_SITE_MANAGE,
+    PUBLIC_SITE_ASSET_DELETE,
 }
 
 INVENTORY_VIEW_CAPABILITIES = {
@@ -544,6 +687,9 @@ ROLE_CAPABILITY_MAP = {
             ADMIN_JOB_HISTORY_VIEW,
             PUBLIC_SITE_VIEW,
             PUBLIC_SITE_MANAGE,
+            PUBLIC_SITE_PUBLISH,
+            PUBLIC_SITE_ASSET_UPLOAD,
+            PUBLIC_SITE_ASSET_DELETE,
         }
     } | AFTER_SALES_VIEW_CAPABILITIES | SUPERVISOR_DASHBOARD_CAPABILITIES | SUPERVISOR_TICKET_CAPABILITIES | SUPERVISOR_DISPATCH_CAPABILITIES | SUPERVISOR_TRACKING_CAPABILITIES,
     'technician': set(STAFF_ROLE_CAPABILITY_MAP['technician']),

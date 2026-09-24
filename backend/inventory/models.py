@@ -1,6 +1,7 @@
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.db.models.functions import Lower
 from django.conf import settings
 
 
@@ -17,6 +18,12 @@ class InventoryCategory(models.Model):
     class Meta:
         verbose_name_plural = "Inventory Categories"
         ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                Lower('name'),
+                name='inventory_category_name_ci_unique',
+            ),
+        ]
 
 
 class InventoryItem(models.Model):
@@ -92,7 +99,53 @@ class InventoryItem(models.Model):
     def __str__(self):
         return f"{self.name} ({self.sku})"
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower('sku'),
+                name='inventory_item_sku_ci_unique',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gte=0),
+                name='inventory_item_quantity_gte_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(minimum_stock__gte=0),
+                name='inventory_item_min_stock_gte_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reserved_quantity__gte=0),
+                name='inventory_item_reserved_gte_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reserved_quantity__lte=models.F('quantity')),
+                name='inventory_item_reserved_lte_qty',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(low_stock_threshold__gte=0, low_stock_threshold__lte=100),
+                name='inventory_item_threshold_0_100',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(unit_price__gte=0),
+                name='inventory_item_unit_price_gte_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(total_value__gte=0),
+                name='inventory_item_total_value_gte_0',
+            ),
+        ]
+
     def save(self, *args, **kwargs):
+        notify_low_stock = kwargs.pop('notify_low_stock', True)
+        self.name = (self.name or '').strip()
+        self.sku = (self.sku or '').strip().upper()
+        self.unit_of_measurement = (self.unit_of_measurement or 'piece').strip()
+
+        # Keep the stock-derived statuses synchronized while preserving
+        # operational lifecycle states such as maintenance and retired.
+        if self.status in ['available', 'out_of_stock']:
+            self.status = 'available' if self.available_quantity > 0 else 'out_of_stock'
+
         self.total_value = self.quantity * self.unit_price
 
         # Check if we need to send low stock notification
@@ -106,7 +159,8 @@ class InventoryItem(models.Model):
         super().save(*args, **kwargs)
 
         # Send notification if stock is low (40% or below minimum)
-        self.check_and_notify_low_stock(old_item)
+        if notify_low_stock:
+            self.check_and_notify_low_stock(old_item)
 
     def check_and_notify_low_stock(self, old_item=None):
         """Check if stock is below threshold and send notification"""
@@ -183,6 +237,14 @@ class InventoryItem(models.Model):
         threshold_value = (self.minimum_stock * self.low_stock_threshold) / 100
         return self.available_quantity <= threshold_value
 
+    @property
+    def stock_status(self):
+        if self.available_quantity <= 0:
+            return 'out_of_stock'
+        if self.is_low_stock:
+            return 'low_stock'
+        return 'in_stock'
+
 
 class InventoryTransaction(models.Model):
     id = models.BigAutoField(primary_key=True, db_column='inventory_transaction_id')
@@ -235,24 +297,46 @@ class InventoryTransaction(models.Model):
         return f"{self.transaction_type} - {self.item.name} - {self.quantity}"
 
     def _apply_stock_movement(self):
+        if self.quantity is None:
+            raise ValidationError({'quantity': 'Quantity is required.'})
+        if self.quantity < 0 or (self.transaction_type != 'adjustment' and self.quantity == 0):
+            raise ValidationError({
+                'quantity': 'Quantity must be greater than zero, except a zero stock adjustment is allowed.'
+            })
+
         if self.transaction_type in ['purchase', 'return']:
             self.item.quantity += self.quantity
         elif self.transaction_type in ['issue', 'transfer']:
-            if self.item.quantity < self.quantity:
+            if self.item.available_quantity < self.quantity:
                 raise ValidationError(
                     f'Cannot {self.transaction_type} {self.quantity} units of '
-                    f'{self.item.name}: only {self.item.quantity} in stock.'
+                    f'{self.item.name}: only {self.item.available_quantity} unreserved unit(s) are available.'
                 )
             self.item.quantity -= self.quantity
         elif self.transaction_type == 'reservation':
+            if self.item.available_quantity < self.quantity:
+                raise ValidationError(
+                    f'Cannot reserve {self.quantity} units of {self.item.name}: '
+                    f'only {self.item.available_quantity} unit(s) are available.'
+                )
             self.item.reserved_quantity += self.quantity
         elif self.transaction_type == 'cancellation':
             new_reserved = self.item.reserved_quantity - self.quantity
             if new_reserved < 0:
-                new_reserved = 0
+                raise ValidationError(
+                    f'Cannot release {self.quantity} reserved units of {self.item.name}: '
+                    f'only {self.item.reserved_quantity} unit(s) are reserved.'
+                )
             self.item.reserved_quantity = new_reserved
         elif self.transaction_type == 'adjustment':
+            if self.quantity < self.item.reserved_quantity:
+                raise ValidationError(
+                    f'Cannot adjust {self.item.name} below its reserved quantity '
+                    f'of {self.item.reserved_quantity}.'
+                )
             self.item.quantity = self.quantity
+        else:
+            raise ValidationError({'transaction_type': 'Unsupported inventory transaction type.'})
 
     def _validate_immutable_stock_fields(self):
         if not self.pk:
@@ -285,13 +369,125 @@ class InventoryTransaction(models.Model):
             return
 
         with transaction.atomic():
-            old_available = self.item.available_quantity
+            # Always calculate from the latest committed balance. Without this
+            # row lock, concurrent PostgreSQL requests can overwrite each
+            # other's quantity or reservation changes.
+            self.item = InventoryItem.objects.select_for_update().get(pk=self.item_id)
             self._apply_stock_movement()
             self.item.save()
             super().save(*args, **kwargs)
 
-        if self.item.available_quantity < old_available:
-            self.item.check_and_notify_low_stock()
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(transaction_type='adjustment', quantity__gte=0) |
+                    models.Q(
+                        transaction_type__in=[
+                            'purchase',
+                            'issue',
+                            'return',
+                            'transfer',
+                            'reservation',
+                            'cancellation',
+                        ],
+                        quantity__gt=0,
+                    )
+                ),
+                name='inventory_transaction_valid_qty',
+            ),
+        ]
+
+
+class EquipmentReturnRequest(models.Model):
+    """Two-party acknowledgement for unused equipment coming back from a ticket."""
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending verification'),
+        ('verified', 'Verified and returned'),
+        ('rejected', 'Rejected'),
+    ]
+    CONDITION_CHOICES = [
+        ('sealed', 'Sealed / unused'),
+        ('usable', 'Opened but usable'),
+        ('damaged', 'Damaged'),
+        ('incomplete', 'Incomplete'),
+    ]
+
+    id = models.BigAutoField(primary_key=True, db_column='equipment_return_request_id')
+    service_ticket = models.ForeignKey(
+        'services.ServiceTicket',
+        on_delete=models.PROTECT,
+        related_name='equipment_return_requests',
+    )
+    technician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='equipment_return_requests',
+        limit_choices_to={'role': 'technician'},
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='submitted_equipment_returns',
+    )
+    condition = models.CharField(max_length=20, choices=CONDITION_CHOICES)
+    notes = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_equipment_returns',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_condition = models.CharField(
+        max_length=20,
+        choices=CONDITION_CHOICES,
+        blank=True,
+        default='',
+    )
+    review_notes = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=['pending', 'verified', 'rejected']),
+                name='equipment_return_request_valid_status',
+            ),
+        ]
+
+
+class EquipmentReturnRequestItem(models.Model):
+    id = models.BigAutoField(primary_key=True, db_column='equipment_return_request_item_id')
+    return_request = models.ForeignKey(
+        EquipmentReturnRequest,
+        on_delete=models.CASCADE,
+        related_name='items',
+    )
+    item = models.ForeignKey(
+        InventoryItem,
+        on_delete=models.PROTECT,
+        related_name='equipment_return_request_items',
+    )
+    quantity = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ['id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['return_request', 'item'],
+                name='equipment_return_request_unique_item',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name='equipment_return_request_item_qty_gt_0',
+            ),
+        ]
 
 
 class InventoryReservation(models.Model):
@@ -314,11 +510,28 @@ class InventoryReservation(models.Model):
         related_name='inventory_reservations'
     )
     notes = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20, default='pending')  # pending, fulfilled, cancelled
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('fulfilled', 'Fulfilled'),
+        ('cancelled', 'Cancelled'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Reservation: {self.item.name} - {self.quantity} units"
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name='inventory_reservation_quantity_gt_0',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=['pending', 'fulfilled', 'cancelled']),
+                name='inventory_reservation_valid_status',
+            ),
+        ]
 
 
 class ServiceTypeInventoryRequirement(models.Model):
@@ -344,6 +557,12 @@ class ServiceTypeInventoryRequirement(models.Model):
     class Meta:
         ordering = ['service_type__name', 'item__name']
         unique_together = ['service_type', 'item']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name='inventory_requirement_quantity_gt_0',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.service_type.name}: {self.item.name} x{self.quantity}"

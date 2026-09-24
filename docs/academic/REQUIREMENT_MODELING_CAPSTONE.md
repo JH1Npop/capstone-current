@@ -3,6 +3,11 @@
 Project: AFN Service Management  
 Prepared for: Capstone documentation
 
+> Final-diagram notice (2026-09-03): the professor-format, current-system
+> sources are maintained in [`final_diagrams/README.md`](final_diagrams/README.md).
+> Use that pack for the paper. The compact examples below are retained only as
+> explanatory chapter text.
+
 ## 1. Context Diagram
 
 The context diagram shows the AFN Service Management system as one central system interacting with external users and services.

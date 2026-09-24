@@ -1,5 +1,12 @@
 # Comprehensive End-to-End (E2E) Visual System Test Report
 
+> **Historical snapshot — superseded.** This report records an earlier 71-test
+> run and its then-current selectors/routes. It is retained for traceability,
+> not as current release evidence. Use
+> `docs/quality/CURRENT_SYSTEM_AUDIT_AND_HANDOFF.md` for the current validation
+> ledger, including the later complete browser coverage and technician-location
+> privacy/retention regressions.
+
 This document provides a comprehensive, detailed breakdown of all **71 automated End-to-End visual tests** executed across the Unified AFN Service Management full-stack platform.
 
 ---

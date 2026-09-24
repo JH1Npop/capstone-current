@@ -5,3 +5,4 @@ from .technician import *
 from .history import *
 from .documents import *
 from .analytics import *
+from .sales import *

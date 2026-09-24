@@ -242,6 +242,27 @@ export const assignTechnician = async ({ ticketId, technicianId, technicianName,
   }
 };
 
+export const fetchTicketEquipmentReconciliation = async (ticketId) => {
+  try {
+    const { data } = await api.get(`/services/service-tickets/${ticketId}/equipment-reconciliation/`);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load issued equipment for this ticket.'));
+  }
+};
+
+export const returnTicketEquipment = async (ticketId, payload) => {
+  try {
+    const { data } = await api.post(
+      `/services/service-tickets/${ticketId}/equipment-reconciliation/`,
+      payload,
+    );
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to record the equipment return.'));
+  }
+};
+
 export const reviewInspectionDecision = async (ticketId, { decision, notes = '', scheduledDate = null }) => {
   try {
     const payload = { decision, notes };
@@ -347,8 +368,7 @@ export const updateSlaRule = async (ruleId, updates) => {
   }
 };
 
-export const fetchActivityLogs = async (filters = {}) => {
-  try {
+const activityLogParams = (filters = {}, { includePagination = true } = {}) => {
     const params = {};
     if (filters.search) params.search = filters.search;
     if (filters.category) params.category = filters.category;
@@ -357,8 +377,14 @@ export const fetchActivityLogs = async (filters = {}) => {
     if (filters.changedBy) params.changed_by = filters.changedBy;
     if (filters.dateFrom) params.date_from = filters.dateFrom;
     if (filters.dateTo) params.date_to = filters.dateTo;
-    if (filters.page) params.page = filters.page;
-    if (filters.pageSize) params.page_size = filters.pageSize;
+    if (includePagination && filters.page) params.page = filters.page;
+    if (includePagination && filters.pageSize) params.page_size = filters.pageSize;
+    return params;
+};
+
+export const fetchActivityLogs = async (filters = {}) => {
+  try {
+    const params = activityLogParams(filters);
 
     const { data } = await api.get('/admin/activity-logs/', { params });
     const rows = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
@@ -378,6 +404,7 @@ export const fetchActivityLogs = async (filters = {}) => {
       message: log.message || log.summary || '',
       metadata: log.metadata || {},
       ipAddress: log.ip_address || '',
+      userAgent: log.user_agent || '',
       appLabel: log.app_label,
       model: log.model,
       objectId: log.object_id,
@@ -399,6 +426,45 @@ export const fetchActivityLogs = async (filters = {}) => {
     };
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to load activity logs.'));
+  }
+};
+
+export const fetchActivityLogSummary = async (filters = {}) => {
+  try {
+    const { data } = await api.get('/admin/activity-logs/summary/', {
+      params: activityLogParams(filters, { includePagination: false }),
+    });
+    return {
+      total: Number(data?.total || 0),
+      today: Number(data?.today || 0),
+      attention: Number(data?.attention || 0),
+      userActions: Number(data?.user_actions || 0),
+    };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load activity summary.'));
+  }
+};
+
+export const downloadActivityLogs = async (filters = {}) => {
+  try {
+    const response = await api.get('/admin/activity-logs/export/', {
+      params: activityLogParams(filters, { includePagination: false }),
+      responseType: 'blob',
+    });
+    const contentDisposition = response.headers?.['content-disposition'] || '';
+    const serverFilename = contentDisposition.match(/filename="?([^";]+)"?/i)?.[1];
+    const filename = serverFilename || `activity-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    const url = window.URL.createObjectURL(response.data);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+    return filename;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to export activity logs.'));
   }
 };
 
@@ -514,21 +580,50 @@ export const deleteService = async (id) => {
   }
 };
 
-export const fetchAdminAnalytics = async (period = 30) => {
+export const fetchAdminAnalytics = async (period = 30, requestOptions = {}) => {
   try {
     const params = typeof period === 'object' && period !== null
       ? {
-          days: Math.max(1, Math.min(1095, Number(period.days) || 30)),
-          start_date: period.startDate,
-          end_date: period.endDate,
+          days: period.days ? Math.max(1, Math.min(1095, Number(period.days) || 30)) : undefined,
+          start_date: period.startDate || period.start_date,
+          end_date: period.endDate || period.end_date,
+          group_by: period.groupBy || period.group_by,
+          service_type_id: period.serviceTypeId || period.service_type_id,
+          technician_id: period.technicianId || period.technician_id,
+          status: period.status,
+          priority: period.priority,
+          city: period.city,
+          province: period.province,
+          assignment_state: period.assignmentState || period.assignment_state,
+          workspace: period.workspace,
+          comparison: period.comparison,
+          comparison_start_date: period.customComparisonStart || period.comparison_start_date,
+          comparison_end_date: period.customComparisonEnd || period.comparison_end_date,
+          sales_status: period.salesStatus || period.sales_status,
+          client_type: period.clientType || period.client_type,
+          currency: period.currency,
+          category_id: period.categoryId || period.category_id,
+          transaction_type: period.transactionType || period.transaction_type,
+          item_id: period.itemId || period.item_id,
+          stock_status: period.stockStatus || period.stock_status,
+          case_type: period.caseType || period.case_type,
+          case_status: period.caseStatus || period.case_status,
+          case_priority: period.casePriority || period.case_priority,
+          creation_source: period.creationSource || period.creation_source,
+          requires_revisit: period.requiresRevisit ?? period.requires_revisit,
+          maintenance_status: period.maintenanceStatus || period.maintenance_status,
+          risk_level: period.riskLevel || period.risk_level,
+          maintenance_service_type_id: period.maintenanceServiceTypeId || period.maintenance_service_type_id,
         }
       : { days: Math.max(1, Math.min(1095, Number(period) || 30)) };
 
     const { data } = await api.get('/admin/analytics/', {
-      params
+      params,
+      signal: requestOptions.signal,
     });
     return data;
   } catch (error) {
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') throw error;
     throw new Error(getApiErrorMessage(error, 'Unable to load admin analytics.'));
   }
 };

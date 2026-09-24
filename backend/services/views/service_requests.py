@@ -29,6 +29,7 @@ from services.views.helpers import (
 )
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.exceptions import ValidationError
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from services.user_display import client_technician_label
 from users.rbac import SUPERVISOR_DISPATCH_VIEW, user_has_capability
@@ -119,40 +120,47 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
         return service_request
 
     def create(self, request, *args, **kwargs):
-        """Override create to add idempotency: reject duplicate submissions."""
+        """Create a request, replaying an earlier response for the same explicit key."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Idempotency guard: check for a matching pending request by the same
-        # client for the same service type created in the last 60 seconds.
-        from django.utils import timezone as tz
-        import datetime
-        client = request.user
-        service_type = serializer.validated_data.get('service_type')
-        cutoff = tz.now() - datetime.timedelta(seconds=60)
-        existing = ServiceRequest.objects.filter(
-            client=client,
-            service_type=service_type,
-            status='Pending',
-            description=serializer.validated_data.get('description'),
-            request_date__gte=cutoff,
-        ).order_by('-request_date').first()
-        if existing:
+        idempotency_key = str(request.headers.get('Idempotency-Key') or '').strip()
+        if idempotency_key and len(idempotency_key) > 128:
             return Response(
-                ServiceRequestSerializer(existing, context={'request': request}).data,
-                status=status.HTTP_200_OK,
+                {'error': 'Idempotency-Key must be 128 characters or fewer.'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        client = serializer.validated_data.get('client') or request.user
+        if idempotency_key:
+            existing = ServiceRequest.objects.filter(
+                client=client,
+                idempotency_key=idempotency_key,
+            ).first()
+            if existing:
+                return Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
 
-    def perform_create(self, serializer):
-        with transaction.atomic():
-            # New requests stay in the review queue until an admin approves them.
-            request_obj = serializer.save(status='Pending', auto_ticket_created=False)
+        try:
+            with transaction.atomic():
+                request_obj = serializer.save(
+                    status='Pending',
+                    auto_ticket_created=False,
+                    idempotency_key=idempotency_key or None,
+                )
+        except IntegrityError:
+            if not idempotency_key:
+                raise
+            existing = ServiceRequest.objects.filter(
+                client=client,
+                idempotency_key=idempotency_key,
+            ).first()
+            if not existing:
+                raise
+            return Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
 
         notify_service_request_submitted(request_obj)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_update(self, serializer):
         requested_status = serializer.validated_data.get('status')
@@ -161,6 +169,12 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                 'status': 'Use the approve, reject, or cancel action to change request status.'
             })
         serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {'error': 'Service requests cannot be deleted. Use the cancel action to preserve the audit trail.'},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -259,8 +273,13 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                 )
 
             reason = str(request.data.get('reason') or '').strip()
+            if not reason:
+                return Response(
+                    {'error': 'A reason is required when rejecting a service request.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             service_request.status = 'Cancelled'
-            service_request._activity_reason = reason or 'Rejected after admin review.'
+            service_request._activity_reason = reason
             service_request.save(update_fields=['status', 'updated_at'])
 
             send_user_notification(
@@ -282,7 +301,9 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
     def cancel(self, request, pk=None):
         """Cancel the service request"""
         service_request = self.get_locked_request()
-        related_ticket = ServiceTicket.objects.filter(request=service_request).select_related('technician').first()
+        related_ticket = ServiceTicket.objects.select_for_update().filter(
+            request=service_request,
+        ).select_related('technician').first()
 
         can_cancel = (
             user_can_manage_service_requests(request.user) or
@@ -291,9 +312,9 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
         if not can_cancel:
             raise PermissionDenied('You do not have permission to cancel this service request.')
 
-        if service_request.status == 'Completed':
+        if service_request.status in {'Completed', 'Cancelled'}:
             return Response(
-                {'error': 'Completed requests cannot be cancelled.'},
+                {'error': f'{service_request.status} requests cannot be cancelled.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -304,7 +325,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
             )
 
         reason = str(request.data.get('reason') or '').strip()
-        if request.user.role == 'client' and not reason:
+        if not reason:
             return Response(
                 {'error': 'Please provide a reason for cancelling this request.'},
                 status=status.HTTP_400_BAD_REQUEST

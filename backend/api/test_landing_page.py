@@ -26,6 +26,7 @@ class LandingPageSettingsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('landingPageContent', response.data)
         self.assertIn('solarCalculatorSettings', response.data)
+        self.assertIn('landingPageProjects', response.data)
         self.assertNotIn('supportEmail', response.data)
 
     def test_admin_can_publish_landing_content_and_public_endpoint_reflects_it(self):
@@ -120,6 +121,66 @@ class LandingPageSettingsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual([item['id'] for item in response.data['landingPagePromotions']], ['current'])
         settings.delete()
+
+    def test_public_endpoint_only_returns_complete_permitted_projects(self):
+        settings = AdminSettings.objects.create(
+            landing_page_projects=[
+                {
+                    'id': 'published-project',
+                    'title': 'Residential solar installation',
+                    'serviceType': 'solar',
+                    'location': 'Malolos, Bulacan',
+                    'completedDate': '2026-08-15',
+                    'description': 'Completed rooftop solar installation.',
+                    'imageUrl': '/media/landing_page/project.png',
+                    'imageAssetId': 17,
+                    'clientConsentConfirmed': True,
+                    'published': True,
+                },
+                {
+                    'id': 'missing-consent',
+                    'title': 'Private CCTV project',
+                    'serviceType': 'cctv',
+                    'location': 'Bulacan',
+                    'completedDate': '2026-08-10',
+                    'description': 'Private installation.',
+                    'imageUrl': '/private.png',
+                    'clientConsentConfirmed': False,
+                    'published': True,
+                },
+                {'id': 'draft', 'published': False},
+            ]
+        )
+
+        response = self.client.get('/api/public/landing-page/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['id'] for item in response.data['landingPageProjects']], ['published-project'])
+        self.assertNotIn('imageAssetId', response.data['landingPageProjects'][0])
+        self.assertNotIn('clientConsentConfirmed', response.data['landingPageProjects'][0])
+        self.assertNotIn('published', response.data['landingPageProjects'][0])
+        settings.delete()
+
+    def test_published_project_requires_complete_details_image_and_consent(self):
+        UserCapabilityGrant.objects.create(user=self.admin, capability_code=PUBLIC_SITE_MANAGE)
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.put(
+            '/api/admin/settings/',
+            {
+                'landingPageProjects': [{
+                    'id': 'unsafe-project',
+                    'title': 'Project without permission',
+                    'serviceType': 'solar',
+                    'published': True,
+                    'clientConsentConfirmed': False,
+                }],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('confirmed client permission', str(response.data))
 
     def test_manage_capability_can_upload_and_delete_valid_image(self):
         UserCapabilityGrant.objects.create(user=self.admin, capability_code=PUBLIC_SITE_MANAGE)

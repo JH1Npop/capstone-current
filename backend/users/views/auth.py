@@ -1,5 +1,7 @@
 # Auto-split from users/views.py
 from users.views.helpers import *  # noqa: F401,F403
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import F
 from rest_framework import serializers as drf_serializers
 from rest_framework.exceptions import PermissionDenied
@@ -21,7 +23,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         """Return appropriate permissions based on action"""
-        if self.action in ['login', 'register', 'verify_email', 'password_reset_request', 'password_reset_confirm']:
+        if self.action in ['login', 'register', 'verify_email', 'resend_verification', 'password_reset_request', 'password_reset_confirm']:
             return [permissions.AllowAny()]
         elif self.action in ['available_capabilities', 'capabilities']:
             return [CanManageStaffCapabilities()]
@@ -35,7 +37,7 @@ class UserViewSet(viewsets.ModelViewSet):
         if self.action == 'login':
             self.throttle_scope = 'login'
             return [ScopedRateThrottle()]
-        if self.action == 'register':
+        if self.action in ['register', 'resend_verification']:
             self.throttle_scope = 'register'
             return [ScopedRateThrottle()]
         if self.action in ['password_reset_request', 'password_reset_confirm']:
@@ -71,6 +73,25 @@ class UserViewSet(viewsets.ModelViewSet):
         elif self.action in ['update', 'partial_update']:
             return UserUpdateSerializer
         return UserSerializer
+
+    def perform_update(self, serializer):
+        try:
+            ensure_actor_can_manage_account(self.request.user, serializer.instance)
+        except PermissionError as exc:
+            raise PermissionDenied(str(exc))
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        user = self.get_object()
+        try:
+            ensure_actor_can_manage_account(request.user, user)
+        except PermissionError as exc:
+            raise PermissionDenied(str(exc))
+
+        user.status = 'inactive'
+        user.is_active = False
+        user.save(update_fields=['status', 'is_active'])
+        return Response({'message': 'User deactivated'}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get', 'patch'])
     def me(self, request):
@@ -115,7 +136,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 {'role': 'Only the superadmin can create admin or staff accounts.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        serializer = UserRegistrationSerializer(data=request.data)
+        serializer = UserRegistrationSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             try:
                 with transaction.atomic():
@@ -162,6 +183,12 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if not user.is_active or user.status != 'active':
+            return Response(
+                {'error': 'This verification link is invalid or has expired.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         update_fields = []
         pending_email = str(getattr(user, 'pending_email', '') or '').strip()
         if requested_email:
@@ -183,16 +210,47 @@ class UserViewSet(viewsets.ModelViewSet):
         elif not user.email_verified:
             user.email_verified = True
             update_fields.append('email_verified')
-        if not user.is_active:
-            user.is_active = True
-            update_fields.append('is_active')
-        if user.status != 'active':
-            user.status = 'active'
-            update_fields.append('status')
         if update_fields:
             user.save(update_fields=update_fields)
+        if requested_email:
+            Token.objects.filter(user=user).delete()
 
         return Response({'message': 'Email verified successfully. You can now sign in.'})
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def resend_verification(self, request):
+        """Resend client verification without disclosing whether an account exists."""
+        delete_expired_unverified_clients()
+        email = str(request.data.get('email') or '').strip()
+        generic_message = (
+            'If an unverified account exists for that email, a verification link has been sent.'
+        )
+        if not email:
+            return Response({'email': 'Enter the email address used to create the account.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(
+            email__iexact=email,
+            role='client',
+            email_verified=False,
+            is_active=True,
+            status='active',
+        ).first()
+        if not user:
+            return Response({'message': generic_message})
+
+        cooldown_seconds = int(getattr(django_settings, 'EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', 60))
+        last_sent = user.email_verification_sent_at
+        if last_sent and (timezone.now() - last_sent).total_seconds() < cooldown_seconds:
+            return Response({'message': generic_message})
+
+        try:
+            send_email_verification_email(user, request=request)
+            user.email_verification_sent_at = timezone.now()
+            user.save(update_fields=['email_verification_sent_at'])
+        except Exception as exc:
+            logger.error('Email verification resend failed: %s', exc, exc_info=True)
+
+        return Response({'message': generic_message})
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def login(self, request):
@@ -205,6 +263,11 @@ class UserViewSet(viewsets.ModelViewSet):
                 serializer.validated_data['password']
             )
             if user:
+                if not user.is_active or user.status != 'active':
+                    return Response(
+                        {'error': 'Invalid credentials'},
+                        status=status.HTTP_401_UNAUTHORIZED,
+                    )
                 if not user.email_verified:
                     return Response(
                         {'error': 'Please verify your email address before signing in.'},
@@ -275,33 +338,37 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def logout(self, request):
         """User logout"""
-        try:
-            log_activity(
-                actor=request.user,
-                category='security',
-                action='logout',
-                target=request.user,
-                message=f'{request.user.get_full_name().strip() or request.user.username} logged out',
-            )
-            request.user.auth_token.delete()
-            return Response({'message': 'Logged out successfully'})
-        except Exception as e:
-            from rest_framework.authtoken.models import Token
-            try:
-                # Token already deleted or never created — still a clean logout
-                pass
-            except:
-                pass
-            return Response({'message': 'Logged out successfully'})
+        log_activity(
+            actor=request.user,
+            category='security',
+            action='logout',
+            target=request.user,
+            message=f'{request.user.get_full_name().strip() or request.user.username} logged out',
+        )
+        Token.objects.filter(user=request.user).delete()
+        return Response({'message': 'Logged out successfully'})
 
     @action(detail=False, methods=['post'])
     def change_password(self, request):
         """Change password for the authenticated user"""
         serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            request.user.set_password(serializer.validated_data['new_password'])
-            request.user.save()
-            return Response({'message': 'Password changed successfully'})
+            with transaction.atomic():
+                request.user.set_password(serializer.validated_data['new_password'])
+                request.user.save(update_fields=['password'])
+                Token.objects.filter(user=request.user).delete()
+                log_activity(
+                    actor=request.user,
+                    category='security',
+                    action='update',
+                    target=request.user,
+                    message=f'{request.user.get_full_name().strip() or request.user.username} changed their password',
+                    metadata={'field_name': 'password'},
+                )
+            return Response({
+                'message': 'Password changed successfully. Please sign in again.',
+                'reauthentication_required': True,
+            })
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
@@ -331,7 +398,12 @@ class UserViewSet(viewsets.ModelViewSet):
 
         try:
             user_id = force_str(urlsafe_base64_decode(serializer.validated_data['uid']))
-            user = User.objects.get(pk=user_id, is_active=True)
+            user = User.objects.get(
+                pk=user_id,
+                is_active=True,
+                status='active',
+                email_verified=True,
+            )
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             return Response(
                 {'error': 'This password reset link is invalid or has expired.'},
@@ -345,10 +417,26 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user.set_password(serializer.validated_data['new_password'])
-        user.save(update_fields=['password'])
-        from rest_framework.authtoken.models import Token
-        Token.objects.filter(user=user).delete()
+        try:
+            validate_password(serializer.validated_data['new_password'], user=user)
+        except DjangoValidationError as exc:
+            return Response(
+                {'new_password': list(exc.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            user.set_password(serializer.validated_data['new_password'])
+            user.save(update_fields=['password'])
+            Token.objects.filter(user=user).delete()
+            log_activity(
+                actor=user,
+                category='security',
+                action='update',
+                target=user,
+                message=f'{user.get_full_name().strip() or user.username} reset their password',
+                metadata={'field_name': 'password', 'recovery': True},
+            )
 
         return Response({
             'message': 'Password has been reset successfully. Please sign in with your new password.'
@@ -367,6 +455,7 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=['get', 'put'])
+    @transaction.atomic
     def capabilities(self, request, pk=None):
         try:
             target_user = User.objects.prefetch_related('capability_grants').get(pk=pk)
@@ -382,6 +471,9 @@ class UserViewSet(viewsets.ModelViewSet):
         allowed_capabilities = get_assignable_capability_codes(request.user, target_user=target_user)
 
         if request.method.lower() == 'put':
+            target_user = User.objects.select_for_update().prefetch_related(
+                'capability_grants'
+            ).get(pk=target_user.pk)
             serializer = CapabilityGrantUpdateSerializer(
                 data=request.data,
                 context={'allowed_capabilities': allowed_capabilities},
@@ -409,6 +501,20 @@ class UserViewSet(viewsets.ModelViewSet):
                     user=target_user,
                     capability_code__in=capabilities_to_remove,
                 ).delete()
+            if capabilities_to_add or capabilities_to_remove:
+                Token.objects.filter(user=target_user).delete()
+                log_activity(
+                    actor=request.user,
+                    category='security',
+                    action='update',
+                    target=target_user,
+                    message=f'{request.user.get_full_name().strip() or request.user.username} updated capabilities for {target_user.get_full_name().strip() or target_user.username}',
+                    metadata={
+                        'capabilities_added': capabilities_to_add,
+                        'capabilities_removed': capabilities_to_remove,
+                        'sessions_revoked': True,
+                    },
+                )
 
         visible_catalog = [
             capability for capability in get_capability_catalog()
@@ -439,15 +545,19 @@ class UserViewSet(viewsets.ModelViewSet):
         """Update user status (admin only)"""
         if not CanManageUsers().has_permission(request, self):
             raise PermissionDenied('You do not have permission to update user status.')
-        try:
-            user = User.objects.get(pk=pk)
-        except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-
         new_status = request.data.get('status')
         if new_status in ['active', 'inactive']:
-            user.status = new_status
-            user.save()
+            try:
+                with transaction.atomic():
+                    user = User.objects.select_for_update().get(pk=pk)
+                    ensure_actor_can_manage_account(request.user, user)
+                    user.status = new_status
+                    user.is_active = new_status == 'active'
+                    user.save(update_fields=['status', 'is_active'])
+            except User.DoesNotExist:
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+            except PermissionError as exc:
+                raise PermissionDenied(str(exc))
             return Response({'status': 'Status updated'})
         return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 

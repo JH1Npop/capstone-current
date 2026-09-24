@@ -315,10 +315,12 @@ class QuotationRecord(models.Model):
         related_name='quotations',
         limit_choices_to={'role': 'client'}
     )
+    quotation_number = models.CharField(max_length=100, blank=True, null=True)
     total_amount = models.CharField(max_length=255, blank=True, null=True)
     downpayment_amount = models.CharField(max_length=255, blank=True, null=True)
     balance_amount = models.CharField(max_length=255, blank=True, null=True)
     payment_terms = models.TextField(blank=True, null=True)
+    warranty_terms = models.TextField(blank=True, null=True)
     validity_days = models.IntegerField(default=30)
     status = models.CharField(
         max_length=20,

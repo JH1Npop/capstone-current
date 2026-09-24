@@ -87,6 +87,46 @@ class AfterSalesCase(models.Model):
         ]
 
 
+class AfterSalesCaseEvent(models.Model):
+    EVENT_TYPE_CHOICES = [
+        ('created', 'Created'),
+        ('status_changed', 'Status Changed'),
+        ('assigned', 'Assigned'),
+        ('reassigned', 'Reassigned'),
+        ('updated', 'Updated'),
+    ]
+
+    id = models.BigAutoField(db_column='after_sales_case_event_id', primary_key=True)
+    case = models.ForeignKey(
+        AfterSalesCase,
+        on_delete=models.CASCADE,
+        related_name='events',
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='after_sales_case_events',
+    )
+    event_type = models.CharField(max_length=30, choices=EVENT_TYPE_CHOICES)
+    from_status = models.CharField(max_length=20, blank=True, default='')
+    to_status = models.CharField(max_length=20, blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['case', '-created_at'], name='svc_afcase_evt_case_time_idx'),
+            models.Index(fields=['event_type', '-created_at'], name='svc_afcase_evt_type_time_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.get_event_type_display()} for after-sales case #{self.case_id}"
+
+
 class MaintenanceSchedule(models.Model):
     id = models.BigAutoField(db_column='maintenance_schedule_id', primary_key=True)
 

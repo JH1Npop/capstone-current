@@ -55,7 +55,6 @@ urlpatterns = [
     path('notifications/', include('notifications.urls')),
     path('inventory/', include('inventory.urls')),
     path('progress/', include('progress.urls')),
-    path('history/', include('history.urls')),
 
     # Dashboard
     path('dashboard/stats/', DashboardView.as_view(), name='dashboard-stats'),

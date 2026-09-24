@@ -30,6 +30,7 @@ def get_business_today():
 
 
 from services.maintenance import process_maintenance_alerts
+from services.job_progress import ACTIVE_TICKET_STATUSES, get_ticket_workflow_progress
 from services.models import (
     AfterSalesCase as FollowUpCase,
     MaintenanceSchedule,
@@ -47,20 +48,17 @@ from services.user_display import client_technician_label as _client_technician_
 from inventory.models import InventoryItem
 from users.models import User
 from users.rbac import (
-    AFTER_SALES_VIEW_CAPABILITIES,
-    ANALYTICS_VIEW_CAPABILITIES,
+    INVENTORY_VIEW_CAPABILITIES,
     SUPERVISOR_DASHBOARD_CAPABILITIES,
     SUPERVISOR_DISPATCH_CAPABILITIES,
-    SUPERVISOR_TICKET_CAPABILITIES,
-    SUPERVISOR_TRACKING_CAPABILITIES,
     TECHNICIAN_DASHBOARD_CAPABILITIES,
+    TECHNICIAN_INVENTORY_CAPABILITIES,
     is_admin_workspace_role,
     user_has_any_capability,
 )
 
 logger = logging.getLogger(__name__)
 
-ACTIVE_TICKET_STATUSES = ['Not Started', 'For Inspection', 'Inspection Completed', 'Ready for Service', 'Awaiting Materials', 'In Progress', 'On Hold']
 DASHBOARD_LIST_LIMIT = 5
 ADMIN_RECENT_TICKET_LIMIT = 10
 
@@ -92,7 +90,7 @@ def _serialize_active_technician_jobs(assigned_admin=None):
     """Get all active technician jobs."""
     active_jobs = ServiceTicket.objects.select_related(
         'technician', 'request__client', 'request__service_type', 'request__location'
-    ).filter(
+    ).prefetch_related('status_history').filter(
         status__in=ACTIVE_TICKET_STATUSES,
         scheduled_date__isnull=False,
         technician__isnull=False
@@ -103,8 +101,10 @@ def _serialize_active_technician_jobs(assigned_admin=None):
     # Order by most recent start time
     active_jobs = active_jobs.order_by('-start_time', '-id')[:20]
 
-    return [
-        {
+    serialized_jobs = []
+    for job in active_jobs:
+        workflow_progress = get_ticket_workflow_progress(job)
+        serialized_jobs.append({
             'id': job.id,
             'ticket_id': job.id,
             'technician': _display_name(job.technician),
@@ -115,42 +115,15 @@ def _serialize_active_technician_jobs(assigned_admin=None):
             'priority': job.priority,
             'location': _get_request_address(job.request),
             'start_time': job.start_time.isoformat() if job.start_time else None,
-            'progress': _calculate_job_progress(job),
+            'progress': workflow_progress['percent'],
+            'progress_label': workflow_progress['label'],
+            'progress_basis': workflow_progress['basis'],
+            'progress_paused': workflow_progress['is_paused'],
+            'progress_track': workflow_progress['track'],
+            'progress_track_label': workflow_progress['track_label'],
             'sla_minutes_remaining': _calculate_sla_minutes_remaining(job),
-        }
-        for job in active_jobs
-    ]
-
-
-def _calculate_job_progress(ticket):
-    """Calculate job progress percentage based on status and time elapsed"""
-    if ticket.status == 'Completed':
-        return 100
-    elif ticket.status == 'Not Started':
-        return 0
-    elif ticket.status == 'For Inspection':
-        return 10
-    elif ticket.status == 'Inspection Completed':
-        return 20
-    elif ticket.status in ['Ready for Service', 'Awaiting Materials']:
-        return 25
-    elif ticket.status == 'In Progress':
-        if ticket.start_time:
-            # Estimate progress based on time elapsed vs actual estimated duration
-            elapsed_minutes = (timezone.now() - ticket.start_time).total_seconds() / 60
-            try:
-                estimated_duration = float(ticket.request.service_type.estimated_duration)
-                if estimated_duration <= 0:
-                    estimated_duration = 60
-            except (AttributeError, ValueError, TypeError):
-                estimated_duration = 60
-                
-            progress = min(int((elapsed_minutes / estimated_duration) * 100), 90)
-            return max(progress, 30)
-        return 30
-    elif ticket.status == 'On Hold':
-        return 30
-    return 0
+        })
+    return serialized_jobs
 
 
 def _calculate_sla_minutes_remaining(ticket):
@@ -337,14 +310,7 @@ class DashboardView(APIView):
             if requested_workspace == 'client' and role != 'client':
                 return Response({'error': 'You do not have access to the requested dashboard.'}, status=403)
 
-            admin_capabilities = (
-                SUPERVISOR_DASHBOARD_CAPABILITIES
-                | ANALYTICS_VIEW_CAPABILITIES
-                | AFTER_SALES_VIEW_CAPABILITIES
-                | SUPERVISOR_TICKET_CAPABILITIES
-                | SUPERVISOR_DISPATCH_CAPABILITIES
-                | SUPERVISOR_TRACKING_CAPABILITIES
-            )
+            admin_capabilities = SUPERVISOR_DASHBOARD_CAPABILITIES
 
             if requested_workspace in self.ADMIN_WORKSPACE_ALIASES:
                 if is_admin_workspace_role(role) and user_has_any_capability(user, admin_capabilities):
@@ -403,14 +369,15 @@ class DashboardView(APIView):
         client_schedule_queryset = ServiceTicket.objects.select_related(
             'request', 'request__client', 'request__service_type', 'technician'
         ).filter(
-            status__in=['Not Started', 'For Inspection', 'Inspection Completed', 'Ready for Service', 'Awaiting Materials', 'In Progress'],
+            status__in=ACTIVE_TICKET_STATUSES,
             scheduled_date__isnull=False
         )
         client_schedule_count = client_schedule_queryset.count()
+        unassigned_scheduled_jobs = client_schedule_queryset.filter(technician__isnull=True).count()
         client_schedule_tickets = client_schedule_queryset.order_by('scheduled_date', 'scheduled_time')[:20]
         sla_service_tickets = ServiceTicket.objects.select_related(
             'request', 'request__client', 'request__service_type', 'technician'
-        ).filter(status__in=['Not Started', 'In Progress'])
+        ).filter(status__in=ACTIVE_TICKET_STATUSES)
 
         # Pending requests from clients (new)
         pending_requests_queryset = ServiceRequest.objects.select_related(
@@ -488,6 +455,7 @@ class DashboardView(APIView):
                 'due_maintenance': active_maintenance.filter(status='due').count(),
                 'pending_approvals': pending_requests_count,
                 'scheduled_jobs': client_schedule_count,
+                'unassigned_scheduled_jobs': unassigned_scheduled_jobs,
                 # After-sales metrics
                 'total_cases': cases.count(),
                 'open_cases': unresolved_cases.count(),
@@ -600,7 +568,7 @@ class DashboardView(APIView):
             Q(technician=user) | Q(crew_assignments__technician=user)
         ).distinct()
         active_tickets = my_tickets.filter(
-            Q(status__in=['Not Started', 'In Progress', 'On Hold'])
+            Q(status__in=ACTIVE_TICKET_STATUSES)
         )
         completed_this_month = my_tickets.filter(
             status='Completed',
@@ -612,7 +580,11 @@ class DashboardView(APIView):
         todays_tickets = my_tickets.filter(scheduled_date=today)
 
         # Inventory access (read-only for technicians)
-        low_stock_items_qs = _low_stock_inventory_items()[:5]
+        can_view_inventory = user_has_any_capability(
+            user,
+            set(TECHNICIAN_INVENTORY_CAPABILITIES) | set(INVENTORY_VIEW_CAPABILITIES),
+        )
+        low_stock_items_qs = _low_stock_inventory_items()[:5] if can_view_inventory else []
         low_stock_alerts = [
             {
                 'id': item.id,
@@ -678,7 +650,7 @@ class DashboardView(APIView):
                 my_tickets = ServiceTicket.objects.filter(request__client=user).select_related(
                     'request', 'request__service_type', 'technician'
                 )
-                active_tickets = my_tickets.filter(Q(status__in=['Not Started', 'In Progress', 'On Hold']))
+                active_tickets = my_tickets.filter(Q(status__in=ACTIVE_TICKET_STATUSES))
                 on_hold_tickets = my_tickets.filter(status='On Hold')
                 completed_tickets_qs = my_tickets.filter(status='Completed').order_by('-completed_date')[:5]
                 tickets_count = my_tickets.count()
@@ -873,6 +845,8 @@ class AdminCalendarView(APIView):
             'request__location',
             'technician',
             'assigned_admin',
+        ).prefetch_related(
+            'crew_assignments__technician',
         ).filter(
             scheduled_date__gte=start_date,
             scheduled_date__lte=end_date,
@@ -944,8 +918,11 @@ class AdminCalendarView(APIView):
             'ticket_id': ticket.id,
             'request_id': ticket.request_id,
             'client': _display_name(ticket.request.client),
+            'client_email': ticket.request.client.email or None,
+            'client_phone': ticket.request.client.phone or None,
             'service_type': ticket.request.service_type.name,
             'service_type_color': ticket.request.service_type.color or '#2563eb',
+            'estimated_duration': ticket.request.service_type.estimated_duration,
             'date': ticket.scheduled_date.isoformat() if ticket.scheduled_date else None,
             'time': str(ticket.scheduled_time) if ticket.scheduled_time else None,
             'time_slot': ticket.scheduled_time_slot,
@@ -959,8 +936,13 @@ class AdminCalendarView(APIView):
             'is_missed_dispatch': dispatch_state['is_missed_dispatch'],
             'missed_dispatch_at': dispatch_state['missed_dispatch_at'],
             'priority': ticket.priority or ticket.request.priority,
+            'workflow_type': ticket.ticket_type,
             'technician': _display_name(ticket.technician) if ticket.technician else None,
             'assigned_technician': _display_name(ticket.technician) if ticket.technician else None,
+            'crew_members': [
+                _display_name(assignment.technician)
+                for assignment in ticket.crew_assignments.select_related('technician').order_by('created_at', 'id')
+            ],
             'assigned_admin': _display_name(ticket.assigned_admin) if ticket.assigned_admin else None,
             'location': _get_request_address(ticket.request),
             'description': ticket.request.description,
@@ -977,8 +959,11 @@ class AdminCalendarView(APIView):
             'ticket_id': None,
             'request_id': service_request.id,
             'client': _display_name(service_request.client),
+            'client_email': service_request.client.email or None,
+            'client_phone': service_request.client.phone or None,
             'service_type': service_request.service_type.name,
             'service_type_color': service_request.service_type.color or '#2563eb',
+            'estimated_duration': service_request.service_type.estimated_duration,
             'date': service_request.preferred_date.isoformat() if service_request.preferred_date else None,
             'time': None,
             'time_slot': service_request.preferred_time_slot,
@@ -987,10 +972,13 @@ class AdminCalendarView(APIView):
             'calendar_status': 'pending_approval' if service_request.status == 'Pending' else 'requested',
             'assignment_status': 'unassigned',
             'priority': service_request.priority,
+            'workflow_type': 'request',
             'technician': None,
             'assigned_technician': None,
+            'crew_members': [],
             'assigned_admin': None,
             'location': _get_request_address(service_request),
             'description': service_request.description,
+            'scheduling_notes': service_request.scheduling_notes,
             'reschedule_requested': False,
         }

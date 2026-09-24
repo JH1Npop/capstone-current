@@ -1,6 +1,7 @@
 from rest_framework import permissions
 
 from .rbac import (
+    ADMIN_JOB_HISTORY_CAPABILITIES,
     AFTER_SALES_MANAGE_CAPABILITIES,
     AFTER_SALES_VIEW_CAPABILITIES,
     MANAGE_STAFF_CAPABILITIES,
@@ -16,6 +17,12 @@ from .rbac import (
     REPORTS_VIEW_CAPABILITIES,
     REPORTS_EXPORT_CAPABILITIES,
     AUDIT_VIEW_CAPABILITIES,
+    COMMUNICATIONS_STAFF_VIEW_CAPABILITIES,
+    COMMUNICATIONS_SUPPORT_MANAGE_CAPABILITIES,
+    COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES,
+    PUBLIC_SITE_VIEW_CAPABILITIES,
+    SYSTEM_SETTINGS_MANAGE_CAPABILITIES,
+    SYSTEM_SETTINGS_VIEW_CAPABILITIES,
     SUPERVISOR_DASHBOARD_CAPABILITIES,
     SUPERVISOR_DISPATCH_CAPABILITIES,
     SUPERVISOR_TICKETS_VIEW,
@@ -27,6 +34,8 @@ from .rbac import (
     TECHNICIAN_HISTORY_CAPABILITIES,
     TECHNICIAN_JOB_DETAIL_CAPABILITIES,
     TECHNICIAN_JOBS_CAPABILITIES,
+    TECHNICIAN_MESSAGES_CAPABILITIES,
+    TECHNICIAN_INVENTORY_CAPABILITIES,
     TECHNICIAN_NAVIGATION_CAPABILITIES,
     TECHNICIAN_PROFILE_CAPABILITIES,
     TECHNICIAN_SCHEDULE_CAPABILITIES,
@@ -146,7 +155,10 @@ class CanManageInventory(permissions.BasePermission):
             return False
         if request.method in permissions.SAFE_METHODS:
             return (
-                user.role == 'technician' or
+                (
+                    user.role == 'technician' and
+                    user_has_any_capability(user, TECHNICIAN_INVENTORY_CAPABILITIES)
+                ) or
                 (
                     is_admin_workspace_role(user.role) and
                     user_has_any_capability(user, INVENTORY_VIEW_CAPABILITIES)
@@ -286,6 +298,55 @@ class CanViewAuditLogs(AdminWorkspaceCapabilityPermission):
     capability_codes = AUDIT_VIEW_CAPABILITIES
 
 
+class CanAccessMessages(permissions.BasePermission):
+    """Allow owned client threads and capability-scoped staff messaging."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.role == 'client':
+            return True
+        if user.role == 'technician':
+            return user_has_any_capability(user, TECHNICIAN_MESSAGES_CAPABILITIES)
+        if is_admin_workspace_role(user.role):
+            return user_has_any_capability(
+                user,
+                set(COMMUNICATIONS_STAFF_VIEW_CAPABILITIES)
+                | set(COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES),
+            )
+        return False
+
+
+class CanViewStaffMessages(AdminWorkspaceCapabilityPermission):
+    capability_codes = COMMUNICATIONS_STAFF_VIEW_CAPABILITIES
+
+
+class CanAccessClientSupport(permissions.BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.role == 'client':
+            return True
+        return (
+            is_admin_workspace_role(user.role)
+            and user_has_any_capability(user, COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES)
+        )
+
+
+class CanManageClientSupport(AdminWorkspaceCapabilityPermission):
+    capability_codes = COMMUNICATIONS_SUPPORT_MANAGE_CAPABILITIES
+
+
+class CanViewSystemOrPublicSiteSettings(AdminWorkspaceCapabilityPermission):
+    capability_codes = set(SYSTEM_SETTINGS_VIEW_CAPABILITIES) | set(PUBLIC_SITE_VIEW_CAPABILITIES)
+
+
+class CanManageSystemSettings(AdminWorkspaceCapabilityPermission):
+    capability_codes = SYSTEM_SETTINGS_MANAGE_CAPABILITIES
+
+
 class CanAccessDocuments(permissions.BasePermission):
     """Capability-scope admins while preserving owned client/technician reads."""
 
@@ -374,6 +435,10 @@ class CanViewSupervisorDispatch(AdminWorkspaceCapabilityPermission):
 
 class CanViewSupervisorTracking(AdminWorkspaceCapabilityPermission):
     capability_codes = SUPERVISOR_TRACKING_CAPABILITIES
+
+
+class CanViewAdminJobHistory(AdminWorkspaceCapabilityPermission):
+    capability_codes = ADMIN_JOB_HISTORY_CAPABILITIES
 
 
 class CanViewSupervisorTechnicianDirectory(AdminWorkspaceCapabilityPermission):

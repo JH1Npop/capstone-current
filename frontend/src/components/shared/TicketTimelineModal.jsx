@@ -37,7 +37,7 @@ export default function TicketTimelineModal({ ticket, events = [], loading = fal
   if (!ticket) return null;
 
   const ticketId = ticket.ticket_id || ticket.ticketId || ticket.id;
-  const serviceName = displayText(ticket.service || ticket.service_type, 'Service');
+  const serviceName = displayText(ticket.service_type_name || ticket.service || ticket.service_type, 'Service');
   const clientName = displayText(ticket.clientFullname || ticket.client, 'Client');
 
   return (

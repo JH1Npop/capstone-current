@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import OnlineStatusBanner from '../shared/OnlineStatusBanner';
 
 const SystemAssistant = lazy(() => import('../shared/SystemAssistant'));
+const ClientSupportAssistant = lazy(() => import('../shared/ClientSupportAssistant'));
 
 export default function Layout({ children }) {
   const { user } = useAuth();
@@ -16,6 +17,8 @@ export default function Layout({ children }) {
   const [assistantReady, setAssistantReady] = useState(false);
   const animationTimer = useRef(null);
   const showSystemAssistant = ['admin', 'superadmin'].includes(user?.role);
+  const showClientAssistant = user?.role === 'client';
+  const showAssistant = showSystemAssistant || showClientAssistant;
   const adminWorkspace = ['admin', 'superadmin'].includes(user?.role);
   const collapsibleWorkspace = Boolean(user?.role);
 
@@ -39,7 +42,7 @@ export default function Layout({ children }) {
   }, []);
 
   useEffect(() => {
-    if (!showSystemAssistant) {
+    if (!showAssistant) {
       setAssistantReady(false);
       return undefined;
     }
@@ -52,7 +55,7 @@ export default function Layout({ children }) {
 
     const timeoutId = window.setTimeout(startAssistant, 900);
     return () => window.clearTimeout(timeoutId);
-  }, [showSystemAssistant]);
+  }, [showAssistant]);
 
   return (
     <div className="min-h-dvh bg-brand-900 p-1 sm:p-2">
@@ -73,7 +76,7 @@ export default function Layout({ children }) {
             canCollapseSidebar={collapsibleWorkspace}
           />
 
-          <main className={`min-h-0 flex-1 touch-pan-y overflow-visible px-2 pb-4 pt-1 sm:px-4 md:px-5 lg:overflow-y-auto lg:overscroll-contain lg:px-6 lg:pb-6 lg:pt-1 ${adminWorkspace ? 'admin-workspace-density' : ''}`}>
+          <main className={`min-h-0 flex-1 touch-pan-y overflow-visible px-2 pb-4 pt-1 sm:px-4 md:px-5 lg:overflow-y-auto lg:overscroll-contain lg:px-6 lg:pb-6 lg:pt-1 ${adminWorkspace ? 'admin-workspace-density' : ''} ${showAssistant ? 'max-sm:pr-16' : ''}`}>
             <div className="mx-auto w-full max-w-[1500px]">
               <OnlineStatusBanner />
               {children}
@@ -84,6 +87,11 @@ export default function Layout({ children }) {
       {showSystemAssistant && assistantReady ? (
         <Suspense fallback={null}>
           <SystemAssistant />
+        </Suspense>
+      ) : null}
+      {showClientAssistant && assistantReady ? (
+        <Suspense fallback={null}>
+          <ClientSupportAssistant />
         </Suspense>
       ) : null}
     </div>

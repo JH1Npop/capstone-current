@@ -6,17 +6,27 @@ from uuid import uuid4
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from users.models import LandingPageAsset
-from users.rbac import PUBLIC_SITE_MANAGE_CAPABILITIES, PUBLIC_SITE_VIEW_CAPABILITIES, user_has_any_capability
+from users.permissions import CanViewSystemOrPublicSiteSettings
+from users.rbac import (
+    PUBLIC_SITE_ASSET_DELETE_CAPABILITIES,
+    PUBLIC_SITE_ASSET_UPLOAD_CAPABILITIES,
+    PUBLIC_SITE_PUBLISH_CAPABILITIES,
+    PUBLIC_SITE_VIEW_CAPABILITIES,
+    SYSTEM_SETTINGS_MANAGE_CAPABILITIES,
+    SYSTEM_SETTINGS_VIEW_CAPABILITIES,
+    user_has_any_capability,
+)
 
 class AdminSettingsViewSet(viewsets.ViewSet):
     """ViewSet for admin settings"""
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, CanViewSystemOrPublicSiteSettings]
     SUPERADMIN_ONLY_FIELDS = {
         'companyName', 'companyAddress', 'documentFooter', 'currencyCode',
         'quotationValidityDays', 'defaultWarrantyDays', 'externalPaymentNotice',
     }
     LANDING_PAGE_FIELDS = {
         'landingPageContent', 'solarCalculatorSettings', 'landingPagePromotions',
+        'landingPageProjects',
     }
     LANDING_IMAGE_TYPES = {
         'image/jpeg': ('jpg', b'\xff\xd8\xff'),
@@ -29,12 +39,33 @@ class AdminSettingsViewSet(viewsets.ViewSet):
         data = dict(AdminSettingsSerializer(settings_obj).data)
         data['canManageOrganizationSettings'] = request.user.role == 'superadmin'
         can_view_landing_page = user_has_any_capability(request.user, PUBLIC_SITE_VIEW_CAPABILITIES)
-        can_manage_landing_page = user_has_any_capability(request.user, PUBLIC_SITE_MANAGE_CAPABILITIES)
+        can_publish_landing_page = user_has_any_capability(request.user, PUBLIC_SITE_PUBLISH_CAPABILITIES)
+        can_upload_landing_assets = user_has_any_capability(request.user, PUBLIC_SITE_ASSET_UPLOAD_CAPABILITIES)
+        can_delete_landing_assets = user_has_any_capability(request.user, PUBLIC_SITE_ASSET_DELETE_CAPABILITIES)
+        can_view_system_settings = user_has_any_capability(request.user, SYSTEM_SETTINGS_VIEW_CAPABILITIES)
+        can_manage_system_settings = user_has_any_capability(request.user, SYSTEM_SETTINGS_MANAGE_CAPABILITIES)
         data['canViewLandingPage'] = can_view_landing_page
-        data['canManageLandingPage'] = can_manage_landing_page
+        data['canManageLandingPage'] = can_publish_landing_page
+        data['canPublishLandingPage'] = can_publish_landing_page
+        data['canUploadLandingAssets'] = can_upload_landing_assets
+        data['canDeleteLandingAssets'] = can_delete_landing_assets
+        data['canViewSystemSettings'] = can_view_system_settings
+        data['canManageSystemSettings'] = can_manage_system_settings
         if not can_view_landing_page:
             for field in self.LANDING_PAGE_FIELDS:
                 data.pop(field, None)
+        if not can_view_system_settings:
+            allowed_fields = set(self.LANDING_PAGE_FIELDS) | {
+                'canManageOrganizationSettings',
+                'canViewLandingPage',
+                'canManageLandingPage',
+                'canPublishLandingPage',
+                'canUploadLandingAssets',
+                'canDeleteLandingAssets',
+                'canViewSystemSettings',
+                'canManageSystemSettings',
+            }
+            data = {key: value for key, value in data.items() if key in allowed_fields}
         return data
 
     def _get_settings(self):
@@ -63,6 +94,12 @@ class AdminSettingsViewSet(viewsets.ViewSet):
     def update(self, request, pk=None):
         """Update admin settings via the router's standard PUT endpoint"""
         settings_obj = self._get_settings()
+        system_updates = set(request.data.keys()) - self.LANDING_PAGE_FIELDS
+        if system_updates and not user_has_any_capability(request.user, SYSTEM_SETTINGS_MANAGE_CAPABILITIES):
+            return Response(
+                {'detail': 'You need the Manage system settings capability to update operational settings.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         protected_updates = self.SUPERADMIN_ONLY_FIELDS.intersection(request.data.keys())
         if protected_updates and request.user.role != 'superadmin':
             return Response(
@@ -70,9 +107,9 @@ class AdminSettingsViewSet(viewsets.ViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         landing_page_updates = self.LANDING_PAGE_FIELDS.intersection(request.data.keys())
-        if landing_page_updates and not user_has_any_capability(request.user, PUBLIC_SITE_MANAGE_CAPABILITIES):
+        if landing_page_updates and not user_has_any_capability(request.user, PUBLIC_SITE_PUBLISH_CAPABILITIES):
             return Response(
-                {'detail': 'You need the Manage public site capability to publish landing-page changes.'},
+                {'detail': 'You need the Publish public site capability to publish landing-page changes.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         serializer = AdminSettingsSerializer(settings_obj, data=request.data, partial=True)
@@ -98,9 +135,9 @@ class AdminSettingsViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'], url_path='landing-images', parser_classes=[MultiPartParser, FormParser])
     def upload_landing_image(self, request):
-        if not user_has_any_capability(request.user, PUBLIC_SITE_MANAGE_CAPABILITIES):
+        if not user_has_any_capability(request.user, PUBLIC_SITE_ASSET_UPLOAD_CAPABILITIES):
             return Response(
-                {'detail': 'You need the Manage public site capability to upload landing-page images.'},
+                {'detail': 'You need the Upload public-site assets capability to upload landing-page images.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -143,9 +180,9 @@ class AdminSettingsViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['delete'], url_path=r'landing-images/(?P<asset_id>[^/.]+)')
     def delete_landing_image(self, request, asset_id=None):
-        if not user_has_any_capability(request.user, PUBLIC_SITE_MANAGE_CAPABILITIES):
+        if not user_has_any_capability(request.user, PUBLIC_SITE_ASSET_DELETE_CAPABILITIES):
             return Response(
-                {'detail': 'You need the Manage public site capability to delete landing-page images.'},
+                {'detail': 'You need the Delete public-site assets capability to delete landing-page images.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         try:
@@ -154,14 +191,19 @@ class AdminSettingsViewSet(viewsets.ViewSet):
             return Response({'detail': 'Landing-page image not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         settings_obj = self._get_settings()
-        is_referenced = any(
+        is_referenced_by_promotion = any(
             str(promotion.get('imageAssetId') or '') == str(asset.id)
             for promotion in settings_obj.landing_page_promotions or []
             if isinstance(promotion, dict)
         )
-        if is_referenced:
+        is_referenced_by_project = any(
+            str(project.get('imageAssetId') or '') == str(asset.id)
+            for project in settings_obj.landing_page_projects or []
+            if isinstance(project, dict)
+        )
+        if is_referenced_by_promotion or is_referenced_by_project:
             return Response(
-                {'detail': 'Remove this image from the promotion and publish before deleting the file.'},
+                {'detail': 'Remove this image from its promotion or project and publish before deleting the file.'},
                 status=status.HTTP_409_CONFLICT,
             )
 

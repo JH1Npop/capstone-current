@@ -162,14 +162,34 @@ const getEquipmentLabel = (item) => {
   if (typeof item === 'string') return item;
   const name = item?.name || 'Equipment';
   const quantity = Number(item?.quantity || 0);
-  return quantity > 1 ? `${name} x${quantity}` : name;
+  const label = quantity > 1 ? `${name} x${quantity}` : name;
+  return item?.service_type_name ? `${item.service_type_name}: ${label}` : label;
 };
+
+const annotateProcedure = (step, serviceType, sourceStepIndex) => ({
+  ...(typeof step === 'string' ? { title: step } : step),
+  service_type_id: serviceType.id || null,
+  service_type_name: serviceType.name,
+  source_step_index: sourceStepIndex,
+});
+
+const resolveServiceChecklist = (serviceType) => {
+  const configured = Array.isArray(serviceType.procedures) ? serviceType.procedures : [];
+  if (configured.length > 0) return { procedures: configured, source: 'dynamic' };
+  if (FALLBACK_CHECKLISTS[serviceType.name]) {
+    return { procedures: FALLBACK_CHECKLISTS[serviceType.name], source: 'fallback' };
+  }
+  return { procedures: GENERIC_CHECKLIST, source: 'generic' };
+};
+
+const checklistDraftKey = (ticketId) => `technician-checklist-draft:${ticketId}`;
 
 export default function TechnicianChecklist() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const ticketId = searchParams.get('ticketId') || searchParams.get('jobId');
   const photoInputRef = useRef(null);
+  const photoStepIndexRef = useRef(null);
   const videoInputRef = useRef(null);
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(Boolean(ticketId));
@@ -196,6 +216,7 @@ export default function TechnicianChecklist() {
   const [activeTab, setActiveTab] = useState('standard');
   const [submitting, setSubmitting] = useState(false);
   const [currentWizardStep, setCurrentWizardStep] = useState(0);
+  const [draftLoaded, setDraftLoaded] = useState(false);
 
   // Dynamic data from ServiceType
   const [dynamicProcedures, setDynamicProcedures] = useState(null);
@@ -232,17 +253,15 @@ export default function TechnicianChecklist() {
     ? `${selectedFollowUpCase?.label || 'Follow-up task'}${isWarrantyFollowUp && automaticWarrantyDueDate ? `, due around ${formatDateLabel(automaticWarrantyDueDate)}` : followUpDueDate ? `, due ${formatDateLabel(followUpDueDate)}` : ', default due date'}`
     : 'No immediate after-sales follow-up task';
   const procedureStepCount = steps.length;
-  const maintenanceWizardStep = procedureStepCount;
-  const warrantyWizardStep = procedureStepCount + 1;
-  const followUpWizardStep = procedureStepCount + 2;
-  const proofWizardStep = procedureStepCount + 3;
-  const reviewWizardStep = procedureStepCount + 4;
-  const totalWizardSteps = procedureStepCount + 5;
-  const activeProcedureStep = currentWizardStep < procedureStepCount ? steps[currentWizardStep] : null;
-  const activeStepPhotos = currentWizardStep < procedureStepCount ? (stepPhotos[currentWizardStep] || []) : [];
-  const activeStepRequiresPhoto = activeProcedureStep ? isStepPhotoRequired(activeProcedureStep) : false;
+  const procedureWizardStep = 0;
+  const maintenanceWizardStep = 1;
+  const warrantyWizardStep = 2;
+  const followUpWizardStep = 3;
+  const proofWizardStep = 4;
+  const reviewWizardStep = 5;
+  const totalWizardSteps = 6;
   const getWizardStepLabel = (stepIndex) => {
-    if (stepIndex < procedureStepCount) return `Procedure ${stepIndex + 1}`;
+    if (stepIndex === procedureWizardStep) return 'Work Steps';
     if (stepIndex === maintenanceWizardStep) return 'Maintenance';
     if (stepIndex === warrantyWizardStep) return 'Warranty';
     if (stepIndex === followUpWizardStep) return 'After-Sales';
@@ -296,25 +315,41 @@ export default function TechnicianChecklist() {
         setJob(jobData);
         setError('');
 
-        // Load dynamic procedures from ServiceType
+        // Resolve every requested service independently. The API includes the
+        // configuration directly; the catalog lookup keeps older responses compatible.
         try {
-          const stName = jobData?.serviceType || jobData?.service || '';
-          if (stName) {
+          let serviceConfigurations = Array.isArray(jobData?.serviceTypes)
+            ? jobData.serviceTypes
+            : [];
+          if (serviceConfigurations.length === 0) {
+            const stName = jobData?.serviceType || jobData?.service || '';
             const serviceTypes = await fetchServiceTypes();
             const match = serviceTypes.find(st => st.name === stName);
-            if (match) {
-              const procs = Array.isArray(match.procedures) ? match.procedures : [];
-              const equip = Array.isArray(match.required_equipment) ? match.required_equipment : [];
-              if (procs.length > 0) {
-                setDynamicProcedures(procs);
-                setProcedureSource('dynamic');
-              } else if (FALLBACK_CHECKLISTS[stName]) {
-                setProcedureSource('fallback');
-              } else {
-                setProcedureSource('generic');
-              }
-              setRequiredEquipment(equip);
-            }
+            serviceConfigurations = match ? [{
+              id: match.id,
+              name: match.name,
+              procedures: match.procedures,
+              requiredEquipment: match.required_equipment,
+            }] : [];
+          }
+
+          if (serviceConfigurations.length > 0) {
+            const resolvedChecklists = serviceConfigurations.map((service) => ({
+              service,
+              ...resolveServiceChecklist(service),
+            }));
+            setDynamicProcedures(resolvedChecklists.flatMap(({ service, procedures }) => (
+              procedures.map((step, stepIndex) => annotateProcedure(step, service, stepIndex))
+            )));
+            setRequiredEquipment(serviceConfigurations.flatMap((service) => (
+              (Array.isArray(service.requiredEquipment) ? service.requiredEquipment : []).map((item) => ({
+                ...(typeof item === 'string' ? { name: item, quantity: 1 } : item),
+                service_type_id: service.id || null,
+                service_type_name: service.name,
+              }))
+            )));
+            const sources = new Set(resolvedChecklists.map(({ source }) => source));
+            setProcedureSource(sources.size === 1 ? [...sources][0] : 'mixed');
           }
         } catch { /* non-critical, will use fallback */ }
       } catch (loadError) {
@@ -332,6 +367,61 @@ export default function TechnicianChecklist() {
     setCurrentWizardStep((step) => Math.min(step, Math.max(totalWizardSteps - 1, 0)));
   }, [totalWizardSteps]);
 
+  useEffect(() => {
+    if (!ticketId) return;
+    try {
+      const savedDraft = JSON.parse(localStorage.getItem(checklistDraftKey(ticketId)) || 'null');
+      if (savedDraft) {
+        setCompleted(savedDraft.completed || {});
+        setTechNotes(savedDraft.techNotes || '');
+        setMaintenanceRequired(savedDraft.maintenanceRequired ?? true);
+        setMaintenanceProfile(savedDraft.maintenanceProfile || '');
+        setMaintenanceIntervalDays(savedDraft.maintenanceIntervalDays || '');
+        setMaintenanceNotes(savedDraft.maintenanceNotes || '');
+        setAfterSalesDecision(savedDraft.afterSalesDecision || '');
+        setWarrantyProvided(savedDraft.warrantyProvided ?? true);
+        setWarrantyPeriodDays(savedDraft.warrantyPeriodDays ?? '30');
+        setWarrantyNotes(savedDraft.warrantyNotes || '');
+        setFollowUpRequired(savedDraft.followUpRequired ?? false);
+        setFollowUpCaseType(savedDraft.followUpCaseType || 'follow_up');
+        setFollowUpDueDate(savedDraft.followUpDueDate || '');
+        setFollowUpSummary(savedDraft.followUpSummary || '');
+        setFollowUpDetails(savedDraft.followUpDetails || '');
+        setCurrentWizardStep(Number(savedDraft.currentWizardStep) || 0);
+      }
+    } catch {
+      localStorage.removeItem(checklistDraftKey(ticketId));
+    }
+    setDraftLoaded(true);
+  }, [ticketId]);
+
+  useEffect(() => {
+    if (!ticketId || !draftLoaded || checklistLocked) return;
+    localStorage.setItem(checklistDraftKey(ticketId), JSON.stringify({
+      completed,
+      techNotes,
+      maintenanceRequired,
+      maintenanceProfile,
+      maintenanceIntervalDays,
+      maintenanceNotes,
+      afterSalesDecision,
+      warrantyProvided,
+      warrantyPeriodDays,
+      warrantyNotes,
+      followUpRequired,
+      followUpCaseType,
+      followUpDueDate,
+      followUpSummary,
+      followUpDetails,
+      currentWizardStep,
+    }));
+  }, [
+    ticketId, draftLoaded, checklistLocked, completed, techNotes, maintenanceRequired,
+    maintenanceProfile, maintenanceIntervalDays, maintenanceNotes, afterSalesDecision,
+    warrantyProvided, warrantyPeriodDays, warrantyNotes, followUpRequired,
+    followUpCaseType, followUpDueDate, followUpSummary, followUpDetails, currentWizardStep,
+  ]);
+
   const toggleStep = (index) => {
     setCompleted((previousState) => ({
       ...previousState,
@@ -339,7 +429,8 @@ export default function TechnicianChecklist() {
     }));
   };
 
-  const addPhoto = () => {
+  const addPhoto = (stepIndex = null) => {
+    photoStepIndexRef.current = Number.isInteger(stepIndex) ? stepIndex : null;
     photoInputRef.current?.click();
   };
 
@@ -351,16 +442,18 @@ export default function TechnicianChecklist() {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length > 0) {
       setPhotos((previousState) => [...previousState, ...selectedFiles]);
-      if (currentWizardStep < procedureStepCount) {
+      if (Number.isInteger(photoStepIndexRef.current)) {
+        const targetStepIndex = photoStepIndexRef.current;
         setStepPhotos((previousState) => ({
           ...previousState,
-          [currentWizardStep]: [
-            ...(previousState[currentWizardStep] || []),
+          [targetStepIndex]: [
+            ...(previousState[targetStepIndex] || []),
             ...selectedFiles
           ]
         }));
       }
     }
+    photoStepIndexRef.current = null;
     event.target.value = '';
   };
 
@@ -394,18 +487,33 @@ export default function TechnicianChecklist() {
     event.target.value = '';
   };
 
+  const removePhotoFile = (targetPhoto) => {
+    setPhotos((previousState) => previousState.filter((photo) => photo !== targetPhoto));
+    setStepPhotos((previousState) => Object.fromEntries(
+      Object.entries(previousState)
+        .map(([stepIndex, files]) => [stepIndex, files.filter((photo) => photo !== targetPhoto)])
+        .filter(([, files]) => files.length > 0)
+    ));
+  };
+
+  const removeVideoFile = (targetVideo) => {
+    setVideos((previousState) => previousState.filter((video) => video !== targetVideo));
+  };
+
   const validateCurrentWizardStep = () => {
-    if (currentWizardStep < procedureStepCount && !completed[currentWizardStep]) {
-      setMessage('Mark this checklist step as completed before continuing.');
-      return false;
-    }
-    if (
-      currentWizardStep < procedureStepCount &&
-      isStepPhotoRequired(steps[currentWizardStep]) &&
-      (stepPhotos[currentWizardStep] || []).length === 0
-    ) {
-      setMessage('Upload a photo for this required-photo step before continuing.');
-      return false;
+    if (currentWizardStep === procedureWizardStep) {
+      const firstIncomplete = steps.findIndex((_, index) => !completed[index]);
+      if (firstIncomplete >= 0) {
+        setMessage(`Complete work step ${firstIncomplete + 1} before continuing.`);
+        return false;
+      }
+      const missingPhoto = steps.findIndex((step, index) => (
+        isStepPhotoRequired(step) && (stepPhotos[index] || []).length === 0
+      ));
+      if (missingPhoto >= 0) {
+        setMessage(`Add the required photo for work step ${missingPhoto + 1} before continuing.`);
+        return false;
+      }
     }
     if (currentWizardStep === maintenanceWizardStep && maintenanceRequired && !maintenanceProfile) {
       setMessage('Select a maintenance profile before continuing.');
@@ -459,7 +567,7 @@ export default function TechnicianChecklist() {
       isStepPhotoRequired(step) && (stepPhotos[index] || []).length === 0
     ));
     if (missingPhotoStepIndex >= 0) {
-      setCurrentWizardStep(missingPhotoStepIndex);
+      setCurrentWizardStep(procedureWizardStep);
       setMessage(`Upload a photo for procedure ${missingPhotoStepIndex + 1} before submitting.`);
       return;
     }
@@ -496,6 +604,9 @@ export default function TechnicianChecklist() {
         required_equipment_snapshot: requiredEquipment,
         checklist_items: steps.map((step, index) => ({
           index,
+          service_type_id: step?.service_type_id || null,
+          service_type_name: step?.service_type_name || serviceType,
+          source_step_index: Number.isInteger(step?.source_step_index) ? step.source_step_index : index,
           label: getStepTitle(step, index),
           description: getStepDescription(step),
           requires_photo: isStepPhotoRequired(step),
@@ -526,6 +637,7 @@ export default function TechnicianChecklist() {
           ? 'Checklist submitted. The after-sales team will receive a handoff when this ticket completes.'
           : 'Checklist submitted successfully!'
       );
+      localStorage.removeItem(checklistDraftKey(ticketId));
       setPhotos([]);
       setVideos([]);
       setTimeout(() => {
@@ -649,10 +761,17 @@ export default function TechnicianChecklist() {
           <div className="rounded-full bg-slate-100 px-4 py-2 text-slate-700">
             {job.address || 'Location pending'}
           </div>
+          <div className="rounded-full bg-white px-4 py-2 text-slate-600 ring-1 ring-slate-200">
+            Answers save on this device
+          </div>
         </div>
         {procedureSource === 'dynamic' ? (
           <p className="text-sm text-emerald-700">
             ✅ Using <strong>admin-configured procedures</strong> for {serviceType}.
+          </p>
+        ) : procedureSource === 'mixed' ? (
+          <p className="text-sm text-blue-700">
+            Each requested service has its own checklist section. Services without a configured template use safe fallback steps.
           </p>
         ) : procedureSource === 'fallback' ? (
           <p className="text-sm text-blue-700">
@@ -663,6 +782,10 @@ export default function TechnicianChecklist() {
             This ticket does not have a custom checklist template yet, so the general completion checklist is being used.
           </p>
         )}
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+          <span className="font-semibold">Draft reminder:</span> answers, notes, decisions, and completed steps are saved on this device.
+          Selected photos and videos are not saved after a refresh, so attach them again before submitting.
+        </div>
       </div>
 
             <div className="mb-6 flex space-x-2 border-b border-slate-200">
@@ -757,78 +880,92 @@ export default function TechnicianChecklist() {
         </div>
       </div>
 
-      {currentWizardStep < procedureStepCount && activeProcedureStep && (
-        <div className="mb-6 rounded-xl border bg-white shadow-sm">
-          <div className="border-b border-slate-200 p-6">
-            <h3 className="text-lg font-semibold">Service Procedure</h3>
+      {currentWizardStep === procedureWizardStep && (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 p-4 sm:p-6">
+            <h3 className="text-lg font-semibold text-slate-900">Complete the work steps</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              All procedures stay on one screen. Tap each row after completing the work and attach evidence where required.
+            </p>
           </div>
-          <div className="p-6">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Procedure {currentWizardStep + 1} of {procedureStepCount}
-              </div>
-              <h4 className="text-xl font-semibold text-slate-950">
-                {getStepTitle(activeProcedureStep, currentWizardStep)}
-              </h4>
-              {getStepDescription(activeProcedureStep) && (
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  {getStepDescription(activeProcedureStep)}
-                </p>
-              )}
-              {activeStepRequiresPhoto && (
-                <div className={`mt-5 rounded-xl border p-4 ${activeStepPhotos.length > 0
-                    ? 'border-emerald-200 bg-emerald-50'
-                    : 'border-amber-200 bg-amber-50'
-                  }`}>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className={`text-sm font-semibold ${activeStepPhotos.length > 0 ? 'text-emerald-900' : 'text-amber-900'
-                        }`}>
-                        Photo required for this step
-                      </p>
-                      <p className={`mt-1 text-xs ${activeStepPhotos.length > 0 ? 'text-emerald-700' : 'text-amber-700'
-                        }`}>
-                        Upload at least one image before moving to the next procedure.
-                      </p>
+          <div className="space-y-3 p-4 sm:p-6">
+            {steps.map((step, stepIndex) => {
+              const stepComplete = Boolean(completed[stepIndex]);
+              const photoRequired = isStepPhotoRequired(step);
+              const attachedPhotos = stepPhotos[stepIndex] || [];
+              const startsServiceSection = Boolean(
+                step?.service_type_name && (
+                  stepIndex === 0 || steps[stepIndex - 1]?.service_type_name !== step.service_type_name
+                )
+              );
+              return (
+                <div
+                  key={`${getStepTitle(step, stepIndex)}-${stepIndex}`}
+                  className={`rounded-xl border p-4 transition ${stepComplete
+                    ? 'border-emerald-300 bg-emerald-50'
+                    : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  {startsServiceSection && (
+                    <div className="mb-3 border-b border-slate-200 pb-3 text-xs font-bold uppercase tracking-[0.16em] text-sky-700">
+                      {step.service_type_name} procedures
                     </div>
+                  )}
+                  <div className="flex items-start gap-3">
                     <button
                       type="button"
-                      onClick={addPhoto}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
+                      aria-pressed={stepComplete}
+                      aria-label={`${stepComplete ? 'Mark incomplete' : 'Mark complete'}: ${getStepTitle(step, stepIndex)}`}
+                      onClick={() => toggleStep(stepIndex)}
+                      className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-lg transition ${stepComplete
+                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                        : 'border-slate-300 bg-white text-slate-500 hover:border-emerald-400'
+                      }`}
                     >
-                      <FiImage /> Insert Image
+                      <FiCheckSquare />
                     </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Step {stepIndex + 1}</span>
+                        {step?.service_type_name && (
+                          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800">
+                            {step.service_type_name}
+                          </span>
+                        )}
+                        {photoRequired && (
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${attachedPhotos.length > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                            {attachedPhotos.length > 0 ? `${attachedPhotos.length} photo attached` : 'Photo required'}
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="mt-1 font-semibold text-slate-950">{getStepTitle(step, stepIndex)}</h4>
+                      {getStepDescription(step) && <p className="mt-1 text-sm leading-5 text-slate-600">{getStepDescription(step)}</p>}
+                    </div>
                   </div>
-                  {activeStepPhotos.length > 0 && (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {activeStepPhotos.map((photo, index) => (
-                        <div key={`${photo.name}-${index}`} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 ring-1 ring-emerald-100">
-                          <span className="min-w-0 truncate">{photo.name}</span>
-                          <button
-                            type="button"
-                            onClick={() => removeStepPhoto(currentWizardStep, index)}
-                            className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
-                          >
-                            Remove
-                          </button>
+                  {photoRequired && (
+                    <div className="mt-3 pl-0 sm:pl-14">
+                      <button
+                        type="button"
+                        onClick={() => addPhoto(stepIndex)}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50"
+                      >
+                        <FiImage /> {attachedPhotos.length > 0 ? 'Add another photo' : 'Add required photo'}
+                      </button>
+                      {attachedPhotos.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          {attachedPhotos.map((photo, photoIndex) => (
+                            <div key={`${photo.name}-${photo.lastModified}-${photoIndex}`} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 ring-1 ring-emerald-100">
+                              <span className="min-w-0 truncate">{photo.name}</span>
+                              <button type="button" onClick={() => removeStepPhoto(stepIndex, photoIndex)} className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Remove</button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-              <button
-                type="button"
-                onClick={() => toggleStep(currentWizardStep)}
-                className={`mt-6 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${completed[currentWizardStep]
-                    ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                    : 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-100'
-                  }`}
-              >
-                <FiCheckSquare size={18} />
-                {completed[currentWizardStep] ? 'Marked Complete' : 'Mark This Step Complete'}
-              </button>
-            </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1128,13 +1265,15 @@ export default function TechnicianChecklist() {
             </label>
             <div className="mb-4 space-y-2">
               {photos.map((photo, index) => (
-                <div key={`${photo.name}-${index}`} className="flex h-24 w-full items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 px-4 text-sm text-slate-500">
-                  <span className="text-center">{photo.name}</span>
+                <div key={`${photo.name}-${index}`} className="flex min-h-16 w-full items-center justify-between gap-3 overflow-hidden rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 px-4 py-3 text-sm text-slate-600">
+                  <span className="min-w-0 truncate">{photo.name}</span>
+                  <button type="button" onClick={() => removePhotoFile(photo)} className="shrink-0 rounded-md bg-white/80 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-white">Remove</button>
                 </div>
               ))}
               {videos.map((video, index) => (
-                <div key={`${video.name}-${index}`} className="flex h-24 w-full items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-sky-100 to-slate-200 px-4 text-sm text-slate-600">
-                  <span className="text-center">{video.name}</span>
+                <div key={`${video.name}-${index}`} className="flex min-h-16 w-full items-center justify-between gap-3 overflow-hidden rounded-lg bg-gradient-to-br from-sky-100 to-slate-200 px-4 py-3 text-sm text-slate-600">
+                  <span className="min-w-0 truncate">{video.name}</span>
+                  <button type="button" onClick={() => removeVideoFile(video)} className="shrink-0 rounded-md bg-white/80 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-white">Remove</button>
                 </div>
               ))}
             </div>

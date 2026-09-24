@@ -53,6 +53,10 @@ export default function QuotationProposalForm({ ticketId, userRole, onSuccess })
       const payload = { ticket: ticketId, ...formData, id: quotation?.id };
       const saved = await saveQuotationRecord(payload);
       setQuotation(saved);
+      setFormData((current) => ({
+        ...current,
+        quotation_number: saved.quotation_number || current.quotation_number,
+      }));
       setMessage('Quotation draft saved successfully.');
       if (onSuccess) onSuccess(saved);
     } catch (err) {

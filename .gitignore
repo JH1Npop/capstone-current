@@ -12,6 +12,7 @@ backend/db-*.sqlite3
 backend/local_backups/*.sqlite3
 backend/local_backups/*.sqlite3.*
 backend/local_backups/*.json
+backend/local_backups/*.zip
 backend/media/
 backend/admin_dashboard_full.txt
 backend/__pycache__/

@@ -2,7 +2,7 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.core.serializers.json import DjangoJSONEncoder
-from users.rbac import is_admin_workspace_role
+from users.rbac import INVENTORY_VIEW_CAPABILITIES, is_admin_workspace_role, user_has_any_capability
 from .models import InventoryItem
 from .serializers import InventoryItemSerializer
 
@@ -12,7 +12,7 @@ class InventoryConsumer(AsyncWebsocketConsumer):
         user = self.scope.get('user')
         self.joined_inventory_group = False
 
-        if not user or not user.is_authenticated or not is_admin_workspace_role(user.role):
+        if not user or not user.is_authenticated or not await self.can_view_inventory(user):
             await self.close()
             return
 
@@ -54,6 +54,17 @@ class InventoryConsumer(AsyncWebsocketConsumer):
             'type': 'low_stock_alerts',
             'data': low_stock_data
         }, cls=DjangoJSONEncoder))
+
+    @database_sync_to_async
+    def can_view_inventory(self, user):
+        if not user.is_active or getattr(user, 'status', None) != 'active':
+            return False
+        if user.role == 'technician':
+            return True
+        return (
+            is_admin_workspace_role(user.role)
+            and user_has_any_capability(user, INVENTORY_VIEW_CAPABILITIES)
+        )
 
     @database_sync_to_async
     def get_inventory_data(self):

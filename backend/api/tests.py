@@ -138,6 +138,133 @@ class DataPersistenceSmokeTests(APITestCase):
         self.assertTrue(checklist.warranty_provided)
         self.assertEqual(checklist.warranty_period_days, 30)
 
+    def test_site_inspection_requires_explicit_answers_and_recommendation(self):
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Explicit inspection answers request.',
+            status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=service_request,
+            technician=self.technician,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            ticket_type='inspection',
+            status='For Inspection',
+        )
+        self.client.force_authenticate(user=self.technician)
+
+        response = self.client.post(
+            '/api/services/inspections/',
+            {'ticket': ticket.id, 'checklist_items': []},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn('site_accessible', response.data)
+        self.assertIn('electrical_adequate', response.data)
+        self.assertIn('safety_equipment_present', response.data)
+        self.assertIn('recommendation', response.data)
+        self.assertFalse(InspectionChecklist.objects.filter(ticket=ticket).exists())
+
+    def test_site_inspection_requires_notes_for_negative_answers(self):
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Negative inspection findings request.',
+            status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=service_request,
+            technician=self.technician,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            ticket_type='inspection',
+            status='For Inspection',
+        )
+        self.client.force_authenticate(user=self.technician)
+        payload = {
+            'ticket': ticket.id,
+            'site_accessible': False,
+            'electrical_adequate': False,
+            'safety_equipment_present': False,
+            'recommendation': 'Conditional',
+            'checklist_items': [],
+        }
+
+        rejected = self.client.post('/api/services/inspections/', payload, format='json')
+        payload.update({
+            'site_accessible_notes': 'Rear access requires client clearance.',
+            'electrical_notes': 'Distribution board needs a spare breaker.',
+            'safety_hazards': 'Roof edge barrier must be installed.',
+        })
+        accepted = self.client.post('/api/services/inspections/', payload, format='json')
+
+        self.assertEqual(rejected.status_code, 400, rejected.data)
+        self.assertIn('site_accessible_notes', rejected.data)
+        self.assertIn('electrical_notes', rejected.data)
+        self.assertIn('safety_hazards', rejected.data)
+        self.assertEqual(accepted.status_code, 201, accepted.data)
+        checklist = InspectionChecklist.objects.get(ticket=ticket)
+        self.assertEqual(checklist.recommendation, 'Conditional')
+        self.assertEqual(checklist.site_accessible_notes, 'Rear access requires client clearance.')
+
+    def test_technician_job_exposes_distinct_checklist_configuration_for_each_service(self):
+        self.client_user.phone = '+639171234567'
+        self.client_user.save(update_fields=['phone'])
+        self.technician.first_name = 'Field'
+        self.technician.last_name = 'Technician'
+        self.technician.save(update_fields=['first_name', 'last_name'])
+        second_service = ServiceType.objects.create(
+            name='Persistence Secondary Service',
+            estimated_duration=45,
+            procedures=[{'title': 'Test secondary controls', 'requires_photo': True}],
+            required_equipment=[{'name': 'Clamp meter', 'quantity': 1}],
+        )
+        self.service_type.procedures = [{'title': 'Inspect primary equipment'}]
+        self.service_type.required_equipment = [{'name': 'Inspection kit', 'quantity': 1}]
+        self.service_type.save(update_fields=['procedures', 'required_equipment'])
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Multi-service checklist request.',
+            status='Approved',
+        )
+        service_request.service_items.create(service_type=self.service_type, sort_order=0)
+        service_request.service_items.create(service_type=second_service, sort_order=1)
+        ticket = ServiceTicket.objects.create(
+            request=service_request,
+            technician=self.technician,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            status='Not Started',
+        )
+        InspectionChecklist.objects.create(
+            ticket=ticket,
+            checklist_items=[
+                {'label': 'Inspect primary equipment', 'completed': True},
+                {'label': 'Test secondary controls', 'completed': False},
+            ],
+            is_completed=False,
+        )
+        self.client.force_authenticate(user=self.technician)
+
+        response = self.client.get(f'/api/technician/jobs/{ticket.id}/')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(
+            [service['name'] for service in response.data['service_types']],
+            [self.service_type.name, second_service.name],
+        )
+        self.assertEqual(response.data['service_types'][0]['procedures'][0]['title'], 'Inspect primary equipment')
+        self.assertEqual(response.data['service_types'][1]['procedures'][0]['title'], 'Test secondary controls')
+        self.assertTrue(response.data['service_types'][1]['procedures'][0]['requires_photo'])
+        self.assertEqual(response.data['service_types'][1]['required_equipment'][0]['name'], 'Clamp meter')
+        self.assertEqual(response.data['request_description'], 'Multi-service checklist request.')
+        self.assertEqual(response.data['client']['phone'], '+639171234567')
+        self.assertEqual(response.data['lead_technician'], 'Field Technician')
+        self.assertEqual(response.data['estimated_duration_minutes'], 105)
+        self.assertEqual(response.data['checklist_completed_steps'], 1)
+        self.assertEqual(response.data['checklist_total_steps'], 2)
+
     def test_technician_additional_equipment_request_persists_inventory_reservation(self):
         category = InventoryCategory.objects.create(name='Smoke Equipment')
         item = InventoryItem.objects.create(

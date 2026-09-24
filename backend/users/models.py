@@ -45,6 +45,10 @@ def default_solar_calculator_settings():
 def default_landing_page_promotions():
     return []
 
+
+def default_landing_page_projects():
+    return []
+
 class User(AbstractUser):
     """Single user model with role-based organization."""
 
@@ -405,6 +409,7 @@ class AdminSettings(models.Model):
     landing_page_content = models.JSONField(default=default_landing_page_content, blank=True)
     solar_calculator_settings = models.JSONField(default=default_solar_calculator_settings, blank=True)
     landing_page_promotions = models.JSONField(default=default_landing_page_promotions, blank=True)
+    landing_page_projects = models.JSONField(default=default_landing_page_projects, blank=True)
     location_validation_enabled = models.BooleanField(default=True)
     arrival_radius_meters = models.PositiveSmallIntegerField(default=30)
     location_validation_disabled_reason = models.TextField(blank=True, default='')

@@ -250,7 +250,9 @@ Use these rules so the models stay connected:
 - Use `MaintenanceSchedule` for future maintenance reminders.
 - Use `Message` only for communication, not as a replacement for after-sales cases.
 - Use `ActivityLog` for admin/superadmin audit trail.
-- Do not center the models around old cleanup candidates such as `progress_ticketprogress` or `history_servicehistory`.
+- Keep `progress_ticketprogress` only as the secured append-only progress API;
+  completed-job history comes from tickets and `services_servicestatushistory`.
+  The redundant `history_servicehistory` model has been retired.
 - Forecast and trend tables may be mentioned as analytics enhancement, but they should not be the center of the main system model unless fully used in the final demo.
 
 ## Recommended Diagram Order

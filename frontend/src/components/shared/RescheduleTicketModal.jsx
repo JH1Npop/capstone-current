@@ -67,6 +67,11 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
       return;
     }
 
+    if (!form.notes.trim()) {
+      setError('Add the reason for changing this schedule.');
+      return;
+    }
+
     try {
       setSubmitting(true);
       await onSubmit(ticketId, form);
@@ -163,14 +168,14 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
           <div className="mt-4 rounded-3xl border border-surface-200 bg-surface-50 p-4">
             <label className="block text-sm font-medium text-slate-700">
               <span className="flex items-center gap-2 font-semibold text-slate-900">
-                <FiMapPin className="text-brand-600" /> Notes
+                <FiMapPin className="text-brand-600" /> Reschedule Reason (required)
               </span>
               <textarea
                 value={form.notes}
                 onChange={(event) => updateField('notes', event.target.value)}
                 rows={4}
                 className="mt-2 w-full rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                placeholder="Optional scheduling note for the client and dispatch record."
+                placeholder="Explain why the schedule is changing for the audit record."
               />
             </label>
           </div>

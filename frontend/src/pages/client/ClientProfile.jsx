@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  FiEdit2,
   FiCamera,
-  FiLock,
+  FiBriefcase,
   FiMail,
   FiMapPin,
   FiPhone,
@@ -10,9 +9,12 @@ import {
   FiUser,
   FiX,
 } from 'react-icons/fi';
-import { changePassword, updateUserProfile } from '../../api/client';
+import { updateUserProfile } from '../../api/client';
 import Layout from '../../components/layout/Layout';
+import ProfileIdentityCard, { ProfileField } from '../../components/shared/ProfileIdentityCard';
+import ProfileSecuritySection from '../../components/shared/ProfileSecuritySection';
 import { useAuth } from '../../context/AuthContext';
+import { PROFILE_IMAGE_ACCEPT, releaseObjectPreview, validateProfileImageFile } from '../../utils/profile';
 
 const emptyProfile = {
   first_name: '',
@@ -25,56 +27,61 @@ const emptyProfile = {
   address: '',
 };
 
-const emptyPassword = {
-  currentPassword: '',
-  newPassword: '',
-  confirmPassword: '',
-};
+const profileFromUser = (user) => ({
+  first_name: user?.first_name || '',
+  middle_name: user?.middle_name || '',
+  last_name: user?.last_name || '',
+  email: user?.email || '',
+  phone: user?.phone || '',
+  landline: user?.landline || '',
+  company_name: user?.client_profile?.company_name || '',
+  address: user?.address || '',
+});
 
 export default function ClientProfile() {
-  const { user, logout } = useAuth();
+  const { user, updateCurrentUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [profileData, setProfileData] = useState(emptyProfile);
   const [profileImageFile, setProfileImageFile] = useState(null);
   const [profileImagePreview, setProfileImagePreview] = useState('');
-  const [passwordData, setPasswordData] = useState(emptyPassword);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    setProfileData({
-      first_name: user.first_name || '',
-      middle_name: user.middle_name || '',
-      last_name: user.last_name || '',
-      email: user.email || '',
-      phone: user.phone || '',
-      landline: user.landline || '',
-      company_name: user.client_profile?.company_name || '',
-      address: user.address || '',
-    });
+    setProfileData(profileFromUser(user));
     setProfileImagePreview(user.profile_image_url || '');
   }, [user]);
 
-  const displayName = `${profileData.first_name} ${profileData.last_name}`.trim() || user?.username || 'Client';
+  const displayName = `${profileData.first_name} ${profileData.middle_name} ${profileData.last_name}`.replace(/\s+/g, ' ').trim() || user?.username || 'Client';
 
   const handleProfileChange = (event) => {
     const { name, value } = event.target;
     setProfileData((current) => ({ ...current, [name]: value }));
   };
 
-  const handlePasswordChange = (event) => {
-    const { name, value } = event.target;
-    setPasswordData((current) => ({ ...current, [name]: value }));
-  };
-
   const handleProfileImageChange = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    const validationError = validateProfileImageFile(file);
+    if (validationError) {
+      event.target.value = '';
+      setMessage({ type: 'error', text: validationError });
+      return;
+    }
+    releaseObjectPreview(profileImagePreview);
     setProfileImageFile(file);
     setProfileImagePreview(URL.createObjectURL(file));
+    setMessage({ type: '', text: '' });
+  };
+
+  const cancelProfileEdit = () => {
+    releaseObjectPreview(profileImagePreview);
+    setProfileData(profileFromUser(user));
+    setProfileImageFile(null);
+    setProfileImagePreview(user?.profile_image_url || '');
+    setMessage({ type: '', text: '' });
+    setIsEditing(false);
   };
 
   const saveProfile = async (event) => {
@@ -83,41 +90,23 @@ export default function ClientProfile() {
     setMessage({ type: '', text: '' });
 
     try {
+      const emailChanged = profileData.email.trim().toLowerCase() !== String(user?.email || '').trim().toLowerCase();
       const updatedProfile = await updateUserProfile({
         ...profileData,
         ...(profileImageFile ? { profile_image: profileImageFile } : {}),
       });
-      const updatedUser = { ...user, ...updatedProfile };
-      sessionStorage.setItem('afn_user', JSON.stringify(updatedUser));
+      releaseObjectPreview(profileImagePreview);
+      updateCurrentUser(updatedProfile);
       setProfileImageFile(null);
       setIsEditing(false);
-      setMessage({ type: 'success', text: 'Profile updated successfully.' });
-      window.setTimeout(() => window.location.reload(), 800);
+      setMessage({
+        type: 'success',
+        text: emailChanged && updatedProfile.pending_email
+          ? `Profile saved. Verify ${updatedProfile.pending_email} before it replaces your current email.`
+          : 'Profile updated successfully.',
+      });
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to update profile.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const changeClientPassword = async (event) => {
-    event.preventDefault();
-    setLoading(true);
-    setMessage({ type: '', text: '' });
-
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setMessage({ type: 'error', text: 'Passwords do not match.' });
-      setLoading(false);
-      return;
-    }
-
-    try {
-      await changePassword(passwordData);
-      setPasswordData(emptyPassword);
-      setShowPasswordForm(false);
-      setMessage({ type: 'success', text: 'Password changed successfully.' });
-    } catch (error) {
-      setMessage({ type: 'error', text: error.message || 'Unable to change password.' });
     } finally {
       setLoading(false);
     }
@@ -127,14 +116,10 @@ export default function ClientProfile() {
 
   return (
     <Layout>
-      <main className="min-h-screen bg-slate-50 p-4 sm:p-6">
-        <div className="mx-auto max-w-3xl">
-          <div className="mb-4">
-            <h1 className="text-2xl font-bold text-slate-900">Client Profile</h1>
-            <p className="text-sm text-slate-500">Manage your account information, contact details, password, and profile photo.</p>
-          </div>
+      <div className="py-2">
+        <div className="mx-auto max-w-5xl">
           {message.text ? (
-            <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+            <div role="status" aria-live="polite" className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
               message.type === 'success'
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                 : 'border-rose-200 bg-rose-50 text-rose-700'
@@ -142,80 +127,81 @@ export default function ClientProfile() {
               {message.text}
             </div>
           ) : null}
-
-          <section className="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-5 border-b border-slate-200 pb-6 sm:flex-row sm:items-center">
-              <div className="h-20 w-20 shrink-0">
-                {profileImagePreview ? (
-                  <img src={profileImagePreview} alt={displayName} className="h-20 w-20 rounded-full object-cover ring-2 ring-brand-100" />
-                ) : (
-                  <div className="grid h-20 w-20 place-items-center rounded-full bg-brand-50 text-2xl font-bold text-brand-700">
-                    {displayName.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-2xl font-bold text-slate-900">{displayName}</h2>
-                <p className="mt-1 text-sm text-slate-500">@{user?.username}</p>
-                <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                  <FiUser size={14} /> Client Account
-                </span>
-              </div>
-              {!isEditing ? (
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(true)}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
-                >
-                  <FiEdit2 size={16} />
-                  Edit Profile
-                </button>
-              ) : null}
+          {user?.pending_email ? (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <p className="font-semibold">Email verification pending</p>
+              <p className="mt-1">Check {user.pending_email}. Your sign-in email remains {user.email} until verification is complete.</p>
             </div>
+          ) : null}
+
+          <section className="mb-6 space-y-4">
+            <ProfileIdentityCard user={user} displayName={displayName} username={user?.username} profileImage={profileImagePreview} editing={isEditing} onEdit={() => setIsEditing(true)}>
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
+                <FiUser size={14} /> Client Account
+              </span>
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                Service customer
+              </span>
+            </ProfileIdentityCard>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Contact Information</h3>
+                <p className="mt-1 text-sm text-slate-500">Contact and company details used for service documents.</p>
+              </div>
 
             {isEditing ? (
               <form onSubmit={saveProfile} className="mt-6 space-y-4">
                 <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
                   <FiCamera size={18} />
-                  <span>{profileImageFile ? profileImageFile.name : 'Change profile photo'}</span>
-                  <input type="file" accept="image/*" onChange={handleProfileImageChange} className="hidden" />
+                  <span>{profileImageFile ? profileImageFile.name : 'Choose a new profile photo'}</span>
+                  <input type="file" accept={PROFILE_IMAGE_ACCEPT} onChange={handleProfileImageChange} className="hidden" />
                 </label>
+                <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                  <span>JPEG, PNG, WebP, or GIF. Maximum 2 MB.</span>
+                  {profileImageFile ? (
+                    <button type="button" onClick={() => { releaseObjectPreview(profileImagePreview); setProfileImageFile(null); setProfileImagePreview(user?.profile_image_url || ''); }} className="font-semibold text-slate-700 hover:text-slate-900">
+                      Clear selected photo
+                    </button>
+                  ) : null}
+                </div>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <label className="block text-sm font-medium text-slate-700">
                     First Name
-                    <input name="first_name" value={profileData.first_name} onChange={handleProfileChange} className={`${inputClass} mt-1`} />
+                    <input name="first_name" value={profileData.first_name} onChange={handleProfileChange} autoComplete="given-name" className={`${inputClass} mt-1`} />
                   </label>
                   <label className="block text-sm font-medium text-slate-700">
                     Middle Name (Optional)
-                    <input name="middle_name" value={profileData.middle_name} onChange={handleProfileChange} className={`${inputClass} mt-1`} />
+                    <input name="middle_name" value={profileData.middle_name} onChange={handleProfileChange} autoComplete="additional-name" className={`${inputClass} mt-1`} />
                   </label>
                   <label className="block text-sm font-medium text-slate-700">
                     Last Name
-                    <input name="last_name" value={profileData.last_name} onChange={handleProfileChange} className={`${inputClass} mt-1`} />
+                    <input name="last_name" value={profileData.last_name} onChange={handleProfileChange} autoComplete="family-name" className={`${inputClass} mt-1`} />
                   </label>
                 </div>
                 <label className="block text-sm font-medium text-slate-700">
                   Email Address
-                  <input type="email" name="email" value={profileData.email} onChange={handleProfileChange} className={`${inputClass} mt-1`} />
+                  <input type="email" name="email" value={profileData.email} onChange={handleProfileChange} autoComplete="email" className={`${inputClass} mt-1`} />
+                  <span className="mt-1 block text-xs font-normal text-slate-500">A new address must be verified before it replaces your current email.</span>
                 </label>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block text-sm font-medium text-slate-700">
                     Phone Number
-                    <input name="phone" value={profileData.phone} onChange={handleProfileChange} placeholder="09123456789" className={`${inputClass} mt-1`} />
+                    <input type="tel" name="phone" value={profileData.phone} onChange={handleProfileChange} autoComplete="tel" placeholder="09123456789" className={`${inputClass} mt-1`} />
                   </label>
                   <label className="block text-sm font-medium text-slate-700">
                     Landline (Optional)
-                    <input name="landline" value={profileData.landline} onChange={handleProfileChange} className={`${inputClass} mt-1`} />
+                    <input type="tel" name="landline" value={profileData.landline} onChange={handleProfileChange} autoComplete="tel" className={`${inputClass} mt-1`} />
                   </label>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block text-sm font-medium text-slate-700">
                     Company Name (Optional)
-                    <input name="company_name" value={profileData.company_name} onChange={handleProfileChange} className={`${inputClass} mt-1`} />
+                    <input name="company_name" value={profileData.company_name} onChange={handleProfileChange} autoComplete="organization" className={`${inputClass} mt-1`} />
                   </label>
                   <label className="block text-sm font-medium text-slate-700">
                     Address
-                    <input name="address" value={profileData.address} onChange={handleProfileChange} className={`${inputClass} mt-1`} />
+                    <input name="address" value={profileData.address} onChange={handleProfileChange} autoComplete="street-address" className={`${inputClass} mt-1`} />
                   </label>
                 </div>
                 <div className="flex flex-col gap-3 pt-2 sm:flex-row">
@@ -223,7 +209,7 @@ export default function ClientProfile() {
                     <FiSave size={16} />
                     Save Changes
                   </button>
-                  <button type="button" onClick={() => setIsEditing(false)} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300">
+                  <button type="button" onClick={cancelProfileEdit} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300">
                     <FiX size={16} />
                     Cancel
                   </button>
@@ -234,62 +220,17 @@ export default function ClientProfile() {
                 <ProfileField icon={FiUser} label="Name" value={displayName} />
                 <ProfileField icon={FiMail} label="Email" value={profileData.email || 'Not provided'} />
                 <ProfileField icon={FiPhone} label="Phone" value={profileData.phone || 'Not provided'} />
+                <ProfileField icon={FiPhone} label="Landline" value={profileData.landline || 'Not provided'} />
+                <ProfileField icon={FiBriefcase} label="Company" value={profileData.company_name || 'Not provided'} />
                 <ProfileField icon={FiMapPin} label="Address" value={profileData.address || 'Not provided'} />
               </div>
             )}
+            </div>
           </section>
 
-          <section className="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-              <FiLock size={20} />
-              Security
-            </h3>
-            {showPasswordForm ? (
-              <form onSubmit={changeClientPassword} className="mt-4 space-y-4">
-                <input type="password" name="currentPassword" value={passwordData.currentPassword} onChange={handlePasswordChange} placeholder="Current password" className={inputClass} required />
-                <input type="password" name="newPassword" value={passwordData.newPassword} onChange={handlePasswordChange} placeholder="New password" className={inputClass} required />
-                <input type="password" name="confirmPassword" value={passwordData.confirmPassword} onChange={handlePasswordChange} placeholder="Confirm new password" className={inputClass} required />
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <button type="submit" disabled={loading} className="flex-1 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">Change Password</button>
-                  <button type="button" onClick={() => { setShowPasswordForm(false); setPasswordData(emptyPassword); }} className="flex-1 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300">Cancel</button>
-                </div>
-              </form>
-            ) : (
-              <button type="button" onClick={() => setShowPasswordForm(true)} className="mt-4 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                Change Password
-              </button>
-            )}
-          </section>
-
-          <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-            {showLogoutConfirm ? (
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={logout} className="flex-1 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700">
-                  Yes, Sign Out
-                </button>
-                <button type="button" onClick={() => setShowLogoutConfirm(false)} className="flex-1 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300">
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => setShowLogoutConfirm(true)} className="w-full rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700">
-                Sign Out
-              </button>
-            )}
-          </section>
+          <ProfileSecuritySection onMessage={setMessage} />
         </div>
-      </main>
+      </div>
     </Layout>
-  );
-}
-
-function ProfileField({ icon: Icon, label, value }) {
-  return (
-    <div className="rounded-lg bg-slate-50 p-4">
-      <p className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
-        <Icon /> {label}
-      </p>
-      <p className="mt-2 break-words text-base font-semibold text-slate-900">{value}</p>
-    </div>
   );
 }

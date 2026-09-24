@@ -4,9 +4,9 @@ import Layout from '../../components/layout/Layout';
 import TicketTimelineModal from '../../components/shared/TicketTimelineModal';
 import StatusBadge, { formatStatusLabel } from '../../components/ui/StatusBadge';
 import { useTechnicianJobs } from '../../hooks/useTechnicianJobs';
-import { FiChevronDown, FiClipboard, FiClock, FiEye, FiMapPin, FiPackage, FiPlus, FiUpload, FiX } from 'react-icons/fi';
+import { FiChevronDown, FiClipboard, FiClock, FiEye, FiMapPin, FiPackage, FiPhone, FiPlus, FiUpload, FiX } from 'react-icons/fi';
 import { fetchTicketTimeline } from '../../api/api';
-import { formatTicketId } from '../../utils/roleIds';
+import { formatReservationId, formatTicketId } from '../../utils/roleIds';
 
 const formatDateLabel = (value) => {
   if (!value) {
@@ -19,6 +19,34 @@ const formatDateLabel = (value) => {
   }
 
   return parsedValue.toLocaleDateString();
+};
+
+const formatTimeLabel = (value, slot) => {
+  if (value) {
+    const [hourValue, minuteValue = '00'] = String(value).split(':');
+    const hour = Number(hourValue);
+    if (Number.isInteger(hour) && hour >= 0 && hour <= 23) {
+      return `${hour % 12 || 12}:${minuteValue} ${hour >= 12 ? 'PM' : 'AM'}`;
+    }
+  }
+
+  return slot ? `${formatStatusLabel(slot)} slot` : 'Time pending';
+};
+
+const formatDurationLabel = (minutes) => {
+  const totalMinutes = Number(minutes || 0);
+  if (totalMinutes <= 0) return 'Not specified';
+  const hours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
+  if (!hours) return `${remainingMinutes} min`;
+  return remainingMinutes ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`;
+};
+
+const getReservationStatusClasses = (status) => {
+  if (status === 'cancelled') return 'bg-slate-100 text-slate-600';
+  if (status === 'pending') return 'bg-amber-100 text-amber-800';
+  if (['issued', 'approved'].includes(status)) return 'bg-emerald-100 text-emerald-800';
+  return 'bg-blue-100 text-blue-800';
 };
 
 export default function TechnicianJobs() {
@@ -78,6 +106,18 @@ export default function TechnicianJobs() {
       : 'Requests go to admin';
   const activeJobs = jobs.filter((job) => !['completed', 'inspection completed', 'cancelled'].includes(job.status?.toLowerCase().replace('_', ' ')));
   const canCompleteSelectedJob = completionJob?.assignmentRole !== 'crew';
+  const activeInventoryReservations = (selectedJob?.inventoryReservations || []).filter(
+    (reservation) => reservation.status !== 'cancelled'
+  );
+  const cancelledInventoryReservations = (selectedJob?.inventoryReservations || []).filter(
+    (reservation) => reservation.status === 'cancelled'
+  );
+
+  const openCompletionFromDetails = () => {
+    const job = selectedJob;
+    closeJobDetails();
+    setCompletionJob(job);
+  };
 
   const openTimeline = async (job) => {
     setTimelineJob(job);
@@ -99,7 +139,6 @@ export default function TechnicianJobs() {
     <Layout>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">My Jobs</h1>
           <p className="text-sm text-slate-500">Active assignments, job actions, checklists, and navigation links.</p>
         </div>
         <Link
@@ -229,15 +268,6 @@ export default function TechnicianJobs() {
                       </div>
 
                       <div className="mt-auto flex flex-col gap-2">
-                        {['not_started', 'for_inspection', 'ready_for_service', 'awaiting_materials'].includes(job.status) && (
-                          <Link
-                            to={`/technician/map-navigation?ticketId=${job.ticketId}`}
-                            onClick={(event) => event.stopPropagation()}
-                            className={`rounded-lg px-3 py-2 text-xs font-medium text-white transition w-full bg-emerald-500 hover:bg-emerald-600`}
-                          >
-                            Navigate
-                          </Link>
-                        )}
                         {job.status === 'navigating' && (
                           <button
                             onClick={(event) => {
@@ -300,7 +330,7 @@ export default function TechnicianJobs() {
                               }}
                               className="rounded-lg bg-green-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-600 w-full"
                             >
-                              Complete (Proof)
+                              Finish Job
                             </button>
                           )
                         )}
@@ -387,6 +417,16 @@ export default function TechnicianJobs() {
                 </div>
               </div>
               <div>
+                <div className="mb-1 text-sm font-medium text-slate-500">Scheduled Time</div>
+                <div className="text-slate-900">
+                  {formatTimeLabel(selectedJob.scheduledTime, selectedJob.scheduledTimeSlot)}
+                </div>
+              </div>
+              <div>
+                <div className="mb-1 text-sm font-medium text-slate-500">Estimated Duration</div>
+                <div className="text-slate-900">{formatDurationLabel(selectedJob.estimatedDurationMinutes)}</div>
+              </div>
+              <div>
                 <div className="mb-1 text-sm font-medium text-slate-500">Address</div>
                 <div className="text-slate-900">{selectedJob.address || 'Location pending'}</div>
               </div>
@@ -400,6 +440,60 @@ export default function TechnicianJobs() {
                   {selectedJob.assignmentRole === 'crew' ? 'Crew Member' : 'Lead Technician'}
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+              <div className="mb-1 text-sm font-medium text-blue-700">Job Scope</div>
+              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                {selectedJob.requestDescription || 'No additional work description was provided.'}
+              </p>
+              {selectedJob.client?.phone && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <a
+                    href={`tel:${selectedJob.client.phone}`}
+                    className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-blue-700 shadow-sm ring-1 ring-blue-200 hover:bg-blue-100"
+                  >
+                    <FiPhone size={15} /> Call Client
+                  </a>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Checklist</div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    {selectedJob.checklistTotalSteps > 0
+                      ? `${selectedJob.checklistCompletedSteps} of ${selectedJob.checklistTotalSteps} steps completed`
+                      : selectedJob.checklistCompleted
+                        ? 'Submitted and ready for final completion'
+                        : 'Not submitted yet'}
+                  </div>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  selectedJob.checklistCompleted
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {selectedJob.checklistCompleted ? 'Complete' : 'Action needed'}
+                </span>
+              </div>
+              {selectedJob.checklistTotalSteps > 0 && (
+                <div
+                  className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"
+                  role="progressbar"
+                  aria-label="Checklist completion"
+                  aria-valuemin="0"
+                  aria-valuemax={selectedJob.checklistTotalSteps}
+                  aria-valuenow={selectedJob.checklistCompletedSteps}
+                >
+                  <div
+                    className="h-full rounded-full bg-emerald-500"
+                    style={{ width: `${Math.min(100, (selectedJob.checklistCompletedSteps / selectedJob.checklistTotalSteps) * 100)}%` }}
+                  />
+                </div>
+              )}
             </div>
 
             {selectedJob.crewMembers?.length > 0 && (
@@ -424,9 +518,9 @@ export default function TechnicianJobs() {
                   </span>
                 )}
               </div>
-              {selectedJob.inventoryReservations?.length > 0 ? (
+              {activeInventoryReservations.length > 0 ? (
                 <div className="space-y-2">
-                  {selectedJob.inventoryReservations.map((reservation) => (
+                  {activeInventoryReservations.map((reservation) => (
                     <div
                       key={reservation.id}
                       className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
@@ -436,11 +530,12 @@ export default function TechnicianJobs() {
                           {reservation.itemName} x{reservation.quantity}
                         </div>
                         <div className="text-xs text-slate-500">
+                          {reservation.reservationCode || formatReservationId(reservation.id)} - {' '}
                           {reservation.itemSku ? `SKU: ${reservation.itemSku}` : 'No SKU'}
                           {reservation.requiredDate ? ` - Needed: ${formatDateLabel(reservation.requiredDate)}` : ''}
                         </div>
                       </div>
-                      <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold capitalize text-blue-800">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${getReservationStatusClasses(reservation.status)}`}>
                         {reservation.status}
                       </span>
                     </div>
@@ -450,6 +545,34 @@ export default function TechnicianJobs() {
                 <p className="text-sm text-slate-500">
                   No reserved equipment has been assigned for this ticket yet.
                 </p>
+              )}
+
+              {cancelledInventoryReservations.length > 0 && (
+                <details className="mt-3 border-t border-slate-200 pt-3">
+                  <summary className="cursor-pointer text-sm font-medium text-slate-600">
+                    Previous requests ({cancelledInventoryReservations.length} cancelled)
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {cancelledInventoryReservations.map((reservation) => (
+                      <div
+                        key={reservation.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-100 px-3 py-2 text-sm"
+                      >
+                        <div>
+                          <div className="font-medium text-slate-700">
+                            {reservation.itemName} x{reservation.quantity}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {reservation.reservationCode || formatReservationId(reservation.id)}
+                          </div>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${getReservationStatusClasses(reservation.status)}`}>
+                          {reservation.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
 
               {canRequestEquipment ? (
@@ -592,12 +715,26 @@ export default function TechnicianJobs() {
                 >
                   View Job History
                 </Link>
+              ) : selectedJob.status === 'in_progress' && selectedJob.checklistCompleted ? (
+                selectedJob.assignmentRole === 'crew' ? (
+                  <div className="rounded-lg bg-slate-100 px-4 py-2 text-center text-sm font-medium text-slate-600">
+                    Lead technician finishes this job
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={openCompletionFromDetails}
+                    className="rounded-lg bg-green-600 px-4 py-2 text-center font-medium text-white hover:bg-green-700"
+                  >
+                    Finish Job
+                  </button>
+                )
               ) : (
                 <Link
                   to={selectedJob.ticketType === 'inspection' ? `/technician/inspection-checklist?ticketId=${selectedJob.ticketId}` : `/technician/checklist?ticketId=${selectedJob.ticketId}`}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-center text-white hover:bg-blue-700"
                 >
-                  Open Checklist
+                  {selectedJob.status === 'in_progress' ? 'Complete Checklist' : 'Open Checklist'}
                 </Link>
               )}
             </div>
@@ -618,7 +755,7 @@ export default function TechnicianJobs() {
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <h3 className="text-xl font-bold text-slate-900 sm:text-2xl">Complete Job - Upload Proof</h3>
+                <h3 className="text-xl font-bold text-slate-900 sm:text-2xl">Finish Job</h3>
                 <p className="text-slate-600">
                   {formatTicketId(completionJob.ticketId)} for {completionJob.client?.full_name || completionJob.client}
                 </p>
@@ -641,10 +778,10 @@ export default function TechnicianJobs() {
               {completionJob.ticketType !== 'inspection' && (
                 <div className="rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 p-6">
                 <label className="mb-2 block text-sm font-semibold text-slate-900">
-                  <FiUpload className="mr-2 inline" /> Upload Proof Images (Required)
+                  <FiUpload className="mr-2 inline" /> Completion Photo (Required)
                 </label>
                 <p className="mb-4 text-sm text-slate-600">
-                  Upload photos showing the completed work as proof of service delivery.
+                  Add at least one clear photo showing the finished work. You can select more than one.
                 </p>
                 <input
                   type="file"
@@ -716,6 +853,7 @@ export default function TechnicianJobs() {
                               {reservation.itemName} x{reservation.quantity}
                             </div>
                             <div className="text-xs text-slate-500">
+                              {reservation.reservationCode || formatReservationId(reservation.id)} - {' '}
                               {reservation.itemSku ? `SKU: ${reservation.itemSku}` : 'No SKU'}
                             </div>
                           </div>
@@ -784,7 +922,7 @@ export default function TechnicianJobs() {
                       Completing...
                     </>
                   ) : (
-                    completionJob.ticketType !== 'inspection' ? 'Complete Job with Proof' : 'Complete Inspection'
+                    completionJob.ticketType !== 'inspection' ? 'Finish Job' : 'Finish Inspection'
                   )}
                 </button>
                 <button

@@ -267,11 +267,12 @@ function EquipmentEditor({ equipment, onChange }) {
 function ServiceCard({ service, requirements, inventoryItems, canManage, canManageInventory, onEdit, onDelete, onSaveRequirement, onDeleteRequirement }) {
   const [expanded, setExpanded] = useState(false);
   const [reqForm, setReqForm] = useState(null);
+  const selectableInventoryItems = inventoryItems.filter((item) => item.status !== 'retired');
 
   const startAddRequirement = () => {
     setReqForm({
       service_type: service.id,
-      item: inventoryItems[0]?.id || '',
+      item: selectableInventoryItems[0]?.id || '',
       quantity: 1,
       auto_reserve: true,
       notes: '',
@@ -417,7 +418,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
           <div>
             <div className="mb-2 flex items-center justify-between">
               <h5 className="text-sm font-semibold text-slate-700">Inventory Templates</h5>
-              {canManageInventory && inventoryItems.length > 0 && (
+              {canManageInventory && selectableInventoryItems.length > 0 && (
                 <button
                   type="button"
                   onClick={startAddRequirement}
@@ -459,7 +460,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
                   value={reqForm.item}
                   onChange={(e) => setReqForm({ ...reqForm, item: Number(e.target.value) })}
                 >
-                  {inventoryItems.map((item) => (
+                  {selectableInventoryItems.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name} ({item.available_quantity ?? item.quantity ?? 0} available)
                     </option>
@@ -629,7 +630,6 @@ export default function AdminServices() {
     <Layout>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Services Management</h1>
           <p className="text-sm text-slate-500">Manage service types, checklist procedures, tools, and inventory templates.</p>
         </div>
         <div className="flex items-center gap-3">

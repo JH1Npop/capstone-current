@@ -455,26 +455,6 @@ Table notifications_firebasetoken {
   Note: 'Push notification device registrations.'
 }
 
-Table notifications_notificationtemplate {
-  id int [pk]
-  name varchar [unique]
-  notification_type varchar
-  subject varchar
-  body text
-  variables text
-}
-
-Table notifications_notificationlog {
-  id int [pk]
-  notification_id int [unique]
-  email_status varchar
-  sms_status varchar
-  email_response text
-  sms_response text
-  last_attempt datetime
-  attempt_count int
-}
-
 Table messages_app_message {
   id int [pk]
   ticket_id int
@@ -495,18 +475,6 @@ Table progress_ticketprogress {
   updated_at datetime
 
   Note: 'Simple progress updates separate from status history.'
-}
-
-Table history_servicehistory {
-  id int [pk]
-  ticket_id int
-  technician_id int
-  service_type_id int
-  completion_date datetime
-  service_duration int
-  customer_rating int
-
-  Note: 'Historical record of completed work.'
 }
 
 Table services_serviceanalytics {
@@ -631,7 +599,6 @@ Ref: notifications_notification.user_id > users_user.id
 Ref: notifications_notification.ticket_id > services_serviceticket.id
 Ref: notifications_notification.request_id > services_servicerequest.id
 Ref: notifications_firebasetoken.user_id > users_user.id
-Ref: notifications_notificationlog.notification_id > notifications_notification.id
 
 Ref: messages_app_message.ticket_id > services_serviceticket.id
 Ref: messages_app_message.sender_id > users_user.id
@@ -639,10 +606,6 @@ Ref: messages_app_message.receiver_id > users_user.id
 
 Ref: progress_ticketprogress.ticket_id > services_serviceticket.id
 Ref: progress_ticketprogress.updated_by_id > users_user.id
-
-Ref: history_servicehistory.ticket_id > services_serviceticket.id
-Ref: history_servicehistory.technician_id > users_user.id
-Ref: history_servicehistory.service_type_id > services_servicetype.id
 
 Ref: services_serviceanalytics.service_type_id > services_servicetype.id
 Ref: services_technicianperformance.technician_id > users_user.id

@@ -268,14 +268,6 @@ Table Notification {
   read_at datetime
 }
 
-Table NotificationLog {
-  notification_log_id integer [pk, increment]
-  notification_id integer [unique, ref: > Notification.notification_id]
-  email_status varchar
-  last_attempt datetime
-  attempt_count integer
-}
-
 Table ActivityLog {
   activity_log_id integer [pk, increment]
   actor_id integer [ref: > User.user_id]

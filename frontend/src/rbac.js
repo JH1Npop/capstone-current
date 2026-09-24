@@ -14,14 +14,23 @@ export const CAPABILITIES = {
   technicianNavigationView: 'technician.navigation.view',
   technicianChecklistView: 'technician.checklist.view',
   technicianMessagesView: 'technician.messages.view',
+  technicianInventoryView: 'technician.inventory.view',
   technicianHistoryView: 'technician.history.view',
   technicianProfileView: 'technician.profile.view',
   manageStaffCapabilities: 'users.capabilities.manage_staff',
   userDirectoryView: 'users.directory.view',
   manageUsers: 'users.directory.manage',
   adminJobHistoryView: 'admin.job_history.view',
+  communicationsStaffView: 'communications.staff.view',
+  communicationsSupportView: 'communications.support.view',
+  communicationsSupportManage: 'communications.support.manage',
+  systemSettingsView: 'system.settings.view',
+  systemSettingsManage: 'system.settings.manage',
   publicSiteView: 'public_site.view',
   publicSiteManage: 'public_site.manage',
+  publicSitePublish: 'public_site.publish',
+  publicSiteAssetUpload: 'public_site.assets.upload',
+  publicSiteAssetDelete: 'public_site.assets.delete',
   inventoryView: 'inventory.view',
   inventoryManage: 'inventory.manage',
   serviceCatalogView: 'services.catalog.view',
@@ -117,13 +126,53 @@ export const ADMIN_JOB_HISTORY_CAPABILITIES = [
   CAPABILITIES.adminJobHistoryView
 ];
 
+export const COMMUNICATIONS_STAFF_VIEW_CAPABILITIES = [
+  CAPABILITIES.communicationsStaffView
+];
+
+export const COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES = [
+  CAPABILITIES.communicationsSupportView,
+  CAPABILITIES.communicationsSupportManage
+];
+
+export const COMMUNICATIONS_SUPPORT_MANAGE_CAPABILITIES = [
+  CAPABILITIES.communicationsSupportManage
+];
+
+export const SYSTEM_SETTINGS_VIEW_CAPABILITIES = [
+  CAPABILITIES.systemSettingsView,
+  CAPABILITIES.systemSettingsManage
+];
+
+export const SYSTEM_SETTINGS_MANAGE_CAPABILITIES = [
+  CAPABILITIES.systemSettingsManage
+];
+
 export const PUBLIC_SITE_VIEW_CAPABILITIES = [
   CAPABILITIES.publicSiteView,
-  CAPABILITIES.publicSiteManage
+  CAPABILITIES.publicSiteManage,
+  CAPABILITIES.publicSitePublish,
+  CAPABILITIES.publicSiteAssetUpload,
+  CAPABILITIES.publicSiteAssetDelete
 ];
 
 export const PUBLIC_SITE_MANAGE_CAPABILITIES = [
   CAPABILITIES.publicSiteManage
+];
+
+export const PUBLIC_SITE_PUBLISH_CAPABILITIES = [
+  CAPABILITIES.publicSiteManage,
+  CAPABILITIES.publicSitePublish
+];
+
+export const PUBLIC_SITE_ASSET_UPLOAD_CAPABILITIES = [
+  CAPABILITIES.publicSiteManage,
+  CAPABILITIES.publicSiteAssetUpload
+];
+
+export const PUBLIC_SITE_ASSET_DELETE_CAPABILITIES = [
+  CAPABILITIES.publicSiteManage,
+  CAPABILITIES.publicSiteAssetDelete
 ];
 
 export const INVENTORY_VIEW_CAPABILITIES = [
@@ -166,6 +215,10 @@ export const TECHNICIAN_CHECKLIST_CAPABILITIES = [
 
 export const TECHNICIAN_MESSAGES_CAPABILITIES = [
   CAPABILITIES.technicianMessagesView
+];
+
+export const TECHNICIAN_INVENTORY_CAPABILITIES = [
+  CAPABILITIES.technicianInventoryView
 ];
 
 export const TECHNICIAN_HISTORY_CAPABILITIES = [

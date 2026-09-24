@@ -11,6 +11,7 @@ from .views import (
 from .views_follow_up import FollowUpCaseViewSet
 from .views_dashboard import DashboardView
 from .views.solar_estimates import SolarEstimateViewSet
+from .views.sales_records import SalesRecordViewSet
 
 router = routers.DefaultRouter()
 router.register(r'service-types', ServiceTypeViewSet)
@@ -36,6 +37,7 @@ router.register(r'technician-jobs', TechnicianJobsView, basename='technician-job
 router.register(r'technician-schedule', TechnicianScheduleView, basename='technician-schedule')
 router.register(r'follow-up-cases', FollowUpCaseViewSet, basename='follow-up-cases')
 router.register(r'solar-estimates', SolarEstimateViewSet, basename='solar-estimate')
+router.register(r'sales-records', SalesRecordViewSet, basename='sales-record')
 router.register(r'coverage-heatmap', CoverageHeatmapViewSet, basename='coverage-heatmap')
 router.register(r'ors', ORSViewSet, basename='ors')
 

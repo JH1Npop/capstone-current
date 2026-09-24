@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Notification, NotificationTemplate, NotificationLog
+from .models import Notification
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -31,19 +31,4 @@ class NotificationSerializer(serializers.ModelSerializer):
             'user', 'ticket', 'request', 'status',
             'created_at', 'read_at', 'email_sent',
             'push_sent', 'related_ticket', 'related_request', 'priority'
-        ]
-
-
-class NotificationTemplateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = NotificationTemplate
-        fields = ['id', 'name', 'notification_type', 'subject', 'body', 'variables']
-
-
-class NotificationLogSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = NotificationLog
-        fields = [
-            'id', 'notification', 'email_status',
-            'email_response', 'attempt_count', 'last_attempt'
         ]

@@ -39,7 +39,8 @@ The authoritative transition map is `ALLOWED_TICKET_TRANSITIONS` in
 | `Arrived on Site` | `In Progress`, `On Hold`, `Cancelled` |
 | `In Progress` | `Inspection Completed`, `Awaiting Materials`, `On Hold`, `Completed`, `Cancelled` |
 | `On Hold` | `Ready for Service`, `In Progress`, `Cancelled` |
-| `Completed` | none |
+| `Completed` | `Turned Over / Accepted` |
+| `Turned Over / Accepted` | none |
 | `Cancelled` | none |
 
 Ticket changes create `ServiceStatusHistory` records containing the actor,
@@ -50,7 +51,26 @@ and new states. Assignment, auto-assignment, inspection decisions, navigation,
 arrival, work start, status updates, and completion lock the ticket row before
 mutation. Dispatch also locks all selected technician rows in deterministic ID
 order and revalidates availability and daily capacity after acquiring the lock.
-Release 1 still needs consistent reason capture on every ticket transition.
+Background automatic dispatch and the Dispatch Board's manual **Find Best
+Match** action use the same candidate-ranking contract: active/available
+status, exact or General Services skill, daily duration capacity, concrete-time
+overlap rejection, location-based fitness, and a score strictly above 30. The
+selected technician is locked and the capacity, overlap, and score checks are
+repeated before assignment. A technician remains available for additional
+scheduled work while capacity permits; the derived busy state is limited to
+`Navigating`, `Arrived on Site`, and `In Progress` work.
+Ticket and crew-assignment model signals reconcile that derived state after
+direct model/admin changes as well as API workflow changes. The
+`reconcile_technician_availability` management command reports historical
+mismatches without writing by default; `--apply` repairs them after the target
+database has been reviewed.
+Every call to the central status-change helper must provide a nonblank note of
+at most 2,000 characters. Routine named actions provide deterministic event
+evidence; the generic administrator status action requires an operator-entered
+reason. Rescheduling also requires and preserves an operator reason, and
+inspection exceptions (`Awaiting Materials` or cancellation) require a reason
+in both the API and review dialog. Whitespace is normalized before the same
+evidence is written to the ticket activity log and `ServiceStatusHistory`.
 
 ## Ticket progress records
 

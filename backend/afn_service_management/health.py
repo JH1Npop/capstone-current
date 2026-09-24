@@ -1,4 +1,8 @@
 import logging
+import asyncio
+import uuid
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.cache import cache
 from django.core.files.storage import default_storage
@@ -8,6 +12,18 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 logger = logging.getLogger(__name__)
+
+
+async def _probe_realtime_layer():
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        raise RuntimeError('No channel layer is configured.')
+    channel_name = f'health.readiness.{uuid.uuid4().hex}'
+    payload = {'type': 'health.probe', 'value': '1'}
+    await channel_layer.send(channel_name, payload)
+    received = await asyncio.wait_for(channel_layer.receive(channel_name), timeout=3)
+    if received != payload:
+        raise RuntimeError('Channel layer probe returned an unexpected payload.')
 
 
 @api_view(['GET'])
@@ -33,6 +49,7 @@ def readiness_view(request):
     checks = {
         'database': 'ready',
         'cache': 'ready',
+        'realtime': 'not_configured',
         'storage': 'ready',
     }
     is_ready = True
@@ -57,7 +74,17 @@ def readiness_view(request):
         logger.warning('Readiness check failed on cache/Redis: %s', e, exc_info=True)
         checks['cache'] = 'degraded'
 
-    # 3. Check Media/File Storage
+    # 3. Check the Redis-backed Channels path when production realtime is enabled.
+    if getattr(settings, 'USE_REDIS', False):
+        try:
+            async_to_sync(_probe_realtime_layer)()
+            checks['realtime'] = 'ready'
+        except Exception as e:
+            logger.warning('Readiness check failed on Redis channel layer: %s', e, exc_info=True)
+            checks['realtime'] = 'unavailable'
+            is_ready = False
+
+    # 4. Check Media/File Storage
     try:
         # Check if storage class responds without throwing critical errors
         if hasattr(default_storage, 'exists'):
@@ -66,7 +93,8 @@ def readiness_view(request):
             checks['storage'] = 'degraded'
     except Exception as e:
         logger.warning('Readiness check failed on media storage: %s', e, exc_info=True)
-        checks['storage'] = 'degraded'
+        checks['storage'] = 'unavailable'
+        is_ready = False
 
     response_status = status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
     return Response({

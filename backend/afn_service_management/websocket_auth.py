@@ -10,7 +10,10 @@ def _get_user_for_token(token_key):
         return AnonymousUser()
 
     try:
-        return Token.objects.select_related('user').get(key=token_key).user
+        user = Token.objects.select_related('user').get(key=token_key).user
+        if not user.is_active or getattr(user, 'status', None) != 'active':
+            return AnonymousUser()
+        return user
     except Token.DoesNotExist:
         return AnonymousUser()
 

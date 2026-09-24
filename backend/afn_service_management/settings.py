@@ -16,6 +16,7 @@ import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 _settings_logger = logging.getLogger(__name__)
@@ -37,6 +38,32 @@ def env_bool(name, default=False):
 def env_list(name, default=''):
     value = os.environ.get(name, default)
     return [item.strip() for item in value.split(',') if item.strip()]
+
+
+def env_int(name, default, *, minimum=None, maximum=None):
+    raw_value = os.environ.get(name, str(default)).strip()
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise ImproperlyConfigured(f'{name} must be a whole number.') from exc
+    if minimum is not None and value < minimum:
+        raise ImproperlyConfigured(f'{name} must be at least {minimum}.')
+    if maximum is not None and value > maximum:
+        raise ImproperlyConfigured(f'{name} must be at most {maximum}.')
+    return value
+
+
+def env_float(name, default, *, minimum=None, maximum=None):
+    raw_value = os.environ.get(name, str(default)).strip()
+    try:
+        value = float(raw_value)
+    except ValueError as exc:
+        raise ImproperlyConfigured(f'{name} must be a number.') from exc
+    if minimum is not None and value < minimum:
+        raise ImproperlyConfigured(f'{name} must be at least {minimum}.')
+    if maximum is not None and value > maximum:
+        raise ImproperlyConfigured(f'{name} must be at most {maximum}.')
+    return value
 
 
 def build_postgres_config_from_url(database_url):
@@ -68,6 +95,10 @@ def build_postgres_config_from_url(database_url):
     if hostaddr:
         options['hostaddr'] = hostaddr
 
+    sslrootcert = os.environ.get('DB_SSLROOTCERT', '').strip()
+    if sslrootcert:
+        options['sslrootcert'] = sslrootcert
+
     return {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': unquote(parsed.path.lstrip('/')),
@@ -82,6 +113,7 @@ def build_postgres_config_from_url(database_url):
 # SECURITY WARNING: don't run with debug turned on in production!
 ENVIRONMENT = os.environ.get('DJANGO_ENV', 'development').lower()
 IS_PRODUCTION = ENVIRONMENT == 'production'
+DEPLOYMENT_STAGE = os.environ.get('DEPLOYMENT_STAGE', ENVIRONMENT).lower()
 DEBUG = env_bool('DEBUG', default=ENVIRONMENT == 'development')
 IS_TEST = 'test' in sys.argv
 
@@ -109,6 +141,25 @@ ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', DEFAULT_ALLOWED_HOSTS)
 # OpenRouteService API key support (for route geometry and ETA)
 OPENROUTESERVICE_API_KEY = os.environ.get('OPENROUTESERVICE_API_KEY', '').strip()
 ORS_API_KEY = os.environ.get('ORS_API_KEY', OPENROUTESERVICE_API_KEY).strip()
+
+# Field-location contract. Bounds are returned by the authenticated tracking APIs
+# so deployed frontends do not need a region hard-coded into their build.
+TRACKING_REGION_NAME = os.environ.get('TRACKING_REGION_NAME', 'CALABARZON').strip() or 'Service region'
+TRACKING_REGION_SOUTH_LAT = env_float('TRACKING_REGION_SOUTH_LAT', 13.38, minimum=-90, maximum=90)
+TRACKING_REGION_WEST_LNG = env_float('TRACKING_REGION_WEST_LNG', 119.88, minimum=-180, maximum=180)
+TRACKING_REGION_NORTH_LAT = env_float('TRACKING_REGION_NORTH_LAT', 14.96, minimum=-90, maximum=90)
+TRACKING_REGION_EAST_LNG = env_float('TRACKING_REGION_EAST_LNG', 122.42, minimum=-180, maximum=180)
+TRACKING_REGION_MIN_ZOOM = env_int('TRACKING_REGION_MIN_ZOOM', 8, minimum=1, maximum=18)
+TECHNICIAN_LOCATION_RETENTION_DAYS = env_int(
+    'TECHNICIAN_LOCATION_RETENTION_DAYS', 30, minimum=1, maximum=3650
+)
+TECHNICIAN_LOCATION_TRAIL_MINUTES = env_int(
+    'TECHNICIAN_LOCATION_TRAIL_MINUTES', 60, minimum=5, maximum=480
+)
+if TRACKING_REGION_SOUTH_LAT >= TRACKING_REGION_NORTH_LAT:
+    raise ImproperlyConfigured('TRACKING_REGION_SOUTH_LAT must be below TRACKING_REGION_NORTH_LAT.')
+if TRACKING_REGION_WEST_LNG >= TRACKING_REGION_EAST_LNG:
+    raise ImproperlyConfigured('TRACKING_REGION_WEST_LNG must be west of TRACKING_REGION_EAST_LNG.')
 
 
 
@@ -216,8 +267,28 @@ WSGI_APPLICATION = 'afn_service_management.wsgi.application'
 # Database configuration with environment variable support
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 DATABASE_ENGINE = os.environ.get('DATABASE_ENGINE', 'sqlite3').lower()
+USE_STAGING_TEST_DATABASE = IS_TEST and env_bool('USE_STAGING_TEST_DATABASE', default=False)
 
-if IS_TEST:
+if USE_STAGING_TEST_DATABASE:
+    staging_test_database_url = os.environ.get('STAGING_TEST_DATABASE_URL', '').strip()
+    staging_test_database_name = os.environ.get('STAGING_TEST_DATABASE_NAME', '').strip()
+    staging_confirmation = os.environ.get('STAGING_TEST_CONFIRM_DISPOSABLE', '').strip().lower()
+    if staging_confirmation != 'disposable-staging':
+        raise ImproperlyConfigured(
+            'Set STAGING_TEST_CONFIRM_DISPOSABLE=disposable-staging before using the staging test database.'
+        )
+    if not staging_test_database_url:
+        raise ImproperlyConfigured('STAGING_TEST_DATABASE_URL is required for staging database tests.')
+    if not staging_test_database_name.lower().startswith('test_'):
+        raise ImproperlyConfigured('STAGING_TEST_DATABASE_NAME must start with test_.')
+
+    staging_database_config = build_postgres_config_from_url(staging_test_database_url)
+    if staging_test_database_name == staging_database_config['NAME']:
+        raise ImproperlyConfigured('The staging test database must differ from the connection database.')
+    staging_database_config['TEST'] = {'NAME': staging_test_database_name}
+    DATABASES = {'default': staging_database_config}
+    _settings_logger.info('Using the explicitly confirmed disposable PostgreSQL staging test database')
+elif IS_TEST:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -242,6 +313,11 @@ elif DATABASE_ENGINE == 'postgresql':
             'OPTIONS': {
                 'connect_timeout': int(os.environ.get('DB_CONNECT_TIMEOUT', '10')),
                 'sslmode': os.environ.get('DB_SSLMODE', 'prefer'),
+                **(
+                    {'sslrootcert': os.environ['DB_SSLROOTCERT'].strip()}
+                    if os.environ.get('DB_SSLROOTCERT', '').strip()
+                    else {}
+                ),
             },
             'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '60')),
         }
@@ -368,7 +444,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 15,
+    'PAGE_SIZE': 10,
     'DEFAULT_RENDERER_CLASSES': (
         [
             'rest_framework.renderers.JSONRenderer',
@@ -416,6 +492,10 @@ CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', DEFAULT_FRONTEND_ORIGINS
 FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL') or (
     CORS_ALLOWED_ORIGINS[0] if CORS_ALLOWED_ORIGINS else 'http://localhost:5173'
 )
+EMAIL_VERIFICATION_EXPIRY_HOURS = int(os.environ.get('EMAIL_VERIFICATION_EXPIRY_HOURS', '24'))
+EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS = int(
+    os.environ.get('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', '60')
+)
 
 # Email settings (configure for your email provider)
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
@@ -456,30 +536,88 @@ ADMIN_PHONE_NUMBERS = os.environ.get('ADMIN_PHONE_NUMBERS', '').split(',') if os
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=False)
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 
 # Django Channels configuration for WebSocket support
 ASGI_APPLICATION = 'afn_service_management.asgi.application'
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [('127.0.0.1', 6379)],
-            'capacity': 10000,
-            'expiry': 10 * 60,
-        },
-    }
-}
+USE_REDIS = env_bool('USE_REDIS', default=IS_PRODUCTION)
+REDIS_URL = os.environ.get(
+    'REDIS_URL',
+    '' if IS_PRODUCTION else 'redis://127.0.0.1:6379/0',
+).strip()
 
-# Fallback to in-memory layer if Redis is unavailable (development only)
-if not os.environ.get('USE_REDIS', '').lower() in ('true', '1', 'yes'):
+if USE_REDIS:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [REDIS_URL],
+                'capacity': int(os.environ.get('CHANNEL_CAPACITY', '10000')),
+                'expiry': int(os.environ.get('CHANNEL_EXPIRY_SECONDS', str(10 * 60))),
+            },
+        }
+    }
+else:
+    # Each process has its own isolated layer. This is suitable only for local
+    # development and tests, never for a multi-process production deployment.
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels.layers.InMemoryChannelLayer',
         }
     }
+
+
+def validate_production_settings():
+    """Fail startup when a production deployment would be unsafe or lossy."""
+    if not IS_PRODUCTION or IS_TEST:
+        return
+
+    errors = []
+    if DEBUG:
+        errors.append('DEBUG must be False')
+    if len(SECRET_KEY) < 50 or SECRET_KEY.startswith(('replace-', 'your-')):
+        errors.append('SECRET_KEY must be a strong, unique value of at least 50 characters')
+    if not ALLOWED_HOSTS:
+        errors.append('ALLOWED_HOSTS must contain the deployed backend hostname')
+    if CORS_ALLOW_ALL_ORIGINS:
+        errors.append('CORS_ALLOW_ALL_ORIGINS must be False')
+    if not CORS_ALLOWED_ORIGINS:
+        errors.append('CORS_ALLOWED_ORIGINS must contain the deployed frontend origin')
+    if not CSRF_TRUSTED_ORIGINS:
+        errors.append('CSRF_TRUSTED_ORIGINS must contain the deployed frontend origin')
+    if not FRONTEND_BASE_URL.startswith('https://'):
+        errors.append('FRONTEND_BASE_URL must use HTTPS')
+    if not ENABLE_HTTPS:
+        errors.append('ENABLE_HTTPS must be True')
+    if DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
+        errors.append('production must use PostgreSQL via DATABASE_URL or DATABASE_ENGINE=postgresql')
+    if not USE_CLOUDINARY_MEDIA and not env_bool('ALLOW_LOCAL_MEDIA_IN_PRODUCTION', default=False):
+        errors.append(
+            'Cloudinary credentials are required for durable production uploads '
+            '(or explicitly set ALLOW_LOCAL_MEDIA_IN_PRODUCTION=True when using a persistent volume)'
+        )
+    if not USE_REDIS and not env_bool('ALLOW_INMEMORY_CHANNEL_LAYER_IN_PRODUCTION', default=False):
+        errors.append(
+            'USE_REDIS=True and REDIS_URL are required for production WebSockets '
+            '(or explicitly set ALLOW_INMEMORY_CHANNEL_LAYER_IN_PRODUCTION=True for a single-process deployment)'
+        )
+    if USE_REDIS and not REDIS_URL:
+        errors.append('REDIS_URL must be set when USE_REDIS=True')
+    if EMAIL_USE_TLS and EMAIL_USE_SSL:
+        errors.append('EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be True')
+    if EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
+        if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD:
+            errors.append('EMAIL_HOST_USER and EMAIL_HOST_PASSWORD are required for SMTP email')
+
+    if errors:
+        formatted = '\n - '.join(errors)
+        raise ImproperlyConfigured(f'Invalid production configuration:\n - {formatted}')
+
+
+validate_production_settings()
 
 if IS_TEST:
     REST_FRAMEWORK['DEFAULT_THROTTLE_CLASSES'] = []

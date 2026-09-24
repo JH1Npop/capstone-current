@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:e2e": "vite --configLoader runner --host 127.0.0.1 --port 5174",
+    "dev:e2e": "vite --configLoader runner --host 127.0.0.1",
     "dev:full": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\dev-full.ps1",
     "build": "vite build --configLoader runner",
     "build:pythonanywhere": "vite build --configLoader runner --mode pythonanywhere",

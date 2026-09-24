@@ -12,10 +12,11 @@ const toNumber = (value, fallback = null) => {
 
 const normalizeInventoryReservation = (reservation) => ({
   ...reservation,
+  reservationCode: reservation?.reservation_code || (reservation?.id != null ? `RSV-${String(reservation.id).padStart(6, '0')}` : ''),
   itemName: reservation?.item_name || reservation?.itemName || 'Equipment',
   itemSku: reservation?.item_sku || reservation?.itemSku || '',
   quantity: toNumericId(reservation?.quantity, 0),
-  status: reservation?.status || 'pending',
+  status: String(reservation?.status || 'pending').toLowerCase(),
   requiredDate: reservation?.required_date || reservation?.requiredDate || null,
   technicianName: reservation?.technician_name || reservation?.technicianName || ''
 });
@@ -41,10 +42,21 @@ const normalizeTechnicianJob = (job) => ({
     : [],
   service: job.service || job.service_type || job.serviceType || 'Service',
   serviceType: job.service_type || job.serviceType || job.service || 'Service',
+  serviceTypes: (Array.isArray(job?.service_types) ? job.service_types : []).map((serviceType) => ({
+    id: toNumericId(serviceType?.id),
+    name: serviceType?.name || 'Service',
+    estimatedDurationMinutes: toNumber(serviceType?.estimated_duration_minutes ?? serviceType?.estimatedDurationMinutes, 0),
+    procedures: Array.isArray(serviceType?.procedures) ? serviceType.procedures : [],
+    requiredEquipment: Array.isArray(serviceType?.required_equipment) ? serviceType.required_equipment : [],
+  })),
   ticketId: toNumericId(job.id, toNumericId(job.ticketId, toNumericId(job.ticket_id))),
   ticketType: job.ticket_type || job.ticketType || 'installation',
-  ticketCode: job.ticket_id || (job.id != null ? `TKT-${job.id}` : ''),
+  ticketCode: job.ticket_id || (job.id != null ? `TKT-${String(job.id).padStart(4, '0')}` : ''),
   scheduledDate: job.scheduledDate || job.scheduled_date,
+  scheduledTime: job.scheduled_time || job.scheduledTime || null,
+  scheduledTimeSlot: job.scheduled_time_slot || job.scheduledTimeSlot || '',
+  estimatedDurationMinutes: toNumber(job?.estimated_duration_minutes ?? job?.estimatedDurationMinutes, 0),
+  requestDescription: job?.request_description || job?.requestDescription || '',
   completedDate: job.completed_date || job.completedDate || null,
   address: job.address || job.location || '',
   location: job.location || job.address || '',
@@ -60,6 +72,8 @@ const normalizeTechnicianJob = (job) => ({
     : [],
   checklistCompleted: Boolean(job?.checklist_completed ?? job?.checklistCompleted),
   checklistCompletedAt: job?.checklist_completed_at || job?.checklistCompletedAt || null,
+  checklistTotalSteps: toNumericId(job?.checklist_total_steps ?? job?.checklistTotalSteps, 0),
+  checklistCompletedSteps: toNumericId(job?.checklist_completed_steps ?? job?.checklistCompletedSteps, 0),
   completionProofImages: Array.isArray(job?.completion_proof_images)
     ? job.completion_proof_images
     : (Array.isArray(job?.completionProofImages) ? job.completionProofImages : []),
@@ -75,6 +89,12 @@ const normalizeTechnicianJob = (job) => ({
   warrantyNotes: job?.warranty_notes || job?.warrantyNotes || '',
   clientRating: job?.client_rating ?? job?.clientRating ?? null,
   clientFeedback: job?.client_feedback || job?.clientFeedback || '',
+  installedEquipment: Array.isArray(job?.installed_equipment) ? job.installed_equipment : [],
+  fieldServiceReports: Array.isArray(job?.field_service_reports) ? job.field_service_reports : [],
+  generatedDocuments: Array.isArray(job?.generated_documents) ? job.generated_documents : [],
+  startTime: job?.start_time || job?.startTime || null,
+  endTime: job?.end_time || job?.endTime || null,
+  durationMinutes: toNumber(job?.duration_minutes ?? job?.durationMinutes),
   crewSummary: Array.isArray(job?.crew_members)
     ? job.crew_members.map((member) => member?.name || member?.username || 'Technician').join(', ')
     : ''
@@ -193,11 +213,23 @@ export const updateTechnicianProfile = async (techNameOrPayload, updates) => {
   }
 };
 
-export const fetchTechnicianHistory = async (techName) => {
+export const fetchTechnicianHistory = async (techName, filters = {}) => {
   try {
-    const { data } = await api.get('/technician/history/', { params: { techName } });
+    const params = { techName };
+    if (filters.search) params.search = filters.search;
+    if (filters.dateFrom) params.date_from = filters.dateFrom;
+    if (filters.dateTo) params.date_to = filters.dateTo;
+    if (filters.page) params.page = filters.page;
+    if (filters.pageSize) params.page_size = filters.pageSize;
+    const { data } = await api.get('/technician/history/', { params });
     const historyArray = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
-    return Array.isArray(historyArray) ? historyArray.map(normalizeTechnicianJob) : [];
+    return {
+      total: Array.isArray(data) ? historyArray.length : Number(data?.total || 0),
+      page: Array.isArray(data) ? 1 : Number(data?.page || 1),
+      pageSize: Array.isArray(data) ? historyArray.length : Number(data?.page_size || filters.pageSize || 10),
+      totalPages: Array.isArray(data) ? 1 : Number(data?.total_pages || 1),
+      results: Array.isArray(historyArray) ? historyArray.map(normalizeTechnicianJob) : [],
+    };
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to load technician history.'));
   }
@@ -291,7 +323,18 @@ export const submitInspectionChecklist = async (ticketId, checklistData) => {
     
     if (checklistData.notes) payload.additional_notes = checklistData.notes;
     
-    const { data } = await api.post('/services/inspections/', payload);
+    // Resume an incomplete inspection instead of failing on the ticket's
+    // one-to-one checklist constraint after a temporary upload/network error.
+    const { data: existingResponse } = await api.get('/services/inspections/', {
+      params: { ticket: ticketId },
+    });
+    const existingInspections = Array.isArray(existingResponse)
+      ? existingResponse
+      : existingResponse?.results || [];
+    const existingInspection = existingInspections.find((inspection) => !inspection.is_completed);
+    const { data } = existingInspection
+      ? await api.patch(`/services/inspections/${existingInspection.id}/`, payload)
+      : await api.post('/services/inspections/', payload);
     
     if (checklistData.photos && checklistData.photos.length > 0) {
       const photoFormData = new FormData();

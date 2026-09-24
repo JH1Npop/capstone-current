@@ -1,6 +1,7 @@
 # Auto-split from users/views.py
 from django.db import transaction
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
 from users.views.helpers import *  # noqa: F401,F403
 
@@ -242,7 +243,6 @@ class AdminClientsViewSet(viewsets.ViewSet):
                     user = serializer.save()
                     user.role = 'client'
                     user.save(update_fields=['role'])
-                    from users.views.helpers import _send_admin_created_verification
                     _send_admin_created_verification(user, request)
             except Exception as exc:
                 import logging
@@ -333,6 +333,10 @@ class AdminUsersViewSet(viewsets.ViewSet):
         """Update a user"""
         try:
             user = User.objects.get(id=pk)
+            try:
+                ensure_actor_can_manage_account(request.user, user)
+            except PermissionError as exc:
+                raise PermissionDenied(str(exc))
             serializer = UserUpdateSerializer(user, data=request.data, partial=True, context={'request': request})
             if serializer.is_valid():
                 serializer.save()
@@ -345,8 +349,10 @@ class AdminUsersViewSet(viewsets.ViewSet):
         """Delete a user"""
         try:
             user = User.objects.get(id=pk)
-            if user.role == 'superadmin':
-                return Response({'error': 'The superadmin account cannot be deleted.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                ensure_actor_can_manage_account(request.user, user)
+            except PermissionError as exc:
+                raise PermissionDenied(str(exc))
             user.status = 'inactive'
             user.is_active = False
             user.save(update_fields=['status', 'is_active'])

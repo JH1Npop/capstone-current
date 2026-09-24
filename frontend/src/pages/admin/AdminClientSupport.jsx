@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { FiCheckCircle, FiClock, FiMessageSquare, FiRefreshCw, FiSend } from 'react-icons/fi';
+import { formatSupportCaseId } from '../../utils/roleIds';
 
 const CLOSED_STATUSES = ['resolved', 'closed'];
 
@@ -23,7 +24,7 @@ const STATUS_LABELS = {
 
 const CATEGORY_LABELS = {
   general: 'General',
-  billing: 'Billing',
+  billing: 'Purchase record',
   schedule: 'Schedule',
   technical: 'Technical',
   complaint: 'Service concern',
@@ -168,7 +169,6 @@ export default function AdminClientSupport() {
       ) : null}
 
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-slate-900">Client Support</h1>
         <p className="text-sm text-slate-500">Respond to customer support cases, status updates, and ongoing conversations.</p>
       </div>
 
@@ -240,7 +240,7 @@ export default function AdminClientSupport() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-slate-950">
-                        {supportCase.case_code ? `[${supportCase.case_code}] ` : ''}{supportCase.subject}
+                        [{supportCase.case_code || formatSupportCaseId(supportCase.id)}] {supportCase.subject}
                       </p>
                       <p className="mt-1 truncate text-xs text-slate-500">{supportCase.client_name}</p>
                     </div>
@@ -257,7 +257,7 @@ export default function AdminClientSupport() {
           </div>
         </aside>
 
-        <main className="min-h-0 flex h-full flex-col bg-slate-50">
+        <div className="min-h-0 flex h-full flex-col bg-slate-50">
           {selectedCase ? (
             <>
               <header className="border-b border-slate-200 bg-white p-4">
@@ -266,7 +266,7 @@ export default function AdminClientSupport() {
                     <div className="flex flex-wrap items-center gap-2">
                       <FiMessageSquare className="text-slate-400" />
                       <h3 className="truncate text-base font-semibold text-slate-950">
-                        {selectedCase.case_code ? `[${selectedCase.case_code}] ` : ''}{selectedCase.subject}
+                        [{selectedCase.case_code || formatSupportCaseId(selectedCase.id)}] {selectedCase.subject}
                       </h3>
                     </div>
                     <p className="mt-1 text-sm text-slate-500">
@@ -366,7 +366,7 @@ export default function AdminClientSupport() {
           ) : (
             <div className="grid flex-1 place-items-center text-sm text-slate-500">Select a support case.</div>
           )}
-        </main>
+        </div>
       </section>
     </Layout>
   );

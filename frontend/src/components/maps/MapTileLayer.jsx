@@ -8,11 +8,6 @@ const TILE_LAYERS = {
     label: 'Map',
     url: MAP_TILE_URL,
     attribution: MAP_ATTRIBUTION
-  },
-  clean2d: {
-    label: '2D',
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
   }
 };
 
@@ -23,6 +18,10 @@ export default function MapTileLayer({ defaultLayer = 'map' }) {
   const layerOptions = useMemo(() => Object.entries(TILE_LAYERS), []);
 
   useEffect(() => {
+    if (layerOptions.length < 2) {
+      return undefined;
+    }
+
     const control = L.control({ position: 'topright' });
 
     control.onAdd = () => {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   FiActivity,
+  FiBell,
   FiCalendar,
   FiClipboard,
   FiFileText,
@@ -19,15 +20,19 @@ import {
   FiUser,
   FiUsers
 } from 'react-icons/fi';
-import { fetchDashboardStats, fetchNotifications } from '../../api/api';
+import { fetchDashboardStats } from '../../api/api';
+import ConfirmationDialog from '../shared/ConfirmationDialog';
 import {
   ADMIN_JOB_HISTORY_CAPABILITIES,
+  COMMUNICATIONS_STAFF_VIEW_CAPABILITIES,
+  COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES,
   INVENTORY_VIEW_CAPABILITIES,
   DOCUMENTS_VIEW_CAPABILITIES,
   ANALYTICS_VIEW_CAPABILITIES,
   REPORTS_VIEW_CAPABILITIES,
   AUDIT_VIEW_CAPABILITIES,
   SERVICE_CATALOG_VIEW_CAPABILITIES,
+  SYSTEM_SETTINGS_VIEW_CAPABILITIES,
   PUBLIC_SITE_VIEW_CAPABILITIES,
   AFTER_SALES_CASE_CAPABILITIES,
   AFTER_SALES_DASHBOARD_CAPABILITIES,
@@ -47,6 +52,7 @@ import {
   hasAnyCapability
 } from '../../rbac';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 
 /* ─── Menu builders (unchanged logic, same as before) ─── */
 
@@ -58,7 +64,7 @@ const getAfterSalesItems = (stats, user) => {
 
   if (canViewDashboard || canViewCases) {
     items.push({
-      label: 'After-Sales Follow-Ups',
+      label: 'After-Sales Cases',
       path: '/admin/after-sales-cases',
       icon: FiHome
     });
@@ -80,6 +86,9 @@ const getAdminMenu = (user, afterSalesItems) => {
   const canViewTickets = hasAnyCapability(user, SUPERVISOR_TICKETS_CAPABILITIES);
   const canViewDispatch = hasAnyCapability(user, SUPERVISOR_DISPATCH_CAPABILITIES);
   const canViewTracking = hasAnyCapability(user, SUPERVISOR_TRACKING_CAPABILITIES);
+  const canViewStaffMessages = hasAnyCapability(user, COMMUNICATIONS_STAFF_VIEW_CAPABILITIES);
+  const canViewClientSupport = hasAnyCapability(user, COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES);
+  const canViewSystemSettings = hasAnyCapability(user, SYSTEM_SETTINGS_VIEW_CAPABILITIES);
 
   const overviewItems = [
     canViewDashboard ? { label: 'Dashboard', path: '/admin/dashboard', icon: FiHome } : null,
@@ -97,11 +106,13 @@ const getAdminMenu = (user, afterSalesItems) => {
   const serviceSetupItems = [
     canViewServices ? { label: 'Services', path: '/admin/services', icon: FiTool } : null,
     canViewInventory ? { label: 'Inventory', path: '/admin/inventory', icon: FiPackage } : null,
-    canViewDocuments ? { label: 'Documents', path: '/admin/documents', icon: FiFileText } : null
+    canViewDocuments ? { label: 'Documents', path: '/admin/documents', icon: FiFileText } : null,
+    canViewDocuments ? { label: 'Sales Records', path: '/admin/sales-records', icon: FiFileText } : null
   ].filter(Boolean);
   const communicationItems = [];
-  communicationItems.push({ label: 'Messages', path: '/admin/messages', icon: FiMessageSquare });
-  communicationItems.push({ label: 'Client Support', path: '/admin/client-support', icon: FiMessageSquare });
+  if (canViewStaffMessages) communicationItems.push({ label: 'Messages', path: '/admin/messages', icon: FiMessageSquare });
+  if (canViewClientSupport) communicationItems.push({ label: 'Client Support', path: '/admin/client-support', icon: FiMessageSquare });
+  communicationItems.push({ label: 'Notifications', path: '/admin/notifications', icon: FiBell });
   const adminControlItems = [];
   const canViewDirectory = canViewAdminUserDirectory(user);
   const canViewLandingPage = hasAnyCapability(user, PUBLIC_SITE_VIEW_CAPABILITIES);
@@ -115,7 +126,7 @@ const getAdminMenu = (user, afterSalesItems) => {
   adminControlItems.push(
     canViewLandingPage ? { label: 'Landing Page', path: '/admin/landing-page', icon: FiGlobe } : null,
     canViewAudit ? { label: 'Activity Logs', path: '/admin/activity-logs', icon: FiActivity } : null,
-    { label: 'Settings', path: '/admin/settings', icon: FiSettings },
+    canViewSystemSettings ? { label: 'Settings', path: '/admin/settings', icon: FiSettings } : null,
     { label: 'Profile', path: '/admin/profile', icon: FiUser }
   );
   const visibleAdminControlItems = adminControlItems.filter(Boolean);
@@ -151,6 +162,7 @@ const getTechnicianMenu = (user) => {
   if (hasAnyCapability(user, TECHNICIAN_NAVIGATION_CAPABILITIES)) workItems.push({ label: 'Navigation', path: '/technician/map-navigation', icon: FiMap });
   if (hasAnyCapability(user, TECHNICIAN_CHECKLIST_CAPABILITIES)) workItems.push({ label: 'Checklist', path: '/technician/checklist', icon: FiClipboard });
   if (hasAnyCapability(user, TECHNICIAN_MESSAGES_CAPABILITIES)) communicationItems.push({ label: 'Messages', path: '/technician/messages', icon: FiMessageSquare });
+  communicationItems.push({ label: 'Notifications', path: '/technician/notifications', icon: FiBell });
   if (hasAnyCapability(user, TECHNICIAN_PROFILE_CAPABILITIES)) accountItems.push({ label: 'Profile', path: '/technician/profile', icon: FiSettings });
 
   return {
@@ -178,12 +190,14 @@ const roleMenu = {
           { label: 'Solar Estimates', path: '/client/solar-estimates', icon: FiSun },
           { label: 'My Requests', path: '/client/requests', icon: FiClipboard },
           { label: 'Service History', path: '/client/service-history', icon: FiFileText },
+          { label: 'Purchase Records', path: '/client/purchase-records', icon: FiPackage },
           { label: 'Client Support', path: '/client/support', icon: FiMessageSquare }
         ]
       },
       {
         title: 'Account',
         items: [
+          { label: 'Notifications', path: '/client/notifications', icon: FiBell },
           { label: 'Profile', path: '/client/profile', icon: FiSettings }
         ]
       }
@@ -195,6 +209,7 @@ const roleMenu = {
 const badgeColors = {
   sky:     'bg-sky-400/20 text-sky-300',
   rose:    'bg-rose-400/20 text-rose-300',
+  red:     'bg-red-500/25 text-red-100',
   emerald: 'bg-emerald-400/20 text-emerald-300',
   amber:   'bg-amber-400/20 text-amber-300',
   orange:  'bg-orange-400/20 text-orange-300',
@@ -258,8 +273,17 @@ const routeForUnreadNotification = (notification, role) => {
   return null;
 };
 
-const buildUnreadBadges = (notifications, role) => {
+const notificationPathForRole = (role) => {
+  if (role === 'client') return '/client/notifications';
+  if (role === 'technician') return '/technician/notifications';
+  if (role === 'admin' || role === 'superadmin') return '/admin/notifications';
+  return null;
+};
+
+const buildUnreadBadges = (notifications, role, unreadCount = 0) => {
   const counts = {};
+  const notificationsPath = notificationPathForRole(role);
+  if (notificationsPath && unreadCount > 0) counts[notificationsPath] = unreadCount;
   (notifications || [])
     .filter((notification) => notification?.status === 'unread')
     .forEach((notification) => {
@@ -280,7 +304,7 @@ const withUnreadBadges = (menu, unreadBadges) => ({
       return {
         ...item,
         badge: count > 99 ? '99+' : count,
-        badgeTone: 'amber',
+        badgeTone: 'red',
       };
     }),
   })),
@@ -290,15 +314,38 @@ const withUnreadBadges = (menu, unreadBadges) => ({
 
 export default function Sidebar({ user, isOpen, onClose, collapsed = false, animate = false }) {
   const { logout } = useAuth();
+  const {
+    notifications,
+    unreadCount,
+    markAllNotificationsRead,
+    markNotificationsRead,
+  } = useNotifications();
   const navRef = useRef(null);
+  const logoutButtonRef = useRef(null);
   const location = useLocation();
   const [afterSalesStats, setAfterSalesStats] = useState(null);
-  const [unreadBadges, setUnreadBadges] = useState({});
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
   const role = user?.role;
   const afterSalesItems = canAccessAfterSalesFeatures(user) ? getAfterSalesItems(afterSalesStats, user) : [];
   const shouldLoadAfterSalesStats =
     canAccessAfterSalesFeatures(user) && hasAnyCapability(user, AFTER_SALES_DASHBOARD_CAPABILITIES);
+
+  const closeLogoutConfirm = () => {
+    if (logoutPending) return;
+    setShowLogoutConfirm(false);
+    window.requestAnimationFrame(() => logoutButtonRef.current?.focus());
+  };
+
+  const confirmLogout = async () => {
+    setLogoutPending(true);
+    try {
+      await logout();
+    } finally {
+      setLogoutPending(false);
+      setShowLogoutConfirm(false);
+    }
+  };
 
   useEffect(() => {
   const savedPosition = sessionStorage.getItem(
@@ -335,32 +382,6 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
     return () => { isMounted = false; };
   }, [shouldLoadAfterSalesStats]);
 
-  useEffect(() => {
-    let isMounted = true;
-    if (!role) {
-      setUnreadBadges({});
-      return () => { isMounted = false; };
-    }
-
-    const loadUnreadBadges = async () => {
-      try {
-        const notifications = await fetchNotifications();
-        if (isMounted) setUnreadBadges(buildUnreadBadges(notifications, role));
-      } catch {
-        if (isMounted) setUnreadBadges({});
-      }
-    };
-
-    loadUnreadBadges();
-    window.addEventListener('afn:notifications-updated', loadUnreadBadges);
-    const intervalId = window.setInterval(loadUnreadBadges, 45000);
-    return () => {
-      isMounted = false;
-      window.removeEventListener('afn:notifications-updated', loadUnreadBadges);
-      window.clearInterval(intervalId);
-    };
-  }, [role, user?.id]);
-
   if (!role) return null;
 
   const menu = role === 'admin' || role === 'superadmin'
@@ -371,7 +392,27 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
 
   if (!menu) return null;
 
-  const displayMenu = withUnreadBadges(menu, unreadBadges);
+  const displayMenu = withUnreadBadges(menu, buildUnreadBadges(notifications, role, unreadCount));
+
+  const clearUnreadBadgeForPath = (path) => {
+    if (path === notificationPathForRole(role)) {
+      if (unreadCount > 0) {
+        void markAllNotificationsRead().catch(() => {});
+      }
+      return;
+    }
+
+    const notificationIds = notifications
+      .filter((notification) => (
+        notification?.status === 'unread' &&
+        routeForUnreadNotification(notification, role) === path
+      ))
+      .map((notification) => notification.id);
+
+    if (notificationIds.length > 0) {
+      void markNotificationsRead(notificationIds);
+    }
+  };
 
   const isItemActive = (item) => {
     const [pathWithSearch, hashFragment = ''] = item.path.split('#');
@@ -490,9 +531,10 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
                       navRef.current?.scrollTop || 0
                     );
 
+                    clearUnreadBadgeForPath(item.path);
                     onClose?.();
                   }}
-                  title={collapsed ? item.label : undefined}
+                  title={item.label}
                   className={() =>
                     `group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-200 ${collapsed ? 'lg:justify-center lg:px-1.5' : ''} ${
                       itemIsActive
@@ -524,7 +566,9 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
                     item.badge !== null && (
                       <span
                         className={`${collapsed ? 'lg:absolute lg:right-1 lg:top-0 lg:min-w-[16px] lg:px-1 lg:text-[9px]' : 'ml-auto'} inline-flex min-w-[22px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                          itemIsActive
+                          itemIsActive && item.badgeTone === 'red'
+                            ? 'bg-red-500 text-white'
+                            : itemIsActive
                             ? 'bg-brand-300/20 text-brand-100'
                             : badgeColors[item.badgeTone] ||
                               'bg-slate-100 text-slate-500'
@@ -569,38 +613,32 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
       </div>
     </div>
 
-    {showLogoutConfirm ? (
-      <div className={`mt-2.5 flex items-center gap-2 ${collapsed ? 'lg:flex-col lg:gap-1' : ''}`}>
-        <button
-          type="button"
-          onClick={logout}
-          className={`flex-1 rounded-[8px] bg-red-500/80 px-2 py-1.5 text-[11px] font-medium text-white ring-1 ring-red-500/50 transition hover:bg-red-500 ${collapsed ? 'lg:w-full lg:px-1 lg:py-1' : ''}`}
-          title="Confirm Logout"
-        >
-          {collapsed ? 'Yes' : 'Confirm'}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowLogoutConfirm(false)}
-          className={`flex-1 rounded-[8px] bg-white/10 px-2 py-1.5 text-[11px] font-medium text-white ring-1 ring-white/10 transition hover:bg-white/15 ${collapsed ? 'lg:w-full lg:px-1 lg:py-1' : ''}`}
-          title="Cancel"
-        >
-          {collapsed ? 'No' : 'Cancel'}
-        </button>
-      </div>
-    ) : (
-      <button
-        type="button"
-        onClick={() => setShowLogoutConfirm(true)}
-        className={`mt-2.5 w-full rounded-[8px] bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white ring-1 ring-white/10 transition hover:bg-white/15 ${collapsed ? 'lg:px-2 lg:text-[0px]' : ''}`}
-        title={collapsed ? 'Logout' : undefined}
-      >
-        <span className={collapsed ? 'lg:sr-only' : ''}>Logout</span>
-        <span className={`hidden text-[11px] ${collapsed ? 'lg:inline' : ''}`}>Out</span>
-      </button>
-    )}
+    <button
+      ref={logoutButtonRef}
+      type="button"
+      onClick={() => setShowLogoutConfirm(true)}
+      className={`mt-2.5 w-full rounded-[8px] bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white ring-1 ring-white/10 transition hover:bg-white/15 ${collapsed ? 'lg:px-2 lg:text-[0px]' : ''}`}
+      title={collapsed ? 'Logout' : undefined}
+      aria-haspopup="dialog"
+      aria-expanded={showLogoutConfirm}
+    >
+      <span className={collapsed ? 'lg:sr-only' : ''}>Logout</span>
+      <span className={`hidden text-[11px] ${collapsed ? 'lg:inline' : ''}`}>Out</span>
+    </button>
   </div>
 </aside>
+      {showLogoutConfirm ? (
+        <ConfirmationDialog
+          title="Log out?"
+          message="You'll need to sign in again to access your account."
+          tone="danger"
+          icon="warning"
+          confirmLabel="Log out"
+          loading={logoutPending}
+          onConfirm={confirmLogout}
+          onCancel={closeLogoutConfirm}
+        />
+      ) : null}
     </>
   );
 }

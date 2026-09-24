@@ -6,6 +6,13 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from .models import Message
 from services.models import ServiceTicket
+from users.rbac import (
+    COMMUNICATIONS_STAFF_VIEW_CAPABILITIES,
+    COMMUNICATIONS_SUPPORT_MANAGE_CAPABILITIES,
+    COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES,
+    TECHNICIAN_MESSAGES_CAPABILITIES,
+    user_has_any_capability,
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -21,7 +28,12 @@ class MessageConsumer(AsyncWebsocketConsumer):
         """Handle WebSocket connection."""
         user = self.scope['user']
         
-        if not user.is_authenticated:
+        self.user_group_name = None
+        if (
+            not user.is_authenticated
+            or not user.is_active
+            or getattr(user, 'status', None) != 'active'
+        ):
             await self.close()
             return
         
@@ -41,11 +53,13 @@ class MessageConsumer(AsyncWebsocketConsumer):
         """Handle WebSocket disconnection."""
         user = self.scope['user']
         
-        await self.channel_layer.group_discard(
-            self.user_group_name,
-            self.channel_name
-        )
-        logger.info(f"User {user.username} ({user.id}) disconnected from WebSocket")
+        if self.user_group_name:
+            await self.channel_layer.group_discard(
+                self.user_group_name,
+                self.channel_name
+            )
+        if user.is_authenticated:
+            logger.info(f"User {user.username} ({user.id}) disconnected from WebSocket")
 
     async def receive(self, text_data):
         """
@@ -71,7 +85,7 @@ class MessageConsumer(AsyncWebsocketConsumer):
             await self.send_error('Invalid JSON format')
         except Exception as e:
             logger.error(f"Error in receive: {e}")
-            await self.send_error(f'Error: {str(e)}')
+            await self.send_error('Unable to process this WebSocket message.')
 
     async def handle_send_message(self, data):
         """
@@ -89,10 +103,16 @@ class MessageConsumer(AsyncWebsocketConsumer):
             if not ticket_id or not receiver_id or not message_text:
                 await self.send_error('Missing required fields: ticket_id, receiver_id, message_text')
                 return
+            if len(message_text) > 5000:
+                await self.send_error('Message text must be 5000 characters or fewer.')
+                return
             
             # Check permissions and save message
             message = await self.save_message(user.id, ticket_id, receiver_id, message_text)
-            
+            if not message:
+                await self.send_error('You cannot send a message to that user for this ticket.')
+                return
+
             if message:
                 # Prepare message data for broadcast
                 message_data = {
@@ -135,8 +155,16 @@ class MessageConsumer(AsyncWebsocketConsumer):
         """
         user = self.scope['user']
         receiver_id = data.get('receiver_id')
-        
-        if not receiver_id:
+
+        if not receiver_id or not data.get('ticket_id'):
+            return
+        allowed = await self.can_send_typing(
+            user.id,
+            data.get('ticket_id'),
+            receiver_id,
+        )
+        if not allowed:
+            await self.send_error('You cannot send typing updates to that user for this ticket.')
             return
         
         typing_data = {
@@ -158,8 +186,8 @@ class MessageConsumer(AsyncWebsocketConsumer):
     def save_message(self, sender_id, ticket_id, receiver_id, message_text):
         """Save message to database with proper permissions."""
         try:
-            sender = User.objects.get(id=sender_id)
-            receiver = User.objects.get(id=receiver_id)
+            sender = User.objects.get(id=sender_id, is_active=True, status='active')
+            receiver = User.objects.get(id=receiver_id, is_active=True, status='active')
             ticket = ServiceTicket.objects.get(id=ticket_id)
             
             # Verify that sender/receiver have access to this ticket
@@ -169,6 +197,18 @@ class MessageConsumer(AsyncWebsocketConsumer):
             if not self.has_permission(sender, ticket):
                 logger.warning(
                     f"User {sender.username} attempted to message but lacks permission for ticket {ticket_id}"
+                )
+                return None
+            if (
+                receiver.id == sender.id
+                or not self.can_receive_ticket_message(receiver, ticket)
+                or not self.can_send_ticket_message(sender, receiver, ticket)
+            ):
+                logger.warning(
+                    'User %s attempted to message invalid receiver %s for ticket %s',
+                    sender.id,
+                    receiver.id,
+                    ticket.id,
                 )
                 return None
             
@@ -195,19 +235,55 @@ class MessageConsumer(AsyncWebsocketConsumer):
 
     def has_permission(self, user, ticket):
         """Check if user has permission to message about this ticket."""
-        # Admins can always message
         if user.role in ('admin', 'superadmin'):
-            return True
+            return user_has_any_capability(
+                user,
+                set(COMMUNICATIONS_STAFF_VIEW_CAPABILITIES)
+                | set(COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES),
+            )
         
         # Technician can message if they're assigned.
         if user.role == 'technician':
-            return ticket.technician == user
+            return (
+                user_has_any_capability(user, TECHNICIAN_MESSAGES_CAPABILITIES)
+                and (
+                    ticket.technician_id == user.id
+                    or ticket.crew_assignments.filter(technician_id=user.id).exists()
+                )
+            )
         
         # Client can message if they're the ticket's client
         if user.role == 'client':
             return ticket.request.client == user
         
         return False
+
+    def can_receive_ticket_message(self, user, ticket):
+        if user.role in ('admin', 'superadmin'):
+            return self.has_permission(user, ticket)
+        return self.has_permission(user, ticket)
+
+    def can_send_ticket_message(self, sender, receiver, ticket):
+        if sender.role not in ('admin', 'superadmin'):
+            return self.has_permission(sender, ticket)
+        if receiver.role == 'client':
+            return user_has_any_capability(sender, COMMUNICATIONS_SUPPORT_MANAGE_CAPABILITIES)
+        return user_has_any_capability(sender, COMMUNICATIONS_STAFF_VIEW_CAPABILITIES)
+
+    @database_sync_to_async
+    def can_send_typing(self, sender_id, ticket_id, receiver_id):
+        try:
+            sender = User.objects.get(id=sender_id, is_active=True, status='active')
+            receiver = User.objects.get(id=receiver_id, is_active=True, status='active')
+            ticket = ServiceTicket.objects.get(id=ticket_id)
+        except (User.DoesNotExist, ServiceTicket.DoesNotExist, TypeError, ValueError):
+            return False
+        return (
+            sender.id != receiver.id
+            and self.has_permission(sender, ticket)
+            and self.can_receive_ticket_message(receiver, ticket)
+            and self.can_send_ticket_message(sender, receiver, ticket)
+        )
 
     async def notify_message(self, event):
         """Send message notification to WebSocket."""

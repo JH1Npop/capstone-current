@@ -233,8 +233,6 @@ Inventory:
 Communication:
 
 - `Notification`
-- `NotificationTemplate`
-- `NotificationLog`
 - `Message`
 - `CustomerSupportCase`
 
@@ -649,7 +647,7 @@ Completed/history features:
 - Client service history.
 - Service reports.
 - Coverage heatmap completed jobs.
-- `ServiceHistory`.
+- Completed `ServiceTicket` records and `ServiceStatusHistory`.
 
 Installed equipment:
 
@@ -770,9 +768,16 @@ Frontend:
 Important distinction:
 
 - Stored service location exists.
-- Device location updates exist.
+- Device location updates begin only after a technician explicitly starts
+  sharing from job Navigation and stop on request or page exit.
 - Route calculation exists.
-- Continuous real-time GPS tracking is partial and depends on submitted location updates.
+- While sharing is active, the navigation workspace submits bounded live GPS
+  updates and authorized supervisors receive fresh/stale/missing health,
+  accuracy, current-job context, and a configurable recent trail.
+- Region bounds, trail window, and retention are backend-validated settings;
+  daily automation deletes expired history and stale current coordinates.
+- This is controlled operational tracking, not undisclosed or always-on
+  background monitoring.
 
 ## 23. Client Requirement Comparison
 

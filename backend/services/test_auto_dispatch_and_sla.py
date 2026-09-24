@@ -2,7 +2,7 @@
 Comprehensive tests for auto-dispatch and SLA enforcement features.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 from django.test import TestCase
 from django.contrib.auth import get_user_model
@@ -168,6 +168,34 @@ class AutoDispatchTests(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result['technician'].username, 'tech_expert')
 
+    def test_find_best_technician_enforces_minimum_score_threshold(self):
+        skill = TechnicianSkill.objects.get(
+            technician=self.tech_expert,
+            service_type=self.ac_service,
+        )
+        skill.skill_level = 'beginner'
+        skill.save(update_fields=['skill_level'])
+        self.location.latitude = Decimal('10.000000')
+        self.location.longitude = Decimal('125.000000')
+        self.location.save(update_fields=['latitude', 'longitude'])
+
+        for offset in range(2, 5):
+            existing_request = ServiceRequest.objects.create(
+                client=self.client_user,
+                service_type=self.ac_service,
+                description=f'Existing active job {offset}',
+                status='Approved',
+            )
+            ServiceTicket.objects.create(
+                request=existing_request,
+                technician=self.tech_expert,
+                status='Not Started',
+                priority='Normal',
+                scheduled_date=timezone.localdate() + timedelta(days=offset),
+            )
+
+        self.assertIsNone(find_best_technician(self.ticket))
+
     def test_find_best_technician_skips_when_service_duration_exceeds_workday(self):
         """Test that daily capacity is based on scheduled service duration."""
         long_service = ServiceType.objects.create(
@@ -275,6 +303,28 @@ class AutoDispatchTests(TestCase):
         )
         self.ticket.scheduled_date = self.ticket.scheduled_date + timedelta(days=1)
         self.ticket.save(update_fields=['scheduled_date'])
+
+        result = find_best_technician(self.ticket)
+
+        self.assertIsNone(result)
+
+    def test_find_best_technician_skips_exact_time_overlap(self):
+        existing_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.ac_service,
+            description='Existing timed visit',
+            status='Approved',
+            preferred_date=self.ticket.scheduled_date,
+        )
+        ServiceTicket.objects.create(
+            request=existing_request,
+            technician=self.tech_expert,
+            status='Not Started',
+            scheduled_date=self.ticket.scheduled_date,
+            scheduled_time=time(hour=9),
+        )
+        self.ticket.scheduled_time = time(hour=10)
+        self.ticket.save(update_fields=['scheduled_time'])
 
         result = find_best_technician(self.ticket)
 

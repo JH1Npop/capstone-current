@@ -18,7 +18,14 @@ test.describe('Client Workspace - All Pages', () => {
 
   test('5.1 - Client Dashboard loads', async ({ page }) => {
     await visitWorkspacePage(page, '/client/dashboard', 'test-results/screenshots/05-client-dashboard.png');
-    await expect(page.locator('[class*="card"], [class*="stat"], [class*="dashboard"], [class*="grid"]').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: 'Create Service Request' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'My requests' })).toBeVisible();
+    await expect(page.getByText('Active requests', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Request Pipeline' })).toBeVisible();
+    const requestButton = page.getByRole('button', { name: 'E2E Solar Installation' }).first();
+    await expect(requestButton).toBeVisible();
+    await requestButton.focus();
+    await expect(requestButton).toBeFocused();
   });
 
   test('5.2 - Service Requests page (create new request)', async ({ page }) => {
@@ -49,11 +56,33 @@ test.describe('Client Workspace - All Pages', () => {
     await visitWorkspacePage(page, '/client/support', 'test-results/screenshots/05-client-support.png');
   });
 
-  test('5.6 - Notifications page', async ({ page }) => {
+  test('5.6 - Client Purchase Records page', async ({ page }) => {
+    await visitWorkspacePage(page, '/client/purchase-records', 'test-results/screenshots/05-client-purchase-records.png');
+    await expect(page.getByRole('heading', { name: 'Purchase Records', exact: true })).toBeVisible();
+    await expect(page.getByText(/Payments are handled outside this portal/i)).toBeVisible();
+  });
+
+  test('5.7 - Client support assistant answers portal questions', async ({ page }) => {
+    await page.goto('/client/dashboard');
+    const openAssistant = page.getByRole('button', { name: 'Open client support assistant' });
+    await expect(openAssistant).toBeVisible({ timeout: 10000 });
+    await openAssistant.click();
+
+    await expect(page.getByRole('heading', { name: 'Client Support Assistant' })).toBeVisible();
+    await page.getByRole('button', { name: 'How do I request service?' }).click();
+    await expect(page.getByText(/Open Request Service, select the service you need/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Request service', exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Where can I see what I purchased?' }).click();
+    await expect(page.getByText(/does not process billing or payments/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'View purchase records', exact: true })).toBeVisible();
+  });
+
+  test('5.8 - Notifications page', async ({ page }) => {
     await visitWorkspacePage(page, '/client/notifications', 'test-results/screenshots/05-client-notifications.png');
   });
 
-  test('5.7 - Client Profile page', async ({ page }) => {
+  test('5.9 - Client Profile page', async ({ page }) => {
     await visitWorkspacePage(page, '/client/profile', 'test-results/screenshots/05-client-profile.png');
     const hasProfileUi =
       await page.locator('input').first().isVisible({ timeout: 3000 }).catch(() => false)
@@ -62,24 +91,54 @@ test.describe('Client Workspace - All Pages', () => {
     expect(hasProfileUi).toBeTruthy();
   });
 
-  test('5.8 - Client Profile can update info', async ({ page }) => {
-    await page.goto('/client/profile');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1000);
+  test('5.10 - Client Profile saves, cancels, validates photos, and explains security', async ({ page }) => {
+    await visitWorkspacePage(page, '/client/profile');
+    await expect(page.getByRole('heading', { name: 'Password & Security' })).toBeVisible();
 
-    const editableFields = page.locator('input:not([type="hidden"]):not([readonly])');
-    const count = await editableFields.count();
+    await page.getByRole('button', { name: 'Edit Profile' }).click();
+    const firstName = page.getByLabel('First Name');
+    const originalFirstName = await firstName.inputValue();
+    await firstName.fill('Unsaved Client Name');
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('button', { name: 'Edit Profile' }).click();
+    await expect(page.getByLabel('First Name')).toHaveValue(originalFirstName);
 
-    if (count > 0) {
-      await page.screenshot({ path: 'test-results/screenshots/05-client-profile-editable.png' });
-      return;
-    }
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'not-an-image.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('not an image'),
+    });
+    await expect(page.getByRole('status')).toContainText('Choose a JPEG, PNG, WebP, or GIF image.');
 
-    const editButton = page.getByRole('button', { name: /edit/i });
-    if (await editButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await editButton.click();
-      await page.waitForTimeout(1000);
-      await page.screenshot({ path: 'test-results/screenshots/05-client-profile-edit-mode.png' });
-    }
+    const companyName = `E2E Client Company ${Date.now()}`;
+    await page.getByLabel('Company Name (Optional)').fill(companyName);
+    await page.getByLabel('Landline (Optional)').fill('0281234567');
+    const updateResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/users/me/')
+      && response.request().method() === 'PATCH'
+    ));
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    expect((await updateResponse).ok()).toBeTruthy();
+    await expect(page.getByRole('status')).toContainText('Profile updated successfully.');
+    await expect(page.getByText(companyName)).toBeVisible();
+    await expect(page.getByText('0281234567')).toBeVisible();
+
+    const securitySection = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Password & Security' }) });
+    await securitySection.getByRole('button', { name: 'Change Password' }).click();
+    await securitySection.getByLabel('Current password').fill('Password123!');
+    await securitySection.getByLabel('New password', { exact: true }).fill('DifferentPassword123!');
+    await securitySection.getByLabel('Confirm new password', { exact: true }).fill('AnotherPassword123!');
+    await securitySection.getByRole('button', { name: 'Change Password' }).click();
+    await expect(page.getByRole('status')).toContainText('do not match');
+  });
+
+  test('5.11 - Solar calculator stays inside the client workspace', async ({ page }) => {
+    await visitWorkspacePage(page, '/client/solar-estimates');
+    await page.getByRole('button', { name: 'New calculation' }).click();
+
+    await expect(page).toHaveURL(/\/client\/solar-estimates$/);
+    await expect(page.getByRole('heading', { name: 'Estimate Your Solar System' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Solar Estimates', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save estimate' })).toBeVisible();
   });
 });

@@ -507,6 +507,7 @@ export default function TechnicianMessages() {
                   onClick={handleSend}
                   disabled={sending || (!newMessage.trim() && !selectedImage)}
                   className="grid h-10 w-10 flex-none place-items-center rounded-full bg-sky-600 text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  aria-label="Send message"
                 >
                   <FiSend size={17} />
                 </button>

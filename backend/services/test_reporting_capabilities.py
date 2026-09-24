@@ -1,6 +1,9 @@
+from datetime import date
+
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from services.models import ServiceRequest, ServiceTicket, ServiceType
 from users.models import ActivityLog, User, UserCapabilityGrant
 from users.rbac import (
     ANALYTICS_VIEW,
@@ -28,13 +31,55 @@ class ReportingCapabilityTests(APITestCase):
         self.client.force_authenticate(user)
 
         self.assertEqual(self.client.get(self.analytics_url).status_code, status.HTTP_200_OK)
-        self.assertEqual(self.client.get('/api/dashboard/stats/', {'role': 'admin'}).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get('/api/dashboard/stats/', {'role': 'admin'}).status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self.client.get(self.performance_url).status_code, status.HTTP_200_OK)
         self.assertEqual(self.client.get(self.report_url).status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self.client.get(self.audit_url).status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_performance_breakdown_accepts_scheduled_date_without_assigned_datetime(self):
+        admin = self.create_admin('analytics-scheduled-date', ANALYTICS_VIEW)
+        technician = User.objects.create_user(username='scheduled-tech', password='pass', role='technician')
+        client = User.objects.create_user(username='scheduled-client', password='pass', role='client')
+        service_type = ServiceType.objects.create(name='Scheduled date regression')
+        service_request = ServiceRequest.objects.create(
+            client=client,
+            service_type=service_type,
+            description='Ticket without assigned_at',
+            status='Approved',
+        )
+        ServiceTicket.objects.create(
+            request=service_request,
+            technician=technician,
+            scheduled_date=date.today(),
+            assigned_at=None,
+            status='Ready for Service',
+        )
+        self.client.force_authenticate(admin)
+
+        response = self.client.get(
+            self.performance_url,
+            {'start_date': date.today().isoformat(), 'end_date': date.today().isoformat()},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        technician_result = next(item for item in response.data if item['technician_id'] == technician.id)
+        self.assertEqual(technician_result['total_jobs'], 1)
+
     def test_report_viewer_can_read_report_but_not_other_reporting_areas(self):
         user = self.create_admin('report-viewer', REPORTS_VIEW)
+        client = User.objects.create_user(username='report-client', password='pass', role='client')
+        service_type = ServiceType.objects.create(name='Report serializer regression')
+        service_request = ServiceRequest.objects.create(
+            client=client,
+            service_type=service_type,
+            description='Ticket that exercises report serialization',
+            status='Approved',
+        )
+        ServiceTicket.objects.create(
+            request=service_request,
+            scheduled_date=date.today(),
+            status='Ready for Service',
+        )
         self.client.force_authenticate(user)
 
         self.assertEqual(self.client.get(self.report_url).status_code, status.HTTP_200_OK)

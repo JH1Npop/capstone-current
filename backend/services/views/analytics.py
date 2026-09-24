@@ -1,4 +1,6 @@
 # Auto-split from services/views.py
+from zoneinfo import ZoneInfo
+
 from services.views.helpers import *  # noqa: F401,F403
 
 
@@ -24,6 +26,7 @@ class GISDashboardView(viewsets.ViewSet):
         technicians = User.objects.filter(
             role='technician',
             status='active',
+            is_active=True,
             technician_profile__current_latitude__isnull=False,
             technician_profile__current_longitude__isnull=False,
         ).select_related('technician_profile')
@@ -63,7 +66,7 @@ class GISDashboardView(viewsets.ViewSet):
 
         # Get all active tickets
         active_tickets = ServiceTicket.objects.filter(
-            status__in=['Not Started', 'In Progress']
+            status__in=ACTIVE_TICKET_STATUSES
         ).select_related('technician', 'request__service_type')
 
         tickets_data = []
@@ -121,16 +124,29 @@ class ServiceAnalyticsViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def dashboard_metrics(self, request):
-        """Get current dashboard metrics"""
-        today = timezone.now().date()
-
-        # Get today's analytics or create if doesn't exist
+        """Get today's live metrics without mutating analytics snapshots."""
+        today = timezone.now().astimezone(ZoneInfo('Asia/Manila')).date()
         analytics = ServiceAnalytics.objects.filter(date=today).first()
-        if not analytics:
-            analytics = self._generate_daily_analytics(today)
-
-        serializer = self.get_serializer(analytics)
-        return Response(serializer.data)
+        if analytics:
+            return Response(self.get_serializer(analytics).data)
+        service_area, popular_locations = self._calculate_service_coverage(today)
+        return Response({
+            'id': None,
+            'date': today,
+            'service_type': None,
+            'total_requests': ServiceRequest.objects.filter(request_date__date=today).count(),
+            'completed_requests': ServiceRequest.objects.filter(status='Completed', updated_at__date=today).count(),
+            'pending_requests': ServiceRequest.objects.filter(status__in=['Pending', 'Approved'], request_date__date=today).count(),
+            'cancelled_requests': ServiceRequest.objects.filter(status='Cancelled', updated_at__date=today).count(),
+            'avg_response_time_hours': self._calculate_avg_response_time(today),
+            'avg_completion_time_hours': self._calculate_avg_completion_time(today),
+            'technician_utilization_rate': self._calculate_technician_utilization(today),
+            'service_area_coverage': service_area,
+            'popular_locations': popular_locations,
+            'satisfaction_score': self._calculate_satisfaction_score(today),
+            'created_at': None,
+            'source': 'live_read_only',
+        })
 
     @action(detail=False, methods=['get'])
     def trends(self, request):
@@ -188,7 +204,7 @@ class ServiceAnalyticsViewSet(viewsets.ModelViewSet):
             .values('request__service_type__name')
             .annotate(
                 total=Count('id'),
-                completed=Count('id', filter=Q(status='Completed')),
+                completed=Count('id', filter=Q(status__in=['Completed', 'Turned Over / Accepted'])),
                 avg_rating=Avg('client_rating'),
             )
             .order_by('-total')
@@ -297,8 +313,8 @@ class ServiceAnalyticsViewSet(viewsets.ModelViewSet):
     def _calculate_avg_completion_time(self, date):
         """Calculate average time from assignment to completion"""
         tickets = ServiceTicket.objects.filter(
-            request__request_date__date=date,
-            status='Completed',
+            completed_date__date=date,
+            status__in=['Completed', 'Turned Over / Accepted'],
             assigned_at__isnull=False,
             completed_date__isnull=False
         )
@@ -314,7 +330,7 @@ class ServiceAnalyticsViewSet(viewsets.ModelViewSet):
 
     def _calculate_technician_utilization(self, date):
         """Calculate technician utilization rate (hours working / available hours)"""
-        technicians = User.objects.filter(role='technician', is_active=True)
+        technicians = User.objects.filter(role='technician', status='active', is_active=True)
 
         total_hours_worked = 0
         total_available_hours = 0
@@ -323,8 +339,8 @@ class ServiceAnalyticsViewSet(viewsets.ModelViewSet):
             # Hours worked on this date
             tickets = ServiceTicket.objects.filter(
                 technician=technician,
-                request__request_date__date=date,
-                status='Completed',
+                completed_date__date=date,
+                status__in=['Completed', 'Turned Over / Accepted'],
                 start_time__isnull=False,
                 end_time__isnull=False
             )
@@ -381,7 +397,7 @@ class ServiceAnalyticsViewSet(viewsets.ModelViewSet):
     def _calculate_satisfaction_score(self, date):
         """Calculate average customer satisfaction from ratings"""
         tickets = ServiceTicket.objects.filter(
-            request__request_date__date=date,
+            completed_date__date=date,
             client_rating__isnull=False
         )
 
@@ -414,7 +430,10 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
         # Aggregate performance over the period
         performances = TechnicianPerformance.objects.filter(
             date__gte=start_date
-        ).values('technician__username').annotate(
+        )
+        if request.user.role == 'technician':
+            performances = performances.filter(technician=request.user)
+        performances = performances.values('technician__username').annotate(
             total_completed=Sum('tickets_completed'),
             avg_satisfaction=Avg('customer_satisfaction'),
             total_hours=Sum('total_work_hours')
@@ -428,7 +447,7 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
         period = str(request.query_params.get('period') or '').strip().lower()
         use_all_time = period in {'all', 'all_time', 'lifetime'}
         days = None if use_all_time else _bounded_days(request)
-        today = timezone.now().date()
+        today = timezone.now().astimezone(ZoneInfo('Asia/Manila')).date()
         end_date = today
         if not use_all_time:
             start_param = str(request.query_params.get('start_date') or '').strip()
@@ -467,31 +486,46 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
             })
             month_cursor = next_month
 
-        technicians = User.objects.filter(role='technician', status='active')
+        technicians = User.objects.filter(role='technician', status='active', is_active=True)
+        if request.user.role == 'technician':
+            technicians = technicians.filter(pk=request.user.pk)
         results = []
 
         for tech in technicians:
             tickets = ServiceTicket.objects.filter(technician=tech)
-            
-            period_total = 0
-            period_completed = 0
-            period_active = 0
-            
-            if start_date:
-                period_total = tickets.filter(Q(assigned_at__date__gte=start_date) | Q(assigned_at__isnull=True, scheduled_date__gte=start_date)).count()
-                period_completed = tickets.filter(status='Completed').filter(Q(completed_date__date__gte=start_date) | Q(completed_date__isnull=True, end_time__date__gte=start_date)).count()
-                period_active = tickets.filter(status__in=['Not Started', 'In Progress', 'On Hold']).filter(Q(assigned_at__date__gte=start_date) | Q(assigned_at__isnull=True, scheduled_date__gte=start_date)).count()
-            else:
+            if use_all_time:
                 period_total = tickets.count()
                 period_completed = tickets.filter(status='Completed').count()
                 period_active = tickets.filter(status__in=['Not Started', 'In Progress', 'On Hold']).count()
+                completed_tickets = tickets.filter(
+                    status='Completed', start_time__isnull=False, end_time__isnull=False,
+                    end_time__gte=F('start_time'),
+                )
+                assigned_tickets = tickets.filter(assigned_at__isnull=False)
+            else:
+                assignment_period = (
+                    Q(assigned_at__date__gte=start_date, assigned_at__date__lte=end_date) |
+                    Q(assigned_at__isnull=True, scheduled_date__gte=start_date, scheduled_date__lte=end_date)
+                )
+                completion_period = (
+                    Q(completed_date__date__gte=start_date, completed_date__date__lte=end_date) |
+                    Q(completed_date__isnull=True, end_time__date__gte=start_date, end_time__date__lte=end_date)
+                )
+                period_total = tickets.filter(assignment_period).count()
+                period_completed = tickets.filter(status='Completed').filter(completion_period).count()
+                period_active = tickets.filter(
+                    assignment_period, status__in=['Not Started', 'In Progress', 'On Hold']
+                ).count()
+                completed_tickets = tickets.filter(
+                    completion_period, status='Completed', start_time__isnull=False,
+                    end_time__isnull=False, end_time__gte=F('start_time'),
+                )
+                assigned_tickets = tickets.filter(
+                    assigned_at__date__gte=start_date,
+                    assigned_at__date__lte=end_date,
+                )
 
             # Avg completion duration (start_time to end_time)
-            completed_tickets = tickets.filter(
-                status='Completed',
-                start_time__isnull=False,
-                end_time__isnull=False,
-            )
             durations = []
             for t in completed_tickets:
                 delta = t.end_time - t.start_time
@@ -499,7 +533,6 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
             avg_duration_hours = round(sum(durations) / len(durations), 2) if durations else 0
 
             # Avg response time (request created to assigned_at)
-            assigned_tickets = tickets.filter(assigned_at__isnull=False)
             response_times = []
             for t in assigned_tickets:
                 if t.request and t.request.request_date:
@@ -508,7 +541,7 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
             avg_response_hours = round(sum(response_times) / len(response_times), 2) if response_times else 0
 
             # Avg client rating
-            ratings = [t.client_rating for t in tickets if t.client_rating]
+            ratings = [t.client_rating for t in completed_tickets if t.client_rating]
             avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else None
 
             # Skills
@@ -530,7 +563,10 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
                 # Count assigned/scheduled jobs
                 assigned_dt = t.assigned_at or t.scheduled_date
                 if assigned_dt:
-                    assigned_day = timezone.localtime(assigned_dt).date() if timezone.is_aware(assigned_dt) else assigned_dt.date()
+                    if isinstance(assigned_dt, timezone.datetime):
+                        assigned_day = timezone.localtime(assigned_dt).date() if timezone.is_aware(assigned_dt) else assigned_dt.date()
+                    else:
+                        assigned_day = assigned_dt
                     month_key = assigned_day.replace(day=1).isoformat()
                     if month_key in monthly_activity_map:
                         monthly_activity_map[month_key]['total_jobs'] += 1
@@ -581,13 +617,21 @@ class DemandForecastViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def generate_forecast(self, request):
-        """Generate trend-based demand forecast using linear regression and historical seasonality"""
-        from django.db.models.functions import TruncDate
-        from django.db.models import Count
+        """Backtest and publish a forecast only when every validation gate passes."""
+        from users.forecasting_service import generate_service_forecast
+
+        if request.user.role != 'superadmin':
+            raise PermissionDenied(
+                'Forecast generation is a controlled analytics write operation reserved for superadmins and the scheduled management command.'
+            )
 
         service_type_id = request.data.get('service_type_id')
-        periods = int(request.data.get('periods', 7))  # Default 7 days
-        history_days = 30
+        try:
+            horizon_months = int(request.data.get('horizon_months', 6))
+        except (TypeError, ValueError):
+            return Response({'error': 'horizon_months must be a whole number from 1 to 12.'}, status=400)
+        if not 1 <= horizon_months <= 12:
+            return Response({'error': 'horizon_months must be between 1 and 12.'}, status=400)
 
         if not service_type_id:
             return Response({'error': 'service_type_id required'}, status=400)
@@ -597,103 +641,23 @@ class DemandForecastViewSet(viewsets.ModelViewSet):
         except ServiceType.DoesNotExist:
             return Response({'error': 'Service type not found'}, status=404)
 
-        base_date = timezone.now().date()
-        start_history = base_date - timezone.timedelta(days=history_days)
-
-        # Get historical daily counts for linear regression
-        daily_counts_qs = ServiceRequest.objects.filter(
-            service_type=service_type,
-            request_date__date__gte=start_history,
-            request_date__date__lt=base_date
-        ).annotate(
-            date=TruncDate('request_date')
-        ).values('date').annotate(
-            count=Count('id')
-        ).order_by('date')
-
-        # Map to a list of counts, using 0 for days with no requests
-        counts_map = {item['date']: item['count'] for item in daily_counts_qs}
-        data_points = []
-        for i in range(history_days):
-            d = start_history + timezone.timedelta(days=i)
-            data_points.append(counts_map.get(d, 0))
-
-        n = len(data_points)
-        
-        # Calculate Linear Regression (Trend Line: y = mx + b)
-        if n < 2:
-            slope = 0
-            intercept = data_points[0] if data_points else 1
-        else:
-            sum_x = sum(range(n))
-            sum_y = sum(data_points)
-            sum_xy = sum(x * y for x, y in enumerate(data_points))
-            sum_xx = sum(x * x for x in range(n))
-            
-            denominator = (n * sum_xx - sum_x * sum_x)
-            if denominator == 0:
-                slope = 0
-                intercept = sum_y / n
-            else:
-                slope = (n * sum_xy - sum_x * sum_y) / denominator
-                intercept = (sum_y - slope * sum_x) / n
-
-        # Calculate dynamic day-of-week seasonality multipliers
-        dow_counts = {i: [] for i in range(7)}
-        for i in range(history_days):
-            d = start_history + timezone.timedelta(days=i)
-            dow_counts[d.weekday()].append(data_points[i])
-
-        overall_avg = sum(data_points) / n if n > 0 else 0
-        dow_averages = {}
-        for i in range(7):
-            if dow_counts[i] and overall_avg > 0:
-                avg = sum(dow_counts[i]) / len(dow_counts[i])
-                dow_averages[i] = avg / overall_avg
-            else:
-                # Fallback to basic assumption if history is completely empty
-                if i >= 5:
-                    dow_averages[i] = 0.8  # Weekend drop
-                elif i == 0:
-                    dow_averages[i] = 1.2  # Monday surge
-                else:
-                    dow_averages[i] = 1.0
-
-        forecasts = []
-        # Generate the forecast for future periods
-        for i in range(periods):
-            forecast_date = base_date + timezone.timedelta(days=i)
-            
-            # x-value for the future date is history_days + i
-            x_val = history_days + i
-            
-            # Base trend projection
-            trend_val = (slope * x_val) + intercept
-            trend_val = max(0.5, trend_val)  # Prevent zero or negative baseline
-
-            # Apply seasonality
-            multiplier = dow_averages[forecast_date.weekday()]
-            predicted_requests = int(round(trend_val * multiplier))
-            predicted_requests = max(1, predicted_requests)  # Floor to 1 request
-
-            forecast = DemandForecast.objects.create(
-                service_type=service_type,
-                forecast_date=forecast_date,
-                forecast_period='daily',
-                predicted_requests=predicted_requests,
-                confidence_level=0.85,  # Slightly higher confidence due to trend model
-                weather_impact=0.0,
-                seasonal_trend=round(multiplier, 2),
-                historical_average=int(overall_avg)
-            )
-            forecasts.append(forecast)
-
-        serializer = self.get_serializer(forecasts, many=True)
-        return Response(serializer.data)
+        result = generate_service_forecast(
+            service_type,
+            horizon_months=horizon_months,
+            persist=True,
+        )
+        if not result['published']:
+            return Response({
+                'error': 'Forecast withheld because the evidence or holdout-validation gates were not met.',
+                'reason': result.get('reason'),
+                'forecast': result.get('readiness'),
+                'model': result.get('model'),
+            }, status=409)
+        return Response(result)
 
     @action(detail=False, methods=['get'])
     def accuracy_report(self, request):
-        """Get forecast accuracy report"""
+        """Return stored actual-versus-predicted outcomes; GET performs no writes."""
         days = _bounded_days(request)
         start_date = _period_start(timezone.now().date(), days)
 
@@ -702,20 +666,13 @@ class DemandForecastViewSet(viewsets.ModelViewSet):
             forecast_date__gte=start_date
         ).exclude(actual_requests__isnull=True)
 
-        accuracy_data = []
-        for forecast in forecasts:
-            if forecast.actual_requests is not None and forecast.predicted_requests > 0:
-                accuracy = 1 - abs(forecast.actual_requests - forecast.predicted_requests) / forecast.predicted_requests
-                forecast.forecast_accuracy = max(0, accuracy)  # Ensure non-negative
-                forecast.save()
-
-                accuracy_data.append({
-                    'service_type': forecast.service_type.name,
-                    'forecast_date': forecast.forecast_date,
-                    'predicted': forecast.predicted_requests,
-                    'actual': forecast.actual_requests,
-                    'accuracy': round(forecast.forecast_accuracy * 100, 1)
-                })
+        accuracy_data = [{
+            'service_type': forecast.service_type.name,
+            'forecast_date': forecast.forecast_date,
+            'predicted': forecast.predicted_requests,
+            'actual': forecast.actual_requests,
+            'accuracy': forecast.forecast_accuracy,
+        } for forecast in forecasts.select_related('service_type')]
 
         return Response(accuracy_data)
 

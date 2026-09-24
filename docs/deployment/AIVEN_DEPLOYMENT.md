@@ -6,12 +6,12 @@ This project is already configured to use PostgreSQL through `DATABASE_URL`, whi
 
 1. Create a PostgreSQL service in Aiven.
 2. Copy the service connection string.
-3. Make sure the URI includes `sslmode=require` if Aiven does not already append it.
+3. Download the Aiven project CA certificate for certificate-verified production connections.
 
 Example:
 
 ```text
-postgresql://avnadmin:your-password@your-project.aivencloud.com:12345/defaultdb?sslmode=require
+postgresql://avnadmin:your-password@your-project.aivencloud.com:12345/defaultdb?sslmode=verify-full
 ```
 
 ## 2. Set environment variables
@@ -23,11 +23,15 @@ DJANGO_ENV=production
 DEBUG=False
 SECRET_KEY=your-production-secret
 ALLOWED_HOSTS=your-domain.com,www.your-domain.com
-DATABASE_URL=postgresql://avnadmin:your-password@your-project.aivencloud.com:12345/defaultdb?sslmode=require
-DB_SSLMODE=require
+DATABASE_URL=postgresql://avnadmin:your-password@your-project.aivencloud.com:12345/defaultdb?sslmode=verify-full
+DB_SSLMODE=verify-full
+DB_SSLROOTCERT=/absolute/path/to/aiven-ca.pem
 CORS_ALLOWED_ORIGINS=https://your-domain.com
 CSRF_TRUSTED_ORIGINS=https://your-domain.com
 FRONTEND_BASE_URL=https://your-domain.com
+ENABLE_HTTPS=True
+USE_REDIS=True
+REDIS_URL=rediss://default:password@your-managed-redis-host:6379/0
 ```
 
 If you use a separate frontend domain, add it to `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS`.
@@ -45,6 +49,11 @@ CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 The backend now switches to Cloudinary automatically when all three values are present. If they are missing, it falls back to local filesystem storage for development.
+
+Production startup fails when Cloudinary is absent because ephemeral host disks
+can lose profile images and proof media. If the host provides a mounted,
+persistent media volume, set `ALLOW_LOCAL_MEDIA_IN_PRODUCTION=True`
+intentionally and include that volume in backups.
 
 ## 3. Run Django migrations
 
@@ -65,12 +74,15 @@ cd backend
 ..\venv\Scripts\python.exe manage.py dumpdata --natural-foreign --natural-primary --exclude contenttypes --exclude auth.permission --indent 2 > local-data.json
 ```
 
-Then set `DATABASE_URL` to the Aiven PostgreSQL URI and load the schema/data:
+Back up both databases before importing. Test the import in staging first and
+do not run it against a populated production database. Then set `DATABASE_URL`
+to the Aiven PostgreSQL URI and load the schema/data:
 
 ```powershell
 cd backend
-$env:DATABASE_URL="postgresql://avnadmin:your-password@your-project.aivencloud.com:12345/defaultdb?sslmode=require"
-$env:DB_SSLMODE="require"
+$env:DATABASE_URL="postgresql://avnadmin:your-password@your-project.aivencloud.com:12345/defaultdb?sslmode=verify-full"
+$env:DB_SSLMODE="verify-full"
+$env:DB_SSLROOTCERT="C:\secure\aiven-ca.pem"
 ..\venv\Scripts\python.exe manage.py migrate
 ..\venv\Scripts\python.exe manage.py loaddata local-data.json
 ```
@@ -108,3 +120,26 @@ For this project, the cleanest path is:
 - deploy the React app as a web app or PWA,
 - keep the backend on Django,
 - use Cordova only if you need an app-store wrapper.
+
+## 6. Verify before routing traffic
+
+Run the production configuration check and then call the probes on the deployed backend:
+
+```bash
+python manage.py check --deploy
+curl --fail https://your-backend.example.com/api/health/liveness/
+curl --fail https://your-backend.example.com/api/health/readiness/
+```
+
+Readiness verifies the database, configured cache, Redis-backed Channels path,
+and media storage. See [Production deployment checklist](PRODUCTION_DEPLOYMENT_CHECKLIST.md)
+for the complete release and rollback sequence.
+
+Before production migration, run the guarded `npm run quality:staging` gate
+with a separate disposable `test_...` PostgreSQL database. See
+[Production-shaped staging validation](STAGING_VALIDATION.md) for the required
+environment markers, concurrency checks, and perimeter probes.
+
+`sslmode=require` encrypts the database connection but does not verify the
+server certificate. Aiven recommends `verify-ca` or `verify-full` plus the
+project CA for production: https://aiven.io/docs/products/postgresql/howto/connect-python

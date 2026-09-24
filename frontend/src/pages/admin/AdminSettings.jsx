@@ -204,7 +204,7 @@ export default function AdminSettings() {
 
   return (
     <Layout>
-      <main className="min-h-screen bg-slate-50 p-4 sm:p-6">
+      <div className="py-2">
         <div className="mx-auto max-w-6xl">
           {message.text ? (
             <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
@@ -547,7 +547,7 @@ export default function AdminSettings() {
             </div>
           </section>
         </div>
-      </main>
+      </div>
     </Layout>
   );
 }

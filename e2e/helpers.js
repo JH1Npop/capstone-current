@@ -6,13 +6,17 @@ import path from 'node:path';
 export const TEST_PASSWORD = 'TestPass123!';
 const TEST_PASSWORD_HASH =
   'pbkdf2_sha256$1$testsalt$xW4q2n4Ym9B5oGEb90oVsVxZpY1bBDrbNn+cZGvCAvs=';
+const E2E_SETTINGS = 'afn_service_management.settings_e2e';
+const E2E_FRONTEND_URL = `http://127.0.0.1:${Number(process.env.E2E_FRONTEND_PORT || 5181)}`;
 
 const ensuredPasswordCache = new Map();
 const authStateCache = new Map();
 
 export async function clearStoredAuth(page) {
-  await page.goto('http://localhost:5174/login', { waitUntil: 'domcontentloaded' });
+  await page.goto(`${E2E_FRONTEND_URL}/login`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => {
+    sessionStorage.removeItem('afn_token');
+    sessionStorage.removeItem('afn_user');
     localStorage.removeItem('afn_token');
     localStorage.removeItem('afn_user');
   });
@@ -34,10 +38,10 @@ export async function authenticateByApi(request, username, password = TEST_PASSW
 }
 
 export async function seedAuthState(page, authState) {
-  await page.goto('http://localhost:5174/login', { waitUntil: 'domcontentloaded' });
+  await page.goto(`${E2E_FRONTEND_URL}/login`, { waitUntil: 'domcontentloaded' });
   await page.evaluate((state) => {
-    localStorage.setItem('afn_token', state.token);
-    localStorage.setItem('afn_user', JSON.stringify(state.user));
+    sessionStorage.setItem('afn_token', state.token);
+    sessionStorage.setItem('afn_user', JSON.stringify(state.user));
   }, authState);
 }
 
@@ -45,8 +49,8 @@ export async function captureAuthStateViaUi(browser, username, expectedPath) {
   const page = await browser.newPage();
   await loginAs(page, username, { expectedPath });
   const authState = await page.evaluate(() => ({
-    token: localStorage.getItem('afn_token'),
-    user: JSON.parse(localStorage.getItem('afn_user') || 'null'),
+    token: sessionStorage.getItem('afn_token'),
+    user: JSON.parse(sessionStorage.getItem('afn_user') || 'null'),
   }));
   await page.close();
   return authState;
@@ -61,7 +65,9 @@ export function loadAuthStateFromBackend(username) {
   ensureUserPassword(username);
 
   const repoRoot = process.cwd();
-  const pythonPath = path.join(repoRoot, 'venv', 'Scripts', 'python.exe');
+  const pythonPath = process.platform === 'win32'
+    ? path.join(repoRoot, 'venv', 'Scripts', 'python.exe')
+    : 'python';
   const managePyPath = path.join(repoRoot, 'backend', 'manage.py');
   const script = [
     'import json',
@@ -80,6 +86,7 @@ export function loadAuthStateFromBackend(username) {
 
   const output = execFileSync(pythonPath, [managePyPath, 'shell', '-c', script], {
     cwd: repoRoot,
+    env: { ...process.env, DJANGO_SETTINGS_MODULE: E2E_SETTINGS },
     encoding: 'utf8',
     maxBuffer: 1024 * 1024 * 5,
   });
@@ -100,8 +107,10 @@ export function ensureUserPassword(username, password = TEST_PASSWORD) {
   }
 
   const repoRoot = process.cwd();
-  const pythonPath = path.join(repoRoot, 'venv', 'Scripts', 'python.exe');
-  const sqlitePath = path.join(repoRoot, 'backend', 'db.sqlite3');
+  const pythonPath = process.platform === 'win32'
+    ? path.join(repoRoot, 'venv', 'Scripts', 'python.exe')
+    : 'python';
+  const sqlitePath = path.join(repoRoot, 'backend', 'db.e2e.sqlite3');
   const updateScript = [
     'import sqlite3, sys',
     'db_path, target_username, password_hash = sys.argv[1:4]',

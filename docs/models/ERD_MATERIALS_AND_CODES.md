@@ -61,8 +61,6 @@ Support/reporting tables:
 - `users_changelog`
 - `users_adminsettings`
 - `users_usercapabilitygrant`
-- `notifications_notificationtemplate`
-- `notifications_notificationlog`
 
 Historical Firebase token tables may appear in older DBML exports, but Firebase push delivery has been removed from the active implementation.
 

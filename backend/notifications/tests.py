@@ -1,5 +1,8 @@
+from importlib import import_module
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.apps import apps
 from django.core import mail
 from django.test import override_settings
 from rest_framework import status
@@ -11,6 +14,33 @@ from notifications.notification_utils import send_team_email, send_team_notifica
 from notifications.models import Notification
 from services.models import ServiceLocation, ServiceRequest, ServiceTicket, ServiceType
 from users.models import User
+
+
+class RetiredNotificationSupportModelTests(APITestCase):
+    def test_only_the_active_notification_model_remains(self):
+        self.assertIsNotNone(apps.get_model('notifications', 'Notification'))
+        with self.assertRaises(LookupError):
+            apps.get_model('notifications', 'NotificationTemplate')
+        with self.assertRaises(LookupError):
+            apps.get_model('notifications', 'NotificationLog')
+
+    def test_removal_migration_refuses_to_drop_populated_support_models(self):
+        migration = import_module(
+            'notifications.migrations.0009_remove_notificationlog_notification_and_more'
+        )
+        manager = SimpleNamespace(
+            using=lambda _alias: SimpleNamespace(exists=lambda: True)
+        )
+        historical_apps = SimpleNamespace(
+            get_model=lambda _app_label, _model_name: SimpleNamespace(objects=manager)
+        )
+        schema_editor = SimpleNamespace(connection=SimpleNamespace(alias='default'))
+
+        with self.assertRaisesRegex(RuntimeError, 'Export and review'):
+            migration.require_empty_retired_notification_models(
+                historical_apps,
+                schema_editor,
+            )
 
 
 class NotificationViewSetTests(APITestCase):
@@ -268,6 +298,14 @@ class NotificationUtilityTests(APITestCase):
             'start_overdue',
             {
                 'minutes_overdue': 30,
+                'action_required': 'Start work',
+            },
+        )
+        notify_supervisors_ticket_escalation(
+            ticket,
+            'start_overdue',
+            {
+                'minutes_overdue': 60,
                 'action_required': 'Start work',
             },
         )

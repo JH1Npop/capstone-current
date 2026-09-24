@@ -1,8 +1,10 @@
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db.models import QuerySet
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +73,12 @@ def _resolve_users(*, users=None, role=None, assigned_admin=None, user_ids=None)
     if users is None and role is None and assigned_admin is None and user_ids is None:
         raise ValueError("At least one recipient selector is required")
 
-    recipients = users if users is not None else User.objects.filter(is_active=True)
+    recipients = users if users is not None else User.objects.filter(is_active=True, status='active')
     if isinstance(recipients, (list, tuple, set)):
         user_ids_from_list = [getattr(user, 'id', user) for user in recipients]
-        recipients = User.objects.filter(id__in=user_ids_from_list, is_active=True)
+        recipients = User.objects.filter(id__in=user_ids_from_list, is_active=True, status='active')
+    elif isinstance(recipients, QuerySet):
+        recipients = recipients.filter(is_active=True, status='active')
 
     if role is not None:
         recipients = recipients.filter(role=role)
@@ -207,6 +211,7 @@ def send_user_notification(
     ticket=None,
     request=None,
     send_email=True,
+    dedupe_for=None,
     **_unused,
 ):
     """
@@ -214,6 +219,25 @@ def send_user_notification(
     Django email. Extra keyword arguments are ignored so older call sites that
     passed push-specific options remain harmless.
     """
+    if not user or not getattr(user, 'is_active', False) or getattr(user, 'status', None) != 'active':
+        return None
+
+    if dedupe_for:
+        from .models import Notification
+
+        window = dedupe_for if isinstance(dedupe_for, timedelta) else timedelta(seconds=float(dedupe_for))
+        duplicate_query = Notification.objects.filter(
+            user=user,
+            title=title,
+            type=notification_type,
+            created_at__gte=timezone.now() - window,
+        )
+        duplicate_query = duplicate_query.filter(ticket=ticket) if ticket else duplicate_query.filter(ticket__isnull=True)
+        duplicate_query = duplicate_query.filter(request=request) if request else duplicate_query.filter(request__isnull=True)
+        duplicate = duplicate_query.order_by('-created_at').first()
+        if duplicate:
+            return duplicate
+
     _normalize_notification_data(data)
     in_app_enabled, email_enabled = notification_channels()
     if not in_app_enabled and not (send_email and email_enabled):
@@ -298,7 +322,7 @@ def send_low_stock_notification(inventory_item):
 
     title = f"Low stock alert for {inventory_item.name}"
     body = f"Current: {inventory_item.available_quantity}, Threshold: {inventory_item.minimum_stock}"
-    admin_users = User.objects.filter(role__in=['superadmin', 'admin'], is_active=True)
+    admin_users = User.objects.filter(role__in=['superadmin', 'admin'], is_active=True, status='active')
 
     return send_team_notification(
         title,

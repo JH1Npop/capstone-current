@@ -3,14 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import { EmptyState, ErrorState } from '../../components/ui/StateDisplay';
-import { FiCalendar, FiEye, FiImage, FiMapPin, FiMessageSquare, FiMoreHorizontal, FiSearch, FiStar, FiX } from 'react-icons/fi';
+import { FiCalendar, FiEye, FiImage, FiMapPin, FiMessageSquare, FiMoreHorizontal, FiStar, FiX } from 'react-icons/fi';
 import StatusBadge from '../../components/ui/StatusBadge';
 import TicketTimelineModal from '../../components/shared/TicketTimelineModal';
+import SearchFilterBar from '../../components/shared/SearchFilterBar';
 import { fetchClientRequests, fetchTicketTimeline } from '../../api/api';
 import { clientTechnicianDisplayOrDash } from '../../utils/clientTechnicianDisplay';
 import { API_BASE_URL } from '../../api/core';
+import { formatTicketId } from '../../utils/roleIds';
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
 
 const resolveProofUrl = (value = '') => {
   const raw = String(value || '').trim();
@@ -37,10 +39,16 @@ const resolveProofUrl = (value = '') => {
 const getProofImages = (service) =>
   service.completion_proof_images || service.completionProofImages || [];
 
+const isVideoProof = (item) => (
+  String(item?.type || '').toLowerCase() === 'video'
+  || /\.(mp4|webm|ogg|mov)(?:$|[?#])/i.test(item?.url || '')
+);
+
 const getProofMedia = (service) => {
   const completionImages = getProofImages(service).map((item, index) => ({
     id: `completion-${index}`,
     name: `Completion proof ${index + 1}`,
+    type: typeof item === 'object' ? item?.type || 'photo' : 'photo',
     url: resolveProofUrl(typeof item === 'string' ? item : item?.url || item?.file || item?.src),
   }));
   const checklistMedia = [
@@ -49,6 +57,7 @@ const getProofMedia = (service) => {
   ].map((item, index) => ({
     id: `checklist-${index}`,
     name: item?.name || item?.filename || `Checklist proof ${index + 1}`,
+    type: typeof item === 'object' ? item?.type || 'photo' : 'photo',
     url: resolveProofUrl(typeof item === 'string' ? item : item?.url || item?.file || item?.src),
   }));
   return [...completionImages, ...checklistMedia].filter((item) => item.url);
@@ -106,7 +115,7 @@ export default function ClientServiceHistory() {
 
     if (query) {
       filtered = filtered.filter((service) => [
-        service.ticket_id ? `TKT-${service.ticket_id}` : '',
+        service.ticket_id ? formatTicketId(service.ticket_id) : '',
         service.service_type_name,
         service.service_type,
         service.description,
@@ -204,39 +213,25 @@ export default function ClientServiceHistory() {
           />
         )}
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[1fr_190px_190px]">
-            <label className="relative block">
-              <span className="sr-only">Search service history</span>
-              <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search service, technician, address, ticket"
-                className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-              />
-            </label>
-            <select
-              value={filterType}
-              onChange={(event) => setFilterType(event.target.value)}
-              className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-            >
-              <option value="all">All Services</option>
-              <option value="rated">Rated Services</option>
-              <option value="pending_rating">Pending Rating</option>
-            </select>
-            <select
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value)}
-              className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-            >
-              <option value="recent">Most Recent</option>
-              <option value="oldest">Oldest First</option>
-              <option value="highest_rating">Highest Rated</option>
-            </select>
-          </div>
-        </div>
+        <SearchFilterBar
+          searchValue={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchLabel="Find a completed service"
+          searchPlaceholder="Search service, technician, address, or ticket"
+          filters={[
+            { key: 'rating', label: 'Rating status', value: filterType, defaultValue: 'all', onChange: setFilterType, options: [
+              { value: 'all', label: 'Any rating status' }, { value: 'rated', label: 'Already rated' }, { value: 'pending_rating', label: 'Needs your rating' },
+            ] },
+            { key: 'sort', label: 'Sort order', value: sortBy, defaultValue: 'recent', onChange: setSortBy, options: [
+              { value: 'recent', label: 'Most recent first' }, { value: 'oldest', label: 'Oldest first' }, { value: 'highest_rating', label: 'Highest rated first' },
+            ] },
+          ]}
+          onClear={() => {
+            setSearchTerm('');
+            setFilterType('all');
+            setSortBy('recent');
+          }}
+        />
 
 {/* Service History Table */}
 {filteredHistory.length === 0 ? (
@@ -506,11 +501,15 @@ export default function ClientServiceHistory() {
                   onClick={() => setSelectedProof(image)}
                   className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
                 >
-                  <img
-                    src={image.url}
-                    alt={image.name || `Proof ${index + 1}`}
-                    className="h-44 w-full object-cover transition group-hover:scale-[1.03]"
-                  />
+                  {isVideoProof(image) ? (
+                    <video src={image.url} preload="metadata" muted className="h-44 w-full object-cover" aria-label={image.name || `Proof ${index + 1}`} />
+                  ) : (
+                    <img
+                      src={image.url}
+                      alt={image.name || `Proof ${index + 1}`}
+                      className="h-44 w-full object-cover transition group-hover:scale-[1.03]"
+                    />
+                  )}
                   <div className="truncate px-3 py-2 text-xs font-medium text-slate-600">{image.name || `Proof ${index + 1}`}</div>
                 </button>
               ))}
@@ -537,11 +536,15 @@ export default function ClientServiceHistory() {
               </button>
             </div>
             <div className="max-h-[78vh] overflow-auto bg-slate-100 p-4">
-              <img
-                src={selectedProof.url}
-                alt={selectedProof.name || 'Proof image'}
-                className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain shadow-sm"
-              />
+              {isVideoProof(selectedProof) ? (
+                <video src={selectedProof.url} controls className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg shadow-sm" />
+              ) : (
+                <img
+                  src={selectedProof.url}
+                  alt={selectedProof.name || 'Proof image'}
+                  className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain shadow-sm"
+                />
+              )}
             </div>
           </div>
         </div>

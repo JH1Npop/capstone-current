@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.core.exceptions import ValidationError
 
 from notifications.models import Notification
 from users.models import User
@@ -55,7 +56,7 @@ def _create_reservation_transaction(reservation, performed_by, notes):
 
 def create_pending_reservation(*, item, quantity, technician, required_date, service_ticket, performed_by, notes=''):
     if quantity <= 0:
-        return None
+        raise ValidationError('Reservation quantity must be greater than zero.')
 
     default_notes = notes or (
         f'Reserved for ticket #{service_ticket.id}' if service_ticket else 'Reserved stock allocation'
@@ -65,7 +66,6 @@ def create_pending_reservation(*, item, quantity, technician, required_date, ser
         # Lock the item row to prevent concurrent reservation races.
         locked_item = InventoryItem.objects.select_for_update().get(pk=item.pk)
         if locked_item.available_quantity < quantity:
-            from django.core.exceptions import ValidationError
             raise ValidationError(
                 f'Insufficient available stock for {locked_item.name}: '
                 f'requested {quantity}, available {locked_item.available_quantity}.'
@@ -83,14 +83,22 @@ def create_pending_reservation(*, item, quantity, technician, required_date, ser
     return reservation
 
 
+@transaction.atomic
 def cancel_pending_reservation(reservation, *, performed_by, notes=''):
+    # Lock the reservation itself so competing cancellation/fulfillment
+    # requests cannot both apply stock movements.
+    reservation = InventoryReservation.objects.select_for_update().select_related(
+        'item',
+        'technician',
+        'service_ticket',
+    ).get(pk=reservation.pk)
     if reservation.status != 'pending':
         return False
 
     # Lock the item row so the reserved_quantity update is atomic.
-    InventoryItem.objects.select_for_update().get(pk=reservation.item_id)
+    locked_item = InventoryItem.objects.select_for_update().get(pk=reservation.item_id)
     InventoryTransaction.objects.create(
-        item=reservation.item,
+        item=locked_item,
         transaction_type='cancellation',
         quantity=reservation.quantity,
         technician=reservation.technician,
@@ -103,20 +111,25 @@ def cancel_pending_reservation(reservation, *, performed_by, notes=''):
     return True
 
 
+@transaction.atomic
 def fulfill_pending_reservation(reservation, *, performed_by, notes=''):
+    reservation = InventoryReservation.objects.select_for_update().select_related(
+        'item',
+        'technician',
+        'service_ticket',
+    ).get(pk=reservation.pk)
     if reservation.status != 'pending':
         return False
 
     # Lock the item row so the quantity + reserved_quantity updates are atomic.
     locked_item = InventoryItem.objects.select_for_update().get(pk=reservation.item_id)
     if locked_item.quantity < reservation.quantity:
-        from django.core.exceptions import ValidationError
         raise ValidationError(
             f'Insufficient stock to fulfill reservation for {locked_item.name}: '
             f'need {reservation.quantity}, have {locked_item.quantity}.'
         )
     InventoryTransaction.objects.create(
-        item=reservation.item,
+        item=locked_item,
         transaction_type='cancellation',
         quantity=reservation.quantity,
         technician=reservation.technician,
@@ -125,7 +138,7 @@ def fulfill_pending_reservation(reservation, *, performed_by, notes=''):
         performed_by=performed_by,
     )
     InventoryTransaction.objects.create(
-        item=reservation.item,
+        item=locked_item,
         transaction_type='issue',
         quantity=reservation.quantity,
         technician=reservation.technician,

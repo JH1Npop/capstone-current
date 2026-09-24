@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from notifications.models import Notification
 
-from .models import AfterSalesCase as FollowUpCase
+from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent
 from .models import InspectionChecklist, MaintenanceSchedule, ServiceTicket
 
 
@@ -19,6 +19,28 @@ COMPLETION_FOLLOW_UP_DEFAULT_OFFSETS = {
     'feedback': 3,
     'follow_up': 2,
 }
+
+
+def _record_automated_case_event(case, *, created, notes):
+    return AfterSalesCaseEvent.objects.create(
+        case=case,
+        actor=None,
+        event_type='created' if created else 'updated',
+        to_status=case.status,
+        notes=notes,
+        metadata={'creation_source': case.creation_source},
+    )
+
+
+def _apply_case_defaults(case, defaults):
+    changed_fields = []
+    for field, value in defaults.items():
+        if getattr(case, field) != value:
+            setattr(case, field, value)
+            changed_fields.append(field)
+    if changed_fields:
+        case.save(update_fields=[*changed_fields, 'updated_at'])
+    return changed_fields
 
 MAINTENANCE_RULES = {
     'commercial_area': {
@@ -262,7 +284,10 @@ def sync_completion_warranty_case(ticket, reference_date=None):
         return None
 
     reference_date = reference_date or timezone.localdate()
-    due_date = ticket.warranty_end_date or reference_date + timedelta(days=COMPLETION_FOLLOW_UP_DEFAULT_OFFSETS['warranty'])
+    # A case response deadline is different from the warranty coverage expiry.
+    # Keep the expiry on the ticket and give the after-sales team a short,
+    # actionable response target.
+    due_date = reference_date + timedelta(days=COMPLETION_FOLLOW_UP_DEFAULT_OFFSETS['warranty'])
     summary = inspection.follow_up_summary or _build_completion_follow_up_summary(ticket, 'warranty')
     details = _build_completion_follow_up_details(ticket, inspection, 'warranty')
 
@@ -284,10 +309,14 @@ def sync_completion_warranty_case(ticket, reference_date=None):
     ).exclude(status__in=['resolved', 'closed']).first()
 
     if existing_case:
-        for field, value in defaults.items():
-            setattr(existing_case, field, value)
-        existing_case.save(update_fields=[*defaults.keys(), 'updated_at'])
-        _notify_completion_follow_up_case(existing_case, created=False)
+        changed_fields = _apply_case_defaults(existing_case, defaults)
+        if changed_fields:
+            _record_automated_case_event(
+                existing_case,
+                created=False,
+                notes='Warranty handoff synchronized from the completed ticket.',
+            )
+            _notify_completion_follow_up_case(existing_case, created=False)
         return existing_case
 
     case = FollowUpCase.objects.create(
@@ -296,6 +325,11 @@ def sync_completion_warranty_case(ticket, reference_date=None):
         status='open',
         assigned_to=None,
         **defaults,
+    )
+    _record_automated_case_event(
+        case,
+        created=True,
+        notes='Warranty handoff created from the completed ticket.',
     )
     _notify_completion_follow_up_case(case, created=True)
     return case
@@ -489,10 +523,14 @@ def sync_completion_follow_up_case(ticket, reference_date=None):
     ).exclude(status__in=['resolved', 'closed']).first()
 
     if existing_case:
-        for field, value in defaults.items():
-            setattr(existing_case, field, value)
-        existing_case.save(update_fields=[*defaults.keys(), 'updated_at'])
-        _notify_completion_follow_up_case(existing_case, created=False)
+        changed_fields = _apply_case_defaults(existing_case, defaults)
+        if changed_fields:
+            _record_automated_case_event(
+                existing_case,
+                created=False,
+                notes='Checklist follow-up handoff synchronized from the completed ticket.',
+            )
+            _notify_completion_follow_up_case(existing_case, created=False)
         return existing_case
 
     case = FollowUpCase.objects.create(
@@ -501,6 +539,11 @@ def sync_completion_follow_up_case(ticket, reference_date=None):
         status='open',
         assigned_to=None,
         **defaults,
+    )
+    _record_automated_case_event(
+        case,
+        created=True,
+        notes='Follow-up handoff created from the completed ticket checklist.',
     )
     _notify_completion_follow_up_case(case, created=True)
     return case
@@ -525,15 +568,22 @@ def ensure_maintenance_follow_up_case(schedule):
     priority = 'high' if schedule.status == 'due' else 'normal'
 
     if case:
-        case.summary = summary
-        case.details = details
-        case.priority = priority
-        case.due_date = schedule.next_due_date
-        case.creation_source = 'maintenance_alert'
-        case.save(update_fields=['summary', 'details', 'priority', 'due_date', 'creation_source', 'updated_at'])
+        changed_fields = _apply_case_defaults(case, {
+            'summary': summary,
+            'details': details,
+            'priority': priority,
+            'due_date': schedule.next_due_date,
+            'creation_source': 'maintenance_alert',
+        })
+        if changed_fields:
+            _record_automated_case_event(
+                case,
+                created=False,
+                notes='Maintenance alert details synchronized from the maintenance schedule.',
+            )
         return case
 
-    return FollowUpCase.objects.create(
+    case = FollowUpCase.objects.create(
         service_ticket=schedule.service_ticket,
         client=schedule.client,
         created_by=None,
@@ -545,6 +595,12 @@ def ensure_maintenance_follow_up_case(schedule):
         details=details,
         due_date=schedule.next_due_date,
     )
+    _record_automated_case_event(
+        case,
+        created=True,
+        notes='Maintenance follow-up created when the maintenance reminder became due.',
+    )
+    return case
 
 
 def _notify_recipients(schedule, stage):
@@ -664,20 +720,20 @@ def process_maintenance_alerts(reference_date=None):
         if schedule.status == 'due' and schedule.due_notified_at is None:
             stage = 'due'
             schedule.due_notified_at = now
-        elif days_until_due <= reminder_days and schedule.due_soon_notified_at is None:
-            stage = 'seven_day'
-            schedule.due_soon_notified_at = now
         elif days_until_due <= 3 and schedule.three_day_notified_at is None:
             stage = 'three_day'
             schedule.three_day_notified_at = now
+        elif days_until_due <= reminder_days and schedule.due_soon_notified_at is None:
+            stage = 'seven_day'
+            schedule.due_soon_notified_at = now
 
-        if days_until_due <= reminder_days and schedule.client_notified_at is None:
-            if _send_client_maintenance_email(schedule, reference_date=reference_date):
-                schedule.client_notified_at = now
-                summary['client_notified'] += 1
-        elif days_until_due <= 3 and schedule.client_three_day_notified_at is None:
+        if days_until_due <= 3 and schedule.client_three_day_notified_at is None:
             if _send_client_maintenance_email(schedule, reference_date=reference_date):
                 schedule.client_three_day_notified_at = now
+                summary['client_notified'] += 1
+        elif days_until_due <= reminder_days and schedule.client_notified_at is None:
+            if _send_client_maintenance_email(schedule, reference_date=reference_date):
+                schedule.client_notified_at = now
                 summary['client_notified'] += 1
 
         schedule.save()

@@ -1,12 +1,15 @@
 import re
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
+from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
 from django.core import mail
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from django.test import override_settings
 from django.utils import timezone
 
@@ -18,6 +21,13 @@ from .rbac import (
     AFTER_SALES_CASES_VIEW,
     AFTER_SALES_DASHBOARD_VIEW,
     ADMIN_CONFIGURED_MARKER,
+    PUBLIC_SITE_ASSET_DELETE,
+    PUBLIC_SITE_ASSET_UPLOAD,
+    PUBLIC_SITE_MANAGE,
+    PUBLIC_SITE_PUBLISH,
+    PUBLIC_SITE_VIEW,
+    SYSTEM_SETTINGS_MANAGE,
+    SYSTEM_SETTINGS_VIEW,
     MANAGE_STAFF_CAPABILITIES,
     TECHNICIAN_DASHBOARD_VIEW,
     TECHNICIAN_JOBS_VIEW,
@@ -50,6 +60,25 @@ class UserRegistrationTests(APITestCase):
         response = self.client.post(self.register_url, payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(User.objects.filter(username='admin1').exists())
+
+    def test_public_registration_rejects_case_insensitive_duplicate_email(self):
+        User.objects.create_user(
+            username='existing-email-owner',
+            email='Existing.Email@example.com',
+            password='Password123!',
+            role='client',
+        )
+
+        response = self.client.post(self.register_url, {
+            'username': 'duplicate-email-registration',
+            'email': 'existing.email@EXAMPLE.com',
+            'password': 'Password123!',
+            'password_confirm': 'Password123!',
+            'role': 'client',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
 
     def test_public_registration_rejects_admin_when_admin_exists(self):
         User.objects.create_user(
@@ -233,6 +262,23 @@ class UserLoginTests(APITestCase):
         user.refresh_from_db()
         self.assertEqual(user.password, 'legacy-pass')
 
+    def test_login_rejects_inactive_business_status_even_if_is_active_is_stale(self):
+        user = User.objects.create_user(
+            username='stale-inactive-user',
+            email='stale-inactive@example.com',
+            password='Password123!',
+            role='client',
+            status='inactive',
+            is_active=True,
+        )
+
+        response = self.client.post(self.login_url, {
+            'username': user.username,
+            'password': 'Password123!',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_user_can_login_with_duplicate_email_when_password_matches_later_account(self):
         shared_email = 'shared-login@example.com'
         User.objects.create_user(
@@ -342,6 +388,55 @@ class EmailVerificationTests(APITestCase):
         self.assertFalse(user.email_verified)
         self.assertIsNotNone(user.email_verification_sent_at)
 
+    def test_unverified_client_can_request_an_enumeration_safe_verification_resend(self):
+        user = User.objects.create_user(
+            username='resend_client',
+            email='resend-client@example.com',
+            password='Password123!',
+            role='client',
+            email_verified=False,
+            email_verification_sent_at=timezone.now() - timezone.timedelta(minutes=2),
+        )
+        response = self.client.post(
+            '/api/users/resend_verification/',
+            {'email': 'RESEND-client@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('/verify-email?uid=', mail.outbox[0].body)
+        user.refresh_from_db()
+        self.assertGreater(user.email_verification_sent_at, timezone.now() - timezone.timedelta(minutes=1))
+
+        unknown = self.client.post(
+            '/api/users/resend_verification/',
+            {'email': 'missing@example.com'},
+            format='json',
+        )
+        self.assertEqual(unknown.status_code, status.HTTP_200_OK)
+        self.assertEqual(unknown.data['message'], response.data['message'])
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_verification_resend_obeys_the_cooldown(self):
+        User.objects.create_user(
+            username='cooldown_client',
+            email='cooldown-client@example.com',
+            password='Password123!',
+            role='client',
+            email_verified=False,
+            email_verification_sent_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            '/api/users/resend_verification/',
+            {'email': 'cooldown-client@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_unverified_user_cannot_login_until_email_is_verified(self):
         user = User.objects.create_user(
             username='unverified_client',
@@ -380,14 +475,14 @@ class EmailVerificationTests(APITestCase):
         self.assertEqual(login_response.status_code, status.HTTP_200_OK)
         self.assertIn('token', login_response.data)
 
-    def test_unverified_client_is_removed_after_five_minutes(self):
+    def test_unverified_client_is_removed_after_verification_window(self):
         user = User.objects.create_user(
             username='expired_unverified_client',
             email='expired-unverified-client@gmail.com',
             password='Password123!',
             role='client',
             email_verified=False,
-            email_verification_sent_at=timezone.now() - timezone.timedelta(minutes=6),
+            email_verification_sent_at=timezone.now() - timezone.timedelta(hours=25),
         )
 
         response = self.client.post(self.login_url, {
@@ -398,14 +493,14 @@ class EmailVerificationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(User.objects.filter(pk=user.pk).exists())
 
-    def test_recent_unverified_client_is_kept_before_five_minutes(self):
+    def test_recent_unverified_client_is_kept_before_verification_window(self):
         user = User.objects.create_user(
             username='recent_unverified_client',
             email='recent-unverified-client@gmail.com',
             password='Password123!',
             role='client',
             email_verified=False,
-            email_verification_sent_at=timezone.now() - timezone.timedelta(minutes=4),
+            email_verification_sent_at=timezone.now() - timezone.timedelta(hours=23),
         )
 
         response = self.client.post(self.login_url, {
@@ -415,6 +510,27 @@ class EmailVerificationTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(User.objects.filter(pk=user.pk).exists())
+
+    def test_email_verification_cannot_reactivate_disabled_account(self):
+        user = User.objects.create_user(
+            username='disabled-verification-user',
+            email='disabled-verification@example.com',
+            password='Password123!',
+            role='client',
+            email_verified=False,
+            status='inactive',
+            is_active=False,
+        )
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+
+        response = self.client.post(self.verify_url, {'uid': uid, 'token': token}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        user.refresh_from_db()
+        self.assertFalse(user.email_verified)
+        self.assertFalse(user.is_active)
+        self.assertEqual(user.status, 'inactive')
 
 
 @override_settings(
@@ -494,6 +610,36 @@ class PasswordResetTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('error', response.data)
+
+    def test_password_reset_request_does_not_email_inactive_account(self):
+        self.user.status = 'inactive'
+        self.user.is_active = False
+        self.user.save(update_fields=['status', 'is_active'])
+
+        response = self.client.post(self.request_url, {
+            'identifier': self.user.email,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_existing_reset_link_cannot_reset_account_after_deactivation(self):
+        self.client.post(self.request_url, {'identifier': self.user.email}, format='json')
+        uid, token = self._extract_reset_credentials(mail.outbox[0].body)
+        self.user.status = 'inactive'
+        self.user.is_active = False
+        self.user.save(update_fields=['status', 'is_active'])
+
+        response = self.client.post(self.confirm_url, {
+            'uid': uid,
+            'token': token,
+            'new_password': 'EvenStrongerPassword456!',
+            'password_confirm': 'EvenStrongerPassword456!',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('Password123!'))
 
 
 class SelfServiceProfileTests(APITestCase):
@@ -590,6 +736,26 @@ class SelfServiceProfileTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('new_password', response.data)
 
+    def test_change_password_revokes_current_token_and_requires_login(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.client_token.key}')
+
+        response = self.client.post('/api/users/change_password/', {
+            'current_password': 'Password123!',
+            'new_password': 'NewStrongPassword456!',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['reauthentication_required'])
+        self.assertFalse(Token.objects.filter(key=self.client_token.key).exists())
+        self.client_user.refresh_from_db()
+        self.assertTrue(self.client_user.check_password('NewStrongPassword456!'))
+
+    def test_non_privilege_partial_save_does_not_revoke_session(self):
+        self.client_user.email_verification_sent_at = timezone.now()
+        self.client_user.save(update_fields=['email_verification_sent_at'])
+
+        self.assertTrue(Token.objects.filter(key=self.client_token.key).exists())
+
 
 class LegacyUserActionAuthorizationTests(APITestCase):
     def setUp(self):
@@ -679,6 +845,7 @@ class LegacyUserActionAuthorizationTests(APITestCase):
 
     def test_user_manager_can_update_account_status(self):
         manager = self._configured_admin('legacy-action-manager', USER_MANAGEMENT_MANAGE)
+        active_token = Token.objects.create(user=self.client_user)
         self.client.force_authenticate(user=manager)
 
         response = self.client.post(
@@ -690,6 +857,28 @@ class LegacyUserActionAuthorizationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.client_user.refresh_from_db()
         self.assertEqual(self.client_user.status, 'inactive')
+        self.assertFalse(self.client_user.is_active)
+        self.assertFalse(Token.objects.filter(key=active_token.key).exists())
+
+    def test_configured_admin_cannot_manage_another_administrator(self):
+        manager = self._configured_admin('bounded-user-manager', USER_MANAGEMENT_MANAGE)
+        target_admin = User.objects.create_user(
+            username='protected-admin-account',
+            password='Password123!',
+            role='admin',
+        )
+        self.client.force_authenticate(user=manager)
+
+        response = self.client.post(
+            f'/api/users/{target_admin.id}/update_status/',
+            {'status': 'inactive'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        target_admin.refresh_from_db()
+        self.assertTrue(target_admin.is_active)
+        self.assertEqual(target_admin.status, 'active')
 
 
 class AdminSettingsTests(APITestCase):
@@ -702,6 +891,95 @@ class AdminSettingsTests(APITestCase):
         )
         token = Token.objects.create(user=self.admin_user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+
+    def configured_admin(self, username, *capabilities):
+        user = User.objects.create_user(
+            username=username,
+            password='Password123!',
+            role='admin',
+        )
+        UserCapabilityGrant.objects.bulk_create([
+            UserCapabilityGrant(user=user, capability_code=ADMIN_CONFIGURED_MARKER),
+            *[
+                UserCapabilityGrant(user=user, capability_code=capability)
+                for capability in capabilities
+            ],
+        ])
+        return user
+
+    def test_configured_admin_requires_system_settings_capabilities(self):
+        unrelated = self.configured_admin('settings-unrelated', TECHNICIAN_DASHBOARD_VIEW)
+        self.client.force_authenticate(user=unrelated)
+        self.assertEqual(self.client.get('/api/users/admin_settings/').status_code, status.HTTP_403_FORBIDDEN)
+
+        viewer = self.configured_admin('settings-viewer', SYSTEM_SETTINGS_VIEW)
+        self.client.force_authenticate(user=viewer)
+        self.assertEqual(self.client.get('/api/users/admin_settings/').status_code, status.HTTP_200_OK)
+        blocked_update = self.client.put(
+            '/api/users/admin_settings/',
+            {'autoDispatchEnabled': True},
+            format='json',
+        )
+        self.assertEqual(blocked_update.status_code, status.HTTP_403_FORBIDDEN)
+
+        manager = self.configured_admin('settings-manager', SYSTEM_SETTINGS_MANAGE)
+        self.client.force_authenticate(user=manager)
+        allowed_update = self.client.put(
+            '/api/users/admin_settings/',
+            {'autoDispatchEnabled': True},
+            format='json',
+        )
+        self.assertEqual(allowed_update.status_code, status.HTTP_200_OK)
+
+    def test_public_site_viewer_does_not_receive_operational_settings(self):
+        public_viewer = self.configured_admin('settings-public-viewer', PUBLIC_SITE_VIEW)
+        self.client.force_authenticate(user=public_viewer)
+
+        response = self.client.get('/api/users/admin_settings/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('landingPageContent', response.data)
+        self.assertNotIn('autoDispatchEnabled', response.data)
+        self.assertFalse(response.data['canViewSystemSettings'])
+
+    def test_public_site_actions_use_granular_capabilities(self):
+        publisher = self.configured_admin('settings-publisher', PUBLIC_SITE_PUBLISH)
+        self.client.force_authenticate(user=publisher)
+        publish_response = self.client.put(
+            '/api/admin/settings/',
+            {'landingPagePromotions': []},
+            format='json',
+        )
+        upload_blocked = self.client.post('/api/admin/settings/landing-images/', {}, format='multipart')
+        self.assertEqual(publish_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(upload_blocked.status_code, status.HTTP_403_FORBIDDEN)
+
+        uploader = self.configured_admin('settings-uploader', PUBLIC_SITE_ASSET_UPLOAD)
+        self.client.force_authenticate(user=uploader)
+        publish_blocked = self.client.put(
+            '/api/admin/settings/',
+            {'landingPagePromotions': []},
+            format='json',
+        )
+        upload_reaches_validation = self.client.post('/api/admin/settings/landing-images/', {}, format='multipart')
+        self.assertEqual(publish_blocked.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(upload_reaches_validation.status_code, status.HTTP_400_BAD_REQUEST)
+
+        deleter = self.configured_admin('settings-deleter', PUBLIC_SITE_ASSET_DELETE)
+        self.client.force_authenticate(user=deleter)
+        delete_reaches_lookup = self.client.delete('/api/admin/settings/landing-images/999999/')
+        self.assertEqual(delete_reaches_lookup.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_legacy_public_site_manage_remains_an_umbrella_capability(self):
+        manager = self.configured_admin('settings-public-manager', PUBLIC_SITE_MANAGE)
+        self.client.force_authenticate(user=manager)
+
+        response = self.client.get('/api/admin/settings/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['canPublishLandingPage'])
+        self.assertTrue(response.data['canUploadLandingAssets'])
+        self.assertTrue(response.data['canDeleteLandingAssets'])
 
     def test_admin_settings_can_be_updated(self):
         response = self.client.put('/api/users/admin_settings/', {
@@ -823,6 +1101,18 @@ class AdminUserManagementTests(APITestCase):
         self.assertEqual(response.data['role'], 'admin')
         self.assertTrue(created_user.is_active)
         self.assertEqual(created_user.status, 'active')
+
+    def test_superadmin_can_create_client_through_client_management_endpoint(self):
+        response = self.client.post('/api/admin/clients/', {
+            'username': 'admin-created-client',
+            'email': 'admin-created-client@example.com',
+            'password': 'Password123!',
+            'password_confirm': 'Password123!',
+            'role': 'client',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertTrue(User.objects.filter(username='admin-created-client', role='client').exists())
 
 
 class AdminAnalyticsTests(APITestCase):
@@ -958,9 +1248,11 @@ class AdminAnalyticsTests(APITestCase):
                 if completed_days_ago is not None else None
             )
         )
+        ServiceTicket.objects.filter(pk=ticket.pk).update(created_at=request_time)
+        ticket.refresh_from_db()
         return ticket
 
-    def test_admin_analytics_returns_predictive_metrics_from_live_data(self):
+    def test_admin_analytics_returns_unified_live_contract(self):
         self._create_request_with_ticket(
             service_type=self.solar,
             request_days_ago=1,
@@ -978,42 +1270,20 @@ class AdminAnalyticsTests(APITestCase):
         response = self.client.get('/api/admin/analytics/')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('overview', response.data)
-        self.assertIn('predictiveSummary', response.data)
-        self.assertIn('serviceForecasts', response.data)
-        self.assertIn('busiestMonths', response.data)
-        self.assertIn('busiestWeeks', response.data)
-        self.assertIn('topRequestedServiceTypes', response.data)
-        self.assertIn('cityCompletionTrends', response.data)
-        self.assertIn('provinceCompletionTrends', response.data)
-        self.assertIn('locationDemandForecast', response.data)
-        self.assertIn('requestSourceBreakdown', response.data)
-        self.assertIn('priorityDistribution', response.data)
-        self.assertIn('ticketStatusBreakdown', response.data)
-        self.assertIn('schedulingInsights', response.data)
-        self.assertGreaterEqual(response.data['overview']['totalRequests'], 4)
-        self.assertGreaterEqual(response.data['overview']['completedRequests'], 2)
-        self.assertEqual(response.data['topTech']['techName'], self.technician_user.username)
-        self.assertTrue(any(item['name'] == self.solar.name for item in response.data['jobCountByService']))
-        self.assertGreaterEqual(response.data['predictiveSummary']['totalPredictedRequests'], 1)
-        self.assertTrue(any(item['serviceType'] == self.solar.name for item in response.data['serviceForecasts']))
-        self.assertGreaterEqual(len(response.data['busiestMonths']), 1)
-        self.assertGreaterEqual(len(response.data['busiestWeeks']), 1)
-        self.assertEqual(response.data['topRequestedServiceTypes'][0]['serviceType'], self.solar.name)
-        self.assertTrue(any(item['city'] == 'Lagos' for item in response.data['cityCompletionTrends']))
-        self.assertTrue(any(item['province'] == 'Lagos' for item in response.data['provinceCompletionTrends']))
-        self.assertGreaterEqual(len(response.data['locationDemandForecast']['hotspots']), 1)
-        self.assertEqual(response.data['locationDemandForecast']['hotspots'][0]['city'], 'Lagos')
-        self.assertIn('projectedNext7Days', response.data['locationDemandForecast']['hotspots'][0])
-        self.assertTrue(any(item['source'] == 'phone' for item in response.data['requestSourceBreakdown']))
-        self.assertTrue(any(item['priority'] == 'Urgent' for item in response.data['priorityDistribution']['requests']))
-        self.assertTrue(any(item['priority'] == 'High' for item in response.data['priorityDistribution']['tickets']))
-        self.assertTrue(any(item['status'] == 'Not Started' for item in response.data['ticketStatusBreakdown']))
-        self.assertTrue(any(item['value'] == 'morning' for item in response.data['schedulingInsights']['preferredRequestSlots']))
-        self.assertTrue(any(item['value'] == 'afternoon' for item in response.data['schedulingInsights']['scheduledTicketSlots']))
-        self.assertTrue(any(item['value'] == 'inspection' for item in response.data['schedulingInsights']['ticketTypes']))
-        self.assertTrue(any(item['value'] == 'active' for item in response.data['schedulingInsights']['warrantyStatuses']))
-        self.assertGreaterEqual(response.data['schedulingInsights']['rescheduleRequests']['count'], 1)
+        self.assertEqual(set(response.data['kpis']), {
+            'total_tickets', 'completed_tickets', 'completion_rate',
+            'average_completion_hours', 'average_completion_observations', 'current_overdue',
+        })
+        self.assertEqual(set(response.data['charts']), {
+            'requests_vs_completions', 'service_demand', 'ticket_statuses',
+            'technician_workload', 'locations',
+        })
+        self.assertEqual(response.data['period']['timezone'], 'Asia/Manila')
+        self.assertLessEqual(response.data['kpis']['completion_rate'], 100)
+        self.assertFalse(response.data['forecast']['available'])
+        self.assertEqual(response.data['forecast']['predictions'], [])
+        self.assertTrue(any(item['service_type'] == self.solar.name for item in response.data['charts']['service_demand']))
+        self.assertTrue(any(item['city'] == 'Lagos' for item in response.data['charts']['locations']))
 
     @override_settings(GEMINI_API_KEY='')
     def test_admin_analytics_ai_summary_returns_local_fallback_without_api_key(self):
@@ -1026,6 +1296,28 @@ class AdminAnalyticsTests(APITestCase):
         self.assertIn('analytics', response.data)
         self.assertIn('overview', response.data['analytics'])
         self.assertIn('forecast', response.data['analytics'])
+        self.assertIn('itemDemandReadiness', response.data['analytics'])
+        self.assertFalse(response.data['analytics']['forecast']['available'])
+        self.assertEqual(response.data['analytics']['forecast']['predictions'], [])
+        self.assertIn('Forecasts are unavailable', response.data['summary'])
+        self.assertNotIn('next 7 days forecast', response.data['summary'])
+
+    @override_settings(GEMINI_API_KEY='configured-for-test', GEMINI_ANALYTICS_MODEL='test-model')
+    @patch('users.views.admin_services.urlrequest.urlopen')
+    def test_admin_analytics_ai_summary_rejects_cut_off_provider_response(self, mocked_urlopen):
+        provider_response = MagicMock()
+        provider_response.read.return_value = (
+            b'{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":"Cut off mid sent"}]}}]}'
+        )
+        mocked_urlopen.return_value.__enter__.return_value = provider_response
+
+        response = self.client.get('/api/admin/analytics/ai-summary/?days=30&question=forecast+accuracy')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['source'], 'local')
+        self.assertFalse(response.data['configured'])
+        self.assertNotIn('Cut off mid sent', response.data['summary'])
+        self.assertIn('Forecasts are unavailable', response.data['summary'])
 
     @override_settings(GEMINI_API_KEY='')
     def test_admin_analytics_ai_summary_includes_issued_inventory_demand(self):
@@ -1047,6 +1339,14 @@ class AdminAnalyticsTests(APITestCase):
             service_ticket=ticket,
             performed_by=self.admin_user,
         )
+        InventoryTransaction.objects.create(
+            item=item,
+            transaction_type='issue',
+            quantity=9,
+            technician=self.technician_user,
+            service_ticket=None,
+            performed_by=self.admin_user,
+        )
 
         response = self.client.get('/api/admin/analytics/ai-summary/?days=30')
 
@@ -1056,27 +1356,23 @@ class AdminAnalyticsTests(APITestCase):
         self.assertEqual(inventory_demand['totalQuantityConsumed'], 3)
         self.assertEqual(inventory_demand['topItems'][0]['item'], 'Solar Cable')
         self.assertEqual(inventory_demand['topCategories'][0]['category'], 'Solar Parts')
+        self.assertIn('linked to service tickets', inventory_demand['dataSource'])
 
-    def test_admin_analytics_period_changes_overview_and_service_counts(self):
+    def test_admin_analytics_period_changes_ticket_cohort_and_service_demand(self):
         weekly_response = self.client.get('/api/admin/analytics/?days=7')
         yearly_response = self.client.get('/api/admin/analytics/?days=365')
 
         self.assertEqual(weekly_response.status_code, status.HTTP_200_OK)
         self.assertEqual(yearly_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(weekly_response.data['analyticsPeriodDays'], 7)
-        self.assertEqual(yearly_response.data['analyticsPeriodDays'], 365)
-        self.assertEqual(weekly_response.data['overview']['totalRequests'], 3)
-        self.assertEqual(weekly_response.data['overview']['completedRequests'], 2)
-        self.assertEqual(yearly_response.data['overview']['totalRequests'], 5)
-        self.assertEqual(yearly_response.data['overview']['completedRequests'], 3)
+        self.assertLess(weekly_response.data['kpis']['total_tickets'], yearly_response.data['kpis']['total_tickets'])
 
         weekly_services = {
-            item['serviceType']: item['requestCount']
-            for item in weekly_response.data['topRequestedServiceTypes']
+            item['service_type']: item['requests']
+            for item in weekly_response.data['charts']['service_demand']
         }
         yearly_services = {
-            item['serviceType']: item['requestCount']
-            for item in yearly_response.data['topRequestedServiceTypes']
+            item['service_type']: item['requests']
+            for item in yearly_response.data['charts']['service_demand']
         }
 
         self.assertEqual(weekly_services[self.solar.name], 2)
@@ -1084,16 +1380,17 @@ class AdminAnalyticsTests(APITestCase):
         self.assertEqual(yearly_services[self.solar.name], 3)
         self.assertEqual(yearly_services[self.cctv.name], 2)
 
-    def test_admin_analytics_avg_completion_time_respects_selected_period(self):
+    def test_admin_analytics_avg_completion_time_uses_valid_cohort_timestamps(self):
         weekly_response = self.client.get('/api/admin/analytics/?days=7')
         yearly_response = self.client.get('/api/admin/analytics/?days=365')
 
         self.assertEqual(weekly_response.status_code, status.HTTP_200_OK)
         self.assertEqual(yearly_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(weekly_response.data['overview']['avgCompletionTimeHours'], 32.0)
-        self.assertEqual(yearly_response.data['overview']['avgCompletionTimeHours'], 28.0)
+        self.assertEqual(weekly_response.data['kpis']['average_completion_observations'], 2)
+        self.assertEqual(yearly_response.data['kpis']['average_completion_observations'], 3)
+        self.assertGreater(weekly_response.data['kpis']['average_completion_hours'], 0)
 
-    def test_admin_analytics_counts_only_available_technicians_in_overview(self):
+    def test_admin_analytics_filter_options_include_active_technician_accounts(self):
         User.objects.create_user(
             username='offline_analytics_tech',
             email='offline_analytics_tech@example.com',
@@ -1106,19 +1403,18 @@ class AdminAnalyticsTests(APITestCase):
         response = self.client.get('/api/admin/analytics/')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['overview']['activeTechnicians'], 1)
-        self.assertEqual(response.data['overview']['availableTechnicians'], 1)
-        self.assertEqual(response.data['overview']['activeTechnicianAccounts'], 2)
+        self.assertEqual(len(response.data['filter_options']['technicians']), 2)
 
     def test_admin_analytics_monthly_trend_buckets_completions_by_completion_month(self):
-        fixed_now = timezone.make_aware(datetime(2026, 4, 25, 12, 0, 0))
-
-        with patch('users.views.timezone.now', return_value=fixed_now):
-            base_response = self.client.get('/api/admin/analytics/')
+        start_date = '2026-03-01'
+        end_date = '2026-04-30'
+        base_response = self.client.get('/api/admin/analytics/', {
+            'start_date': start_date, 'end_date': end_date, 'group_by': 'month',
+        })
 
         base_trend = {
-            item['monthStart']: item
-            for item in base_response.data['monthlyServiceTrend']
+            item['period']: item
+            for item in base_response.data['charts']['requests_vs_completions']
         }
 
         request_time = timezone.make_aware(datetime(2026, 3, 28, 9, 0, 0))
@@ -1155,29 +1451,30 @@ class AdminAnalyticsTests(APITestCase):
             completed_date=completion_time,
         )
 
-        with patch('users.views.timezone.now', return_value=fixed_now):
-            response = self.client.get('/api/admin/analytics/')
+        response = self.client.get('/api/admin/analytics/', {
+            'start_date': start_date, 'end_date': end_date, 'group_by': 'month',
+        })
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         request_month = request_time.date().replace(day=1).isoformat()
         completion_month = completion_time.date().replace(day=1).isoformat()
         updated_trend = {
-            item['monthStart']: item
-            for item in response.data['monthlyServiceTrend']
+            item['period']: item
+            for item in response.data['charts']['requests_vs_completions']
         }
 
         self.assertEqual(
-            updated_trend[request_month]['requestCount'],
-            base_trend[request_month]['requestCount'] + 1,
+            updated_trend[request_month]['requests'],
+            base_trend[request_month]['requests'] + 1,
         )
         self.assertEqual(
-            updated_trend[completion_month]['completedCount'],
-            base_trend[completion_month]['completedCount'] + 1,
+            updated_trend[completion_month]['completions'],
+            base_trend[completion_month]['completions'] + 1,
         )
         self.assertEqual(
-            updated_trend[request_month]['completedCount'],
-            base_trend[request_month]['completedCount'],
+            updated_trend[request_month]['completions'],
+            base_trend[request_month]['completions'],
         )
 
 
@@ -1216,6 +1513,7 @@ class CapabilityGrantApiTests(APITestCase):
 
     def test_superadmin_can_grant_direct_capabilities_to_staff(self):
         token = Token.objects.create(user=self.superadmin_user)
+        target_token = Token.objects.create(user=self.technician_user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
 
         response = self.client.put(
@@ -1235,6 +1533,14 @@ class CapabilityGrantApiTests(APITestCase):
             {TECHNICIAN_DASHBOARD_VIEW, TECHNICIAN_JOBS_VIEW}
         )
         self.assertIn(TECHNICIAN_DASHBOARD_VIEW, response.data['effective_capabilities'])
+        self.assertFalse(Token.objects.filter(key=target_token.key).exists())
+        activity = ActivityLog.objects.filter(
+            category='security',
+            target_id=self.technician_user.id,
+            message__icontains='capabilities',
+        ).first()
+        self.assertIsNotNone(activity)
+        self.assertTrue(activity.metadata['sessions_revoked'])
 
     def test_admin_cannot_grant_staff_capabilities(self):
         token = Token.objects.create(user=self.admin_user)
@@ -1437,6 +1743,24 @@ class AdminActivityLogTests(APITestCase):
         self.assertTrue(all(row['model'] == 'servicetype' for row in rows))
         self.assertTrue(all(row['action'] == 'update' for row in rows))
 
+    def test_activity_log_pagination_defaults_to_ten_results(self):
+        ActivityLog.objects.all().delete()
+        for index in range(11):
+            ActivityLog.objects.create(
+                actor=self.superadmin_user,
+                actor_role='superadmin',
+                category='security',
+                action='login',
+                message=f'Pagination activity {index}',
+            )
+        self.authenticate(self.superadmin_user)
+
+        response = self.client.get('/api/admin/activity-logs/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 11)
+        self.assertEqual(len(response.data['results']), 10)
+
     def test_cancelled_service_request_is_recorded_as_cancel_activity(self):
         self.authenticate(self.superadmin_user)
         service_request = ServiceRequest.objects.create(
@@ -1447,7 +1771,11 @@ class AdminActivityLogTests(APITestCase):
         )
         ActivityLog.objects.all().delete()
 
-        response = self.client.post(f'/api/services/service-requests/{service_request.id}/cancel/')
+        response = self.client.post(
+            f'/api/services/service-requests/{service_request.id}/cancel/',
+            {'reason': 'Client withdrew the request.'},
+            format='json',
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         log = ActivityLog.objects.filter(
@@ -1526,6 +1854,74 @@ class AdminActivityLogTests(APITestCase):
         response = self.client.get('/api/admin/activity-logs/')
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_activity_summary_uses_the_complete_filtered_queryset(self):
+        ActivityLog.objects.all().delete()
+        ActivityLog.objects.create(
+            actor=self.superadmin_user,
+            actor_role='superadmin',
+            actor_display_name='Activity Owner',
+            category='security',
+            action='login',
+            message='Activity Owner logged in.',
+        )
+        ActivityLog.objects.create(
+            category='system',
+            action='error',
+            message='Background synchronization failed.',
+        )
+        self.authenticate(self.superadmin_user)
+
+        response = self.client.get('/api/admin/activity-logs/summary/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total'], 2)
+        self.assertEqual(response.data['today'], 2)
+        self.assertEqual(response.data['attention'], 1)
+        self.assertEqual(response.data['user_actions'], 1)
+
+        filtered = self.client.get('/api/admin/activity-logs/summary/', {'category': 'security'})
+        self.assertEqual(filtered.status_code, status.HTTP_200_OK)
+        self.assertEqual(filtered.data['total'], 1)
+        self.assertEqual(filtered.data['attention'], 0)
+        self.assertEqual(filtered.data['user_actions'], 1)
+
+    def test_activity_csv_export_respects_filters_and_neutralizes_formulas(self):
+        ActivityLog.objects.all().delete()
+        included = ActivityLog.objects.create(
+            actor=self.superadmin_user,
+            actor_role='superadmin',
+            category='inventory',
+            action='update',
+            target_model='inventoryitem',
+            target_id=42,
+            target_label='=HYPERLINK("https://example.invalid")',
+            message='Inventory quantity updated.',
+            metadata={'field_name': 'quantity', 'new_value': 12},
+            ip_address='127.0.0.1',
+            user_agent='Audit Test Browser',
+        )
+        ActivityLog.objects.create(
+            category='security',
+            action='login',
+            message='Unrelated security event.',
+        )
+        self.authenticate(self.superadmin_user)
+
+        response = self.client.get('/api/admin/activity-logs/export/', {'category': 'inventory'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Content-Type'], 'text/csv; charset=utf-8')
+        content = b''.join(response.streaming_content).decode('utf-8')
+        self.assertIn('Event ID,Recorded at,Category,Action', content)
+        self.assertIn(str(included.pk), content)
+        self.assertIn('Inventory quantity updated.', content)
+        self.assertIn("'=HYPERLINK", content)
+        self.assertNotIn('Unrelated security event.', content)
+
+        self.authenticate(self.client_user)
+        forbidden = self.client.get('/api/admin/activity-logs/export/')
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_audit_taxonomy_covers_sla_admin_settings_and_documents(self):
         from users.signals import set_current_user

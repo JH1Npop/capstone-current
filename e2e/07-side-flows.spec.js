@@ -143,18 +143,55 @@ test.describe('Side Flow - Client Support', () => {
 test.describe('Side Flow - Notifications', () => {
   test('7.8 - Client notifications page loads', async ({ page }) => {
     await seedAuthState(page, clientAuthState);
+    await page.route('**/api/notifications/unread_count/', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ unread_count: 7 }),
+    }));
 
     await page.goto('/client/notifications');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
 
     await page.screenshot({ path: 'test-results/screenshots/07-08-notifications.png', fullPage: true });
-    const hasNotificationsUi =
-      await page.locator('[class*="notification"], [class*="card"], [class*="list"], [class*="empty"]').first().isVisible({ timeout: 3000 }).catch(() => false)
-      || await page.getByRole('heading', { name: /notifications/i }).isVisible({ timeout: 3000 }).catch(() => false)
-      || await page.getByText(/no notifications|unable to load notifications/i).isVisible({ timeout: 3000 }).catch(() => false)
-      || await page.getByRole('button', { name: /mark all as read|refresh/i }).isVisible({ timeout: 3000 }).catch(() => false);
-    expect(hasNotificationsUi).toBeTruthy();
+    await expect(page.getByRole('heading', { name: 'Notifications', exact: true })).toBeVisible();
+    const sidebarLink = page.getByRole('link', { name: /Notifications/ });
+    await expect(sidebarLink).toHaveAttribute('href', '/client/notifications');
+    await expect(sidebarLink.locator('span').last()).toHaveText('7');
+  });
+
+  test('7.8b - Opening a badged sidebar destination clears its related unread notifications', async ({ page }) => {
+    await seedAuthState(page, clientAuthState);
+    const markedNotificationIds = [];
+    const notifications = [
+      { id: 901, title: 'Request updated', message: 'Your request status was updated.', status: 'unread', created_at: '2026-09-15T10:00:00Z' },
+      { id: 902, title: 'New service request update', message: 'Your technician was assigned.', status: 'unread', created_at: '2026-09-15T10:01:00Z' },
+    ];
+
+    await page.route('**/api/notifications/', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(notifications),
+    }));
+    await page.route('**/api/notifications/unread_count/', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ unread_count: 2 }),
+    }));
+    await page.route('**/api/notifications/*/mark_read/', (route) => {
+      markedNotificationIds.push(Number(new URL(route.request().url()).pathname.split('/').at(-3)));
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'read' }) });
+    });
+
+    await page.goto('/client/dashboard');
+    const badgedRequestsLink = page.getByRole('link', { name: /My Requests/ });
+    await expect(badgedRequestsLink).toContainText('2');
+    await badgedRequestsLink.click();
+
+    await expect(page).toHaveURL(/\/client\/requests$/);
+    await expect(page.getByRole('link', { name: 'My Requests', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Notifications', exact: true })).toBeVisible();
+    await expect.poll(() => markedNotificationIds.sort()).toEqual([901, 902]);
   });
 });
 

@@ -106,11 +106,8 @@ These are not fake or dead, but they are easier to miss because they are not cen
 | --- | ---: | --- | --- |
 | `services_aftersalescase` | 6 | Lightly Surfaced | Used for follow-up/after-sales flow, but not central in the main admin queue |
 | `services_maintenanceschedule` | 4 | Lightly Surfaced | Used for maintenance follow-up scheduling, not a main daily workflow screen |
-| `progress_ticketprogress` | 0 | Cleanup Candidate | Exposed by API, but active operation reports now use live service ticket reports |
-| `history_servicehistory` | 0 | Cleanup Candidate | Exposed by API, but current job history comes from completed service tickets |
+| `progress_ticketprogress` | 0 | Retained API Contract | Secured append-only progress API; active operation reports also use live service ticket reports |
 | `messages_app_message` | 2 | Lightly Surfaced | Staff chat and ticket-linked after-sales messaging |
-| `notifications_notificationtemplate` | 0 | Lightly Surfaced | Template support exists, but not actively populated |
-| `notifications_notificationlog` | 0 | Lightly Surfaced | Delivery logging structure exists, but not populated locally |
 
 Note: Firebase push delivery has been removed from the active implementation. Any Firebase token table in an older local database or diagram export is legacy cleanup context, not a current feature surface.
 
@@ -253,7 +250,8 @@ User/Profile/Capability
   -> ActivityLog
 ```
 
-The older `progress` and `history` apps should not drive new model work unless you intentionally reconnect them to the main flow.
+The older `history_servicehistory` model was retired. `TicketProgress` remains
+only because it has an explicit append-only API and authorization contract.
 
 ## What Is Probably Safe To Ignore Day To Day
 
@@ -264,8 +262,6 @@ If you are focusing on normal operations, these are not usually where you should
 - `sqlite_sequence`
 - `users_user_groups`
 - `users_user_user_permissions`
-- `notifications_notificationtemplate`
-- `notifications_notificationlog`
 
 ## What You Should Focus On If Admin Feels Messy
 
@@ -302,21 +298,18 @@ The right next step is usually:
 2. document which tables are internal versus operational
 3. only then consider cleanup or removal
 
-## Suggested Cleanup Candidates For Later Review
+## Completed Schema Cleanup
 
-These are not recommendations to delete immediately. They are only the first places to review if you want to reduce conceptual clutter later.
+The following zero-row, disconnected structures were retired after static and
+runtime verification:
 
-- `history_servicehistory`
-  Reason: active schema but empty locally; completed ticket history is already available from `ServiceTicket`
+- `history_servicehistory`; completed ticket history already comes from
+  `ServiceTicket` and `ServiceStatusHistory`
+- `notifications_notificationtemplate`; no runtime producer or consumer
+- `notifications_notificationlog`; no runtime producer or consumer
 
-- `progress_ticketprogress`
-  Reason: real route exists, but current reports use live service ticket data
-
-- `notifications_notificationtemplate`
-  Reason: structure exists but appears unused locally
-
-- `notifications_notificationlog`
-  Reason: structure exists but appears unused locally
+`progress_ticketprogress` was reviewed but retained because its authenticated,
+append-only API and authorization tests are active contracts.
 
 - analytics tables
   Reason: valid backend structures, but not part of the core daily operational flow

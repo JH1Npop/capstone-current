@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FiSearch } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
+import SearchFilterBar from '../../components/shared/SearchFilterBar';
 import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { api } from '../../api/core';
@@ -9,7 +9,7 @@ import { REPORTS_EXPORT_CAPABILITIES, hasAnyCapability } from '../../rbac';
 import { formatDate } from '../../utils/formatDate';
 import { formatTechnicianId, formatTicketId } from '../../utils/roleIds';
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
 
 const normalizeReportValue = (value) =>
   String(value || '').trim().replace(/[_-]+/g, ' ').toLowerCase();
@@ -348,79 +348,20 @@ export default function AdminReports() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_minmax(130px,155px)_minmax(130px,155px)_minmax(150px,180px)_minmax(150px,180px)_minmax(150px,180px)]">
-            <label className="relative block min-w-0">
-              <span className="sr-only">Search reports</span>
-              <FiSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                type="text"
-                placeholder="Search client, technician, address, service"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 pl-11 pr-4 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              />
-            </label>
-            <label className="block min-w-0">
-              <span className="sr-only">From date</span>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(event) => setDateFrom(event.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              />
-            </label>
-            <label className="block min-w-0">
-              <span className="sr-only">To date</span>
-              <input
-                type="date"
-                value={dateTo}
-                min={dateFrom || undefined}
-                onChange={(event) => setDateTo(event.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              />
-            </label>
-            <label className="block min-w-0">
-              <span className="sr-only">Service</span>
-              <select
-                value={serviceFilter}
-                onChange={(event) => setServiceFilter(event.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              >
-                <option value="All">All Services</option>
-                {serviceOptions.map((service) => (
-                  <option key={service} value={service}>{service}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block min-w-0">
-              <span className="sr-only">Client</span>
-              <select
-                value={clientFilter}
-                onChange={(event) => setClientFilter(event.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              >
-                <option value="All">All Clients</option>
-                {clientOptions.map((client) => (
-                  <option key={client} value={client}>{client}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block min-w-0">
-              <span className="sr-only">Technician</span>
-              <select
-                value={technicianFilter}
-                onChange={(event) => setTechnicianFilter(event.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              >
-                <option value="All">All Technicians</option>
-                {technicianOptions.map((technician) => (
-                  <option key={technician} value={technician}>{technician}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </section>
+        <SearchFilterBar
+          searchValue={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchLabel="Find a service ticket"
+          searchPlaceholder="Search client, technician, address, or service"
+          filters={[
+            { key: 'from', label: 'From date', type: 'date', value: dateFrom, defaultValue: '', onChange: setDateFrom },
+            { key: 'to', label: 'To date', type: 'date', value: dateTo, defaultValue: '', min: dateFrom || undefined, onChange: setDateTo },
+            { key: 'service', label: 'Service', value: serviceFilter, defaultValue: 'All', onChange: setServiceFilter, options: [{ value: 'All', label: 'Any service' }, ...serviceOptions.map((value) => ({ value, label: value }))] },
+            { key: 'client', label: 'Client', value: clientFilter, defaultValue: 'All', onChange: setClientFilter, options: [{ value: 'All', label: 'Any client' }, ...clientOptions.map((value) => ({ value, label: value }))] },
+            { key: 'technician', label: 'Technician', value: technicianFilter, defaultValue: 'All', onChange: setTechnicianFilter, options: [{ value: 'All', label: 'Any technician' }, ...technicianOptions.map((value) => ({ value, label: value }))] },
+          ]}
+          onClear={resetFilters}
+        />
 
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
@@ -429,13 +370,6 @@ export default function AdminReports() {
               <p className="text-sm text-slate-500">Showing {visibleStartIndex}-{visibleEndIndex} of {filteredTickets.length} tickets.</p>
             </div>
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="h-9 rounded-lg border border-slate-300 px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-              >
-                Reset
-              </button>
               {canExport ? (
                 <>
                   <button type="button" onClick={printReport} className="h-9 rounded-lg border border-slate-300 px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50">

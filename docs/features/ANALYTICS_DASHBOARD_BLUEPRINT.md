@@ -273,28 +273,12 @@ So `TicketProgress` is usable for timeline analytics, but weak for precise acade
 
 ---
 
-### 2.8 `ServiceHistory`
+### 2.8 Completed-job facts
 
-Current useful fields:
-
-- `ticket`
-- `technician`
-- `service_type`
-- `completion_date`
-- `service_duration`
-- `customer_rating`
-
-Analytics value:
-
-- completed jobs archive
-- completed jobs per technician
-- completed jobs per service type
-- average service duration
-- customer satisfaction by technician or service
-
-Important limitation:
-
-- `ServiceHistory` is useful as a completed-job summary table, but it lacks location, status path, arrival time, start time, and assignment time.
+The disconnected `ServiceHistory` model was retired. Completed-job analytics
+must derive from `ServiceTicket`, its request/service/location relationships,
+and `ServiceStatusHistory`. This keeps one authoritative operational timeline
+instead of maintaining a second summary table that can drift.
 
 ---
 
@@ -592,7 +576,6 @@ Possible through:
 
 - `ServiceTicket.client_rating`
 - `ServiceTicket.client_feedback`
-- `ServiceHistory.customer_rating`
 
 Why partial:
 
@@ -694,19 +677,11 @@ Why:
 
 - free text causes weak reporting consistency
 
-#### Add to `ServiceHistory`
+#### Keep completed-job facts on the authoritative workflow
 
-- `province`
-- `city`
-- `barangay`
-- `assigned_at`
-- `arrived_at_site`
-- `started_at`
-- `completed_at`
-
-Why:
-
-- if `ServiceHistory` becomes the completed-job fact table, analytics and reports become easier
+Use `ServiceTicket`, `ServiceLocation`, and `ServiceStatusHistory` for province,
+city, assignment, arrival, start, and completion facts. Do not recreate the
+retired `ServiceHistory` summary table.
 
 ### Optional but useful fields
 

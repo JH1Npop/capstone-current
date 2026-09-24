@@ -1,22 +1,38 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   FiCheckCircle,
   FiClipboard,
   FiAlertTriangle,
+  FiBox,
+  FiClock,
+  FiTool,
+  FiUsers,
   FiRefreshCw,
   FiTrendingUp,
+  FiExternalLink,
   FiX
 } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import ActiveTechnicianJobs from '../../components/shared/ActiveTechnicianJobs';
+import ActiveJobDetailsDialog from '../../components/shared/ActiveJobDetailsDialog';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import StatsCard from '../../components/ui/StatsCard';
 import StatusBadge from '../../components/ui/StatusBadge';
 import SLABadge from '../../components/ui/SLABadge';
 import { useAuth } from '../../context/AuthContext';
 import { fetchDashboardStats, approveServiceRequest, rejectServiceRequest, fetchServiceRequest } from '../../api/api';
-import { canViewAdminUserDirectory, hasAnyCapability, SERVICE_REQUEST_REVIEW_CAPABILITIES } from '../../rbac';
+import {
+  ADMIN_JOB_HISTORY_CAPABILITIES,
+  AFTER_SALES_CASE_CAPABILITIES,
+  INVENTORY_VIEW_CAPABILITIES,
+  SERVICE_REQUEST_REVIEW_CAPABILITIES,
+  SUPERVISOR_DISPATCH_CAPABILITIES,
+  SUPERVISOR_TICKETS_CAPABILITIES,
+  SUPERVISOR_TRACKING_CAPABILITIES,
+  canViewAdminUserDirectory,
+  hasAnyCapability,
+} from '../../rbac';
 import {
   AUTO_REFRESH_MS,
   formatDate,
@@ -27,6 +43,7 @@ import { formatClientId } from '../../utils/roleIds';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const canReviewRequests = hasAnyCapability(user, SERVICE_REQUEST_REVIEW_CAPABILITIES);
   const [stats, setStats] = useState(null);
@@ -36,7 +53,13 @@ export default function AdminDashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [approvingRequests, setApprovingRequests] = useState(new Set());
   const [requestDecision, setRequestDecision] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
   const [viewingRequestDetails, setViewingRequestDetails] = useState(null);
+  const [viewingActiveJob, setViewingActiveJob] = useState(null);
+  const [actionMessage, setActionMessage] = useState('');
+  const detailsDialogRef = useRef(null);
+  const detailsTriggerRef = useRef(null);
+  const activeJobTriggerRef = useRef(null);
 
   const loadDashboard = async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
@@ -62,8 +85,11 @@ export default function AdminDashboard() {
       // Refresh the dashboard to show updated stats
       await loadDashboard({ silent: true });
       if (viewingRequestDetails?.id === requestId) {
-        setViewingRequestDetails(null);
+        closeRequestDetails();
       }
+      setActionMessage(requireInspection
+        ? 'Request approved for site inspection.'
+        : 'Request approved and prepared for dispatch.');
     } catch (err) {
       setError(err.message || 'Unable to approve request.');
     } finally {
@@ -75,14 +101,15 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleRejectRequest = async (requestId) => {
+  const handleRejectRequest = async (requestId, reason) => {
     setApprovingRequests(prev => new Set(prev).add(requestId));
     try {
-      await rejectServiceRequest(requestId, 'Request rejected during admin review.');
+      await rejectServiceRequest(requestId, reason);
       await loadDashboard({ silent: true });
       if (viewingRequestDetails?.id === requestId) {
-        setViewingRequestDetails(null);
+        closeRequestDetails();
       }
+      setActionMessage('Request rejected with the recorded reason.');
     } catch (err) {
       setError(err.message || 'Unable to reject request.');
     } finally {
@@ -103,8 +130,44 @@ export default function AdminDashboard() {
     } else if (decision.type === 'approve_inspection') {
       await handleApproveRequest(decision.id, true);
     } else {
-      await handleRejectRequest(decision.id);
+      await handleRejectRequest(decision.id, rejectReason.trim());
+      setRejectReason('');
     }
+  };
+
+  const closeRequestDetails = () => {
+    setViewingRequestDetails(null);
+    window.requestAnimationFrame(() => detailsTriggerRef.current?.focus());
+  };
+
+  const openRequestDetails = async (requestId, fallback, trigger = null) => {
+    detailsTriggerRef.current = trigger;
+    try {
+      const fullRequest = await fetchServiceRequest(requestId);
+      setViewingRequestDetails(fullRequest);
+    } catch (requestError) {
+      console.error(requestError);
+      setViewingRequestDetails(fallback || { id: requestId });
+    }
+  };
+
+  const openActiveJobDetails = (job, trigger = null) => {
+    activeJobTriggerRef.current = trigger;
+    setViewingActiveJob(job);
+  };
+
+  const closeActiveJobDetails = () => {
+    setViewingActiveJob(null);
+    window.requestAnimationFrame(() => activeJobTriggerRef.current?.focus());
+  };
+
+  const focusDashboardSection = (sectionId) => {
+    navigate(`/admin/dashboard#${sectionId}`);
+    window.requestAnimationFrame(() => {
+      const section = document.getElementById(sectionId);
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      section?.focus({ preventScroll: true });
+    });
   };
 
   useEffect(() => {
@@ -112,6 +175,40 @@ export default function AdminDashboard() {
     const intervalId = window.setInterval(() => loadDashboard({ silent: true }), AUTO_REFRESH_MS);
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    if (!viewingRequestDetails) return undefined;
+    const dialog = detailsDialogRef.current;
+    const focusable = dialog?.querySelectorAll(
+      'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+    );
+    focusable?.[0]?.focus();
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeRequestDetails();
+        return;
+      }
+      if (event.key !== 'Tab' || !focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [viewingRequestDetails]);
+
+  useEffect(() => {
+    const sectionId = location.hash.replace(/^#/, '');
+    if (!sectionId || !stats) return;
+    window.requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView({ block: 'start' }));
+  }, [location.hash, stats]);
 
   const overview = stats?.overview || {};
   const pendingRequests = Array.isArray(stats?.pending_requests) ? stats.pending_requests : [];
@@ -128,7 +225,20 @@ export default function AdminDashboard() {
   const slaWarningCount = Number(slaOverview.warning_count ?? 0);
   const slaOverdueCount = Number(slaOverview.overdue_count ?? 0);
   const lowStockCount = Number(overview.low_stock_items ?? 0);
+  const outOfStockCount = Number(overview.out_of_stock ?? 0);
+  const dueMaintenanceCount = Number(overview.due_maintenance ?? 0);
+  const overdueCasesCount = Number(overview.overdue_cases ?? 0);
+  const unassignedScheduleCount = Number(overview.unassigned_scheduled_jobs ?? 0);
+  const listCounts = stats?.list_counts || {};
+  const pendingRequestTotal = Number(listCounts.pending_requests ?? pendingApprovalsCount);
+  const scheduledJobTotal = Number(listCounts.client_schedule ?? clientSchedule.length ?? 0);
   const canOpenUsers = canViewAdminUserDirectory(user);
+  const canOpenTickets = hasAnyCapability(user, SUPERVISOR_TICKETS_CAPABILITIES);
+  const canOpenDispatch = hasAnyCapability(user, SUPERVISOR_DISPATCH_CAPABILITIES);
+  const canOpenInventory = hasAnyCapability(user, INVENTORY_VIEW_CAPABILITIES);
+  const canOpenAfterSales = hasAnyCapability(user, AFTER_SALES_CASE_CAPABILITIES);
+  const canOpenJobHistory = hasAnyCapability(user, ADMIN_JOB_HISTORY_CAPABILITIES);
+  const canOpenTracking = hasAnyCapability(user, SUPERVISOR_TRACKING_CAPABILITIES);
 
   const isActiveScheduleTicket = (ticket) => !['completed', 'cancelled'].includes(
     String(ticket?.status || '').toLowerCase().replace(/\s+/g, '_')
@@ -149,37 +259,110 @@ export default function AdminDashboard() {
     {
       label: 'Pending approvals',
       value: pendingApprovalsCount,
+      icon: FiClipboard,
+      actionLabel: 'Review requests',
+      onClick: canReviewRequests ? () => focusDashboardSection('pending-approvals') : null,
       tone: pendingApprovalsCount ? 'text-amber-700 bg-amber-50 ring-amber-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
     },
     {
       label: 'SLA warnings',
       value: slaWarningCount,
+      icon: FiClock,
+      actionLabel: 'Open warning queue',
+      path: canOpenTickets ? '/admin/service-tickets?focus=sla-warning' : null,
       tone: slaWarningCount ? 'text-orange-700 bg-orange-50 ring-orange-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
     },
     {
       label: 'Overdue SLA',
       value: slaOverdueCount,
+      icon: FiAlertTriangle,
+      actionLabel: 'Open overdue queue',
+      path: canOpenTickets ? '/admin/service-tickets?focus=sla-overdue' : null,
       tone: slaOverdueCount ? 'text-rose-700 bg-rose-50 ring-rose-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
     },
     {
       label: 'Low stock',
       value: lowStockCount,
+      icon: FiBox,
+      actionLabel: 'Open inventory',
+      path: canOpenInventory ? '/admin/inventory' : null,
       tone: lowStockCount ? 'text-amber-700 bg-amber-50 ring-amber-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
     },
+    {
+      label: 'Out of stock',
+      value: outOfStockCount,
+      icon: FiBox,
+      actionLabel: 'Open inventory',
+      path: canOpenInventory ? '/admin/inventory' : null,
+      tone: outOfStockCount ? 'text-rose-700 bg-rose-50 ring-rose-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
+    },
+    {
+      label: 'Unassigned visits',
+      value: unassignedScheduleCount,
+      icon: FiUsers,
+      actionLabel: 'Open dispatch',
+      path: canOpenDispatch ? '/admin/dispatch-board' : null,
+      tone: unassignedScheduleCount ? 'text-orange-700 bg-orange-50 ring-orange-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
+    },
+    {
+      label: 'Maintenance due',
+      value: dueMaintenanceCount,
+      icon: FiTool,
+      actionLabel: 'Review required',
+      path: null,
+      tone: dueMaintenanceCount ? 'text-orange-700 bg-orange-50 ring-orange-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
+    },
+    {
+      label: 'Overdue after-sales',
+      value: overdueCasesCount,
+      icon: FiAlertTriangle,
+      actionLabel: 'Open cases',
+      path: canOpenAfterSales ? '/admin/after-sales-cases?status=open' : null,
+      tone: overdueCasesCount ? 'text-rose-700 bg-rose-50 ring-rose-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
+    },
   ];
-  const totalAttentionCount = attentionItems.reduce((sum, item) => sum + item.value, 0);
+  const activeAttentionItems = attentionItems.filter((item) => item.value > 0);
+  const attentionCategoryCount = activeAttentionItems.length;
 
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-slate-500">
-            Last updated: <span className="font-medium text-slate-700">{formatDateTime(lastUpdated)}</span>
-          </p>
+        <div className="flex flex-col gap-3 rounded-2xl border border-brand-100 bg-gradient-to-r from-white via-brand-50/70 to-sky-50/70 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
+              <FiTrendingUp className="h-5 w-5" />
+              <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Live operations snapshot</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Updated <span className="font-medium text-slate-700">{formatDateTime(lastUpdated)}</span> · refreshes every 45 seconds
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => loadDashboard({ silent: true })}
+            disabled={loading || refreshing}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-200 bg-white px-3 py-2 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50 disabled:cursor-wait disabled:opacity-60"
+          >
+            <FiRefreshCw className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'Refreshing' : 'Refresh dashboard'}
+          </button>
         </div>
 
         {error && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+          <div role="alert" className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:flex-row sm:items-center sm:justify-between">
+            <span>{stats ? `Showing last known data. ${error}` : error}</span>
+            <button type="button" onClick={() => loadDashboard()} className="font-semibold underline underline-offset-2">Try again</button>
+          </div>
+        )}
+
+        {actionMessage && (
+          <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <span>{actionMessage}</span>
+            <button type="button" onClick={() => setActionMessage('')} aria-label="Dismiss update" className="rounded-md p-1 hover:bg-emerald-100"><FiX /></button>
+          </div>
         )}
 
         {/* ── Stat cards ── */}
@@ -190,6 +373,8 @@ export default function AdminDashboard() {
             icon={FiClipboard}
             accent="amber"
             color="text-amber-600"
+            helper={canReviewRequests ? 'Review on this dashboard' : 'Awaiting review'}
+            onClick={canReviewRequests ? () => focusDashboardSection('pending-approvals') : undefined}
           />
           <StatsCard
             title="Active Tickets"
@@ -197,6 +382,8 @@ export default function AdminDashboard() {
             icon={FiTrendingUp}
             accent="blue"
             color="text-brand-600"
+            helper={canOpenTickets ? 'Open service tickets' : 'Current active work'}
+            onClick={canOpenTickets ? () => navigate('/admin/service-tickets?focus=active') : undefined}
           />
           <StatsCard
             title="Completed Today"
@@ -204,46 +391,83 @@ export default function AdminDashboard() {
             icon={FiCheckCircle}
             accent="emerald"
             color="text-emerald-600"
+            helper={canOpenJobHistory ? 'Open completed jobs' : 'Business day total'}
+            onClick={canOpenJobHistory ? () => navigate('/admin/job-history') : undefined}
           />
           <StatsCard
-            title="Active Technicians"
+            title="Active Technician Accounts"
             value={activeTechniciansCount}
             icon={FiCheckCircle}
             accent="emerald"
             color="text-emerald-600"
+            helper={canOpenTracking ? 'Open technician tracking' : (canOpenUsers ? 'Open user directory' : 'Enabled accounts')}
+            onClick={canOpenTracking
+              ? () => navigate('/admin/technician-tracking')
+              : (canOpenUsers ? () => navigate('/admin/user-management') : undefined)}
           />
         </div>
 
         {/* ── Attention bar ── */}
         {/* ── Two-column: Approvals + Schedule ── */}
-        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex min-w-0 items-center gap-3">
-              <div className={`grid h-9 w-9 flex-none place-items-center rounded-lg ${totalAttentionCount ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                {totalAttentionCount ? <FiAlertTriangle /> : <FiCheckCircle />}
+              <div className={`grid h-9 w-9 flex-none place-items-center rounded-lg ${attentionCategoryCount ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                {attentionCategoryCount ? <FiAlertTriangle className="h-4 w-4" /> : <FiCheckCircle className="h-4 w-4" />}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">
-                  {totalAttentionCount ? `${totalAttentionCount} item${totalAttentionCount === 1 ? '' : 's'} need attention` : 'No urgent dashboard alerts'}
-                </p>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  {attentionCategoryCount ? `${attentionCategoryCount} area${attentionCategoryCount === 1 ? ' needs' : 's need'} your attention` : 'Everything looks under control'}
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">Operations control</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {attentionItems.map((item) => (
-                <span key={item.label} className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${item.tone}`}>
-                  <span>{item.value}</span>
-                  <span>{item.label}</span>
-                </span>
-              ))}
-            </div>
+            {activeAttentionItems.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+              {activeAttentionItems.map((item) => {
+                const actionable = item.path || item.onClick;
+                const ItemIcon = item.icon || FiAlertTriangle;
+                const content = (
+                  <>
+                    <ItemIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span className="font-bold">{item.value}</span>
+                    <span>{item.label}</span>
+                    {actionable && <FiExternalLink className="h-3 w-3 opacity-60" aria-hidden="true" />}
+                  </>
+                );
+                return actionable ? (
+                  <button
+                    type="button"
+                    key={item.label}
+                    onClick={() => item.onClick ? item.onClick() : navigate(item.path)}
+                    aria-label={`${item.label}: ${item.value}. ${item.actionLabel}`}
+                    className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold ring-1 ring-inset transition hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${item.tone}`}
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <div key={item.label} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold ring-1 ring-inset ${item.tone}`}>{content}</div>
+                );
+              })}
+              </div>
+            ) : (
+              <span className="text-xs font-semibold text-emerald-700">All queues clear</span>
+            )}
           </div>
         </section>
 
         <div className="grid gap-5 xl:grid-cols-2">
           {/* Pending Approvals */}
-          <div className="card p-5">
+          <div id="pending-approvals" tabIndex={-1} className="card scroll-mt-24 p-5 outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-slate-900">Pending Approvals</h2>
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-100 text-amber-700"><FiClipboard /></span>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Pending Approvals</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">Showing {filteredPendingRequests.length} of {pendingRequestTotal}</p>
+                </div>
+              </div>
+              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Review queue</span>
             </div>
             <div className="mt-4 space-y-2 max-h-[400px] overflow-y-auto pr-2">
               {loading && !stats ? (
@@ -262,15 +486,7 @@ export default function AdminDashboard() {
                       <span className="text-xs text-slate-400">{formatDate(req.request_date)}</span>
                       <button
                         type="button"
-                        onClick={async () => {
-                          try {
-                            const fullReq = await fetchServiceRequest(req.id);
-                            setViewingRequestDetails(fullReq);
-                          } catch (err) {
-                            console.error(err);
-                            setViewingRequestDetails(req);
-                          }
-                        }}
+                        onClick={(event) => openRequestDetails(req.id, req, event.currentTarget)}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 transition hover:bg-brand-100"
                       >
                         <FiClipboard className="h-3 w-3" />
@@ -288,14 +504,20 @@ export default function AdminDashboard() {
           {/* Upcoming Schedule */}
           <div className="card p-5">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-slate-900">Upcoming Schedule</h2>
-              <button
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-100 text-brand-700"><FiClock /></span>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Upcoming Schedule</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">Showing {filteredClientSchedule.length} of {scheduledJobTotal}</p>
+                </div>
+              </div>
+              {canOpenDispatch && <button
                 type="button"
                 onClick={() => navigate('/admin/dispatch-board')}
                 className="text-sm font-medium text-brand-500 transition hover:text-brand-600"
               >
                 Dispatch board →
-              </button>
+              </button>}
             </div>
             <div className="mt-4 space-y-2 max-h-[400px] overflow-y-auto pr-2">
               {loading && !stats ? (
@@ -304,12 +526,12 @@ export default function AdminDashboard() {
                 </div>
               ) : filteredClientSchedule.length ? (
                 filteredClientSchedule.map((ticket) => (
-                  <div key={ticket.id} className="flex flex-col gap-3 rounded-xl bg-surface-50 px-4 py-3 transition hover:bg-surface-100 sm:flex-row sm:items-center sm:justify-between">
+                  <button key={ticket.id} type="button" onClick={() => canOpenDispatch && navigate('/admin/dispatch-board')} disabled={!canOpenDispatch} className="flex w-full flex-col gap-3 rounded-xl bg-surface-50 px-4 py-3 text-left transition hover:bg-surface-100 disabled:cursor-default sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="truncate font-medium text-slate-800">{ticket.client || 'Client not set'}</p>
                       <p className="mt-0.5 truncate text-xs text-slate-500">
                         {ticket.service_type || 'Service not set'}
-                        {ticket.assigned_technician ? ` · ${ticket.assigned_technician}` : ''}
+                        {ticket.assigned_technician ? ` · ${ticket.assigned_technician}` : ' · Unassigned'}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
@@ -319,7 +541,7 @@ export default function AdminDashboard() {
                         {ticket.scheduled_time ? ` ${ticket.scheduled_time}` : ''}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 ))
               ) : (
                 <p className="py-8 text-center text-sm text-slate-400">No scheduled visits yet.</p>
@@ -332,6 +554,8 @@ export default function AdminDashboard() {
         <ActiveTechnicianJobs
           jobs={filteredActiveTechnicianJobs}
           title="Technician Job Progress"
+          onJobClick={canOpenTickets ? openActiveJobDetails : undefined}
+          onViewAll={canOpenDispatch ? () => navigate('/admin/dispatch-board') : undefined}
         />
 
         {/* ── SLA Watchlist ── */}
@@ -339,7 +563,7 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-slate-900">SLA Watchlist</h2>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-100 px-3 py-1 text-xs font-medium text-slate-600">
-              {filteredSlaQueue.length} items
+              Showing {Math.min(filteredSlaQueue.length, 5)} of {filteredSlaQueue.length}
             </span>
           </div>
 
@@ -357,6 +581,7 @@ export default function AdminDashboard() {
                     <th className="pb-3 pr-4">Status</th>
                     <th className="pb-3 pr-4">SLA</th>
                     <th className="pb-3">Schedule</th>
+                    <th className="pb-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-50">
@@ -379,6 +604,19 @@ export default function AdminDashboard() {
                         </td>
                         <td className="py-3 text-xs text-slate-500">
                           {item.scheduled_date ? formatDate(item.scheduled_date) : '—'}
+                        </td>
+                        <td className="py-3 text-right">
+                          {canOpenTickets && (
+                            <button
+                              type="button"
+                              onClick={(event) => item.entity_type === 'request'
+                                ? openRequestDetails(item.id, item, event.currentTarget)
+                                : navigate(`/admin/service-tickets?focus=${item.sla?.state === 'overdue' ? 'sla-overdue' : 'sla-warning'}`)}
+                              className="font-semibold text-brand-600 hover:text-brand-700"
+                            >
+                              Open
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -412,22 +650,43 @@ export default function AdminDashboard() {
               ? 'Require inspection'
               : 'Reject request'}
           cancelLabel="Cancel"
-          onCancel={() => setRequestDecision(null)}
+          disabled={requestDecision.type === 'reject' && rejectReason.trim().length < 8}
+          onCancel={() => {
+            setRequestDecision(null);
+            setRejectReason('');
+          }}
           onConfirm={confirmRequestDecision}
-        />
+        >
+          {requestDecision.type === 'reject' && (
+            <div>
+              <label htmlFor="dashboard-rejection-reason" className="text-sm font-semibold text-slate-800">Reason for rejection</label>
+              <textarea
+                id="dashboard-rejection-reason"
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+                rows={4}
+                maxLength={2000}
+                placeholder="Explain the decision clearly for the client and activity record."
+                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              />
+              <p className="mt-1 text-xs text-slate-500">Enter at least 8 characters. This reason is sent to the client and retained in the audit trail.</p>
+            </div>
+          )}
+        </ConfirmationDialog>
       )}
 
       {viewingRequestDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onMouseDown={(event) => event.target === event.currentTarget && closeRequestDetails()}>
+          <div ref={detailsDialogRef} role="dialog" aria-modal="true" aria-labelledby="dashboard-request-details-title" className="w-full max-w-2xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Service Request Details</h3>
+                <h3 id="dashboard-request-details-title" className="text-lg font-semibold text-slate-900">Service Request Details</h3>
                 <p className="text-sm text-slate-500">#{viewingRequestDetails.id} • Submitted {formatDateTime(viewingRequestDetails.request_date)}</p>
               </div>
               <button
                 type="button"
-                onClick={() => setViewingRequestDetails(null)}
+                onClick={closeRequestDetails}
+                aria-label="Close request details"
                 className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
               >
                 <FiX className="h-5 w-5" />
@@ -534,6 +793,14 @@ export default function AdminDashboard() {
             </div>}
           </div>
         </div>
+      )}
+      {viewingActiveJob && (
+        <ActiveJobDetailsDialog
+          job={viewingActiveJob}
+          onClose={closeActiveJobDetails}
+          onOpenTickets={canOpenTickets ? () => navigate('/admin/service-tickets?focus=active') : undefined}
+          onOpenDispatch={canOpenDispatch ? () => navigate('/admin/dispatch-board') : undefined}
+        />
       )}
     </Layout>
   );

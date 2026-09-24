@@ -15,6 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import { getLocalDateInputValue } from '../../utils/date';
 import { CALABARZON_BOUNDS, clampToCalabarzon } from '../../utils/mapRegion';
+import { formatEstimateId, formatRequestId } from '../../utils/roleIds';
 import { FiCheckCircle, FiSearch } from 'react-icons/fi';
 import MapTileLayer from '../../components/maps/MapTileLayer';
 
@@ -169,7 +170,7 @@ export default function ClientServiceRequests() {
       .then((estimate) => {
         setLinkedEstimate(estimate);
         const result = estimate.result_snapshot || {};
-        setNotes((current) => current || `Solar site assessment for estimate #${estimate.id}: ${result.panelCount || 0} panels and ${result.installedCapacity || 0} kWp preliminary capacity.`);
+        setNotes((current) => current || `Solar site assessment for ${estimate.estimate_code || formatEstimateId(estimate.id)}: ${result.panelCount || 0} panels and ${result.installedCapacity || 0} kWp preliminary capacity.`);
       })
       .catch((loadError) => {
         setLinkedEstimate(null);
@@ -338,7 +339,7 @@ const selectSearchResult = async (result) => {
         : null;
       const createdRequest = conversion?.service_request || await createServiceRequest(requestPayload);
       setSubmitError('');
-      const successMessage = `Your request has been submitted. Request #${createdRequest.id} is now waiting for review.`;
+      const successMessage = `Your request has been submitted. ${formatRequestId(createdRequest.id)} is now waiting for review.`;
       setMessage(`Service request #${createdRequest.id} submitted for review.`);
       setSuccessDialog({
         title: 'Request submitted',
@@ -374,7 +375,7 @@ const selectSearchResult = async (result) => {
     }
   };
 
-  const messageToneClassName = message.startsWith('Service request #')
+  const messageToneClassName = message.includes('REQ-')
     ? 'text-green-600'
     : 'text-slate-600';
   const selectedTimeSlotLabel = TIME_SLOT_OPTIONS.find((option) => option.value === preferredTimeSlot)?.label || 'No preference';
@@ -383,7 +384,7 @@ const selectSearchResult = async (result) => {
     <Layout>
       {linkedEstimate ? (
         <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <strong>Solar estimate #{linkedEstimate.id} is linked.</strong>{' '}
+          <strong>{linkedEstimate.estimate_code || formatEstimateId(linkedEstimate.id)} is linked.</strong>{' '}
           Select the site-assessment service, appointment, and exact map location to submit it for review.
         </div>
       ) : null}
@@ -452,7 +453,6 @@ const selectSearchResult = async (result) => {
       )}
 
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-slate-900">Service Requests</h1>
         <p className="text-sm text-slate-500">Create a service request, choose a service type, and pin the location for dispatch.</p>
       </div>
 

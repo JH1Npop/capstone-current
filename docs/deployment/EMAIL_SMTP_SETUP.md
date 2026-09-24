@@ -24,6 +24,11 @@ EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 For Gmail, `EMAIL_HOST_PASSWORD` should be an app password, not the normal
 account password.
 
+Production startup rejects the SMTP backend when the username or password is
+empty. Keep both values in the hosting provider's secret manager. Also set only
+one of `EMAIL_USE_TLS=True` (normally port 587) or `EMAIL_USE_SSL=True`
+(normally port 465); enabling both is invalid.
+
 ## Use In New Functions
 
 Use direct email when the message should not appear in the notification list:

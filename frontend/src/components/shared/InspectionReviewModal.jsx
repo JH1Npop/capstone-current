@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FiAlertTriangle, FiCalendar, FiCheckCircle, FiX, FiXCircle } from 'react-icons/fi';
 import StatusBadge from '../ui/StatusBadge';
 import { reviewInspectionDecision } from '../../api/admin';
+import { formatTicketId } from '../../utils/roleIds';
 
 const DecisionCard = ({ active, accent, icon: Icon, title, description, onSelect }) => (
   <label
@@ -46,6 +47,11 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
       return;
     }
 
+    if (['awaiting_materials', 'cancel'].includes(decision) && !notes.trim()) {
+      setError('Add a reason for this exception decision.');
+      return;
+    }
+
     setError('');
     setSubmitting(true);
 
@@ -62,7 +68,7 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
     }
   };
 
-  const ticketLabel = ticket.id ? `TKT-${ticket.id}` : 'Inspection';
+  const ticketLabel = ticket.id ? formatTicketId(ticket.id) : 'Inspection';
   const clientLabel = ticket.clientFullname || 'Client';
 
   const optionAccent = {
@@ -177,7 +183,7 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
           )}
 
           <div className="mt-6">
-            <label className="mb-2 block text-sm font-bold text-slate-900">Admin Notes</label>
+            <label className="mb-2 block text-sm font-bold text-slate-900">Admin Notes{['awaiting_materials', 'cancel'].includes(decision) ? ' (required)' : ''}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}

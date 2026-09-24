@@ -67,9 +67,9 @@ admin user directory, roles, capabilities, activity logs, and settings.
 - [ ] Verify object-level authorization for clients and assigned technicians.
 - [ ] Separate sensitive actions such as user suspension, capability assignment,
       publishing, inventory adjustment, document finalization, and report export.
-- [ ] Add session/token revocation for password, role, suspension, and capability changes.
-- [ ] Add login throttling, security event logging, and administrator alerts.
-- [ ] Review email verification, password-reset expiry, and recovery enumeration risks.
+- [x] Add session/token revocation for password, role, suspension, and capability changes.
+- [x] Add login throttling, security event logging, and administrator alerts.
+- [x] Review email verification, password-reset expiry, and recovery enumeration risks.
 - [ ] Add tests proving forbidden APIs remain forbidden even when called directly.
 
 Exit criteria:
@@ -101,10 +101,10 @@ Current scope: client dashboard, request creation/tracking/detail, service histo
 notifications, support, profile, locations, rescheduling, cancellation, and feedback.
 
 - [x] Define and enforce the service-request state machine and allowed transitions.
-- [ ] Prevent duplicate submissions and make conversion endpoints idempotent.
+- [x] Prevent duplicate submissions and make conversion endpoints idempotent.
 - [ ] Support multiple saved service locations with a clear default and validation.
 - [ ] Show request timeline, SLA expectations, schedule, technician, and next action.
-- [ ] Unify cancellation, rejection, rescheduling, and reason capture across views.
+- [x] Unify cancellation, rejection, rescheduling, and reason capture across views.
 - [ ] Provide document/quotation acknowledgment and completion feedback where applicable.
 - [ ] Test that clients can access only their own requests, messages, files, and history.
 
@@ -118,7 +118,7 @@ Current scope: service types, procedures, equipment requirements, inventory
 requirements, SLA rules, service requests, tickets, approval, and status history.
 
 - [ ] Normalize request, ticket, inspection, job, and completion status transitions.
-- [ ] Make approval/ticket creation atomic and safe to retry.
+- [x] Make approval/ticket creation atomic and safe to retry.
 - [ ] Remove duplicate notification paths and add notification preference handling.
 - [ ] Validate service procedures, required skills, duration, price, and required stock.
 - [ ] Surface SLA warning/overdue reasons and escalation ownership.
@@ -138,7 +138,10 @@ coverage heatmap, ORS routing, skills, availability, schedules, and assignment s
 - [ ] Add conflict-safe schedule and assignment writes.
 - [ ] Explain auto-dispatch recommendations and allow audited manual overrides.
 - [ ] Handle no-route, stale-location, geocoding failure, and technician-offline cases.
-- [ ] Set retention and privacy rules for technician location history.
+- [x] Set retention and privacy rules for technician location history. The
+  authenticated policy contract, explicit technician start/stop control,
+  configurable retention/region settings, and daily purge automation are
+  implemented; organization-specific policy approval remains a production gate.
 - [ ] Add dispatch acceptance/rejection and reassignment reasons where required.
 - [ ] Verify calendar, board, map, ticket, and technician views remain synchronized.
 
@@ -152,7 +155,7 @@ Current scope: technician dashboard, jobs, schedule, map navigation, inspection 
 service checklists, status updates, progress, messages, history, and profile.
 
 - [ ] Define navigation, en-route, arrival, inspection, work, blocked, and completion transitions.
-- [ ] Require the correct checklist and evidence before applicable completion actions.
+- [x] Require the correct checklist and evidence before applicable completion actions.
 - [ ] Support retry-safe updates and useful offline/PWA behavior for field conditions.
 - [ ] Record material usage, readings, notes, photos, signatures, and exceptions against the job.
 - [ ] Prevent technicians from viewing or changing unassigned jobs unless explicitly authorized.
@@ -169,13 +172,13 @@ Exit criteria:
 Current scope: categories, items/SKUs, stock transactions, reservations, service
 requirements, real-time updates, and installed equipment.
 
-- [ ] Define transaction types and immutable stock-ledger rules.
-- [ ] Make reservation, release, consume, return, and adjustment operations atomic.
-- [ ] Prevent negative available stock and race conditions during concurrent dispatch.
+- [x] Define transaction types and immutable stock-ledger rules.
+- [x] Make reservation, release, consume, return, and adjustment operations atomic.
+- [x] Prevent negative available stock and race conditions during concurrent dispatch.
 - [ ] Connect service requirements and solar BOMs to ticket reservations.
 - [ ] Add reorder thresholds, supplier/lead-time fields, and actionable low-stock alerts.
 - [ ] Trace serialized equipment from receipt to installation, warranty, and replacement.
-- [ ] Require reason and capability for manual stock adjustments.
+- [x] Require reason and capability for manual stock adjustments.
 - [ ] Reconcile reservation totals, transaction totals, and physical counts.
 
 Exit criteria:
@@ -188,10 +191,10 @@ Current scope: generated documents, templates, technical data sheets, quotations
 installation contracts, field-service reports, commissioning, turnover, signatures,
 and installed-equipment records.
 
-- [ ] Resolve documented frontend/backend field-shape mismatches.
+- [x] Resolve documented frontend/backend field-shape mismatches.
 - [ ] Establish a shared project/service profile for reusable document data.
 - [ ] Version documents and distinguish draft, finalized, signed, and superseded files.
-- [ ] Prevent finalized commercial/technical records from changing without a revision.
+- [x] Prevent finalized commercial/technical records from changing without a revision.
 - [ ] Link quotation items to inventory/SKUs and approved project quantities.
 - [ ] Reuse commissioning and turnover results in installed-equipment and warranty records.
 - [ ] Add authorization, file-integrity, retention, and signature audit rules.
@@ -207,12 +210,12 @@ Exit criteria:
 Current scope: staff/technician messaging, client support cases, WebSockets,
 notifications, and email delivery.
 
-- [ ] Define conversation membership and object-level visibility rules.
+- [x] Define conversation membership and object-level visibility rules.
 - [ ] Connect support conversations to clients, requests, tickets, or after-sales cases.
 - [ ] Add delivery/read state, retry behavior, unread consistency, and attachment policy.
 - [ ] Deduplicate notifications and define which events produce in-app versus email messages.
 - [ ] Use Redis-backed Channels for multi-instance production real-time delivery.
-- [ ] Add abuse throttling, attachment validation, retention, and audit behavior.
+- [x] Add abuse throttling and attachment validation; retention policy remains operational follow-up.
 - [ ] Provide graceful polling/fallback when WebSockets are unavailable.
 
 Exit criteria:
@@ -229,7 +232,7 @@ schedules, follow-up cases, outcomes, feedback, and warranty-related service.
 - [ ] Generate maintenance schedules according to service/equipment policy.
 - [ ] Connect follow-up cases to original work, equipment, technician, and client feedback.
 - [ ] Track resolution, recurrence, warranty cost, and root cause.
-- [ ] Prevent historical records from being modified through operational endpoints.
+- [x] Prevent historical records from being modified through operational endpoints.
 - [ ] Add client-visible warranty and upcoming-maintenance information.
 
 Exit criteria:
@@ -274,15 +277,15 @@ Exit criteria:
 Current scope: Django/ASGI, React PWA, scheduled analytics, email, media, database,
 health endpoints, logging, backups, and deployment.
 
-- [ ] Validate Aiven PostgreSQL TLS, connection lifetime, migration, and health behavior.
+- [x] Validate Aiven PostgreSQL TLS, connection lifetime, migration, and health behavior.
 - [ ] Validate Cloudinary upload, transformation, deletion, and backup/retention policy.
-- [ ] Use managed Redis for production Channels and distributed background work when enabled.
+- [x] Require managed Redis for production Channels and validate it through readiness.
 - [ ] Replace workstation-specific scheduled tasks with environment-based management jobs.
 - [ ] Add job locking, idempotency, run history, heartbeat, retry, and failure alerts.
 - [ ] Configure SMTP, structured logs, centralized error reporting, and request correlation IDs.
-- [ ] Add liveness/readiness checks that distinguish application, database, Redis, and media health.
+- [x] Add liveness/readiness checks that distinguish application, database, Redis, and media health.
 - [ ] Test PWA cache invalidation, offline boundaries, and safe handling of authenticated data.
-- [ ] Document encrypted backups, restore drills, staging migrations, and rollback.
+- [x] Document encrypted backups, restore drills, staging migrations, and rollback.
 
 Exit criteria:
 
@@ -292,11 +295,11 @@ Exit criteria:
 
 - [ ] Add an API schema and contract checks between frontend and backend.
 - [ ] Add frontend unit/component tests for business-critical logic.
-- [ ] Stabilize and repair the complete Playwright suite.
+- [x] Stabilize and repair the complete Playwright suite.
 - [ ] Add accessibility, responsive, and browser-compatibility gates.
 - [ ] Refactor oversized pages into domain components, hooks, services, and schemas.
 - [ ] Add database indexes from measured query patterns and remove N+1 queries.
-- [ ] Add CI for checks, migrations, tests, lint, builds, E2E smoke, and dependency scanning.
+- [x] Add CI for checks, migration drift, backend tests, frontend builds, and E2E smoke; add lint when a repository lint configuration is adopted.
 - [ ] Add security review coverage for authentication, authorization, uploads, WebSockets,
       object ownership, injection, CSRF/CORS, rate limits, and secret handling.
 - [ ] Normalize repository documentation to UTF-8 and remove stale paths/routes.
@@ -417,3 +420,20 @@ Exit criteria:
   append-only operational record. Clients retain owned read access, assigned
   lead/crew technicians and admins can append entries, and direct API tests
   enforce ownership, assignment, immutability, and server-controlled actors.
+- 2026-08-27: Hardened inventory as an append-only, constraint-backed ledger.
+  Stock and reservation writes now lock rows, preserve reserved stock, require
+  reasons for manual adjustments, block destructive history deletion, and ship
+  a guarded legacy-data migration plus direct API regression coverage. See
+  [`security/INVENTORY_LEDGER_CONTRACT.md`](./security/INVENTORY_LEDGER_CONTRACT.md).
+- 2026-08-29: Hardened account state and recovery behavior. Inactive status now
+  blocks API and WebSocket authentication, password changes revoke sessions,
+  verification cannot reactivate disabled users, account-management hierarchy
+  is enforced, and ticket WebSocket receivers are participant-scoped. See
+  [`security/AUTHENTICATION_ACCOUNT_SECURITY_CONTRACT.md`](./security/AUTHENTICATION_ACCOUNT_SECURITY_CONTRACT.md).
+- 2026-08-29: Completed phases 4-9 hardening across request/ticket lifecycle,
+  documents and turnover, media and communication, analytics and audit,
+  production configuration, CI, and isolated browser automation. The backend
+  suite passes 321 tests, the frontend build passes, dependency audits report
+  no known issues, and all 75 maintained Playwright tests pass across the
+  recorded groups. See
+  [`quality/IMPLEMENTATION_CHECKPOINT_PHASES_4_TO_9_2026-08-29.md`](./quality/IMPLEMENTATION_CHECKPOINT_PHASES_4_TO_9_2026-08-29.md).

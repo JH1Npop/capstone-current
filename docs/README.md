@@ -17,11 +17,20 @@ automated tests. Dated reports must not be treated as current test results.
 
 | Area | Authoritative document |
 | --- | --- |
+| **Start here: living audit and agent handoff** | **[Current system audit and handoff](quality/CURRENT_SYSTEM_AUDIT_AND_HANDOFF.md)** |
+| Manual whole-system QA | [Manual end-to-end testing playbook](quality/MANUAL_END_TO_END_TESTING_PLAYBOOK.md) |
 | Whole-system delivery | [System end-to-end implementation plan](SYSTEM_END_TO_END_IMPLEMENTATION_PLAN.md) |
 | Request, ticket, and progress behavior | [Workflow state machines](security/WORKFLOW_STATE_MACHINES.md) |
+| Authentication and account security | [Authentication/account security contract](security/AUTHENTICATION_ACCOUNT_SECURITY_CONTRACT.md) |
+| Inventory balances and ledger behavior | [Inventory ledger contract](security/INVENTORY_LEDGER_CONTRACT.md) |
+| Connected Sales/Purchase Records | [Sales Record contract](security/SALES_RECORD_CONTRACT.md) |
+| Record identity and display codes | [Record identity contract](security/RECORD_IDENTITY_CONTRACT.md) |
 | Route and API authorization | [Route/API capability matrix](security/ROUTE_API_CAPABILITY_MATRIX.md) |
-| Current validation | [Implementation baseline - 2026-08-27](quality/IMPLEMENTATION_BASELINE_2026-08-27.md) |
+| Current validation | [Implementation checkpoint - Phases 4-9 - 2026-08-29](quality/IMPLEMENTATION_CHECKPOINT_PHASES_4_TO_9_2026-08-29.md) |
+| Production release | [Production deployment checklist](deployment/PRODUCTION_DEPLOYMENT_CHECKLIST.md) |
+| Production-shaped staging evidence | [Staging validation](deployment/STAGING_VALIDATION.md) |
 | Solar workflow | [Solar workflow implementation subplan](SOLAR_SYSTEM_IMPLEMENTATION_PLAN.md) |
+| Final capstone diagram code pack | [One Context, one DFD, one Chen ERD, and one database schema source](academic/final_diagrams/README.md) |
 
 ## Sections
 
@@ -39,6 +48,13 @@ The active analytics specification is [features/ANALYTICS_DASHBOARD_BLUEPRINT.md
 
 - [System end-to-end implementation plan](SYSTEM_END_TO_END_IMPLEMENTATION_PLAN.md)
 - [Solar workflow implementation subplan](SOLAR_SYSTEM_IMPLEMENTATION_PLAN.md)
+
+## Deployment
+
+- [Production deployment checklist](deployment/PRODUCTION_DEPLOYMENT_CHECKLIST.md)
+- [Production-shaped staging validation](deployment/STAGING_VALIDATION.md)
+- [Aiven PostgreSQL deployment](deployment/AIVEN_DEPLOYMENT.md)
+- [Email and SMTP setup](deployment/EMAIL_SMTP_SETUP.md)
 
 ## Document Workflow and Templates
 

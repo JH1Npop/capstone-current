@@ -7,7 +7,8 @@ import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import { FiAlertCircle, FiBell, FiCheckCircle, FiInfo, FiTrash2 } from 'react-icons/fi';
 import { api, fetchAllPages } from '../../api/api';
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
+const announceNotificationsUpdated = () => window.dispatchEvent(new Event('afn:notifications-updated'));
 
 const extractNotifications = (data) => {
   if (Array.isArray(data)) {
@@ -65,6 +66,7 @@ export default function ClientNotifications() {
           notification.id === notifId ? { ...notification, status: 'read' } : notification
         )
       );
+      announceNotificationsUpdated();
     } catch (markError) {
       setError(markError.message || 'Unable to mark notification as read.');
     }
@@ -74,6 +76,7 @@ export default function ClientNotifications() {
     try {
       await api.post('/notifications/mark_all_read/');
       setNotifications((current) => current.map((notification) => ({ ...notification, status: 'read' })));
+      announceNotificationsUpdated();
     } catch (markAllError) {
       setError(markAllError.message || 'Unable to update notifications.');
     }
@@ -83,6 +86,7 @@ export default function ClientNotifications() {
     try {
       await api.delete(`/notifications/${notifId}/`);
       setNotifications((current) => current.filter((notification) => notification.id !== notifId));
+      announceNotificationsUpdated();
     } catch (deleteError) {
       setError(deleteError.message || 'Unable to delete notification.');
     }
@@ -95,6 +99,7 @@ export default function ClientNotifications() {
     try {
       await api.delete('/notifications/delete_all/');
       setNotifications([]);
+      announceNotificationsUpdated();
       setCurrentPage(1);
       setDeleteAllConfirmOpen(false);
       setError('');
@@ -155,11 +160,10 @@ export default function ClientNotifications() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-slate-50 p-4">
+      <div className="py-2">
         <div className="mx-auto max-w-3xl">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Notifications</h1>
               <p className="text-sm text-slate-500">Alerts, updates, reminders, and request activity.</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">

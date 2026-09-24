@@ -1,16 +1,21 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 import {
   ADMIN_JOB_HISTORY_CAPABILITIES,
+  COMMUNICATIONS_STAFF_VIEW_CAPABILITIES,
+  COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES,
   INVENTORY_VIEW_CAPABILITIES,
   DOCUMENTS_VIEW_CAPABILITIES,
   ANALYTICS_VIEW_CAPABILITIES,
   REPORTS_VIEW_CAPABILITIES,
   AUDIT_VIEW_CAPABILITIES,
   SERVICE_CATALOG_VIEW_CAPABILITIES,
+  SYSTEM_SETTINGS_VIEW_CAPABILITIES,
   PUBLIC_SITE_VIEW_CAPABILITIES,
   AFTER_SALES_CASE_CAPABILITIES,
+  SUPERVISOR_DASHBOARD_CAPABILITIES,
   SUPERVISOR_DISPATCH_CAPABILITIES,
   SUPERVISOR_TRACKING_CAPABILITIES,
   SUPERVISOR_TICKETS_CAPABILITIES,
@@ -73,6 +78,7 @@ const TechnicianProfile = lazy(() => import('./pages/technician/TechnicianProfil
 const AdminInventory = lazy(() => import('./pages/admin/AdminInventory'));
 const AdminJobHistory = lazy(() => import('./pages/admin/AdminJobHistory'));
 const AdminDocuments = lazy(() => import('./pages/admin/AdminDocuments'));
+const SalesRecords = lazy(() => import('./pages/shared/SalesRecords'));
 
 const getDashboardPath = (user) => {
   if (!user) {
@@ -80,7 +86,27 @@ const getDashboardPath = (user) => {
   }
 
   if (canAccessAdminWorkspace(user)) {
-    return '/admin/dashboard';
+    const destinations = [
+      [SUPERVISOR_DASHBOARD_CAPABILITIES, '/admin/dashboard'],
+      [SUPERVISOR_TICKETS_CAPABILITIES, '/admin/service-tickets'],
+      [SUPERVISOR_DISPATCH_CAPABILITIES, '/admin/dispatch-board'],
+      [SUPERVISOR_TRACKING_CAPABILITIES, '/admin/technician-tracking'],
+      [ADMIN_JOB_HISTORY_CAPABILITIES, '/admin/job-history'],
+      [INVENTORY_VIEW_CAPABILITIES, '/admin/inventory'],
+      [DOCUMENTS_VIEW_CAPABILITIES, '/admin/documents'],
+      [ANALYTICS_VIEW_CAPABILITIES, '/admin/analytics'],
+      [REPORTS_VIEW_CAPABILITIES, '/admin/reports'],
+      [SERVICE_CATALOG_VIEW_CAPABILITIES, '/admin/services'],
+      [AFTER_SALES_CASE_CAPABILITIES, '/admin/after-sales-cases'],
+      [COMMUNICATIONS_STAFF_VIEW_CAPABILITIES, '/admin/messages'],
+      [COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES, '/admin/client-support'],
+      [USER_DIRECTORY_CAPABILITIES, '/admin/user-management'],
+      [SYSTEM_SETTINGS_VIEW_CAPABILITIES, '/admin/settings'],
+      [PUBLIC_SITE_VIEW_CAPABILITIES, '/admin/landing-page'],
+      [AUDIT_VIEW_CAPABILITIES, '/admin/activity-logs']
+    ];
+    const destination = destinations.find(([capabilities]) => hasAnyCapability(user, capabilities));
+    return destination?.[1] || '/admin/profile';
   }
 
   if (user.role === 'technician') {
@@ -168,7 +194,7 @@ function AppRoutes() {
           <Route path="/about-us" element={<AboutPage />} />
           <Route path="/solar-calculator" element={<LandingPage />} />
 
-          <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={SUPERVISOR_DASHBOARD_CAPABILITIES}><AdminDashboard /></ProtectedRoute>} />
           <Route path="/admin/calendar" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={SUPERVISOR_DISPATCH_CAPABILITIES}><AdminCalendar /></ProtectedRoute>} />
           <Route path="/admin/service-tickets" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={SUPERVISOR_TICKETS_CAPABILITIES}><AdminServiceTickets /></ProtectedRoute>} />
           <Route path="/admin/dispatch-board" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={SUPERVISOR_DISPATCH_CAPABILITIES}><AdminDispatchBoard /></ProtectedRoute>} />
@@ -184,6 +210,7 @@ function AppRoutes() {
           <Route path="/admin/services" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={SERVICE_CATALOG_VIEW_CAPABILITIES}><AdminServices /></ProtectedRoute>} />
           <Route path="/admin/inventory" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={INVENTORY_VIEW_CAPABILITIES}><AdminInventory /></ProtectedRoute>} />
           <Route path="/admin/documents" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={DOCUMENTS_VIEW_CAPABILITIES}><AdminDocuments /></ProtectedRoute>} />
+          <Route path="/admin/sales-records" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={DOCUMENTS_VIEW_CAPABILITIES}><SalesRecords /></ProtectedRoute>} />
           <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={ANALYTICS_VIEW_CAPABILITIES}><AdminAnalytics /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={REPORTS_VIEW_CAPABILITIES}><AdminReports /></ProtectedRoute>} />
           <Route path="/admin/operations-report" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={REPORTS_VIEW_CAPABILITIES}><AdminOperationsReport /></ProtectedRoute>} />
@@ -201,15 +228,15 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
-          <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><AdminSettings /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={SYSTEM_SETTINGS_VIEW_CAPABILITIES}><AdminSettings /></ProtectedRoute>} />
           <Route path="/admin/landing-page" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={PUBLIC_SITE_VIEW_CAPABILITIES}><AdminLandingPage /></ProtectedRoute>} />
           <Route path="/admin/landing-page/preview" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={PUBLIC_SITE_VIEW_CAPABILITIES}><LandingPage /></ProtectedRoute>} />
           <Route path="/admin/activity-logs" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={AUDIT_VIEW_CAPABILITIES}><AdminActivityLogs /></ProtectedRoute>} />
           <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><AdminProfile /></ProtectedRoute>} />
           <Route path="/admin/notifications" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><ClientNotifications /></ProtectedRoute>} />
-          <Route path="/admin/messages" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><TechnicianMessages /></ProtectedRoute>} />
-          <Route path="/admin/client-support" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><AdminClientSupport /></ProtectedRoute>} />
-          <Route path="/admin/support" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><Navigate to="/admin/client-support" replace /></ProtectedRoute>} />
+          <Route path="/admin/messages" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={COMMUNICATIONS_STAFF_VIEW_CAPABILITIES}><TechnicianMessages /></ProtectedRoute>} />
+          <Route path="/admin/client-support" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES}><AdminClientSupport /></ProtectedRoute>} />
+          <Route path="/admin/support" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES}><Navigate to="/admin/client-support" replace /></ProtectedRoute>} />
           <Route path="/admin/coverage-heatmap" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={SUPERVISOR_TRACKING_CAPABILITIES}><CoverageHeatmap /></ProtectedRoute>} />
           <Route path="/admin/job-history" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={ADMIN_JOB_HISTORY_CAPABILITIES}><AdminJobHistory /></ProtectedRoute>} />
           <Route path="/follow-up/dashboard" element={<Navigate to="/admin/dashboard#after-sales" replace />} />
@@ -233,6 +260,7 @@ function AppRoutes() {
           <Route path="/client/requests" element={<ProtectedRoute role="client"><ClientRequestTracking /></ProtectedRoute>} />
           <Route path="/client/requests/:requestId" element={<ProtectedRoute role="client"><ClientRequestDetail /></ProtectedRoute>} />
           <Route path="/client/service-history" element={<ProtectedRoute role="client"><ClientServiceHistory /></ProtectedRoute>} />
+          <Route path="/client/purchase-records" element={<ProtectedRoute role="client"><SalesRecords /></ProtectedRoute>} />
           <Route path="/client/support" element={<ProtectedRoute role="client"><ClientSupport /></ProtectedRoute>} />
           <Route path="/client/notifications" element={<ProtectedRoute role="client"><ClientNotifications /></ProtectedRoute>} />
           <Route path="/client/profile" element={<ProtectedRoute role="client"><ClientProfile /></ProtectedRoute>} />
@@ -247,9 +275,11 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <AppRoutes />
-      </BrowserRouter>
+      <NotificationProvider>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <AppRoutes />
+        </BrowserRouter>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

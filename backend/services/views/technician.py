@@ -1,6 +1,33 @@
 # Auto-split from services/views.py
 from services.views.helpers import *  # noqa: F401,F403
 from services.user_display import client_technician_label
+from django.utils.dateparse import parse_date
+
+
+def _serialize_ticket_service_checklists(ticket):
+    """Return every requested service with its own field-work configuration."""
+    # ServiceRequestService.Meta supplies the field-work order. ``all()`` also
+    # reuses the list/retrieve prefetch cache instead of issuing one query per
+    # ticket in the technician job list.
+    service_items = list(ticket.request.service_items.all())
+    service_types = [
+        item.service_type
+        for item in service_items
+        if item.service_type_id and item.service_type
+    ]
+    if not service_types and ticket.request.service_type_id:
+        service_types = [ticket.request.service_type]
+
+    return [
+        {
+            'id': service_type.id,
+            'name': service_type.name,
+            'estimated_duration_minutes': service_type.estimated_duration or 0,
+            'procedures': service_type.procedures or [],
+            'required_equipment': service_type.required_equipment or [],
+        }
+        for service_type in service_types
+    ]
 
 class TechnicianClientsView(viewsets.ViewSet):
     """View for technicians to see their assigned clients with location data"""
@@ -64,7 +91,12 @@ class TechnicianDashboardView(viewsets.ViewSet):
             technician,
             base_queryset=ServiceTicket.objects.select_related(
                 'request__service_type', 'request__client', 'request__location', 'technician'
-            ).prefetch_related('crew_assignments__technician', 'inventory_reservations__item', 'inventory_reservations__technician')
+            ).prefetch_related(
+                'request__service_items__service_type',
+                'crew_assignments__technician',
+                'inventory_reservations__item',
+                'inventory_reservations__technician',
+            )
         )
 
         # Upcoming schedule
@@ -219,7 +251,8 @@ class TechnicianJobsView(viewsets.ViewSet):
             latitude = None
             longitude = None
 
-        service_name = ticket.request.service_type.name if ticket.request.service_type else 'Service'
+        service_checklists = _serialize_ticket_service_checklists(ticket)
+        service_name = ', '.join(item['name'] for item in service_checklists) or 'Service'
         assignment_role = None
         if technician is not None:
             assignment_role = 'lead' if ticket.technician_id == technician.id else 'crew'
@@ -228,9 +261,17 @@ class TechnicianJobsView(viewsets.ViewSet):
             checklist = ticket.inspection
             checklist_completed = bool(checklist.is_completed)
             checklist_completed_at = checklist.completed_at
+            checklist_items = checklist.checklist_items or []
+            checklist_total_steps = len(checklist_items)
+            checklist_completed_steps = sum(
+                1 for item in checklist_items
+                if isinstance(item, dict) and item.get('completed')
+            )
         except InspectionChecklist.DoesNotExist:
             checklist_completed = False
             checklist_completed_at = None
+            checklist_total_steps = 0
+            checklist_completed_steps = 0
 
         return {
             'id': ticket.id,
@@ -238,10 +279,17 @@ class TechnicianJobsView(viewsets.ViewSet):
             'ticket_type': ticket.ticket_type,
             'service': service_name,
             'service_type': service_name,
+            'service_types': service_checklists,
             'client': {
                 'id': ticket.request.client.id,
-                'full_name': f"{ticket.request.client.first_name} {ticket.request.client.last_name}".strip() or ticket.request.client.username
+                'full_name': f"{ticket.request.client.first_name} {ticket.request.client.last_name}".strip() or ticket.request.client.username,
+                'phone': ticket.request.client.phone or '',
             },
+            'request_description': ticket.request.description or '',
+            'estimated_duration_minutes': sum(
+                int(service.get('estimated_duration_minutes') or 0)
+                for service in service_checklists
+            ),
             'address': location_address or '',
             'location': location_address or '',
             'latitude': latitude,
@@ -254,13 +302,15 @@ class TechnicianJobsView(viewsets.ViewSet):
             'scheduled_time': str(ticket.scheduled_time) if ticket.scheduled_time else None,
             'scheduled_time_slot': ticket.scheduled_time_slot,
             'notes': ticket.notes or '',
-            'technician': ticket.technician.username if ticket.technician else None,
-            'lead_technician': ticket.technician.username if ticket.technician else None,
+            'technician': client_technician_label(ticket.technician) if ticket.technician else None,
+            'lead_technician': client_technician_label(ticket.technician) if ticket.technician else None,
             'crew_members': serialize_ticket_crew_members(ticket),
             'inventory_reservations': serialize_ticket_inventory(ticket),
             'assignment_role': assignment_role,
             'checklist_completed': checklist_completed,
             'checklist_completed_at': checklist_completed_at,
+            'checklist_total_steps': checklist_total_steps,
+            'checklist_completed_steps': checklist_completed_steps,
             'created_at': ticket.request.request_date
         }
 
@@ -272,7 +322,12 @@ class TechnicianJobsView(viewsets.ViewSet):
             technician,
             base_queryset=ServiceTicket.objects.select_related(
                 'request__service_type', 'request__client', 'request__location', 'technician'
-            ).prefetch_related('crew_assignments__technician', 'inventory_reservations__item', 'inventory_reservations__technician')
+            ).prefetch_related(
+                'request__service_items__service_type',
+                'crew_assignments__technician',
+                'inventory_reservations__item',
+                'inventory_reservations__technician',
+            )
         ).order_by('-scheduled_date')
 
         jobs = [self._serialize_job(ticket, technician=technician) for ticket in tickets]
@@ -285,7 +340,12 @@ class TechnicianJobsView(viewsets.ViewSet):
                 request.user,
                 base_queryset=ServiceTicket.objects.select_related(
                     'request__service_type', 'request__client', 'request__location', 'technician'
-                ).prefetch_related('crew_assignments__technician', 'inventory_reservations__item', 'inventory_reservations__technician')
+                ).prefetch_related(
+                    'request__service_items__service_type',
+                    'crew_assignments__technician',
+                    'inventory_reservations__item',
+                    'inventory_reservations__technician',
+                )
             ).get(pk=pk)
         except ServiceTicket.DoesNotExist:
             return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -562,6 +622,11 @@ class TechnicianJobsView(viewsets.ViewSet):
             elif not isinstance(proof_images, list):
                 proof_images = [proof_images]
 
+            try:
+                ensure_ticket_completion_proof(ticket, proof_images)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
             completion_notes = request.data.get('completion_notes') or ''
             ticket.completion_proof_images = proof_images
             ticket.completion_notes = completion_notes
@@ -581,6 +646,8 @@ class TechnicianJobsView(viewsets.ViewSet):
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         if resolved_status == 'Completed':
+            from ..maintenance import sync_completion_follow_up_case
+
             record_arrival_validation_log(
                 ticket=ticket,
                 technician=request.user,
@@ -589,6 +656,7 @@ class TechnicianJobsView(viewsets.ViewSet):
                 validation_result='not_required',
                 remarks=status_notes,
             )
+            sync_completion_follow_up_case(ticket)
             create_notification(
                 ticket.request.client,
                 f"Your service ticket #{ticket.id} has been completed!",
@@ -648,7 +716,7 @@ class TechnicianScheduleView(viewsets.ViewSet):
         tickets = get_technician_ticket_queryset(
             technician,
             base_queryset=ServiceTicket.objects.select_related(
-                'request__service_type', 'request__client', 'request__location', 'technician'
+                'request__service_type', 'request__client', 'request__location', 'technician', 'inspection'
             ).prefetch_related('crew_assignments__technician')
         ).filter(
             scheduled_date__gte=start_date,
@@ -801,10 +869,47 @@ class TechnicianHistoryView(viewsets.ViewSet):
                 'after_sales_cases',
                 'inventory_reservations__item',
                 'inventory_reservations__technician',
+                'installed_equipment',
+                'field_service_reports',
+                'generated_documents',
             )
         ).filter(
-            status__in=['Completed', 'Inspection Completed']
-        ).order_by('-completed_date', '-updated_at')
+            status__in=['Completed', 'Turned Over / Accepted']
+        )
+
+        search = str(request.query_params.get('search') or '').strip()
+        if search:
+            tickets = tickets.filter(build_ticket_search_query(search))
+
+        date_from_value = str(request.query_params.get('date_from') or '').strip()
+        date_to_value = str(request.query_params.get('date_to') or '').strip()
+        date_from = parse_date(date_from_value) if date_from_value else None
+        date_to = parse_date(date_to_value) if date_to_value else None
+        if date_from_value and not date_from:
+            return Response({'detail': 'date_from must use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+        if date_to_value and not date_to:
+            return Response({'detail': 'date_to must use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+        if date_from and date_to and date_from > date_to:
+            return Response({'detail': 'date_from cannot be later than date_to.'}, status=status.HTTP_400_BAD_REQUEST)
+        if date_from:
+            tickets = tickets.filter(completed_date__date__gte=date_from)
+        if date_to:
+            tickets = tickets.filter(completed_date__date__lte=date_to)
+
+        total = tickets.count()
+        try:
+            page_size = int(request.query_params.get('page_size', 10))
+        except (TypeError, ValueError):
+            page_size = 10
+        page_size = max(1, min(page_size, 100))
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        try:
+            page = int(request.query_params.get('page', 1))
+        except (TypeError, ValueError):
+            page = 1
+        page = max(1, min(page, total_pages))
+        page_start = (page - 1) * page_size
+        tickets = tickets.order_by('-completed_date', '-updated_at')[page_start:page_start + page_size]
 
         history = []
         for ticket in tickets:
@@ -813,6 +918,10 @@ class TechnicianHistoryView(viewsets.ViewSet):
                 address = location.address if location else ''
             except ServiceLocation.DoesNotExist:
                 address = ''
+
+            duration_minutes = None
+            if ticket.start_time and ticket.end_time:
+                duration_minutes = max(0, round((ticket.end_time - ticket.start_time).total_seconds() / 60))
 
             history.append({
                 'id': ticket.id,
@@ -825,8 +934,13 @@ class TechnicianHistoryView(viewsets.ViewSet):
                     ) if ticket.request.client else 'Unknown',
                 },
                 'ticketId': ticket.id,
+                'status': ticket.status,
                 'scheduledDate': ticket.completed_date or ticket.scheduled_date,
                 'completed_date': ticket.completed_date,
+                'scheduled_time': ticket.scheduled_time,
+                'start_time': ticket.start_time,
+                'end_time': ticket.end_time,
+                'duration_minutes': duration_minutes,
                 'priority': ticket.request.priority if ticket.request else '',
                 'notes': ticket.notes or '',
                 'completion_notes': ticket.completion_notes or '',
@@ -855,5 +969,51 @@ class TechnicianHistoryView(viewsets.ViewSet):
                     }
                     for case in ticket.after_sales_cases.all()[:5]
                 ],
+                'installed_equipment': [
+                    {
+                        'id': equipment.id,
+                        'brand_model': equipment.brand_model,
+                        'equipment_type': equipment.equipment_type,
+                        'serial_number': equipment.serial_number,
+                        'capacity': equipment.capacity,
+                        'location': equipment.location,
+                        'warranty_start': equipment.warranty_start,
+                        'warranty_end': equipment.warranty_end,
+                    }
+                    for equipment in ticket.installed_equipment.all()
+                ],
+                'field_service_reports': [
+                    {
+                        'id': report.id,
+                        'indoor_temp': report.indoor_temp,
+                        'outdoor_temp': report.outdoor_temp,
+                        'ampere_reading': report.ampere_reading,
+                        'voltage_reading': report.voltage_reading,
+                        'before_service_readings': report.before_service_readings,
+                        'after_service_readings': report.after_service_readings,
+                        'brand_model': report.brand_model,
+                        'serial_number': report.serial_number,
+                        'recommendation': report.recommendation,
+                        'client_acknowledged': report.client_acknowledged,
+                        'client_signature_date': report.client_signature_date,
+                    }
+                    for report in ticket.field_service_reports.all()
+                ],
+                'generated_documents': [
+                    {
+                        'id': document.id,
+                        'document_type': document.document_type,
+                        'title': document.title or document.get_document_type_display(),
+                        'status': document.status,
+                        'updated_at': document.updated_at,
+                    }
+                    for document in ticket.generated_documents.all()
+                ],
             })
-        return Response(history)
+        return Response({
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages,
+            'results': history,
+        })

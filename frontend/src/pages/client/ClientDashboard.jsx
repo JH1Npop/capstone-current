@@ -85,7 +85,6 @@ export default function ClientDashboard() {
       <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Client Dashboard</h1>
             <p className="text-sm text-slate-500">
               Last updated: <span className="font-semibold text-slate-700">{formatDateTime(lastUpdated)}</span>
             </p>
@@ -213,13 +212,15 @@ export default function ClientDashboard() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {activeRequests.map((request) => (
-                        <tr
-                          key={request.id}
-                          onClick={() => navigate(`/client/requests/${request.id}`)}
-                          className="cursor-pointer transition hover:bg-slate-50"
-                        >
+                        <tr key={request.id} className="transition hover:bg-slate-50">
                           <td className="max-w-[360px] px-4 py-3">
-                            <p className="font-semibold text-slate-900">{request.service_type}</p>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/client/requests/${request.id}`)}
+                              className="text-left font-semibold text-brand-700 hover:text-brand-800 hover:underline"
+                            >
+                              {request.service_type}
+                            </button>
                             <p className="mt-1 line-clamp-1 text-xs text-slate-500">{request.description || 'No details added'}</p>
                           </td>
                           <td className="px-4 py-3 text-slate-600">{formatDate(request.created_at)}</td>
@@ -319,13 +320,15 @@ export default function ClientDashboard() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {activeTickets.map((ticket) => (
-                        <tr
-                          key={ticket.id}
-                          onClick={() => openTicketDetail(ticket)}
-                          className="cursor-pointer transition hover:bg-slate-50"
-                        >
+                        <tr key={ticket.id} className="transition hover:bg-slate-50">
                           <td className="px-4 py-3">
-                            <p className="font-semibold text-slate-900">{ticket.service_type}</p>
+                            <button
+                              type="button"
+                              onClick={() => openTicketDetail(ticket)}
+                              className="text-left font-semibold text-brand-700 hover:text-brand-800 hover:underline"
+                            >
+                              {ticket.service_type}
+                            </button>
                             <p className="mt-1 text-xs text-slate-500">Tech: {clientTechnicianDisplayOrDash(ticket)}</p>
                           </td>
                           <td className="px-4 py-3 text-slate-600">

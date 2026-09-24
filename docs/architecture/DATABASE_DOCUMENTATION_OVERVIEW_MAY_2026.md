@@ -85,8 +85,6 @@ These tables support user alerts and ticket-linked communication.
 | Table | Purpose |
 | --- | --- |
 | `notifications_notification` | In-app notifications |
-| `notifications_notificationtemplate` | Reusable notification templates |
-| `notifications_notificationlog` | Delivery attempt tracking |
 | `messages_app_message` | Ticket-based messaging between users |
 
 Documentation note:
@@ -100,14 +98,17 @@ These tables support progress tracking, completed-service history, and analytics
 | Table | Purpose |
 | --- | --- |
 | `progress_ticketprogress` | Simple progress updates |
-| `history_servicehistory` | Completed service history |
 | `services_serviceanalytics` | Aggregated service metrics |
 | `services_technicianperformance` | Technician performance snapshots |
 | `services_demandforecast` | Demand forecasting records |
 | `services_servicetrend` | Trend analysis records |
 
 Documentation note:
-These are excellent to mention as "decision-support" or "future-ready analytics" tables.
+`progress_ticketprogress` remains a secured append-only API contract. Completed
+job history comes directly from service tickets and `services_servicestatushistory`;
+the redundant `history_servicehistory` table was retired. Unused notification
+template/delivery-log tables were also retired because the running notification
+flow creates `notifications_notification` records directly.
 
 ## Primary Workflow To Show In Your Capstone
 

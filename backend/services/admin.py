@@ -5,7 +5,21 @@ from .models import (
     TechnicianLocationHistory, AfterSalesCase, MaintenanceSchedule,
     TicketCrewAssignment, ServiceAnalytics, TechnicianPerformance,
     DemandForecast, ServiceTrend,
+    SalesRecord, SalesRecordLine,
 )
+
+
+class SalesRecordLineInline(admin.TabularInline):
+    model = SalesRecordLine
+    extra = 0
+    can_delete = False
+    readonly_fields = [
+        'line_type', 'service_type', 'inventory_item', 'installed_equipment', 'name',
+        'sku', 'quantity', 'unit', 'unit_price', 'line_total', 'source_snapshot', 'sort_order',
+    ]
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 class ServiceLocationInline(admin.StackedInline):
@@ -142,6 +156,27 @@ class ServiceTicketAdmin(admin.ModelAdmin):
     @admin.display(description='Crew')
     def crew_size(self, obj):
         return obj.crew_assignments.count()
+
+
+@admin.register(SalesRecord)
+class SalesRecordAdmin(admin.ModelAdmin):
+    list_display = ['record_number', 'ticket', 'client', 'status', 'sale_date', 'agreed_total', 'currency_code']
+    list_filter = ['status', 'sale_date', 'currency_code']
+    search_fields = ['record_number', 'ticket__id', 'client__username', 'client__first_name', 'client__last_name']
+    raw_id_fields = ['ticket', 'client', 'quotation', 'created_by', 'confirmed_by', 'voided_by', 'replaces']
+    readonly_fields = [
+        'record_number', 'ticket', 'client', 'quotation', 'status', 'sale_date',
+        'currency_code', 'agreed_total', 'notes', 'source_snapshot', 'created_by',
+        'confirmed_by', 'confirmed_at', 'voided_by', 'voided_at', 'void_reason',
+        'replaces', 'created_at', 'updated_at',
+    ]
+    inlines = [SalesRecordLineInline]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(TechnicianSkill)

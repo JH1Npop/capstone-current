@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 from .models import ActivityLog, AdminSettings, ChangeLog, User, TechnicianProfile, ClientProfile, ManagementProfile
 from .rbac import (
     get_default_admin_scope_for_role,
@@ -124,6 +125,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                   'first_name', 'middle_name', 'last_name', 'role', 'phone', 'landline', 'address',
                   'current_latitude', 'current_longitude', 'is_available',
                   'skill_level', 'max_daily_assignments', 'company_name']
+
+    def validate_email(self, value):
+        normalized_email = str(value or '').strip()
+        if normalized_email and User.objects.filter(email__iexact=normalized_email).exists():
+            raise serializers.ValidationError('This email address is already in use.')
+        return normalized_email
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
@@ -570,6 +577,10 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def update(self, instance, validated_data):
+        requested_status = validated_data.get('status')
+        if requested_status is not None:
+            validated_data['is_active'] = requested_status == 'active'
+
         profile_fields = {
             'current_latitude',
             'current_longitude',
@@ -605,13 +616,15 @@ class SelfUserUpdateSerializer(serializers.ModelSerializer):
         if not value:
             return value
 
-        content_type = getattr(value, 'content_type', '')
-        if content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:
-            raise serializers.ValidationError('Upload a JPG, PNG, WebP, or GIF image.')
+        from afn_service_management.upload_validation import validate_image_upload
 
-        max_size = 2 * 1024 * 1024
-        if getattr(value, 'size', 0) > max_size:
-            raise serializers.ValidationError('Profile image must be 2 MB or smaller.')
+        _format, _content_type, safe_extension, original_stem = validate_image_upload(
+            value,
+            max_bytes=2 * 1024 * 1024,
+            allowed_formats={'JPEG', 'PNG', 'WEBP', 'GIF'},
+            field_name='profile_image',
+        )
+        value.name = f'{original_stem}{safe_extension}'
 
         return value
 
@@ -752,6 +765,7 @@ class AdminSettingsSerializer(serializers.ModelSerializer):
     landingPageContent = serializers.JSONField(source='landing_page_content', required=False)
     solarCalculatorSettings = serializers.JSONField(source='solar_calculator_settings', required=False)
     landingPagePromotions = serializers.JSONField(source='landing_page_promotions', required=False)
+    landingPageProjects = serializers.JSONField(source='landing_page_projects', required=False)
     locationValidationEnabled = serializers.BooleanField(source='location_validation_enabled')
     arrivalRadiusMeters = serializers.IntegerField(source='arrival_radius_meters', min_value=1, max_value=1000)
     locationValidationDisabledReason = serializers.CharField(
@@ -869,6 +883,59 @@ class AdminSettingsSerializer(serializers.ModelSerializer):
             })
         return normalized
 
+    def validate_landingPageProjects(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Projects must be a list.')
+        if len(value) > 12:
+            raise serializers.ValidationError('A maximum of 12 projects is allowed.')
+
+        service_types = {'solar', 'cctv', 'aircon'}
+        normalized = []
+        for index, project in enumerate(value):
+            if not isinstance(project, dict):
+                raise serializers.ValidationError(f'Project {index + 1} must be an object.')
+
+            title = str(project.get('title') or '').strip()
+            service_type = str(project.get('serviceType') or '').strip().lower()
+            location = str(project.get('location') or '').strip()
+            completed_date = str(project.get('completedDate') or '').strip()
+            description = str(project.get('description') or '').strip()
+            image_url = str(project.get('imageUrl') or '').strip()
+            consent_confirmed = bool(project.get('clientConsentConfirmed', False))
+            published = bool(project.get('published', False))
+
+            if service_type and service_type not in service_types:
+                raise serializers.ValidationError(f'Project {index + 1} has an invalid service type.')
+            if image_url and not image_url.startswith(('/', 'https://', 'http://')):
+                raise serializers.ValidationError(f'Project {index + 1} has an invalid image URL.')
+            if completed_date:
+                try:
+                    parsed_date = serializers.DateField().run_validation(completed_date)
+                except serializers.ValidationError:
+                    raise serializers.ValidationError(f'Project {index + 1} has an invalid completion date.')
+                if parsed_date > timezone.localdate():
+                    raise serializers.ValidationError(f'Project {index + 1} completion date cannot be in the future.')
+
+            required_values = (title, service_type, location, completed_date, description, image_url)
+            if published and (not all(required_values) or not consent_confirmed):
+                raise serializers.ValidationError(
+                    f'Project {index + 1} needs complete details, an image, and confirmed client permission before publishing.'
+                )
+
+            normalized.append({
+                'id': str(project.get('id') or f'project-{index + 1}')[:80],
+                'title': title[:120],
+                'serviceType': service_type,
+                'location': location[:120],
+                'completedDate': completed_date[:10],
+                'description': description[:500],
+                'imageUrl': image_url[:500],
+                'imageAssetId': project.get('imageAssetId') or None,
+                'clientConsentConfirmed': consent_confirmed,
+                'published': published,
+            })
+        return normalized
+
     class Meta:
         model = AdminSettings
         fields = [
@@ -898,6 +965,7 @@ class AdminSettingsSerializer(serializers.ModelSerializer):
             'landingPageContent',
             'solarCalculatorSettings',
             'landingPagePromotions',
+            'landingPageProjects',
             'locationValidationEnabled',
             'arrivalRadiusMeters',
             'locationValidationDisabledReason',

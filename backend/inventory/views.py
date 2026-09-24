@@ -1,7 +1,10 @@
 
+from django.db import transaction
 from django.db.models import Sum, Count
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError as ApiValidationError
 from rest_framework.response import Response
 from django.utils import timezone
 
@@ -29,33 +32,52 @@ from users.permissions import (
 )
 
 
+def raise_api_validation_error(exc):
+    if hasattr(exc, 'message_dict'):
+        raise ApiValidationError(exc.message_dict)
+    raise ApiValidationError({'detail': list(getattr(exc, 'messages', [str(exc)]))})
+
+
 class InventoryCategoryViewSet(viewsets.ModelViewSet):
-    queryset = InventoryCategory.objects.all()
+    queryset = InventoryCategory.objects.annotate(
+        item_count=Count('items', distinct=True),
+        subcategory_count=Count('subcategories', distinct=True),
+    ).order_by('name')
     serializer_class = InventoryCategorySerializer
     permission_classes = [CanManageInventory]
 
+    def destroy(self, request, *args, **kwargs):
+        with transaction.atomic():
+            category = InventoryCategory.objects.select_for_update().get(pk=self.get_object().pk)
+            if category.items.exists() or category.subcategories.exists():
+                return Response(
+                    {'detail': 'Move this category\'s items and subcategories before deleting it.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            return super().destroy(request, *args, **kwargs)
+
 
 class InventoryItemViewSet(viewsets.ModelViewSet):
-    queryset = InventoryItem.objects.order_by('id')
+    queryset = InventoryItem.objects.select_related('category').order_by('id')
     serializer_class = InventoryItemSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'sku', 'description']
 
     def get_permissions(self):
-        """Return appropriate permissions based on action"""
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [CanManageInventory()]
-        elif self.action in ['list', 'retrieve']:
-            return [CanManageInventory()]
-        return [permissions.IsAuthenticated()]
+        """Use the shared inventory permission for list and custom actions too."""
+        return [CanManageInventory()]
 
     def get_queryset(self):
-        queryset = InventoryItem.objects.order_by('id')
+        queryset = InventoryItem.objects.select_related('category').order_by('id')
 
         # Filter by category
         category = self.request.query_params.get('category')
         if category:
+            try:
+                category = int(category)
+            except (TypeError, ValueError):
+                raise ApiValidationError({'category': 'Category must be an integer ID.'})
             queryset = queryset.filter(category_id=category)
 
         # Filter by status
@@ -70,6 +92,25 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
             queryset = InventoryItem.objects.filter(id__in=low_stock_ids)
 
         return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        with transaction.atomic():
+            item = InventoryItem.objects.select_for_update().get(pk=self.get_object().pk)
+            if (
+                item.transactions.exists() or
+                item.reservations.exists() or
+                item.service_type_requirements.exists()
+            ):
+                return Response(
+                    {
+                        'detail': (
+                            'This item has inventory history or service requirements and cannot be deleted. '
+                            'Set its status to retired instead.'
+                        )
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
@@ -116,6 +157,7 @@ class InventoryTransactionViewSet(viewsets.ModelViewSet):
     queryset = InventoryTransaction.objects.all()
     serializer_class = InventoryTransactionSerializer
     permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'post', 'head', 'options']
 
     def get_permissions(self):
         """Return appropriate permissions based on action"""
@@ -130,12 +172,19 @@ class InventoryTransactionViewSet(viewsets.ModelViewSet):
         return InventoryTransaction.objects.all()
 
     def perform_create(self, serializer):
-        serializer.save(performed_by=self.request.user)
+        try:
+            serializer.save(performed_by=self.request.user)
+        except DjangoValidationError as exc:
+            raise_api_validation_error(exc)
 
     @action(detail=False, methods=['get'])
     def recent(self, request):
         """Get recent transactions"""
-        limit = int(request.query_params.get('limit', 20))
+        try:
+            limit = int(request.query_params.get('limit', 20))
+        except (TypeError, ValueError):
+            return Response({'limit': 'Limit must be an integer.'}, status=status.HTTP_400_BAD_REQUEST)
+        limit = max(1, min(limit, 100))
         transactions = self.get_queryset().order_by('-id')[:limit]
         serializer = self.get_serializer(transactions, many=True)
         return Response(serializer.data)
@@ -146,6 +195,13 @@ class InventoryTransactionViewSet(viewsets.ModelViewSet):
         item_id = request.query_params.get('item_id')
         if not item_id:
             return Response({'error': 'item_id required'}, status=400)
+        try:
+            item_id = int(item_id)
+        except (TypeError, ValueError):
+            return Response(
+                {'item_id': 'item_id must be an integer.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Reuse get_queryset so technicians only see their own transactions
         transactions = self.get_queryset().filter(item_id=item_id)
@@ -154,9 +210,12 @@ class InventoryTransactionViewSet(viewsets.ModelViewSet):
 
 
 class InventoryReservationViewSet(viewsets.ModelViewSet):
-    queryset = InventoryReservation.objects.all()
+    queryset = InventoryReservation.objects.select_related(
+        'item', 'technician', 'service_ticket',
+    ).order_by('-required_date', '-id')
     serializer_class = InventoryReservationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'post', 'head', 'options']
 
     def get_permissions(self):
         """Return appropriate permissions based on action"""
@@ -167,21 +226,41 @@ class InventoryReservationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.role == 'technician':
-            return InventoryReservation.objects.filter(technician=user)
-        return InventoryReservation.objects.all()
+            queryset = self.queryset.filter(technician=user)
+        else:
+            queryset = self.queryset
+
+        item_id = self.request.query_params.get('item_id')
+        if item_id:
+            try:
+                item_id = int(item_id)
+            except (TypeError, ValueError):
+                raise ApiValidationError({'item_id': 'item_id must be an integer.'})
+            queryset = queryset.filter(item_id=item_id)
+
+        reservation_status = self.request.query_params.get('status')
+        if reservation_status:
+            if reservation_status not in {'pending', 'fulfilled', 'cancelled'}:
+                raise ApiValidationError({'status': 'Unknown reservation status.'})
+            queryset = queryset.filter(status=reservation_status)
+
+        return queryset
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        reservation = create_pending_reservation(
-            item=serializer.validated_data['item'],
-            quantity=serializer.validated_data['quantity'],
-            technician=serializer.validated_data['technician'],
-            required_date=serializer.validated_data['required_date'],
-            service_ticket=serializer.validated_data.get('service_ticket'),
-            performed_by=request.user,
-            notes=serializer.validated_data.get('notes') or 'Manual reservation',
-        )
+        try:
+            reservation = create_pending_reservation(
+                item=serializer.validated_data['item'],
+                quantity=serializer.validated_data['quantity'],
+                technician=serializer.validated_data['technician'],
+                required_date=serializer.validated_data['required_date'],
+                service_ticket=serializer.validated_data.get('service_ticket'),
+                performed_by=request.user,
+                notes=serializer.validated_data.get('notes') or 'Manual reservation',
+            )
+        except DjangoValidationError as exc:
+            raise_api_validation_error(exc)
         output_serializer = self.get_serializer(reservation)
         headers = self.get_success_headers(output_serializer.data)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
@@ -194,11 +273,19 @@ class InventoryReservationViewSet(viewsets.ModelViewSet):
         if reservation.status != 'pending':
             return Response({'error': 'Only pending reservations can be fulfilled.'}, status=400)
 
-        fulfill_pending_reservation(
-            reservation,
-            performed_by=request.user,
-            notes=f"Fulfilling reservation #{reservation.id}",
-        )
+        try:
+            fulfilled = fulfill_pending_reservation(
+                reservation,
+                performed_by=request.user,
+                notes=f"Fulfilling reservation #{reservation.id}",
+            )
+        except DjangoValidationError as exc:
+            raise_api_validation_error(exc)
+        if not fulfilled:
+            return Response(
+                {'error': 'Only pending reservations can be fulfilled.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         return Response({'status': 'Reservation fulfilled'})
 
     @action(detail=True, methods=['post'])
@@ -209,17 +296,25 @@ class InventoryReservationViewSet(viewsets.ModelViewSet):
         if reservation.status != 'pending':
             return Response({'error': 'Only pending reservations can be cancelled.'}, status=400)
 
-        cancel_pending_reservation(
-            reservation,
-            performed_by=request.user,
-            notes=f"Cancelled reservation #{reservation.id}",
-        )
+        try:
+            cancelled = cancel_pending_reservation(
+                reservation,
+                performed_by=request.user,
+                notes=f"Cancelled reservation #{reservation.id}",
+            )
+        except DjangoValidationError as exc:
+            raise_api_validation_error(exc)
+        if not cancelled:
+            return Response(
+                {'error': 'Only pending reservations can be cancelled.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         return Response({'status': 'Reservation cancelled'})
 
     @action(detail=False, methods=['get'])
     def pending(self, request):
         """Get all pending reservations"""
-        reservations = InventoryReservation.objects.filter(status='pending')
+        reservations = self.get_queryset().filter(status='pending')
         serializer = self.get_serializer(reservations, many=True)
         return Response(serializer.data)
 

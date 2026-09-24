@@ -111,13 +111,21 @@ class MessageSerializer(serializers.ModelSerializer):
         if not sender or not sender.is_authenticated:
             raise serializers.ValidationError('Authentication is required to send a message.')
         if image:
-            content_type = getattr(image, 'content_type', '')
-            if content_type and not content_type.startswith('image/'):
-                raise serializers.ValidationError({'image': 'Only image attachments are allowed.'})
-            if getattr(image, 'size', 0) > 5 * 1024 * 1024:
-                raise serializers.ValidationError({'image': 'Image attachments must be 5 MB or smaller.'})
+            from afn_service_management.upload_validation import validate_image_upload
+
+            _format, _content_type, safe_extension, original_stem = validate_image_upload(
+                image,
+                max_bytes=5 * 1024 * 1024,
+                allowed_formats={'JPEG', 'PNG', 'WEBP', 'GIF'},
+                field_name='image',
+            )
+            image.name = f'{original_stem}{safe_extension}'
+        if len(str(text or '')) > 5000:
+            raise serializers.ValidationError({'text': 'Messages cannot exceed 5000 characters.'})
         if not str(text or '').strip() and not image:
             raise serializers.ValidationError({'text': 'Add a message or attach an image.'})
+        if room_type == 'direct' and receiver and (not receiver.is_active or receiver.status != 'active'):
+            raise serializers.ValidationError({'receiver': 'Choose an active message recipient.'})
 
         if ticket:
             if not user_can_access_ticket(sender, ticket):

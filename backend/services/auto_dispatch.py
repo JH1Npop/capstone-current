@@ -15,6 +15,7 @@ from services.views import (
     get_eligible_technician_ids_for_service,
     score_technician_fit,
     validate_technician_daily_capacity,
+    validate_technician_schedule_overlap,
 )
 from users.models import User
 from notifications.notification_utils import send_user_notification
@@ -38,6 +39,65 @@ def get_auto_dispatch_settings():
     }
 
 
+def rank_technician_candidates(ticket: ServiceTicket) -> List[Dict[str, Any]]:
+    """Return eligible technicians using the canonical smart-dispatch rules."""
+    try:
+        service_location = ticket.request.location
+    except ServiceLocation.DoesNotExist:
+        logger.warning(f"Ticket {ticket.id} has no service location - cannot auto-dispatch")
+        return []
+
+    if (
+        not service_location
+        or service_location.latitude is None
+        or service_location.longitude is None
+    ):
+        logger.warning(f"Ticket {ticket.id} has no valid location - cannot auto-dispatch")
+        return []
+
+    eligible_technician_ids = get_eligible_technician_ids_for_service(ticket.request.service_type)
+    skilled_technicians = User.objects.filter(
+        id__in=eligible_technician_ids,
+        role='technician',
+        status='active',
+        is_active=True,
+        technician_profile__is_available=True,
+    ).distinct()
+
+    ranked_candidates = []
+    for technician in skilled_technicians:
+        try:
+            validate_technician_schedule_overlap(
+                technician,
+                ticket.scheduled_date,
+                ticket.scheduled_time,
+                ticket,
+            )
+        except ValueError:
+            continue
+
+        fitness = score_technician_fit(
+            ticket,
+            technician,
+            float(service_location.latitude),
+            float(service_location.longitude),
+        )
+        if fitness is None or fitness['score'] <= MIN_SCORE_THRESHOLD:
+            continue
+
+        fitness['technician'] = technician
+        ranked_candidates.append(fitness)
+
+    ranked_candidates.sort(
+        key=lambda item: (
+            item.get('daily_assigned_minutes', 0),
+            -item['score'],
+            item['technician'].id,
+        )
+    )
+    return ranked_candidates
+
+
 def find_best_technician(ticket: ServiceTicket) -> Optional[Dict[str, Any]]:
     """
     Find the best technician to assign to a ticket.
@@ -51,81 +111,9 @@ def find_best_technician(ticket: ServiceTicket) -> Optional[Dict[str, Any]]:
     Returns:
         Dict with technician, score, and summary, or None if no qualified technician found
     """
-    try:
-        service_location = ticket.request.location
-    except ServiceLocation.DoesNotExist:
-        logger.warning(f"Ticket {ticket.id} has no service location - cannot auto-dispatch")
-        return None
-
-    if not service_location or service_location.latitude is None:
-        logger.warning(f"Ticket {ticket.id} has no valid location - cannot auto-dispatch")
-        return None
-
-    # Find all technicians with the exact service skill, or General Services as fallback.
-    eligible_technician_ids = get_eligible_technician_ids_for_service(ticket.request.service_type)
-    skilled_technicians = User.objects.filter(
-        id__in=eligible_technician_ids,
-        role='technician',
-        status='active',
-        technician_profile__is_available=True,
-    ).distinct()
-
-    if not skilled_technicians.exists():
-        logger.info(
-            f"No available technicians with skill '{ticket.request.service_type.name}' "
-            f"for ticket {ticket.id}"
-        )
-        return None
-
-    best_match = None
-    best_score = MIN_SCORE_THRESHOLD
-
-    for technician in skilled_technicians:
-        # Score the technician
-        fitness = score_technician_fit(
-            ticket,
-            technician,
-            float(service_location.latitude),
-            float(service_location.longitude),
-        )
-
-        if fitness is None:
-            logger.debug(
-                f"Technician {technician.username} has incomplete location data"
-            )
-            continue
-
-        score = fitness['score']
-        if score <= MIN_SCORE_THRESHOLD:
-            continue
-
-        daily_assigned_minutes = fitness.get('daily_assigned_minutes', 0)
-
-        # Update best match if this technician scores higher
-        if (
-            best_match is None or
-            daily_assigned_minutes < best_match.get('daily_assigned_minutes', 0) or
-            (
-                daily_assigned_minutes == best_match.get('daily_assigned_minutes', 0) and
-                score > best_score
-            )
-        ):
-            best_score = score
-            best_match = {
-                'technician': technician,
-                'score': score,
-                'distance_km': fitness['distance_km'],
-                'skill_level': fitness['skill_level'],
-                'summary': fitness['summary'],
-                'daily_assigned_minutes': daily_assigned_minutes,
-                'scheduled_days_required': fitness.get('scheduled_days_required', 1),
-            }
-            logger.debug(
-                f"New best match for ticket {ticket.id}: "
-                f"{technician.username} (score: {score})"
-            )
-
-    if best_match:
+    ranked_candidates = rank_technician_candidates(ticket)
+    if ranked_candidates:
+        best_match = ranked_candidates[0]
         logger.info(
             f"Found best technician for ticket {ticket.id}: "
             f"{best_match['technician'].username} (score: {best_match['score']})"
@@ -169,14 +157,32 @@ def auto_assign_technician(ticket: ServiceTicket) -> bool:
                 return False
 
             technician = User.objects.select_for_update().get(pk=technician.pk, role='technician')
-            if technician.status != 'active' or not technician.is_available:
+            if technician.status != 'active' or not technician.is_active or not technician.is_available:
                 logger.info(f"Technician {technician.id} is no longer available for ticket {ticket.id}")
                 return False
             try:
                 validate_technician_daily_capacity(technician, ticket.scheduled_date, ticket)
+                validate_technician_schedule_overlap(
+                    technician,
+                    ticket.scheduled_date,
+                    ticket.scheduled_time,
+                    ticket,
+                )
             except ValueError as exc:
                 logger.info(f"Technician {technician.id} capacity changed for ticket {ticket.id}: {exc}")
                 return False
+
+            location = ticket.request.location
+            locked_fitness = score_technician_fit(
+                ticket,
+                technician,
+                float(location.latitude),
+                float(location.longitude),
+            )
+            if locked_fitness is None or locked_fitness['score'] <= MIN_SCORE_THRESHOLD:
+                logger.info(f"Technician {technician.id} no longer meets the score threshold for ticket {ticket.id}")
+                return False
+            best_match = {**locked_fitness, 'technician': technician}
 
             # Assign as primary technician
             ticket.technician = technician

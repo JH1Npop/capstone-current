@@ -8,9 +8,9 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import { FiCalendar, FiEye, FiPlus, FiSearch, FiX } from 'react-icons/fi';
 import { cancelServiceRequest, fetchClientRequests } from '../../api/api';
 import { clientTechnicianDisplayString } from '../../utils/clientTechnicianDisplay';
-import { formatTicketId } from '../../utils/roleIds';
+import { formatRequestId, formatTicketId } from '../../utils/roleIds';
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
 
 export default function ClientRequestTracking() {
   const [requests, setRequests] = useState([]);
@@ -132,7 +132,6 @@ export default function ClientRequestTracking() {
       <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Request Tracking</h1>
             <p className="text-sm text-slate-500">Track active requests, ticket progress, technician assignment, and cancellations.</p>
           </div>
           <button
@@ -238,7 +237,7 @@ export default function ClientRequestTracking() {
                             onClick={() => handleViewDetail(request.id)}
                             className="font-semibold text-brand-700 hover:underline"
                           >
-                            Request #{request.id}
+                            {formatRequestId(request.id)}
                           </button>
                           <div className="mt-1 flex flex-wrap gap-1.5">
                             {request.priority && (
@@ -333,7 +332,7 @@ export default function ClientRequestTracking() {
       {cancelTarget && (
         <ConfirmationDialog
           title="Cancel service request?"
-          message={`Request #${cancelTarget.id} will be removed from active processing if work has not started. AFN will be notified.`}
+          message={`${formatRequestId(cancelTarget.id)} will be removed from active processing if work has not started. AFN will be notified.`}
           tone="danger"
           icon="warning"
           confirmLabel="Cancel request"

@@ -7,10 +7,11 @@ import { useAuth } from '../../context/AuthContext';
 import { REPORTS_EXPORT_CAPABILITIES, hasAnyCapability } from '../../rbac';
 import { formatDate } from '../../utils/formatDate';
 import { formatTechnicianId, formatTicketId } from '../../utils/roleIds';
+import SearchFilterBar from '../../components/shared/SearchFilterBar';
 
 const convertToCSV = (rows) => {
   if (!rows.length) return '';
-  const headers = ['ID', 'Client', 'Client(Fullname)', 'Service', 'Priority', 'Status', 'SLA', 'Technician ID', 'Technician Fullname', 'Next Step'];
+  const headers = ['Ticket ID', 'Client', 'Client Fullname', 'Service', 'Priority', 'Status', 'SLA', 'Technician ID', 'Technician Fullname', 'Next Step'];
   const escape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
   const csvData = rows.map(row => [
     formatTicketId(row.id),
@@ -134,7 +135,6 @@ export default function AdminOperationsReport() {
     <Layout>
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold mb-2">Operations Ticket Report</h2>
           <p className="text-slate-600">Comprehensive operations ticket progress and status report.</p>
         </div>
 
@@ -158,74 +158,25 @@ export default function AdminOperationsReport() {
           </div>
         </div>
 
-        {/* Filter Bar */}
-        <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-200">
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="min-w-[11rem] flex-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date From</label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="min-w-[11rem] flex-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date To</label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="min-w-[10rem] flex-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="All">All</option>
-                <option value="Completed">Completed</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Not Started">Not Started</option>
-              </select>
-            </div>
-            <div className="min-w-[10rem] flex-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
-              <select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="All">All</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-                <option value="Urgent">Urgent</option>
-              </select>
-            </div>
-            <div className="min-w-[16rem] flex-[2_1_18rem]">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Search</label>
-              <input
-                type="text"
-                placeholder="Client, service, technician, or next step..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="min-w-[9rem] flex-1 sm:flex-none">
-              <button
-                onClick={resetFilters}
-                className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition"
-              >
-                Reset Filters
-              </button>
-            </div>
-          </div>
-        </div>
+        <SearchFilterBar
+          searchValue={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchLabel="Find an operation"
+          searchPlaceholder="Search client, service, technician, or next step"
+          filters={[
+            { key: 'from', label: 'From date', type: 'date', value: dateFrom, defaultValue: '', onChange: setDateFrom },
+            { key: 'to', label: 'To date', type: 'date', value: dateTo, defaultValue: '', min: dateFrom || undefined, onChange: setDateTo },
+            { key: 'status', label: 'Work status', value: statusFilter, defaultValue: 'All', onChange: setStatusFilter, options: [
+              { value: 'All', label: 'Any work status' }, { value: 'Completed', label: 'Completed' },
+              { value: 'In Progress', label: 'In progress' }, { value: 'Not Started', label: 'Not started' },
+            ] },
+            { key: 'priority', label: 'Priority', value: priorityFilter, defaultValue: 'All', onChange: setPriorityFilter, options: [
+              { value: 'All', label: 'Any priority' }, { value: 'Urgent', label: 'Urgent' }, { value: 'High', label: 'High' },
+              { value: 'Medium', label: 'Medium' }, { value: 'Low', label: 'Low' },
+            ] },
+          ]}
+          onClear={resetFilters}
+        />
 
         {/* Export Buttons */}
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">

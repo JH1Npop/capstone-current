@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef } from 'react';
 import { FiAlertTriangle, FiCheckCircle, FiInfo, FiTrash2, FiX } from 'react-icons/fi';
 
 const toneConfig = {
@@ -45,16 +46,48 @@ export default function ConfirmationDialog({
 }) {
   const activeTone = toneConfig[tone] || toneConfig.brand;
   const Icon = iconMap[icon] || iconMap.info;
+  const titleId = useId();
+  const dialogRef = useRef(null);
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const focusable = dialog?.querySelectorAll(
+      'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+    );
+    const preferredFocus = dialog?.querySelector('textarea, input, select') || focusable?.[0];
+    preferredFocus?.focus();
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !loading) {
+        event.preventDefault();
+        onCancelRef.current?.();
+        return;
+      }
+      if (event.key !== 'Tab' || !focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [loading]);
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4">
-      <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-lg">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-lg">
         <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-3">
             <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${activeTone.iconWrap}`}>
               <Icon size={20} />
             </div>
-            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+            <h2 id={titleId} className="text-lg font-semibold text-slate-900">{title}</h2>
           </div>
           <button
             type="button"

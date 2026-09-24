@@ -45,7 +45,16 @@ npm run build:frontend
 npx playwright test
 ```
 
+Playwright uses an ignored, isolated `backend/db.e2e.sqlite3` database. Its
+global setup migrates, flushes, and seeds only that browser-test database; it
+does not modify the development `backend/db.sqlite3` database.
+
 For Docker-based development, set `SECRET_KEY` in `.env`, then run `docker compose up --build`.
+
+For production, follow the [production deployment checklist](docs/deployment/PRODUCTION_DEPLOYMENT_CHECKLIST.md)
+and [Aiven PostgreSQL guide](docs/deployment/AIVEN_DEPLOYMENT.md). Do not copy a
+local `.env` file into Git or expose database, Cloudinary, Redis, SMTP, or Django
+secrets through frontend `VITE_*` variables.
 
 ## Documentation
 

@@ -3,6 +3,7 @@ Notification utilities for SLA escalations and alerts.
 """
 
 import logging
+from datetime import timedelta
 from django.utils import timezone
 from notifications.notification_utils import send_user_notification
 
@@ -23,7 +24,12 @@ def notify_admins_sla_breach(breach_type: str, object_id: int, evaluation: dict)
     User = get_user_model()
     admins = User.objects.filter(role__in=['superadmin', 'admin'])
 
-    message = f"SLA Breach Alert: {evaluation.get('rule_label')}"
+    request_obj = None
+    if breach_type == 'request_approval':
+        from services.models import ServiceRequest
+        request_obj = ServiceRequest.objects.filter(pk=object_id).first()
+    identity = f'REQ-{object_id:04d}' if request_obj else f'ID-{object_id}'
+    message = f"{identity} SLA breach: {evaluation.get('rule_label')}"
     details = {
         'breach_type': breach_type,
         'object_id': object_id,
@@ -39,7 +45,9 @@ def notify_admins_sla_breach(breach_type: str, object_id: int, evaluation: dict)
                 title=message,
                 body=evaluation.get('action_required') or 'Review the affected request.',
                 notification_type='warning',
+                request=request_obj,
                 data=details,
+                dedupe_for=timedelta(hours=24),
             )
         except Exception as e:
             logger.error(f"Failed to notify admin {admin.username} about SLA breach: {e}")
@@ -88,6 +96,7 @@ def notify_supervisors_ticket_escalation(ticket, escalation_type: str, evaluatio
                 ticket=ticket,
                 request=ticket.request,
                 data=details,
+                dedupe_for=timedelta(hours=24),
             )
         except Exception as e:
             logger.error(
@@ -128,6 +137,7 @@ def notify_admins_ticket_escalation(ticket, escalation_type: str, evaluation: di
                 ticket=ticket,
                 request=ticket.request,
                 data=details,
+                dedupe_for=timedelta(hours=24),
             )
         except Exception as e:
             logger.error(

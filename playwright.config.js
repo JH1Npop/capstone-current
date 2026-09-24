@@ -4,6 +4,11 @@ import { defineConfig } from '@playwright/test';
 const backendPython = process.platform === 'win32'
   ? 'venv\\Scripts\\python.exe'
   : 'python';
+const backendPort = Number(process.env.E2E_BACKEND_PORT || 8011);
+const frontendPort = Number(process.env.E2E_FRONTEND_PORT || 5181);
+const backendUrl = `http://127.0.0.1:${backendPort}`;
+const frontendUrl = `http://127.0.0.1:${frontendPort}`;
+const managedServersInGlobalSetup = process.platform === 'win32';
 
 /**
  * AFN Service Management — Playwright E2E Configuration
@@ -16,6 +21,8 @@ const backendPython = process.platform === 'win32'
  */
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: ['**/debug_*.spec.js'],
+  globalSetup: './e2e/global-setup.js',
   fullyParallel: false,           // Sequential so login state doesn't collide
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -30,7 +37,7 @@ export default defineConfig({
   },
 
   use: {
-    baseURL: 'http://localhost:5174',
+    baseURL: frontendUrl,
     actionTimeout: 10_000,
     navigationTimeout: 30_000,
 
@@ -57,11 +64,15 @@ export default defineConfig({
     },
   ],
 
-  webServer: [
+  // Playwright's Windows webServer shutdown shells out to taskkill and can
+  // wait forever when that process-tree operation is unavailable. The global
+  // setup owns direct child processes on Windows; POSIX/CI retains Playwright's
+  // native webServer management.
+  webServer: managedServersInGlobalSetup ? undefined : [
     {
-      command: `${backendPython} backend/manage.py runserver 127.0.0.1:8000 --noreload --noasgi`,
-      url: 'http://127.0.0.1:8000/api/health/database/',
-      reuseExistingServer: !process.env.CI,
+      command: `${backendPython} backend/manage.py runserver 127.0.0.1:${backendPort} --noreload --noasgi`,
+      url: `${backendUrl}/api/health/database/`,
+      reuseExistingServer: false,
       timeout: 120_000,
       env: {
         ...process.env,
@@ -73,13 +84,13 @@ export default defineConfig({
     },
     {
       command: 'npm --prefix frontend run dev:e2e',
-      url: 'http://127.0.0.1:5174',
-      reuseExistingServer: !process.env.CI,
+      url: frontendUrl,
+      reuseExistingServer: false,
       timeout: 120_000,
       env: {
         ...process.env,
-        VITE_BACKEND_HOST: 'http://127.0.0.1:8000',
-        VITE_DEV_SERVER_PORT: '5174',
+        VITE_BACKEND_HOST: backendUrl,
+        VITE_DEV_SERVER_PORT: String(frontendPort),
       },
     },
   ],

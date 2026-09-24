@@ -1,6 +1,10 @@
 # Auto-split from services/views.py
 from services.views.helpers import *  # noqa: F401,F403
-from users.permissions import CanViewReports
+from users.permissions import (
+    CanViewAdminJobHistory,
+    CanViewReports,
+    CanViewSupervisorTracking,
+)
 from django.conf import settings
 from django.db.models import Prefetch
 from rest_framework.throttling import ScopedRateThrottle
@@ -237,9 +241,14 @@ class StatusReportsViewSet(viewsets.ViewSet):
 
         # Inventory status
         total_items = InventoryItem.objects.count()
-        in_stock = InventoryItem.objects.filter(quantity__gt=0).count()
-        low_stock = sum(1 for item in InventoryItem.objects.all() if item.is_low_stock)
-        out_of_stock = InventoryItem.objects.filter(quantity=0).count()
+        in_stock = InventoryItem.objects.filter(quantity__gt=F('reserved_quantity')).count()
+        low_stock = InventoryItem.objects.annotate(
+            low_stock_margin=(
+                100 * (F('quantity') - F('reserved_quantity'))
+                - F('minimum_stock') * F('low_stock_threshold')
+            ),
+        ).filter(minimum_stock__gt=0, low_stock_margin__lte=0).count()
+        out_of_stock = InventoryItem.objects.filter(quantity=F('reserved_quantity')).count()
 
         # Calculate completion stages for inventory process
         ordered_items = InventoryItem.objects.filter(
@@ -728,7 +737,11 @@ class StatusReportsViewSet(viewsets.ViewSet):
 
 class CoverageHeatmapViewSet(viewsets.ViewSet):
     """Coverage Heatmap - GIS-based visualization showing areas with high concentrations of service requests."""
-    permission_classes = [IsAdminOrSupervisor]
+
+    def get_permissions(self):
+        if self.action == 'completed_jobs':
+            return [CanViewAdminJobHistory()]
+        return [CanViewSupervisorTracking()]
 
     @action(detail=False, methods=['get'])
     def service_density(self, request):
@@ -888,12 +901,6 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def completed_jobs(self, request):
         """Return all completed jobs with location and checklist data for history/heatmap page."""
-        from users.rbac import (
-            is_superadmin_role, user_has_capability,
-            ADMIN_JOB_HISTORY_VIEW, AFTER_SALES_VIEW_CAPABILITIES,
-            user_has_any_capability,
-        )
-
         def build_media_url(value):
             raw_value = str(value or '').strip()
             if not raw_value:
@@ -932,29 +939,26 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
                     })
             return normalized
 
-        user = request.user
-        role = getattr(user, 'role', '')
-
-        # Access control: superadmin always, admin with capability
-        has_access = (
-            is_superadmin_role(role)
-            or (role == 'admin' and user_has_capability(user, ADMIN_JOB_HISTORY_VIEW))
-        )
-        if not has_access:
-            return Response(
-                {'detail': 'You do not have permission to view job history.'},
-                status=403,
-            )
-
         # Build queryset
         tickets = ServiceTicket.objects.filter(
-            status='Completed'
+            status__in=['Completed', 'Turned Over / Accepted']
         ).select_related(
             'request__service_type',
             'request__client',
             'request__location',
             'technician',
-        ).prefetch_related('inspection', 'installed_equipment', 'field_service_reports')
+            'inspection',
+            'maintenance_schedule',
+        ).prefetch_related(
+            'installed_equipment',
+            'field_service_reports',
+            'crew_assignments__technician',
+            'inventory_reservations__item',
+            'inventory_reservations__technician',
+            'after_sales_cases',
+            'generated_documents',
+            'status_history__changed_by',
+        )
 
         # Filters
         days = request.query_params.get('days')
@@ -972,7 +976,7 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
         if search:
             tickets = tickets.filter(build_ticket_search_query(search))
 
-        option_tickets = tickets
+        option_tickets = tickets.prefetch_related(None)
 
         client_id = request.query_params.get('client')
         if client_id:
@@ -982,7 +986,35 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
         if technician_id:
             tickets = tickets.filter(technician_id=technician_id)
 
-        tickets = tickets.order_by('-completed_date', '-scheduled_date')
+        ordering_map = {
+            'ticket_id': 'id',
+            'client': 'request__client__last_name',
+            'service_type': 'request__service_type__name',
+            'technician': 'technician__last_name',
+            'client_rating': 'client_rating',
+            'completed_date': 'completed_date',
+        }
+        ordering_key = request.query_params.get('ordering', 'completed_date')
+        ordering_field = ordering_map.get(ordering_key, 'completed_date')
+        ordering_direction = request.query_params.get('direction', 'desc')
+        if ordering_direction != 'asc':
+            ordering_field = f'-{ordering_field}'
+
+        filtered_tickets = tickets
+        total_results = filtered_tickets.count()
+        try:
+            page_size = int(request.query_params.get('page_size', 10))
+        except (TypeError, ValueError):
+            page_size = 10
+        page_size = max(1, min(page_size, 100))
+        total_pages = max(1, (total_results + page_size - 1) // page_size)
+        try:
+            page = int(request.query_params.get('page', 1))
+        except (TypeError, ValueError):
+            page = 1
+        page = max(1, min(page, total_pages))
+        page_start = (page - 1) * page_size
+        tickets = filtered_tickets.order_by(ordering_field, '-id')[page_start:page_start + page_size]
 
         # Build response
         results = []
@@ -1041,13 +1073,40 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
             field_service_reports = [
                 {
                     'id': report.id,
+                    'indoor_temp': report.indoor_temp,
+                    'outdoor_temp': report.outdoor_temp,
+                    'ampere_reading': report.ampere_reading,
+                    'voltage_reading': report.voltage_reading,
+                    'before_service_readings': report.before_service_readings,
+                    'after_service_readings': report.after_service_readings,
                     'brand_model': report.brand_model,
                     'serial_number': report.serial_number,
                     'recommendation': report.recommendation,
                     'client_acknowledged': report.client_acknowledged,
+                    'client_signature_date': str(report.client_signature_date) if report.client_signature_date else None,
+                    'created_at': report.created_at,
                 }
                 for report in ticket.field_service_reports.all()
             ]
+
+            try:
+                maintenance = ticket.maintenance_schedule
+                maintenance_schedule = {
+                    'id': maintenance.id,
+                    'maintenance_profile': maintenance.maintenance_profile,
+                    'interval_days': maintenance.interval_days,
+                    'next_due_date': maintenance.next_due_date,
+                    'notify_on_date': maintenance.notify_on_date,
+                    'status': maintenance.status,
+                    'maintenance_notes': maintenance.maintenance_notes,
+                    'risk_level': maintenance.risk_level,
+                }
+            except Exception:
+                maintenance_schedule = None
+
+            duration_minutes = None
+            if ticket.start_time and ticket.end_time:
+                duration_minutes = max(0, round((ticket.end_time - ticket.start_time).total_seconds() / 60))
 
             results.append({
                 'id': ticket.id,
@@ -1063,6 +1122,10 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
                 'priority': ticket.priority,
                 'status': ticket.status,
                 'scheduled_date': str(ticket.scheduled_date) if ticket.scheduled_date else None,
+                'scheduled_time': str(ticket.scheduled_time) if ticket.scheduled_time else None,
+                'start_time': ticket.start_time,
+                'end_time': ticket.end_time,
+                'duration_minutes': duration_minutes,
                 'completed_date': str(ticket.completed_date) if ticket.completed_date else None,
                 'address': loc.address if loc else '',
                 'city': loc.city if loc else '',
@@ -1071,24 +1134,63 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
                 'longitude': float(loc.longitude) if loc and loc.longitude else None,
                 'client_rating': ticket.client_rating,
                 'client_feedback': ticket.client_feedback,
+                'warranty_status': ticket.warranty_status,
+                'warranty_start_date': ticket.warranty_start_date,
+                'warranty_end_date': ticket.warranty_end_date,
+                'warranty_notes': ticket.warranty_notes,
                 'completion_proof_images': normalize_report_media(ticket.completion_proof_images),
                 'completion_notes': ticket.completion_notes,
+                'crew_members': serialize_ticket_crew_members(ticket),
+                'inventory_reservations': serialize_ticket_inventory(ticket),
                 'installed_equipment': installed_equipment,
                 'field_service_reports': field_service_reports,
                 'inspection': inspection,
+                'maintenance_schedule': maintenance_schedule,
+                'after_sales_cases': [
+                    {
+                        'id': case.id,
+                        'case_type': case.case_type,
+                        'status': case.status,
+                        'priority': case.priority,
+                        'summary': case.summary,
+                        'due_date': case.due_date,
+                    }
+                    for case in ticket.after_sales_cases.all()
+                ],
+                'generated_documents': [
+                    {
+                        'id': document.id,
+                        'document_type': document.document_type,
+                        'title': document.title or document.get_document_type_display(),
+                        'status': document.status,
+                        'updated_at': document.updated_at,
+                    }
+                    for document in ticket.generated_documents.all()
+                ],
+                'timeline': [
+                    {
+                        'id': event.id,
+                        'status': event.status,
+                        'changed_by': _format_person_name(event.changed_by) if event.changed_by else 'System',
+                        'notes': event.notes or '',
+                        'timestamp': event.timestamp,
+                    }
+                    for event in sorted(ticket.status_history.all(), key=lambda item: item.timestamp, reverse=True)
+                ],
             })
 
         # Aggregate stats
-        unique_locations = len({
-            f"{r['latitude']:.4f},{r['longitude']:.4f}"
-            for r in results if r['latitude'] and r['longitude']
-        })
-        service_types_served = len({r['service_type'] for r in results})
-        jobs_with_checklist = sum(1 for r in results if r['inspection'])
-        jobs_with_warranty = sum(
-            1 for r in results
-            if r['inspection'] and r['inspection'].get('warranty_provided')
-        )
+        unique_locations = filtered_tickets.exclude(
+            request__location__latitude__isnull=True
+        ).exclude(
+            request__location__longitude__isnull=True
+        ).values(
+            'request__location__latitude', 'request__location__longitude'
+        ).distinct().count()
+        service_types_served = filtered_tickets.values('request__service_type_id').distinct().count()
+        jobs_with_checklist = filtered_tickets.filter(inspection__isnull=False).count()
+        jobs_with_warranty = filtered_tickets.filter(inspection__warranty_provided=True).count()
+        rated_jobs = filtered_tickets.filter(client_rating__isnull=False).count()
         client_options = {}
         technician_options = {}
         for ticket in option_tickets:
@@ -1099,11 +1201,15 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
                 technician_options[tech.id] = _format_person_name(tech)
 
         return Response({
-            'total': len(results),
+            'total': total_results,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages,
             'unique_locations': unique_locations,
             'service_types_served': service_types_served,
             'jobs_with_checklist': jobs_with_checklist,
             'jobs_with_warranty': jobs_with_warranty,
+            'rated_jobs': rated_jobs,
             'client_options': [
                 {'id': option_id, 'name': name}
                 for option_id, name in sorted(client_options.items(), key=lambda item: item[1])

@@ -127,7 +127,7 @@ const ACCESS_AREA_DEFINITIONS = [
 ];
 const inputClass = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:bg-slate-50 disabled:text-slate-500';
 const panelClass = 'rounded-lg border border-slate-200 bg-white p-5 shadow-sm';
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
 const emptyCreate = { username: '', name: '', role: 'technician', email: '', phone: '', address: '', status: 'available', password: '', passwordConfirm: '' };
 const emptyEdit = { name: '', email: '', phone: '', address: '', status: 'available', lat: '', lng: '', skills: [] };
 const emptySkillEntry = { service_type: '', skill_level: 'intermediate' };
@@ -657,7 +657,7 @@ export default function AdminUserManagement() {
       ) : (
         <div className={`${panelClass} overflow-hidden p-0`}>
           <div className="overflow-x-auto w-full">
-            <div className="min-w-[900px] max-h-[68vh] overflow-y-auto">
+            <div className="min-w-[1040px] max-h-[68vh] overflow-y-auto">
               <table className="w-full border-separate border-spacing-0 text-sm">
               <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
                 <tr>
@@ -665,9 +665,9 @@ export default function AdminUserManagement() {
                   <th className="w-[10%] border-b border-slate-200 px-3 py-3">Role</th>
                   <th className={`${canManageUsers ? 'w-[18%]' : 'w-[22%]'} border-b border-slate-200 px-3 py-3`}>Address</th>
                   <th className={`${canManageUsers ? 'w-[20%]' : 'w-[24%]'} border-b border-slate-200 px-3 py-3`}>Contact</th>
-                  <th className={`${canManageUsers ? 'w-[15%]' : 'w-[12%]'} border-b border-slate-200 px-3 py-3`}>Access</th>
-                  <th className="w-[7%] border-b border-slate-200 px-3 py-3">Status</th>
-                  {canManageUsers ? <th className="w-[8%] border-b border-slate-200 px-3 py-3 text-right">Actions</th> : null}
+                  <th className={`${canManageUsers ? 'w-[13%]' : 'w-[12%]'} border-b border-slate-200 px-3 py-3`}>Access</th>
+                  <th className="w-[8%] border-b border-slate-200 px-3 py-3">Status</th>
+                  {canManageUsers ? <th className="w-[12%] min-w-[128px] border-b border-slate-200 px-3 py-3 text-right">Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -719,18 +719,18 @@ export default function AdminUserManagement() {
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2 align-middle"><span className={`rounded-lg px-2 py-1 text-xs font-semibold ${record.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>{record.active ? 'Active' : 'Inactive'}</span></td>
                       {canManageUsers ? (
-                        <td className="border-b border-slate-100 px-3 py-2 align-middle text-right">
-                          <div className="flex flex-wrap justify-end gap-1.5">
+                        <td className="min-w-[128px] border-b border-slate-100 px-3 py-2 align-middle text-right">
+                          <div className="flex flex-col items-end gap-1.5">
                             <button
                               type="button"
                               disabled={loadingProfileUserId === record.id}
                               onClick={() => openProfileEditor(record)}
-                              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="min-w-[76px] rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {loadingProfileUserId === record.id ? 'Loading...' : 'Edit'}
                             </button>
                             {canRemove ? (
-                              <button type="button" disabled={busyUserId === record.id} onClick={() => setDeleteTarget(record)} className="rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60">{busyUserId === record.id ? busyRemoveLabel : removeLabel}</button>
+                              <button type="button" disabled={busyUserId === record.id} onClick={() => setDeleteTarget(record)} className="min-w-[76px] rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60">{busyUserId === record.id ? busyRemoveLabel : removeLabel}</button>
                             ) : record.role === 'superadmin' ? (
                               <span className="text-sm text-slate-400">Owner account</span>
                             ) : <span className="text-sm text-slate-400">Inactive</span>}

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { MapContainer, Marker, useMapEvents } from 'react-leaflet';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
-import { FiCalendar, FiCheck, FiClipboard, FiClock, FiDownload, FiMap, FiPlus, FiRefreshCw, FiX, FiMoreVertical, FiCheckCircle, FiXCircle, FiCheckSquare, FiSearch } from 'react-icons/fi';
+import { FiCalendar, FiCheck, FiClipboard, FiClock, FiDownload, FiMap, FiPlus, FiRefreshCw, FiX, FiMoreVertical, FiCheckCircle, FiXCircle, FiCheckSquare } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -18,6 +17,7 @@ import TicketTimelineModal from '../../components/shared/TicketTimelineModal';
 import QuotationProposalModal from '../../components/shared/QuotationProposalModal';
 import TurnoverAcceptanceModal from '../../components/shared/TurnoverAcceptanceModal';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
+import WalkInRequestDialog from '../../components/shared/WalkInRequestDialog';
 import { EmptyState, ErrorState, LoadingSkeleton } from '../../components/ui/StateDisplay';
 import StatusBadge, { formatStatusLabel } from '../../components/ui/StatusBadge';
 import SLABadge, { formatSlaSummary } from '../../components/ui/SLABadge';
@@ -37,7 +37,6 @@ import {
   searchLocations
 } from '../../api/api';
 import { CALABARZON_BOUNDS, CALABARZON_CENTER, CALABARZON_MIN_ZOOM, clampToCalabarzon } from '../../utils/mapRegion';
-import MapTileLayer from '../../components/maps/MapTileLayer';
 import { queueActionLabel } from '../../utils/dashboardHelpers';
 
 const initialWalkInForm = {
@@ -78,7 +77,15 @@ const shortSourceLabel = (sourceLabel = '') =>
 const normalizeStatus = (status) => String(status || '').toLowerCase().replace(/\s+/g, '_');
 const CLOSED_QUEUE_STATUSES = new Set(['completed', 'cancelled']);
 const isClosedTicket = (ticket) => CLOSED_QUEUE_STATUSES.has(normalizeStatus(ticket.status));
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
+const QUEUE_FOCUS_OPTIONS = [
+  { value: 'active', label: 'All active' },
+  { value: 'unassigned', label: 'Unassigned' },
+  { value: 'missed-dispatch', label: 'Needs reschedule' },
+  { value: 'sla-warning', label: 'SLA warning' },
+  { value: 'sla-overdue', label: 'SLA overdue' },
+];
+const VALID_QUEUE_FOCUSES = new Set(QUEUE_FOCUS_OPTIONS.map((option) => option.value));
 const CALABARZON_PROVINCES = ['Cavite', 'Laguna', 'Batangas', 'Rizal', 'Quezon'];
 const CITY_PROVINCE_OVERRIDES = {
   lucena: 'Quezon',
@@ -117,24 +124,9 @@ const extractProvinceName = (address = {}, displayName = '', cityName = '') => {
   ) || cityOverride || String(directValue || '').replace(/\s+Province$/i, '');
 };
 
-function WalkInLocationPicker({ latitude, longitude, onChange }) {
-  const map = useMapEvents({
-    click(event) {
-      const [clat, clng] = clampToCalabarzon(event.latlng.lat, event.latlng.lng);
-      onChange(clat, clng);
-    }
-  });
-
-  useEffect(() => {
-    if (latitude == null || longitude == null || !map) return;
-    map.setView([latitude, longitude], map.getZoom());
-  }, [latitude, longitude, map]);
-
-  return latitude != null && longitude != null ? <Marker position={[latitude, longitude]} /> : null;
-}
-
 export default function AdminServiceTickets() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const canReviewRequests = hasAnyCapability(user, SERVICE_REQUEST_REVIEW_CAPABILITIES);
   const canManageTickets = hasAnyCapability(user, SERVICE_TICKET_MANAGE_CAPABILITIES);
@@ -150,6 +142,7 @@ export default function AdminServiceTickets() {
   const [walkInSearchQuery, setWalkInSearchQuery] = useState('');
   const [walkInSearchResults, setWalkInSearchResults] = useState([]);
   const [walkInMapCenter, setWalkInMapCenter] = useState(CALABARZON_CENTER);
+  const [walkInDiscardAction, setWalkInDiscardAction] = useState(null);
   const [rescheduleTicket, setRescheduleTicket] = useState(null);
   const [timelineTicket, setTimelineTicket] = useState(null);
   const [actionModalTicket, setActionModalTicket] = useState(null);
@@ -170,6 +163,8 @@ export default function AdminServiceTickets() {
   const [rejectingTicket, setRejectingTicket] = useState(false);
   const [documentDownloadId, setDocumentDownloadId] = useState(null);
   const debouncedWalkInSearchQuery = useDebounce(walkInSearchQuery, 500);
+  const requestedQueueFocus = searchParams.get('focus') || 'active';
+  const queueFocus = VALID_QUEUE_FOCUSES.has(requestedQueueFocus) ? requestedQueueFocus : 'active';
 
   const loadData = async (isInitial = false) => {
     try {
@@ -297,6 +292,34 @@ export default function AdminServiceTickets() {
     setWalkInSearchResults([]);
     setWalkInMapCenter(CALABARZON_CENTER);
     setWalkInError('');
+  };
+
+  const walkInHasDraft =
+    JSON.stringify(walkInForm) !== JSON.stringify(initialWalkInForm)
+    || Boolean(walkInSearchQuery.trim());
+
+  const requestWalkInClose = () => {
+    if (walkInHasDraft) {
+      setWalkInDiscardAction('close');
+      return;
+    }
+    setShowWalkInForm(false);
+    setWalkInError('');
+  };
+
+  const requestWalkInClear = () => {
+    if (walkInHasDraft) {
+      setWalkInDiscardAction('clear');
+      return;
+    }
+    resetWalkInForm();
+  };
+
+  const confirmWalkInDiscard = () => {
+    const shouldClose = walkInDiscardAction === 'close';
+    resetWalkInForm();
+    setWalkInDiscardAction(null);
+    if (shouldClose) setShowWalkInForm(false);
   };
 
   const openRescheduleModal = (ticket) => {
@@ -435,6 +458,8 @@ export default function AdminServiceTickets() {
       setWalkInSearchQuery('');
       setWalkInSearchResults([]);
       setWalkInMapCenter(CALABARZON_CENTER);
+      setShowWalkInForm(false);
+      setWalkInDiscardAction(null);
       setWalkInMessage(
         walkInForm.approveNow
           ? `Walk-in request #${createdRequest.id} approved and added to dispatch.`
@@ -457,7 +482,17 @@ export default function AdminServiceTickets() {
   const missedDispatchCount = ticketSummary?.missedDispatch ?? missedDispatchTickets.length;
   const slaRiskCount = ticketSummary?.slaRisk ?? (overdueTickets.length + warningTickets.length);
   const completedCount = ticketSummary?.completed ?? completedTickets.length;
-  const sortedTickets = [...activeQueueTickets].sort((firstTicket, secondTicket) => {
+  const focusedTickets = queueFocus === 'unassigned'
+    ? unassignedTickets
+    : queueFocus === 'missed-dispatch'
+      ? missedDispatchTickets
+      : queueFocus === 'sla-warning'
+        ? warningTickets
+        : queueFocus === 'sla-overdue'
+          ? overdueTickets
+          : activeQueueTickets;
+  const activeFocusLabel = QUEUE_FOCUS_OPTIONS.find((option) => option.value === queueFocus)?.label || 'All active';
+  const sortedTickets = [...focusedTickets].sort((firstTicket, secondTicket) => {
     if (firstTicket.isMissedDispatch !== secondTicket.isMissedDispatch) {
       return firstTicket.isMissedDispatch ? -1 : 1;
     }
@@ -476,16 +511,29 @@ export default function AdminServiceTickets() {
     }
   }, [currentPage, safeCurrentPage]);
 
+  const selectQueueFocus = (focus) => {
+    setCurrentPage(1);
+    if (focus === 'active') {
+      setSearchParams(new URLSearchParams());
+    } else {
+      setSearchParams({ focus });
+    }
+  };
+
   return (
     <Layout>
       <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-end">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
             {canReviewRequests && <button
-              onClick={() => setShowWalkInForm((isVisible) => !isVisible)}
+              onClick={() => {
+                setWalkInMessage('');
+                setWalkInError('');
+                setShowWalkInForm(true);
+              }}
               className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
             >
-              {showWalkInForm ? <FiX className="mr-2" /> : <FiPlus className="mr-2" />}
-              {showWalkInForm ? 'Close Walk-in Form' : 'Create Walk-in Request'}
+              <FiPlus className="mr-2" />
+              Create Walk-in Request
             </button>}
             <button
               onClick={() => navigate('/admin/job-history')}
@@ -517,266 +565,53 @@ export default function AdminServiceTickets() {
         </div>
       )}
 
-      {canReviewRequests && showWalkInForm && (
-        <section className="mt-5">
-          <form onSubmit={handleWalkInSubmit} className="card p-4 sm:p-5">
-            <div className="flex flex-col gap-2 border-b border-surface-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Create Walk-in Request</h2>
-                <p className="text-sm text-slate-500">For clients who request service in person or by phone.</p>
-              </div>
-              <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={walkInForm.approveNow}
-                  onChange={(event) => updateWalkInForm('approveNow', event.target.checked)}
-                  className="h-4 w-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500"
-                />
-                Approve and create ticket now
-              </label>
-            </div>
-
-            {walkInMessage && (
-              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
-                {walkInMessage}
-              </div>
-            )}
-            {walkInError && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-                {walkInError}
-              </div>
-            )}
-
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Client
-                <select
-                  value={walkInForm.client}
-                  onChange={(event) => updateWalkInForm('client', event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                >
-                  <option value="">Select client</option>
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>{getClientLabel(client)}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block text-sm font-medium text-slate-700">
-                Priority
-                <select
-                  value={walkInForm.priority}
-                  onChange={(event) => updateWalkInForm('priority', event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                >
-                  {priorityOptions.map((priority) => (
-                    <option key={priority} value={priority}>{priority}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-4">
-              <div className="text-sm font-medium text-slate-700">Services</div>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {serviceTypes.map((serviceType) => {
-                  const serviceTypeId = String(serviceType.id);
-                  const isSelected = walkInForm.serviceTypeIds.includes(serviceTypeId);
-                  return (
-                    <button
-                      key={serviceType.id}
-                      type="button"
-                      onClick={() => toggleServiceType(serviceTypeId)}
-                      className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition ${
-                        isSelected
-                          ? 'border-brand-300 bg-brand-50 text-brand-800'
-                          : 'border-surface-200 bg-white text-slate-700 hover:bg-surface-50'
-                      }`}
-                    >
-                      <span className="font-medium">{getServiceTypeName(serviceType)}</span>
-                      {isSelected && <FiCheck className="shrink-0 text-brand-600" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <label className="mt-4 block text-sm font-medium text-slate-700">
-              Request Details
-              <textarea
-                value={walkInForm.description}
-                onChange={(event) => updateWalkInForm('description', event.target.value)}
-                rows={3}
-                className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                placeholder="Describe what the client needs."
-              />
-            </label>
-
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Preferred Date
-                <input
-                  type="date"
-                  value={walkInForm.preferredDate}
-                  onChange={(event) => updateWalkInForm('preferredDate', event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                />
-              </label>
-
-              <label className="block text-sm font-medium text-slate-700">
-                Time Slot
-                <select
-                  value={walkInForm.preferredTimeSlot}
-                  onChange={(event) => updateWalkInForm('preferredTimeSlot', event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                >
-                  {timeSlotOptions.map((slot) => (
-                    <option key={slot.value} value={slot.value}>{slot.label}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-slate-700">
-                Search Location
-                <div className="mt-1 rounded-lg border border-surface-200 bg-white px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <FiSearch className="text-slate-400" />
-                    <input
-                      value={walkInSearchQuery}
-                      onChange={(event) => setWalkInSearchQuery(event.target.value)}
-                      className="w-full border-0 bg-transparent p-0 text-sm text-slate-800 focus:outline-none focus:ring-0"
-                      placeholder="Search address, city, barangay, or landmark"
-                    />
-                  </div>
-                </div>
-              </label>
-              {walkInSearchResults.length > 0 && (
-                <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                  {walkInSearchResults.map((result) => (
-                    <button
-                      key={`${result.place_id}-${result.lat}-${result.lon}`}
-                      type="button"
-                      onClick={() => handleWalkInSearchSelect(result)}
-                      className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition last:border-b-0 hover:bg-slate-50"
-                    >
-                      {result.display_name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <MapContainer
-                center={walkInMapCenter}
-                zoom={CALABARZON_MIN_ZOOM}
-                minZoom={CALABARZON_MIN_ZOOM}
-                maxBounds={CALABARZON_BOUNDS}
-                maxBoundsViscosity={1}
-                className="h-[22rem] w-full"
-              >
-                <MapTileLayer />
-                <WalkInLocationPicker
-                  latitude={walkInForm.latitude ? Number(walkInForm.latitude) : null}
-                  longitude={walkInForm.longitude ? Number(walkInForm.longitude) : null}
-                  onChange={handleWalkInLocationChange}
-                />
-              </MapContainer>
-              <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                Click the map to drop the service pin. The form will auto-fill the address, city, province, and coordinates.
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 xl:grid-cols-[2fr_1fr_1fr]">
-              <label className="block text-sm font-medium text-slate-700">
-                Service Address
-                <input
-                  value={walkInForm.address}
-                  onChange={(event) => updateWalkInForm('address', event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                  placeholder="Street, barangay, landmark"
-                />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                City
-                <input
-                  value={walkInForm.city}
-                  onChange={(event) => updateWalkInForm('city', event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                Province
-                <input
-                  value={walkInForm.province}
-                  onChange={(event) => updateWalkInForm('province', event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                />
-              </label>
-            </div>
-
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Latitude
-                <input
-                  type="number"
-                  step="any"
-                  value={walkInForm.latitude}
-                  onChange={(event) => updateWalkInForm('latitude', event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                  placeholder="14.5995"
-                />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                Longitude
-                <input
-                  type="number"
-                  step="any"
-                  value={walkInForm.longitude}
-                  onChange={(event) => updateWalkInForm('longitude', event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                  placeholder="121.0364"
-                />
-              </label>
-            </div>
-
-            <label className="mt-4 block text-sm font-medium text-slate-700">
-              Scheduling Notes
-              <textarea
-                value={walkInForm.schedulingNotes}
-                onChange={(event) => updateWalkInForm('schedulingNotes', event.target.value)}
-                rows={2}
-                className="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                placeholder="Optional notes for dispatch."
-              />
-            </label>
-
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={resetWalkInForm}
-                className="inline-flex items-center justify-center rounded-lg border border-surface-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-surface-50"
-              >
-                Clear
-              </button>
-              <button
-                type="submit"
-                disabled={walkInSubmitting}
-                className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {walkInSubmitting ? 'Saving...' : 'Save Walk-in Request'}
-              </button>
-            </div>
-          </form>
-        </section>
+      {walkInMessage && (
+        <div role="status" className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
+          {walkInMessage}
+        </div>
       )}
 
+      <WalkInRequestDialog
+        open={canReviewRequests && showWalkInForm}
+        form={walkInForm}
+        clients={clients}
+        serviceTypes={serviceTypes}
+        priorityOptions={priorityOptions}
+        timeSlotOptions={timeSlotOptions}
+        mapCenter={walkInMapCenter}
+        searchQuery={walkInSearchQuery}
+        searchResults={walkInSearchResults}
+        submitting={walkInSubmitting}
+        error={walkInError}
+        getClientLabel={getClientLabel}
+        getServiceTypeName={getServiceTypeName}
+        onChange={updateWalkInForm}
+        onToggleService={toggleServiceType}
+        onSearchQueryChange={setWalkInSearchQuery}
+        onSearchSelect={handleWalkInSearchSelect}
+        onLocationChange={handleWalkInLocationChange}
+        onClear={requestWalkInClear}
+        onClose={requestWalkInClose}
+        onSubmit={handleWalkInSubmit}
+      />
+
+      {walkInDiscardAction && (
+        <ConfirmationDialog
+          title={walkInDiscardAction === 'close' ? 'Discard walk-in request?' : 'Clear walk-in form?'}
+          message="The information entered in this form has not been saved."
+          tone="warning"
+          icon="warning"
+          confirmLabel={walkInDiscardAction === 'close' ? 'Discard and close' : 'Clear form'}
+          cancelLabel="Keep editing"
+          onCancel={() => setWalkInDiscardAction(null)}
+          onConfirm={confirmWalkInDiscard}
+        />
+      )}
       <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="stat-card p-4">
-          <p className="text-[13px] font-medium text-slate-500">Active Queue</p>
+          <p className="text-[13px] font-medium text-slate-500">All Active Tickets</p>
           <p className="mt-1 text-3xl font-bold text-slate-800">{activeQueueCount}</p>
+          <p className="mt-1 text-[11px] text-slate-400">Assigned and unassigned work</p>
         </div>
         <div className="stat-card p-4">
           <p className="text-[13px] font-medium text-slate-500">Needs Reschedule</p>
@@ -799,6 +634,40 @@ export default function AdminServiceTickets() {
         </div>
       </section>
 
+      <nav aria-label="Ticket queue views" className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="mb-3">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-600">Queue view</p>
+          <p className="mt-0.5 text-sm text-slate-500">Focus the workspace on the tickets that need a specific action.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+          {QUEUE_FOCUS_OPTIONS.map((option) => {
+            const counts = {
+              active: activeQueueTickets.length,
+              unassigned: unassignedTickets.length,
+              'missed-dispatch': missedDispatchTickets.length,
+              'sla-warning': warningTickets.length,
+              'sla-overdue': overdueTickets.length,
+            };
+            const selected = queueFocus === option.value;
+            return (
+              <button
+                type="button"
+                key={option.value}
+                onClick={() => selectQueueFocus(option.value)}
+                aria-pressed={selected}
+                aria-label={`${option.label} (${counts[option.value]})`}
+                className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${selected ? 'border-brand-600 bg-brand-600 text-white shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700'}`}
+              >
+                <span>{option.label}</span>
+                <span className={`grid h-6 min-w-6 place-items-center rounded-lg px-1.5 text-[11px] font-bold ${selected ? 'bg-white/20 text-white' : 'bg-white text-slate-600 shadow-sm ring-1 ring-slate-200'}`}>
+                  {counts[option.value]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
       {/* Main content */}
       <section className="mt-4">
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -806,9 +675,9 @@ export default function AdminServiceTickets() {
             <div>
               <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900 sm:text-xl">
                 <FiClipboard className="text-brand-500" />
-                Ticket Queue
+                Ticket Queue · {activeFocusLabel}
               </h2>
-              <p className="text-sm text-slate-500">Showing {visibleStartIndex}-{visibleEndIndex} of {sortedTickets.length} active tickets.</p>
+              <p className="text-sm text-slate-500">Showing {visibleStartIndex}-{visibleEndIndex} of {sortedTickets.length} matching active tickets.</p>
             </div>
             <button
               type="button"
@@ -866,8 +735,8 @@ export default function AdminServiceTickets() {
                 </div>
 
                 <div className="mt-3 grid gap-2 text-sm text-slate-700">
-                  <div><span className="font-medium text-slate-900">Client(ID):</span> {formatClientId(ticket.clientId)}</div>
-                  <div><span className="font-medium text-slate-900">Client(Fullname):</span> {ticket.clientFullname}</div>
+                  <div><span className="font-medium text-slate-900">Client ID:</span> {formatClientId(ticket.clientId)}</div>
+                  <div><span className="font-medium text-slate-900">Client fullname:</span> {ticket.clientFullname}</div>
                   <div><span className="font-medium text-slate-900">Source:</span> {ticket.requestSourceLabel}</div>
                   <div><span className="font-medium text-slate-900">Technician:</span> {formatTechnicianId(ticket.assignedTechnicianId)}</div>
                   <div><span className="font-medium text-slate-900">Technician Fullname:</span> {ticket.technicianFullname || 'Unassigned'}</div>
@@ -892,8 +761,10 @@ export default function AdminServiceTickets() {
 
                 <div className="mt-4 flex justify-end">
                   <button
+                    type="button"
                     onClick={() => setActionModalTicket(ticket)}
                     className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition"
+                    aria-label={`Open actions for ${formatTicketId(ticket.id)}`}
                   >
                     <FiMoreVertical size={20} />
                   </button>
@@ -984,8 +855,10 @@ export default function AdminServiceTickets() {
                     </td>
                     <td className="border-b border-slate-100 px-3 py-2 align-middle text-right">
                       <button
+                        type="button"
                         onClick={() => setActionModalTicket(ticket)}
                         className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-surface-100 hover:text-slate-700 transition"
+                        aria-label={`Open actions for ${formatTicketId(ticket.id)}`}
                       >
                         <FiMoreVertical size={20} />
                       </button>

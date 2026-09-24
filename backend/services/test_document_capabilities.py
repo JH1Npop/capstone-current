@@ -62,6 +62,22 @@ class DocumentCapabilityTests(APITestCase):
             self.client.post('/api/services/quotations/', {}, format='json').status_code,
             status.HTTP_403_FORBIDDEN,
         )
+        self.assertEqual(
+            self.client.post(
+                f'/api/services/service-tickets/{self.ticket.id}/promote-to-project-profile/',
+                {},
+                format='json',
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.post(
+                '/api/services/solar-project-profiles/promote-estimate/',
+                {'ticket_id': self.ticket.id},
+                format='json',
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
 
     def test_document_manager_can_read_and_save_draft(self):
         user = self.create_admin('document-manager', DOCUMENTS_MANAGE)
@@ -78,12 +94,61 @@ class DocumentCapabilityTests(APITestCase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertRegex(response.data['document_code'], r'^DOC-\d{4,}$')
         self.assertTrue(
             GeneratedDocument.objects.filter(
                 ticket=self.ticket,
                 document_type='turnover_acceptance',
             ).exists()
         )
+
+    def test_finalized_generated_document_cannot_be_overwritten(self):
+        user = self.create_admin('document-finalizer', DOCUMENTS_MANAGE)
+        self.client.force_authenticate(user)
+        first = self.client.post(
+            self.draft_url,
+            {
+                'document_type': 'turnover_acceptance',
+                'data_json': {'systemCapacity': '5.5 kWp'},
+                'status': 'finalized',
+            },
+            format='json',
+        )
+        second = self.client.post(
+            self.draft_url,
+            {
+                'document_type': 'turnover_acceptance',
+                'data_json': {'systemCapacity': '999 kWp'},
+                'status': 'draft',
+            },
+            format='json',
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
+        document = GeneratedDocument.objects.get(ticket=self.ticket, document_type='turnover_acceptance')
+        self.assertEqual(document.data_json['systemCapacity'], '5.5 kWp')
+
+    def test_quotation_post_is_retry_safe_per_ticket(self):
+        user = self.create_admin('quotation-manager', DOCUMENTS_MANAGE)
+        self.client.force_authenticate(user)
+        payload = {
+            'ticket': self.ticket.id,
+            'client': self.client_user.id,
+            'total_amount': '100000',
+            'validity_days': 30,
+            'bill_of_materials': [{'description': 'PV panel', 'quantity': 8}],
+        }
+
+        first = self.client.post('/api/services/quotations/', payload, format='json')
+        payload['total_amount'] = '105000'
+        second = self.client.post('/api/services/quotations/', payload, format='json')
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.data)
+        self.assertEqual(first.data['id'], second.data['id'])
+        self.assertEqual(first.data['quotation_number'], f'QUO-{self.ticket.id:04d}')
+        self.assertEqual(second.data['total_amount'], '105000')
 
     def test_unrelated_configured_admin_cannot_access_documents(self):
         user = self.create_admin('landing-document-denied', PUBLIC_SITE_VIEW)

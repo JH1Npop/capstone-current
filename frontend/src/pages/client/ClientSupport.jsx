@@ -5,6 +5,7 @@ import { createCustomerSupportCase, fetchCustomerSupportCases, fetchMessages, se
 import { fetchServiceTickets } from '../../api/services';
 import { useAuth } from '../../context/AuthContext';
 import { FiMessageSquare, FiRefreshCw } from 'react-icons/fi';
+import { formatSupportCaseId, formatTicketId } from '../../utils/roleIds';
 
 const statusLabels = {
   pending: 'Pending Review',
@@ -18,7 +19,7 @@ const statusLabels = {
 
 const supportCategoryLabels = {
   general: 'Need support',
-  billing: 'Billing',
+  billing: 'Purchase record',
   schedule: 'Schedule',
   technical: 'Technical help',
   complaint: 'Service concern',
@@ -197,7 +198,7 @@ export default function ClientSupport() {
                 }`}
               >
                 <span className="max-w-[180px] truncate">
-                  {supportCase.case_code ? `[${supportCase.case_code}] ` : ''}{supportCase.subject}
+                  [{supportCase.case_code || formatSupportCaseId(supportCase.id)}] {supportCase.subject}
                 </span>
                 <span className="capitalize text-slate-400">/ {supportCase.status.replace('_', ' ')}</span>
               </button>
@@ -240,7 +241,7 @@ export default function ClientSupport() {
               className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
             >
               <option value="general">Need support</option>
-              <option value="billing">Billing</option>
+              <option value="billing">Purchase record</option>
               <option value="schedule">Schedule</option>
               <option value="technical">Technical</option>
               <option value="complaint">Service concern</option>
@@ -264,7 +265,7 @@ export default function ClientSupport() {
               <option value="">No related ticket</option>
               {clientTickets.map((ticket) => (
                 <option key={ticket.id} value={ticket.id}>
-                  TKT-{ticket.id} ({ticket.service || 'Service'})
+                  {formatTicketId(ticket.id)} ({ticket.service || 'Service'})
                 </option>
               ))}
             </select>
@@ -274,7 +275,7 @@ export default function ClientSupport() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="font-semibold text-slate-900">
-                  {activeSupportCase.case_code && <span className="mr-2 text-slate-500">[{activeSupportCase.case_code}]</span>}
+                  <span className="mr-2 text-slate-500">[{activeSupportCase.case_code || formatSupportCaseId(activeSupportCase.id)}]</span>
                   {activeSupportCase.subject}
                 </p>
                 <p className="text-xs capitalize text-slate-500">

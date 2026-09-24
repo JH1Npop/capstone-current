@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENTS_MANAGE_CAPABILITIES, hasAnyCapability } from '../../rbac';
+import { formatTicketId } from '../../utils/roleIds';
 import {
   fetchDocumentDraft,
   fetchDocumentPrefill,
@@ -36,6 +37,7 @@ import {
   getProjectDetail,
   hasValue,
   normalizeQuotationRecords,
+  pickNumericId,
 } from './adminDocumentsSupport';
 import {
   buildCommissioningFormFromTicket,
@@ -899,7 +901,7 @@ function TableCellInput({ value, onChange }) {
 
 function FieldServiceReport({ form, onUpdateRow, onAddRow, onRemoveRow }) {
   return (
-    <main className="document-paper">
+    <article className="document-paper">
       <Header />
       <h1 className="fsr-title">----------&nbsp; Field Service Report &nbsp;----------</h1>
       <section className="fsr-info grid grid-cols-2 gap-4">
@@ -1023,7 +1025,7 @@ function FieldServiceReport({ form, onUpdateRow, onAddRow, onRemoveRow }) {
         <p className="signature-line">Signature of Technician: <span className="line" /></p>
       </section>
       <Footer />
-    </main>
+    </article>
   );
 }
 
@@ -1043,7 +1045,7 @@ function SolarCommissioningChecklistPreview({
   );
 
   return (
-    <main className="document-paper">
+    <article className="document-paper">
       <Header />
       <h1 className="commissioning-title">PV Solar Site Commissioning Checklist</h1>
 
@@ -1227,7 +1229,7 @@ function SolarCommissioningChecklistPreview({
         </tbody>
       </table>
       <Footer />
-    </main>
+    </article>
   );
 }
 
@@ -1240,7 +1242,7 @@ function QuotationProposalPreview({
   inventoryItems
 }) {
   return (
-    <main className="document-paper">
+    <article className="document-paper">
       <Header />
       <h1 className="quotation-title">Quotation Proposal</h1>
 
@@ -1590,7 +1592,7 @@ function QuotationProposalPreview({
       </div>
 
       <Footer />
-    </main>
+    </article>
   );
 }
 
@@ -1602,7 +1604,7 @@ function TurnoverAcceptancePreview({
   onRemoveTableRow
 }) {
   return (
-    <main className="document-paper">
+    <article className="document-paper">
       <Header />
       <h1 className="turnover-title">Turnover / Acceptance Form for ___ kWp Solar PV System</h1>
 
@@ -1891,13 +1893,13 @@ function TurnoverAcceptancePreview({
 
         <Footer />
       </section>
-    </main>
+    </article>
   );
 }
 
 function TechnicalDataSheetPreview({ form, onFieldChange, onLoadRowChange, onPurposeRowChange }) {
   return (
-    <main className="document-paper">
+    <article className="document-paper">
       <Header />
       <h1 className="tds-title">TDS - Technical Data Sheet</h1>
 
@@ -2115,13 +2117,13 @@ function TechnicalDataSheetPreview({ form, onFieldChange, onLoadRowChange, onPur
       </section>
 
       <Footer />
-    </main>
+    </article>
   );
 }
 
 function InstallationContractPreview({ form, onFieldChange }) {
   return (
-    <main className="document-paper">
+    <article className="document-paper">
       <Header />
       <h1 className="contract-title">Solar Installation Contract</h1>
 
@@ -2347,14 +2349,14 @@ function InstallationContractPreview({ form, onFieldChange }) {
       </section>
 
       <Footer />
-    </main>
+    </article>
   );
 }
 
 function SimpleTemplatePreview({ activeTemplate, form }) {
   const title = TEMPLATE_OPTIONS.find((template) => template.id === activeTemplate)?.label || 'AFN Document';
   return (
-    <main className="document-paper">
+    <article className="document-paper">
       <Header />
       <h1 className="fsr-title">{title}</h1>
       <div className="simple-placeholder">
@@ -2365,7 +2367,7 @@ function SimpleTemplatePreview({ activeTemplate, form }) {
         <p>System Capacity: {form.systemCapacity}</p>
       </div>
       <Footer />
-    </main>
+    </article>
   );
 }
 
@@ -3516,7 +3518,7 @@ export default function AdminDocuments() {
                         placeholder="Search ticket by ID, client, or service..."
                         value={isDropdownOpen ? ticketSearch : (selectedTicketId ? (() => {
                           const t = tickets.find(t => String(t.id) === String(selectedTicketId));
-                          return t ? `TKT-${t.id} | ${t.clientFullname || t.client}` : `TKT-${selectedTicketId}`;
+                          return t ? `${formatTicketId(t.id)} | ${t.clientFullname || t.client}` : formatTicketId(selectedTicketId);
                         })() : '')}
                         onChange={(e) => setTicketSearch(e.target.value)}
                         onFocus={() => setIsDropdownOpen(true)}
@@ -3553,7 +3555,7 @@ export default function AdminDocuments() {
                                   : 'text-slate-700 hover:bg-slate-50'
                               }`}
                             >
-                              <div className="font-medium text-slate-900">TKT-{ticket.id}</div>
+                              <div className="font-medium text-slate-900">{formatTicketId(ticket.id)}</div>
                               <div className="text-xs text-slate-500 truncate">{ticket.clientFullname || ticket.client} | {ticket.service}</div>
                             </button>
                           ))
@@ -3816,17 +3818,17 @@ export default function AdminDocuments() {
 
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col items-start gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Print Preview</h2>
                 <p className="mt-1 text-sm text-slate-500">Paper: {paper.label}</p>
               </div>
-              <div className="flex gap-2">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                 >
                   <FiRefreshCw size={15} />
                   Reset
@@ -3834,7 +3836,7 @@ export default function AdminDocuments() {
                 <button
                   type="button"
                   onClick={printCurrentDocument}
-                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white transition hover:bg-brand-700"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white transition hover:bg-brand-700"
                 >
                   <FiPrinter size={15} />
                   Print

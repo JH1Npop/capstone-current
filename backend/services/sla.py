@@ -7,15 +7,6 @@ SLA_STATE_INACTIVE = 'inactive'
 SLA_STATE_HEALTHY = 'healthy'
 SLA_STATE_WARNING = 'warning'
 SLA_STATE_OVERDUE = 'overdue'
-from datetime import datetime, time, timedelta
-
-from django.utils import timezone
-
-
-SLA_STATE_INACTIVE = 'inactive'
-SLA_STATE_HEALTHY = 'healthy'
-SLA_STATE_WARNING = 'warning'
-SLA_STATE_OVERDUE = 'overdue'
 SLA_STATE_PAUSED = 'paused'
 
 SLA_RULE_LABELS = {

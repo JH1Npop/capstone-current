@@ -187,7 +187,7 @@ export function useTechnicianJobs() {
 
     try {
       setIsCompleting(true);
-      setActionMessage('Completing job with proof images...');
+      setActionMessage('Finishing job...');
       const inventoryUsage = (completionJob.inventoryReservations || [])
         .filter((reservation) => reservation.status === 'pending')
         .map((reservation) => ({
@@ -202,7 +202,7 @@ export function useTechnicianJobs() {
       setProofImages([]);
       setCompletionNotes('');
       setMaterialUsage({});
-      setActionMessage(`Job ${completionJob.id} completed with proof images.`);
+      setActionMessage(`Job ${completionJob.id} completed successfully.`);
       setTimeout(() => setActionMessage(''), 4000);
     } catch (completeError) {
       setActionMessage(completeError.message || 'Unable to complete job.');

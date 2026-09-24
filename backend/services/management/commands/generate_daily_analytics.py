@@ -1,4 +1,4 @@
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from datetime import timedelta
 from services.models import ServiceAnalytics
@@ -78,6 +78,6 @@ class Command(BaseCommand):
                 f"satisfaction {analytics.satisfaction_score}/5"
             )
         except Exception as e:
-            self.stdout.write(
-                self.style.ERROR(f"Error generating analytics for {target_date}: {str(e)}")
-            )
+            raise CommandError(
+                f"Error generating analytics for {target_date}: {str(e)}"
+            ) from e

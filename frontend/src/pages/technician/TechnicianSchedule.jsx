@@ -282,13 +282,13 @@ export default function TechnicianSchedule() {
                   const meta = getStatusMeta(item.status);
                   const ticketId = item.ticketId || item.ticket_id || item.id;
                   return (
-                    <div key={item.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
+                    <div key={item.id} className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
                       <div className={`h-3 w-3 shrink-0 rounded-full ${meta.dot}`} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-slate-900">
                           {formatTicketId(ticketId)}: {item.service || item.serviceType || item.service_type || 'Service'}
                         </p>
-                        <div className="mt-1 flex items-center gap-2">
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
                           <span className="truncate text-xs text-slate-500">
                             {item.calendarDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {formatTime(item)}
                           </span>
@@ -298,7 +298,7 @@ export default function TechnicianSchedule() {
                       <button
                         type="button"
                         onClick={() => navigate(`/technician/my-jobs?ticketId=${ticketId}`)}
-                        className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"
+                        className="col-span-2 w-full rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 sm:col-span-1 sm:w-auto sm:shrink-0"
                       >
                         Open
                       </button>

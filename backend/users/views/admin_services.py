@@ -8,6 +8,7 @@ from urllib.error import HTTPError, URLError
 from django.utils.dateparse import parse_date
 
 from inventory.models import ServiceTypeInventoryRequirement
+from users.analytics_service import _forecast_readiness, build_admin_analytics
 from users.views.helpers import *  # noqa: F401,F403
 from users.permissions import CanManageServiceCatalog, CanViewAnalytics, CanViewServiceCatalog
 
@@ -229,67 +230,8 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         })
 
     def list(self, request):
-        """Get descriptive and predictive analytics based on live system data."""
-        today = timezone.localdate()
-        start_date, end_date, days = self._resolve_analytics_period(request, today)
-
-        overview = self._build_overview(end_date, days)
-        service_breakdown = self._build_service_breakdown(end_date, days)
-        top_technician = self._build_top_technician(end_date, days)
-        completion_trend = self._build_completion_trend(end_date, days)
-        monthly_service_trend = self._build_monthly_service_trend(end_date, days)
-        monthly_service_breakdown = self._build_monthly_service_breakdown(end_date, days)
-        completed_service_value = self._build_completed_service_value(end_date, days)
-        predictive_summary, service_forecasts, daily_forecast = self._build_predictive_analytics(end_date, days)
-        location_demand_forecast = self._build_location_demand_forecast(end_date, days, service_forecasts, predictive_summary)
-        busiest_months = self._build_busiest_months(end_date, days)
-        busiest_weeks = self._build_busiest_weeks(end_date, days)
-        top_requested_service_types = self._build_top_requested_service_types(service_breakdown)
-        city_completion_trends, province_completion_trends = self._build_location_completion_trends(end_date, days)
-        seasonal_inventory_demand = self._build_seasonal_inventory_demand(end_date, days)
-        request_source_breakdown = self._build_request_source_breakdown(end_date, days)
-        priority_distribution = self._build_priority_distribution(end_date, days)
-        ticket_status_breakdown = self._build_ticket_status_breakdown(end_date, days)
-        scheduling_insights = self._build_scheduling_insights(end_date, days)
-
-        return Response({
-            'generatedAt': timezone.now(),
-            'analyticsPeriodDays': days,
-            'analyticsStartDate': start_date.isoformat(),
-            'analyticsEndDate': end_date.isoformat(),
-            'overview': overview,
-            'totalRequests': overview['totalRequests'],
-            'completedRequests': overview['completedRequests'],
-            'pendingRequests': overview['pendingRequests'],
-            'activeUsers': overview['activeUsers'],
-            'activeTechnicians': overview['activeTechnicians'],
-            'availableTechnicians': overview['availableTechnicians'],
-            'activeTechnicianAccounts': overview['activeTechnicianAccounts'],
-            'avgResponseTime': overview['avgResponseTimeHours'],
-            'avgCompletionTime': overview['avgCompletionTimeHours'],
-            # This is an estimate based on configured service prices, not collected revenue.
-            'totalRevenue': 0,
-            'completedServiceValue': completed_service_value,
-            'jobCountByService': service_breakdown,
-            'topTech': top_technician,
-            'completionTrend': completion_trend,
-            'monthlyServiceTrend': monthly_service_trend,
-            'monthlyServiceBreakdown': monthly_service_breakdown,
-            'predictiveSummary': predictive_summary,
-            'serviceForecasts': service_forecasts,
-            'dailyForecast': daily_forecast,
-            'locationDemandForecast': location_demand_forecast,
-            'busiestMonths': busiest_months,
-            'busiestWeeks': busiest_weeks,
-            'topRequestedServiceTypes': top_requested_service_types,
-            'cityCompletionTrends': city_completion_trends,
-            'provinceCompletionTrends': province_completion_trends,
-            'seasonalInventoryDemand': seasonal_inventory_demand,
-            'requestSourceBreakdown': request_source_breakdown,
-            'priorityDistribution': priority_distribution,
-            'ticketStatusBreakdown': ticket_status_breakdown,
-            'schedulingInsights': scheduling_insights,
-        })
+        """Return the unified, live, read-only Analytics workspace contract."""
+        return Response(build_admin_analytics(request.query_params))
 
     @action(detail=False, methods=['get'], url_path='ai-summary')
     def ai_summary(self, request):
@@ -321,9 +263,10 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         prompt = (
             "You are the Analytics Assistant for AFN Solar Power Engineering Services.\n"
             "Use ONLY the JSON summary below. Do not invent numbers, names, or records.\n"
-            "Treat analytics, demand forecast, and predictive analytics as one connected feature.\n"
-            "When asked how predictions are made, explain the formula/method from forecastMethod.\n"
-            "When asked about accuracy, explain that confidence is data-quality based and real accuracy is measured later by comparing predicted versus actual requests.\n"
+            "Treat historical analytics and forecasting readiness as separate concepts.\n"
+            "Never describe historical density or inventory usage as a prediction.\n"
+            "When forecast.predictions_available is false, clearly say that no validated forecast, future quantity, confidence score, or forecast accuracy is available.\n"
+            "When asked how future item demand will eventually be calculated, explain forecastMethod without claiming that the model already exists.\n"
             "When asked about sales or revenue, use completedServiceValue and call it estimated completed service value. Clearly state that it is based on configured service prices and is not collected revenue or payment received.\n"
             "If a list is empty, say no matching records were found for the selected period. "
             "Do not say the system is not capturing data unless the JSON explicitly says dataSourceUnavailable is true.\n"
@@ -387,19 +330,29 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         with urlrequest.urlopen(request_obj, timeout=20) as response:
             response_data = json.loads(response.read().decode('utf-8'))
 
-        parts = (
-            response_data.get('candidates', [{}])[0]
-            .get('content', {})
-            .get('parts', [])
-        )
+        candidate = response_data.get('candidates', [{}])[0]
+        finish_reason = str(candidate.get('finishReason') or '').upper()
+        if finish_reason and finish_reason != 'STOP':
+            raise ValueError(f'Gemini response was incomplete ({finish_reason}).')
+        parts = candidate.get('content', {}).get('parts', [])
         text_parts = [part.get('text', '') for part in parts if part.get('text')]
         return '\n'.join(text_parts).strip()
 
     def _build_ai_analytics_summary(self, today, days):
-        overview = self._build_overview(today, days)
+        start_date = today - timezone.timedelta(days=days - 1)
+        overview_contract = build_admin_analytics({
+            'start_date': start_date.isoformat(),
+            'end_date': today.isoformat(),
+            'workspace': 'overview',
+        })
+        forecasting_contract = build_admin_analytics({
+            'start_date': start_date.isoformat(),
+            'end_date': today.isoformat(),
+            'workspace': 'forecasting',
+        })
+        overview = overview_contract.get('overview', {})
         service_breakdown = self._build_service_breakdown(today, days)
         top_technician = self._build_top_technician(today, days)
-        predictive_summary, service_forecasts, daily_forecast = self._build_predictive_analytics(today, days)
         seasonal_inventory_demand = self._build_seasonal_inventory_demand(today, days)
         completed_service_value = self._build_completed_service_value(today, days)
         
@@ -412,18 +365,25 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         ticket_status_breakdown = self._build_ticket_status_breakdown(today, days)
         scheduling_insights = self._build_scheduling_insights(today, days)
 
+        model_status = forecasting_contract.get('model_status', {})
+        forecast_available = bool(model_status.get('predictions_available'))
         return {
             'periodDays': days,
             'generatedAt': timezone.now().isoformat(),
             'forecastMethod': {
-                'type': 'Trend-based predictive analytics',
-                'model': 'Rule-based statistical forecast from recorded service history, not trained machine learning.',
-                'mainFormula': 'Predicted requests = recent daily average x weekday demand factor x trend factor',
-                'trendFactor': 'trend factor = 1 + (growth rate x 0.35), limited between 0.8 and 1.5',
-                'growthRate': 'growth rate compares recent demand against the previous comparable period or the broader history window',
-                'weekdayFactor': 'weekday factor compares same-weekday demand against the historical daily average; fallback values are used when history is light',
-                'capacityFormula': 'recommended technicians = ceiling(predicted next 7 days / forecast jobs per technician)',
-                'accuracyExplanation': 'Displayed confidence is based on available history volume and whether both recent and previous periods have data. Actual forecast accuracy is measured after the period by comparing predicted requests against actual requests.',
+                'type': 'Readiness-gated service and inventory demand forecasting',
+                'model': (
+                    model_status.get('model_label')
+                    if forecast_available
+                    else 'No current model has passed every evidence, freshness, and holdout-validation gate.'
+                ),
+                'plannedMethod': forecasting_contract.get('item_demand_readiness', {}).get('method'),
+                'horizonsDays': forecasting_contract.get('item_demand_readiness', {}).get('forecast_horizons_days', []),
+                'accuracyExplanation': (
+                    'Published models expose stored holdout MAE, WAPE, bias, and actual-versus-predicted evidence.'
+                    if forecast_available
+                    else 'Forecast accuracy is unavailable until a model is trained, backtested, and compared with held-out actual results.'
+                ),
             },
             'overview': {
                 'totalRequests': overview.get('totalRequests', 0),
@@ -438,20 +398,20 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
             'topServices': service_breakdown[:5],
             'topTechnician': top_technician,
             'forecast': {
-                'totalPredictedRequests': predictive_summary.get('totalPredictedRequests', 0),
-                'peakDay': predictive_summary.get('peakDay'),
-                'staffingPressure': predictive_summary.get('staffingPressure'),
-                'capacityGap': predictive_summary.get('capacityGap', 0),
-                'serviceForecasts': service_forecasts[:5],
-                'dailyForecast': daily_forecast[:7],
+                **forecasting_contract.get('forecast', {}),
             },
+            'demandForecast': forecasting_contract.get('demand_forecast', {}),
+            'forecastHistorySummary': forecasting_contract.get('history_summary', {}),
+            'historicalForecastEvidence': forecasting_contract.get('historical_charts', {}),
+            'itemDemandReadiness': forecasting_contract.get('item_demand_readiness', {}),
+            'modelStatus': forecasting_contract.get('model_status', {}),
             'inventoryDemand': {
                 'topItems': seasonal_inventory_demand.get('topItems', [])[:5],
                 'topCategories': seasonal_inventory_demand.get('categoryDemand', [])[:5],
                 'totalTransactions': seasonal_inventory_demand.get('totalTransactions', 0),
                 'totalQuantityConsumed': seasonal_inventory_demand.get('totalQuantityConsumed', 0),
-                'dataSource': 'Inventory issue transactions recorded when reserved stock is used for service tickets.',
-                'emptyMeaning': 'No issued inventory usage was recorded in the selected period.',
+                'dataSource': 'Historical inventory issue transactions linked to service tickets in the selected period.',
+                'emptyMeaning': 'No ticket-linked issued inventory usage was recorded in the selected period.',
             },
             'busiestMonths': busiest_months[:3],
             'busiestWeeks': busiest_weeks[:3],
@@ -475,15 +435,16 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         total = overview.get('totalRequests', 0)
         completed = overview.get('completedRequests', 0)
         pending = overview.get('pendingRequests', 0)
-        predicted = forecast.get('totalPredictedRequests', 0)
-        pressure = forecast.get('staffingPressure') or 'low'
         completed_value = summary.get('completedServiceValue', {})
 
         what = (
             f"Analytics show {total} request(s), {completed} completed, and {pending} pending "
-            f"for the selected {summary.get('periodDays', 30)}-day period. "
-            f"The next 7 days forecast {predicted} request(s), with {pressure} staffing pressure."
+            f"for the selected {summary.get('periodDays', 30)}-day period."
         )
+        if forecast.get('predictions_available'):
+            what += " A validated forecast is available."
+        else:
+            what += f" Forecasts are unavailable: {forecast.get('reason') or 'the evidence and model-validation gates are not met.'}"
         if top_service:
             what += f" Top service demand is {top_service.get('name') or top_service.get('serviceType') or 'the leading service'}."
         if completed_value.get('completedTickets'):
@@ -494,14 +455,21 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
 
         reason = "Possible reason: demand is being driven by recent service trends and recorded completion/request patterns."
         if top_item:
-            reason += f" Inventory demand also points to {top_item.get('item') or top_item.get('name') or 'a recurring item'} usage."
+            reason += f" Historical ticket-linked usage is highest for {top_item.get('item') or top_item.get('name') or 'a recurring item'}."
 
-        method = (
-            "Prediction method: this is trend-based predictive analytics. "
-            "Predicted requests = recent daily average x weekday demand factor x trend factor. "
-            "Confidence depends on historical volume and whether recent and previous periods both have usable data; "
-            "actual accuracy is checked later by comparing predicted requests against actual requests."
-        )
+        if forecast.get('predictions_available'):
+            demand_forecast = summary.get('demandForecast', {})
+            method = (
+                f"Forecast method: {demand_forecast.get('method')}. "
+                f"The current validated outlook estimates {demand_forecast.get('next_7_days', 0)} requests in 7 days "
+                f"and {demand_forecast.get('next_30_days', 0)} requests in 30 days."
+            )
+        else:
+            method = (
+                "Forecast method: no future quantities or confidence scores are generated yet. "
+                "When evidence is sufficient, the planned method forecasts service demand by service and city/province, "
+                "then translates it through validated ticket-linked item usage and service-item requirements."
+            )
         action = "Next action: review pending approvals, dispatch capacity, SLA risk, and inventory stock before confirming more schedules."
         return f"{what}\n\n{reason}\n\n{method}\n\n{action}"
 
@@ -1485,7 +1453,10 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
             transactions = InventoryTransaction.objects.filter(
                 transaction_date__gte=period_start,
                 transaction_date__lt=period_end,
-                transaction_type='issue'
+                transaction_type='issue',
+                service_ticket__isnull=False,
+            ).exclude(
+                service_ticket__request__description__startswith='[Historical Seed]'
             ).select_related('item', 'item__category')
 
             # Group by category and sum quantities
@@ -1563,7 +1534,25 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
             }
 
     def _build_predictive_analytics(self, today, days=30):
-        # Adjust window sizes based on selected period
+        readiness = _forecast_readiness()
+        return ({
+                'available': False,
+                'forecastWindowDays': self.FORECAST_WINDOW_DAYS,
+                'historyWindowDays': self.HISTORY_WINDOW_DAYS,
+                'totalPredictedRequests': None,
+                'projectedGrowthRate': None,
+                'activeTechnicians': User.objects.filter(role='technician', status='active', is_active=True).count(),
+                'recommendedTechnicians': None,
+                'staffingPressure': 'unavailable',
+                'busiestDay': None,
+                'topRiskService': None,
+                'reason': readiness['reason'] if not readiness['available'] else 'The legacy forecast is disabled; no validated forecast model has been trained.',
+                'requestCount': readiness['request_count'],
+                'historyMonths': readiness['history_months'],
+            }, [], [])
+
+        # Retained below only as historical implementation reference. This
+        # path is intentionally unreachable until a validated model replaces it.
         history_days = min(days, 42)  # Max 42 days for history
         recent_days = min(max(14, days // 2), 30)  # 50% of period or 14-30 days
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
@@ -6,14 +6,12 @@ import { MapContainer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { FiNavigation, FiRefreshCw, FiFlag, FiChevronRight } from 'react-icons/fi';
-import { fetchNavigationRoute, fetchTechnicianJob, markTechnicianArrival, startJobNavigation, updateTechnicianLocation } from '../../api/api';
+import { fetchNavigationRoute, fetchTechnicianJob, fetchTechnicianTrackingPolicy, markTechnicianArrival, startJobNavigation, updateTechnicianLocation } from '../../api/api';
 import { useAuth } from '../../context/AuthContext';
 import { useGPSTracking } from '../../hooks/useGPSTracking';
 import GPSStatusIndicator, { GPSNotice } from '../../components/ui/GPSStatusIndicator';
 import {
-  CALABARZON_BOUNDS,
-  CALABARZON_CENTER,
-  CALABARZON_MIN_ZOOM
+  resolveServiceRegion
 } from '../../utils/mapRegion';
 import { formatTicketId } from '../../utils/roleIds';
 import MapTileLayer from '../../components/maps/MapTileLayer';
@@ -73,6 +71,19 @@ function MapBoundsUpdater({ routeCoords, jobLoc, techLoc }) {
   return null;
 }
 
+function ServiceRegionController({ region }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setMaxBounds(region.bounds);
+    map.options.maxBoundsViscosity = 1.0;
+    map.setMinZoom(region.minZoom);
+    map.invalidateSize();
+  }, [map, region]);
+
+  return null;
+}
+
 export default function TechnicianMapNavigation() {
   const [searchParams] = useSearchParams();
   const ticketId = searchParams.get('ticketId') || searchParams.get('jobId');
@@ -87,7 +98,7 @@ export default function TechnicianMapNavigation() {
   const [jobLoading, setJobLoading] = useState(Boolean(ticketId));
   const [routeLoading, setRouteLoading] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [watchStarted, setWatchStarted] = useState(false);
+  const [trackingConfig, setTrackingConfig] = useState(null);
   const [error, setError] = useState(ticketId ? '' : 'Open a job from My Jobs before starting navigation.');
   const lastRouteRequestRef = useRef({ at: 0, lat: null, lng: null });
   const lastLocationUpdateRef = useRef({ at: 0, lat: null, lng: null });
@@ -99,10 +110,16 @@ export default function TechnicianMapNavigation() {
     permission: gpsPermission,
     requestPermission,
     startWatching,
-    stopWatching
+    stopWatching,
+    watching
   } = useGPSTracking({ autoStart: false });
 
-  const techLoc = gpsLocation ? [gpsLocation.latitude, gpsLocation.longitude] : CALABARZON_CENTER;
+  const trackingRegion = useMemo(
+    () => resolveServiceRegion(trackingConfig?.region),
+    [trackingConfig?.region]
+  );
+  const trackingPolicy = trackingConfig?.policy || {};
+  const techLoc = gpsLocation ? [gpsLocation.latitude, gpsLocation.longitude] : trackingRegion.center;
   const hasJobCoordinates =
     job?.latitude != null &&
     job?.longitude != null &&
@@ -189,23 +206,42 @@ export default function TechnicianMapNavigation() {
   }, [ticketId]);
 
   useEffect(() => {
-    if (!watchStarted) {
-      startWatching();
-      setWatchStarted(true);
-    }
-
+    let active = true;
+    fetchTechnicianTrackingPolicy()
+      .then((data) => {
+        if (active) setTrackingConfig(data);
+      })
+      .catch((policyError) => {
+        console.warn('Unable to load location-sharing policy', policyError);
+      });
     return () => {
+      active = false;
       stopWatching();
     };
-  }, []);
+  }, [stopWatching]);
+
+  const startLocationSharing = async () => {
+    try {
+      if (gpsPermission !== 'granted') {
+        await requestPermission();
+      }
+      startWatching();
+    } catch {
+      // GPSNotice presents the browser/device action required from the technician.
+    }
+  };
+
+  const stopLocationSharing = () => {
+    stopWatching();
+  };
 
   useEffect(() => {
-    if (!jobLoc || arrived) {
+    if (!jobLoc || arrived || !gpsLocation) {
       return;
     }
 
-    loadRoute();
-  }, [ticketId, job?.latitude, job?.longitude, arrived]);
+    loadRoute(gpsLocation.latitude, gpsLocation.longitude);
+  }, [ticketId, job?.latitude, job?.longitude, arrived, gpsLocation?.latitude, gpsLocation?.longitude]);
 
   useEffect(() => {
     if (!gpsLocation) {
@@ -331,20 +367,32 @@ export default function TechnicianMapNavigation() {
         <p className="text-slate-600">
           {job ? `${job.service} for ${job.client?.full_name || job.client} | ${job.address || 'Location pending'}` : 'Loading job details...'}
         </p>
-        <p className="mt-1 text-sm text-slate-500">Live GPS tracking enabled | {route.directions.length} turns</p>
+        <p className="mt-1 text-sm text-slate-500">
+          {watching ? 'Location sharing active' : 'Location sharing off'} | {route.directions.length} turns | {trackingRegion.name}
+        </p>
+        <div className={`mt-3 rounded-xl border px-4 py-3 text-sm ${watching ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold">Location sharing policy</p>
+              <p className="mt-1 leading-5">
+                Used for dispatch, job navigation, arrival support, and safety. Authorized supervisors can view current and recent locations. History is retained for up to {trackingPolicy.retentionDays || 30} days.
+              </p>
+              <p className="mt-1 text-xs opacity-80">Sharing starts only when you choose Start location sharing and stops when you leave this page or choose Stop sharing.</p>
+            </div>
+            <button
+              type="button"
+              onClick={watching ? stopLocationSharing : startLocationSharing}
+              className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-white ${watching ? 'bg-slate-700 hover:bg-slate-800' : 'bg-blue-600 hover:bg-blue-700'}`}
+            >
+              {watching ? 'Stop sharing' : 'Start location sharing'}
+            </button>
+          </div>
+        </div>
         <GPSStatusIndicator status={gpsPermission} accuracy={gpsLocation?.accuracy} className="mt-2" />
         <GPSNotice
           status={gpsPermission}
           error={gpsError}
           location={gpsLocation}
-          onRequestAccess={async () => {
-            try {
-              await requestPermission();
-              startWatching();
-            } catch {
-              // The visible GPS notice explains what the technician needs to enable.
-            }
-          }}
           className="mt-3"
         />
         {gpsError && (
@@ -375,34 +423,37 @@ export default function TechnicianMapNavigation() {
           ) : (
             <MapContainer
               center={jobLoc || techLoc}
-              zoom={CALABARZON_MIN_ZOOM}
-              minZoom={CALABARZON_MIN_ZOOM}
+              zoom={trackingRegion.minZoom}
+              minZoom={trackingRegion.minZoom}
               maxZoom={18}
-              maxBounds={CALABARZON_BOUNDS}
+              maxBounds={trackingRegion.bounds}
               maxBoundsViscosity={1.0}
               className="h-[60vh] min-h-[24rem]"
             >
+              <ServiceRegionController region={trackingRegion} />
               <MapBoundsUpdater routeCoords={route.routeCoords} jobLoc={jobLoc} techLoc={techLoc} />
               <MapTileLayer />
 
-              <Marker position={techLoc} icon={techIcon}>
-                <Popup>
-                  <div>
-                    <strong>Your Location</strong>
-                    <br />
-                    Moving to job site...
-                  </div>
-                </Popup>
-              </Marker>
+              {gpsLocation ? (
+                <Marker position={techLoc} icon={techIcon}>
+                  <Popup>
+                    <div>
+                      <strong>Your Location</strong>
+                      <br />
+                      Moving to job site...
+                    </div>
+                  </Popup>
+                </Marker>
+              ) : null}
 
               <Marker position={jobLoc} icon={jobIcon}>
                 <Popup>
                   <div className="text-center">
                     <strong>Job Site</strong>
                     <br />
-                    {route.distanceKm} km away
+                    {route.distanceKm > 0 ? `${route.distanceKm} km away` : 'Route not calculated'}
                     <br />
-                    ~{route.estimatedTimeMin} min
+                    {route.estimatedTimeMin > 0 ? `~${route.estimatedTimeMin} min` : 'Start location sharing first'}
                   </div>
                 </Popup>
               </Marker>
@@ -428,12 +479,12 @@ export default function TechnicianMapNavigation() {
 
         <div className="space-y-4">
           <div className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 p-5 text-white shadow-lg">
-            <div className="mb-1 text-3xl font-bold">{route.distanceKm} km</div>
+            <div className="mb-1 text-3xl font-bold">{route.distanceKm > 0 ? `${route.distanceKm} km` : '--'}</div>
             <div className="text-blue-100">Distance</div>
           </div>
 
           <div className="rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 p-5 text-white shadow-lg">
-            <div className="mb-1 text-3xl font-bold">{route.estimatedTimeMin} min</div>
+            <div className="mb-1 text-3xl font-bold">{route.estimatedTimeMin > 0 ? `${route.estimatedTimeMin} min` : '--'}</div>
             <div className="text-emerald-100">Travel Time</div>
           </div>
 
@@ -476,7 +527,9 @@ export default function TechnicianMapNavigation() {
                   {index === currentStepIndex && <FiChevronRight className="flex-shrink-0 text-blue-500" size={20} />}
                 </div>
               )) : (
-                <p className="py-4 text-center text-slate-500">No directions available</p>
+                <p className="py-4 text-center text-slate-500">
+                  {gpsLocation ? 'No directions available' : 'Start location sharing to calculate directions.'}
+                </p>
               )}
             </div>
           </div>
@@ -486,8 +539,8 @@ export default function TechnicianMapNavigation() {
             <div className="space-y-3">
               <button
                 onClick={() => loadRoute(undefined, undefined, { force: true })}
-                disabled={routeLoading}
-                className="group flex w-full items-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-left transition hover:bg-slate-200"
+                disabled={routeLoading || !gpsLocation}
+                className="group flex w-full items-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-left transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <FiRefreshCw className={`transition-transform group-hover:rotate-180 ${routeLoading ? 'animate-spin' : ''}`} />
                 {routeLoading ? 'Recalculating...' : 'Recalculate Route'}

@@ -9,13 +9,14 @@ import {
   FiPackage,
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import Layout from '../../components/layout/Layout';
 import StatsCard from '../../components/ui/StatsCard';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
-import { fetchNotifications, fetchTechnicianDashboard, getUnreadNotificationCount, updateJobStatus, updateTechnicianLocation, deleteAllNotifications } from '../../api/api';
+import { fetchTechnicianDashboard, updateJobStatus, updateTechnicianLocation } from '../../api/api';
 import { useGPSTracking } from '../../hooks/useGPSTracking';
-import GPSStatusIndicator, { GPSNotice } from '../../components/ui/GPSStatusIndicator';
+import GPSStatusIndicator from '../../components/ui/GPSStatusIndicator';
 import StatusBadge, { formatStatusLabel } from '../../components/ui/StatusBadge';
 import { AUTO_REFRESH_MS, formatDateTime } from '../../utils/dashboardHelpers';
 import {
@@ -84,23 +85,30 @@ const formatEquipmentQuantity = (item) => {
 
 export default function TechnicianDashboard() {
   const { user } = useAuth();
+  const { notifications, unreadCount: unreadNotificationCount, deleteAllNotifications } = useNotifications();
   const navigate = useNavigate();
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [isStartingJob, setIsStartingJob] = useState(false);
+  const [isStartingGps, setIsStartingGps] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
 
   const techName = dashboard.technician?.full_name || user?.username || 'Technician';
 
-  const { location, error: gpsError, permission: gpsPermission, requestPermission } = useGPSTracking({
+  const {
+    location,
+    error: gpsError,
+    permission: gpsPermission,
+    watching: gpsWatching,
+    requestPermission,
+    startWatching,
+  } = useGPSTracking({
     updateInterval: 20000,
-    autoStart: true,
+    autoStart: false,
     onLocationUpdate: async (loc) => {
       try {
         await updateTechnicianLocation({ techName, lat: loc.latitude, lng: loc.longitude, accuracy: loc.accuracy, speed: loc.speed, heading: loc.heading });
@@ -112,21 +120,12 @@ export default function TechnicianDashboard() {
     if (silent) setRefreshing(true);
     else setLoading(true);
     try {
-      const [dData, nData, unreadCount] = await Promise.all([
-        fetchTechnicianDashboard(techName),
-        fetchNotifications(),
-        getUnreadNotificationCount()
-      ]);
-      const sorted = [...nData].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      const dData = await fetchTechnicianDashboard(techName);
       setDashboard(dData || EMPTY_DASHBOARD);
-      setNotifications(sorted);
-      setUnreadNotificationCount(unreadCount || 0);
       setLastUpdated(new Date().toISOString());
       setError('');
     } catch (err) {
       setDashboard(EMPTY_DASHBOARD);
-      setNotifications([]);
-      setUnreadNotificationCount(0);
       setError(err.message || 'Unable to load technician dashboard.');
     } finally {
       setLoading(false);
@@ -136,12 +135,24 @@ export default function TechnicianDashboard() {
 
   const [isDeletingNotifications, setIsDeletingNotifications] = useState(false);
 
+  const startLocationSharing = async () => {
+    setIsStartingGps(true);
+    setActionMessage('');
+    try {
+      await requestPermission();
+      startWatching();
+      setActionMessage('Location sharing is on for this dashboard session.');
+    } catch {
+      // The GPS panel renders the browser-specific error and recovery guidance.
+    } finally {
+      setIsStartingGps(false);
+    }
+  };
+
   const handleDeleteAllNotifications = async () => {
     setIsDeletingNotifications(true);
     try {
       await deleteAllNotifications();
-      setNotifications([]);
-      setUnreadNotificationCount(0);
       setDeleteAllConfirmOpen(false);
     } catch (err) {
       console.error('Failed to delete notifications:', err);
@@ -234,14 +245,6 @@ export default function TechnicianDashboard() {
           Last updated: <span className="font-medium text-slate-700">{formatDateTime(lastUpdated)}</span>
         </p>
       </div>
-
-      <GPSNotice
-        status={gpsPermission}
-        error={gpsError}
-        location={location}
-        onRequestAccess={() => requestPermission().catch(() => {})}
-        className="mb-5"
-      />
 
       {actionMessage && (
         <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{actionMessage}</div>
@@ -420,7 +423,11 @@ export default function TechnicianDashboard() {
               <h3 className="mt-2 text-xl font-semibold text-slate-900">Live Tracking</h3>
               <p className="mt-2 text-sm text-slate-500">Used for route visibility and dispatch.</p>
             </div>
-            <GPSStatusIndicator status={gpsPermission} accuracy={gpsAccuracy} className="rounded-full bg-surface-100 px-3 py-1.5" />
+            <GPSStatusIndicator
+              status={gpsWatching ? 'granted' : gpsPermission === 'denied' ? 'denied' : 'off'}
+              accuracy={gpsAccuracy}
+              className="rounded-full bg-surface-100 px-3 py-1.5"
+            />
           </div>
 
           <div className="mt-5 divide-y divide-surface-200 rounded-lg border border-surface-200 bg-surface-50">
@@ -442,6 +449,21 @@ export default function TechnicianDashboard() {
               </div>
             )}
           </div>
+          {!gpsWatching && gpsPermission !== 'denied' && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={startLocationSharing}
+                disabled={isStartingGps}
+                className="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-wait disabled:opacity-60"
+              >
+                {isStartingGps ? 'Starting location sharing...' : 'Start location sharing'}
+              </button>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Sharing starts only after you choose this action and lasts for this dashboard session.
+              </p>
+            </div>
+          )}
         </section>
       </div>
 
@@ -537,7 +559,33 @@ export default function TechnicianDashboard() {
           ) : recentActivity.length === 0 ? (
             <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 p-5 text-center text-sm text-slate-500">No recent activity yet.</div>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-surface-200">
+            <>
+              <div className="space-y-3 md:hidden">
+                {recentActivity.slice(0, 5).map((item) => (
+                  <article key={item.id} className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900">{formatTicketId(item.id)}</p>
+                        <p className="mt-1 truncate text-sm text-slate-600" title={item.client?.full_name || item.client}>
+                          {item.client?.full_name || item.client}
+                        </p>
+                      </div>
+                      <StatusBadge status={item.status} size="sm" />
+                    </div>
+                    <p className="mt-3 truncate text-sm text-slate-600" title={item.service_type}>
+                      {item.service_type}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/technician/my-jobs?ticketId=${item.id}`)}
+                      className="mt-3 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-surface-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    >
+                      View job
+                    </button>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-hidden rounded-lg border border-surface-200 md:block">
               <table className="w-full table-fixed text-left text-sm">
                 <thead className="bg-surface-50 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                   <tr>
@@ -578,7 +626,8 @@ export default function TechnicianDashboard() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </>
           )}
         </div>
       </section>

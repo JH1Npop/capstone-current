@@ -181,16 +181,6 @@ Table progress_ticketprogress {
   updated_at datetime
 }
 
-Table history_servicehistory {
-  id integer [pk, increment]
-  ticket_id integer [ref: > services_serviceticket.id]
-  technician_id integer [ref: > users_user.id]
-  service_type_id integer [ref: > services_servicetype.id]
-  completion_date datetime
-  service_duration integer
-  customer_rating integer
-}
-
 Table services_inspectionchecklist {
   id integer [pk, increment]
   ticket_id integer [unique, ref: > services_serviceticket.id]
@@ -367,26 +357,6 @@ Table notifications_notification {
   sms_sent boolean
   created_at datetime
   read_at datetime
-}
-
-Table notifications_notificationtemplate {
-  id integer [pk, increment]
-  name varchar [unique]
-  notification_type varchar
-  subject varchar
-  body text
-  variables text
-}
-
-Table notifications_notificationlog {
-  id integer [pk, increment]
-  notification_id integer [unique, ref: > notifications_notification.id]
-  email_status varchar
-  sms_status varchar
-  email_response text
-  sms_response text
-  last_attempt datetime
-  attempt_count integer
 }
 
 Table notifications_firebasetoken {

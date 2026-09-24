@@ -69,78 +69,6 @@ def set_current_request_meta(request):
 def get_current_user():
     """Get the user set by middleware, or None."""
     return getattr(_thread_locals, 'user', None)
-"""
-Auto-logging signals for the ChangeLog audit trail.
-
-Automatically records create/update/delete operations on critical models:
-- ServiceRequest, ServiceTicket, User, AfterSalesCase, MaintenanceSchedule
-
-This ensures previous records are NEVER lost — every change is preserved.
-"""
-
-import logging
-import threading
-
-from django.contrib.contenttypes.models import ContentType
-from django.db.models.signals import post_save, pre_save, pre_delete
-from django.dispatch import receiver
-
-logger = logging.getLogger(__name__)
-
-# Thread-local storage for tracking the current request user
-_thread_locals = threading.local()
-
-
-def ensure_user_role_profile(user):
-    """Create the role-specific profile row expected by serializers and APIs."""
-    from users.models import (
-        ClientProfile,
-        ManagementProfile,
-        TechnicianProfile,
-    )
-
-    role_profile_map = {
-        'superadmin': ManagementProfile,
-        'admin': ManagementProfile,
-        'technician': TechnicianProfile,
-        'client': ClientProfile,
-    }
-    profile_model = role_profile_map.get(getattr(user, 'role', None))
-    if not profile_model:
-        return
-
-    defaults = {}
-    if profile_model.__name__ == 'ManagementProfile':
-        from users.rbac import get_default_admin_scope_for_role
-
-        defaults['admin_scope'] = get_default_admin_scope_for_role(user.role) or 'general'
-
-    profile_model.objects.get_or_create(user=user, defaults=defaults)
-
-
-def set_current_user(user):
-    """Call this from middleware to set the current request user."""
-    _thread_locals.user = user
-
-
-def set_current_request_meta(request):
-    """Store request metadata for activity logs without passing request around."""
-    if request is None:
-        _thread_locals.request_meta = {}
-        return
-
-    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
-    ip_address = forwarded_for.split(',')[0].strip() if forwarded_for else request.META.get('REMOTE_ADDR')
-    _thread_locals.request_meta = {
-        'ip_address': ip_address or None,
-        'user_agent': request.META.get('HTTP_USER_AGENT', ''),
-    }
-
-
-def get_current_user():
-    """Get the user set by middleware, or None."""
-    return getattr(_thread_locals, 'user', None)
-
 
 def get_current_request_meta():
     return getattr(_thread_locals, 'request_meta', {}) or {}
@@ -167,11 +95,17 @@ TRACKED_FIELDS = {
         'business_days', 'business_open_time', 'business_close_time', 'holiday_dates',
         'maintenance_reminder_days', 'company_name', 'company_address', 'document_footer',
         'currency_code', 'quotation_validity_days', 'default_warranty_days', 'external_payment_notice',
-        'landing_page_content', 'solar_calculator_settings', 'landing_page_promotions',
+        'landing_page_content', 'solar_calculator_settings', 'landing_page_promotions', 'landing_page_projects',
         'location_validation_enabled', 'arrival_radius_meters', 'location_validation_disabled_reason',
     ],
-    'QuotationRecord': ['total_amount', 'downpayment_amount', 'balance_amount', 'payment_terms', 'validity_days', 'status', 'bill_of_materials'],
+    'QuotationRecord': ['quotation_number', 'total_amount', 'downpayment_amount', 'balance_amount', 'payment_terms', 'warranty_terms', 'validity_days', 'status', 'bill_of_materials'],
     'InstallationContract': ['scope_of_work', 'start_date', 'estimated_completion_days', 'total_contract_amount', 'payment_terms_upfront', 'payment_terms_completion', 'payment_terms_final', 'warranty_period', 'status'],
+    'TechnicalDataSheet': ['status', 'premise_type', 'primary_electric_supply', 'rooftop_type', 'client_confirmation_date', 'client_confirmed_name', 'prepared_by_id', 'reviewed_by_id'],
+    'TurnoverAcceptance': ['turnover_date', 'accepted_by_client_name', 'accepted_by_client_contact', 'warranty_start_date', 'status', 'finalized_by_id', 'finalized_at'],
+    'GeneratedDocument': ['document_type', 'title', 'status', 'data_json', 'source_snapshot_json', 'generated_by_id'],
+    'SolarProjectProfile': ['location_id', 'original_ticket_id', 'system_capacity', 'panel_brand', 'number_of_panels', 'inverter_brand', 'number_of_inverters', 'battery_brand', 'mounting_structure'],
+    'InstalledEquipment': ['ticket_id', 'client_id', 'brand_model', 'equipment_type', 'serial_number', 'capacity', 'location', 'warranty_start', 'warranty_end'],
+    'SalesRecord': ['status', 'sale_date', 'currency_code', 'agreed_total', 'notes', 'confirmed_by_id', 'confirmed_at', 'voided_by_id', 'voided_at', 'void_reason'],
 }
 
 
@@ -202,6 +136,7 @@ ACTIVITY_CATEGORIES = {
     'AdminSettings': 'settings',
     'QuotationRecord': 'tickets',
     'InstallationContract': 'tickets',
+    'SalesRecord': 'tickets',
 }
 
 IGNORED_ACTIVITY_FIELDS = {
@@ -224,6 +159,7 @@ MODEL_LABELS = {
     'AdminSettings': 'admin settings',
     'QuotationRecord': 'quotation record',
     'InstallationContract': 'installation contract',
+    'SalesRecord': 'sales record',
 }
 
 FIELD_LABELS = {
@@ -643,9 +579,18 @@ def changelog_post_save(sender, instance, created, **kwargs):
     if sender.__name__ == 'User':
         # Revoke active sessions when role or status changes.
         old_values = getattr(instance, '_changelog_old_values', {})
-        role_changed = old_values.get('role', '') != str(getattr(instance, 'role', ''))
-        status_changed = old_values.get('status', '') != str(getattr(instance, 'status', ''))
-        is_active_changed = old_values.get('is_active', '') != str(getattr(instance, 'is_active', ''))
+        role_changed = (
+            'role' in old_values
+            and old_values['role'] != str(getattr(instance, 'role', ''))
+        )
+        status_changed = (
+            'status' in old_values
+            and old_values['status'] != str(getattr(instance, 'status', ''))
+        )
+        is_active_changed = (
+            'is_active' in old_values
+            and old_values['is_active'] != str(getattr(instance, 'is_active', ''))
+        )
 
         if not created and (role_changed or status_changed or is_active_changed):
             try:

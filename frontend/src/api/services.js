@@ -118,6 +118,15 @@ export const fetchServiceTickets = async (filters = {}) => {
   }
 };
 
+export const fetchServiceTicket = async (ticketId) => {
+  try {
+    const { data } = await api.get(`/services/service-tickets/${ticketId}/`);
+    return normalizeTicket(data);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load service ticket details.'));
+  }
+};
+
 export const searchServiceTickets = async (query = '') => {
   try {
     const { data } = await api.get('/services/service-tickets/', {
@@ -321,10 +330,13 @@ export const fetchServiceTypes = async () => {
   }
 };
 
-export const createServiceRequest = async (requestData) => {
+export const createServiceRequest = async (requestData, idempotencyKey = globalThis.crypto?.randomUUID?.()) => {
   try {
     const payload = normalizeCoordinatePayload(requestData);
-    const { data } = await api.post('/services/service-requests/', payload);
+    const config = idempotencyKey
+      ? { headers: { 'Idempotency-Key': idempotencyKey } }
+      : undefined;
+    const { data } = await api.post('/services/service-requests/', payload, config);
     return data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to create service request.'));
@@ -437,12 +449,48 @@ export const fetchFollowUpCases = async (filters = {}) => {
     if (filters.ordering) {
       params.ordering = filters.ordering;
     }
+    if (filters.page) {
+      params.page = filters.page;
+    }
 
     const { data } = await api.get('/services/follow-up-cases/', { params });
     const caseArray = Array.isArray(data) ? data : (data.results || []);
-    return Array.isArray(caseArray) ? caseArray : [];
+    return {
+      results: Array.isArray(caseArray) ? caseArray : [],
+      count: Array.isArray(data) ? data.length : Number(data?.count || 0),
+      next: Array.isArray(data) ? null : (data?.next || null),
+      previous: Array.isArray(data) ? null : (data?.previous || null)
+    };
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to load follow-up cases.'));
+  }
+};
+
+export const fetchFollowUpCaseSummary = async (filters = {}) => {
+  try {
+    const params = {};
+    if (filters.status) params.status = filters.status;
+    if (filters.caseType) params.case_type = filters.caseType;
+    if (filters.priority) params.priority = filters.priority;
+    if (filters.creationSource) params.creation_source = filters.creationSource;
+    if (filters.search) params.search = filters.search;
+    if (filters.page) params.page = filters.page;
+    if (filters.pageSize) params.page_size = filters.pageSize;
+    if (filters.ordering) params.ordering = filters.ordering;
+    if (filters.direction) params.direction = filters.direction;
+    const { data } = await api.get('/services/follow-up-cases/summary/', { params });
+    return data || {};
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load follow-up summary.'));
+  }
+};
+
+export const fetchFollowUpAssignees = async () => {
+  try {
+    const { data } = await api.get('/services/follow-up-cases/assignees/');
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load after-sales case owners.'));
   }
 };
 
@@ -529,6 +577,35 @@ export const fetchTrackingData = async () => {
   }
 };
 
+export const fetchTechnicianTrackingPolicy = async () => {
+  try {
+    const { data } = await api.get('/services/technician-locations/policy/');
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load the location-sharing policy.'));
+  }
+};
+
+export const fetchTechnicianLocationHistory = async (technicianId, { minutes = 60 } = {}) => {
+  try {
+    const { data } = await api.get('/services/technician-locations/', {
+      params: { technician: technicianId, minutes, page_size: 250 },
+    });
+    const rows = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
+    return rows
+      .map((row) => ({
+        id: row.id,
+        lat: Number(row.latitude),
+        lng: Number(row.longitude),
+        accuracy: Number(row.accuracy || 0),
+        timestamp: row.timestamp,
+      }))
+      .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load technician location history.'));
+  }
+};
+
 export const getGoogleMapsUrl = ({ lat, lng, zoom = 14 }) =>
   `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&zoom=${zoom}`;
 
@@ -562,7 +639,8 @@ export const registerInstalledEquipment = async (payload) => {
 export const fetchQuotationRecord = async (ticketId) => {
   try {
     const { data } = await api.get(`/services/quotations/`, { params: { ticket_id: ticketId } });
-    return data;
+    const rows = Array.isArray(data) ? data : (data?.results || []);
+    return rows[0] || null;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to load quotation record.'));
   }
@@ -570,10 +648,60 @@ export const fetchQuotationRecord = async (ticketId) => {
 
 export const saveQuotationRecord = async (payload) => {
   try {
-    const { data } = await api.post(`/services/quotations/`, payload);
+    const { id, ...requestPayload } = payload;
+    const { data } = id
+      ? await api.patch(`/services/quotations/${id}/`, requestPayload)
+      : await api.post(`/services/quotations/`, requestPayload);
     return data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to save quotation record.'));
+  }
+};
+
+export const fetchSalesRecords = async (filters = {}) => {
+  try {
+    const params = {};
+    if (filters.status) params.status = filters.status;
+    if (filters.search) params.search = filters.search;
+    return await fetchAllPages('/services/sales-records/', { params });
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load sales records.'));
+  }
+};
+
+export const prepareSalesRecord = async (ticketId) => {
+  try {
+    const { data } = await api.post('/services/sales-records/prepare/', { ticket_id: ticketId });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to prepare the sales record.'));
+  }
+};
+
+export const updateSalesRecord = async (recordId, updates) => {
+  try {
+    const { data } = await api.patch(`/services/sales-records/${recordId}/`, updates);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to update the sales record.'));
+  }
+};
+
+export const confirmSalesRecord = async (recordId) => {
+  try {
+    const { data } = await api.post(`/services/sales-records/${recordId}/confirm/`);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to confirm the sales record.'));
+  }
+};
+
+export const voidSalesRecord = async (recordId, reason) => {
+  try {
+    const { data } = await api.post(`/services/sales-records/${recordId}/void/`, { reason });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to void the sales record.'));
   }
 };
 

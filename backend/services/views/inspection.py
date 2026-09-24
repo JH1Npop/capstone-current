@@ -7,6 +7,7 @@ from users.permissions import IsAdmin
 from services.models import SolarCommissioningChecklist, TurnoverAcceptance, TechnicalDataSheet, InstallationContract
 from services.serializers import SolarCommissioningChecklistSerializer, TurnoverAcceptanceSerializer, TechnicalDataSheetSerializer, InstallationContractSerializer
 from services.views.helpers import *  # noqa: F401,F403
+from services.tracking_config import get_tracking_config
 
 class TechnicianSkillViewSet(viewsets.ModelViewSet):
     queryset = TechnicianSkill.objects.select_related('technician', 'service_type')
@@ -98,7 +99,7 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
         if ticket_id:
             qs = qs.filter(ticket_id=ticket_id)
             
-        return qs
+        return qs.order_by('-created_at', '-id')
 
     def perform_create(self, serializer):
         ticket = serializer.validated_data['ticket']
@@ -141,9 +142,12 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
             logger.exception('Unable to mark ticket %s inspection completed', ticket.id)
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def complete(self, request, pk=None):
         """Mark inspection as completed"""
-        checklist = self.get_object()
+        checklist = self.get_queryset().select_for_update().get(pk=pk)
+        if checklist.is_completed:
+            return Response({'status': 'Inspection completed'})
         checklist.is_completed = True
         checklist.completed_at = timezone.now()
         checklist.completed_by = request.user
@@ -267,8 +271,16 @@ class SolarCommissioningChecklistViewSet(viewsets.ModelViewSet):
         serializer.save(completed_by=completed_by or serializer.instance.completed_by)
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def complete(self, request, pk=None):
-        checklist = self.get_object()
+        checklist = self.get_queryset().select_for_update().get(pk=pk)
+        if checklist.status == 'finalized':
+            return Response(
+                {'error': 'Finalized commissioning checklists are immutable.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if checklist.status == 'completed':
+            return Response({'status': 'completed'})
         checklist.status = 'completed'
         checklist.completed_by = request.user
         checklist.save(update_fields=['status', 'completed_by', 'updated_at'])
@@ -318,37 +330,59 @@ class TurnoverAcceptanceViewSet(viewsets.ModelViewSet):
             sync_ticket_maintenance_schedule(turnover.ticket)
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def finalize(self, request, pk=None):
-        turnover = self.get_object()
+        turnover = self.get_queryset().select_for_update().select_related('ticket').get(pk=pk)
+        if turnover.status in {'finalized', 'accepted'}:
+            return Response(
+                {'error': 'This turnover acceptance has already been finalized.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        ticket = ServiceTicket.objects.select_for_update().get(pk=turnover.ticket_id)
+        if ticket.status != 'Completed':
+            return Response(
+                {'error': 'The service ticket must be completed before turnover can be finalized.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        allowed_fields = {
+            'turnover_date',
+            'accepted_by_client_name',
+            'accepted_by_client_contact',
+            'warranty_start_date',
+        }
+        payload = {key: value for key, value in request.data.items() if key in allowed_fields}
+        serializer = self.get_serializer(turnover, data=payload, partial=True)
+        serializer.is_valid(raise_exception=True)
+        turnover = serializer.save()
         turnover.status = 'finalized'
         turnover.finalized_by = request.user
         turnover.finalized_at = timezone.now()
-        
-        # Override fields if provided
-        if 'turnover_date' in request.data:
-            turnover.turnover_date = request.data['turnover_date']
-        if 'accepted_by_client_name' in request.data:
-            turnover.accepted_by_client_name = request.data['accepted_by_client_name']
-        if 'accepted_by_client_contact' in request.data:
-            turnover.accepted_by_client_contact = request.data['accepted_by_client_contact']
-        if 'warranty_start_date' in request.data:
-            turnover.warranty_start_date = request.data['warranty_start_date']
-            
-        turnover.save()
-        turnover.refresh_from_db()
+        turnover.save(update_fields=['status', 'finalized_by', 'finalized_at', 'updated_at'])
 
         # Update Ticket Status and Warranty
-        ticket = turnover.ticket
-        ticket.status = 'Turned Over / Accepted'
+        warranty_update_fields = []
         if turnover.warranty_start_date:
             ticket.warranty_start_date = turnover.warranty_start_date
             ticket.warranty_status = 'active'
+            warranty_update_fields.extend(['warranty_start_date', 'warranty_status'])
             
             # Optionally calculate end date if period is known
             if ticket.warranty_period_days:
                 ticket.warranty_end_date = turnover.warranty_start_date + timezone.timedelta(days=ticket.warranty_period_days)
-        
-        ticket.save(update_fields=['status', 'warranty_start_date', 'warranty_status', 'warranty_end_date'])
+                warranty_update_fields.append('warranty_end_date')
+
+        try:
+            apply_ticket_status_change(
+                ticket,
+                'Turned Over / Accepted',
+                changed_by=request.user,
+                notes='Turnover acceptance finalized.',
+                extra_update_fields=warranty_update_fields,
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         sync_ticket_maintenance_schedule(ticket)
 
         return Response({'status': 'finalized', 'ticket_status': ticket.status})
@@ -390,18 +424,30 @@ class TechnicalDataSheetViewSet(viewsets.ModelViewSet):
         serializer.save(prepared_by=self.request.user)
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def submit(self, request, pk=None):
-        tds = self.get_object()
+        tds = self.get_queryset().select_for_update().get(pk=pk)
+        if tds.status != 'draft':
+            return Response(
+                {'error': f'Only draft technical data sheets can be submitted; this sheet is {tds.status}.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         tds.status = 'submitted'
         tds.submitted_at = timezone.now()
         tds.save(update_fields=['status', 'submitted_at'])
         return Response({'status': 'submitted'})
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def review(self, request, pk=None):
-        tds = self.get_object()
+        tds = self.get_queryset().select_for_update().get(pk=pk)
         if not is_admin_workspace_role(request.user.role):
             raise PermissionDenied("Only admins can review the TDS.")
+        if tds.status != 'submitted':
+            return Response(
+                {'error': 'Only submitted technical data sheets can be reviewed.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         tds.status = 'reviewed'
         tds.reviewed_by = request.user
         tds.reviewed_at = timezone.now()
@@ -417,6 +463,12 @@ class TechnicianLocationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     def get_permissions(self):
         if self.action == 'update_location':
             return [IsTechnician()]
+        if self.action == 'policy':
+            if self.request.user.role == 'technician':
+                return [IsTechnician()]
+            if is_admin_workspace_role(self.request.user.role):
+                return [CanViewSupervisorTracking()]
+            return [permissions.IsAuthenticated()]
         if self.action in ['list', 'retrieve']:
             if self.request.user.role == 'technician':
                 return [IsTechnician()]
@@ -428,10 +480,29 @@ class TechnicianLocationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if is_admin_workspace_role(user.role):
-            return self.queryset
-        if user.role == 'technician':
-            return self.queryset.filter(technician=user)
-        return self.queryset.none()
+            queryset = self.queryset
+            technician_id = self.request.query_params.get('technician')
+            if technician_id and str(technician_id).isdigit():
+                queryset = queryset.filter(technician_id=int(technician_id))
+        elif user.role == 'technician':
+            queryset = self.queryset.filter(technician=user)
+        else:
+            return self.queryset.none()
+
+        raw_minutes = self.request.query_params.get('minutes')
+        if raw_minutes and str(raw_minutes).isdigit():
+            minutes = max(1, min(int(raw_minutes), 480))
+            queryset = queryset.filter(timestamp__gte=timezone.now() - timezone.timedelta(minutes=minutes))
+        return queryset
+
+    @action(detail=False, methods=['get'])
+    def policy(self, request):
+        if request.user.role not in ('superadmin', 'admin', 'technician'):
+            return Response(
+                {'error': 'Location policy is available only to field staff and authorized supervisors.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response(get_tracking_config())
 
     @action(detail=False, methods=['post'])
     def update_location(self, request):

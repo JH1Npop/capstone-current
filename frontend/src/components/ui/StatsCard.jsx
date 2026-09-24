@@ -1,4 +1,4 @@
-import { FiArrowDown, FiArrowUp, FiMinus } from 'react-icons/fi';
+import { FiArrowDown, FiArrowUp, FiArrowUpRight, FiMinus } from 'react-icons/fi';
 
 const accentColors = {
   blue:    { icon: 'bg-brand-100 text-brand-600', bar: 'from-brand-300 via-brand-500 to-brand-400' },
@@ -33,6 +33,7 @@ export default function StatsCard({
   trend,
   trendLabel,
   helper,
+  onClick,
 }) {
   const displayTitle = title || label;
   const displayHelper = trendLabel || helper;
@@ -40,8 +41,13 @@ export default function StatsCard({
   const palette = accentColors[resolvedAccent] || accentColors.blue;
   const TrendIcon = trend ? trendIcons[trend] : null;
 
+  const Card = onClick ? 'button' : 'div';
+
   return (
-    <div className="stat-card p-4 sm:p-5">
+    <Card
+      {...(onClick ? { type: 'button', onClick, 'aria-label': `${displayTitle}: ${value}. ${displayHelper || 'Open details'}` } : {})}
+      className={`stat-card group w-full p-4 text-left sm:p-5 ${onClick ? 'transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2' : ''}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium text-slate-500">{displayTitle}</p>
@@ -61,6 +67,7 @@ export default function StatsCard({
                 />
               )}
               {displayHelper && <span className="text-[12px] text-slate-500">{displayHelper}</span>}
+              {onClick && <FiArrowUpRight className="ml-auto h-3.5 w-3.5 text-slate-400 transition group-hover:text-brand-600" aria-hidden="true" />}
             </div>
           )}
         </div>
@@ -70,6 +77,6 @@ export default function StatsCard({
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

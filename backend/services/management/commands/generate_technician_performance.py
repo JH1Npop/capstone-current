@@ -1,4 +1,4 @@
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Sum, Avg, Q
@@ -61,6 +61,7 @@ class Command(BaseCommand):
     def _generate_for_date(self, target_date, force=False):
         """Generate technician performance metrics for a specific date"""
         technicians = User.objects.filter(role='technician', is_active=True)
+        failures = []
 
         for technician in technicians:
             # Check if already exists
@@ -169,8 +170,14 @@ class Command(BaseCommand):
                     )
 
             except Exception as e:
+                failures.append(f'{technician.username}: {str(e)}')
                 self.stdout.write(
                     self.style.ERROR(
                         f"Error generating metrics for {technician.username}: {str(e)}"
                     )
                 )
+
+        if failures:
+            raise CommandError(
+                'Technician performance generation failed for: ' + '; '.join(failures)
+            )

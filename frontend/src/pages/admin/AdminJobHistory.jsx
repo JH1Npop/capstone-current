@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Layout from '../../components/layout/Layout';
 import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -14,13 +14,17 @@ import {
   FiImage,
   FiMapPin,
   FiPackage,
-  FiSearch,
+  FiRotateCcw,
   FiStar,
   FiUser,
   FiX,
 } from 'react-icons/fi';
-import { fetchCompletedJobsHistory, fetchServiceTypes } from '../../api/api';
+import SearchFilterBar from '../../components/shared/SearchFilterBar';
+import EquipmentReturnDialog from '../../components/shared/EquipmentReturnDialog';
+import { useAuth } from '../../context/AuthContext';
+import { downloadTicketDocument, fetchCompletedJobsHistory, fetchServiceTypes } from '../../api/api';
 import { API_BASE_URL } from '../../api/core';
+import { SUPERVISOR_DISPATCH_CAPABILITIES, hasAnyCapability } from '../../rbac';
 import { formatTicketId } from '../../utils/roleIds';
 
 const formatDate = (value) => {
@@ -29,6 +33,12 @@ const formatDate = (value) => {
   return Number.isNaN(parsed.getTime())
     ? value
     : parsed.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+const formatDateTime = (value) => {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 };
 
 
@@ -352,6 +362,8 @@ function ChecklistDetail({ inspection, onPreviewProof }) {
 }
 
 export default function AdminJobHistory() {
+  const { user } = useAuth();
+  const canReconcileEquipment = hasAnyCapability(user, SUPERVISOR_DISPATCH_CAPABILITIES);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -361,13 +373,17 @@ export default function AdminJobHistory() {
   const [sortField, setSortField] = useState('completed_date');
   const [sortDirection, setSortDirection] = useState('desc');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(15);
+  const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
   const [daysFilter, setDaysFilter] = useState('');
   const [serviceTypeFilter, setServiceTypeFilter] = useState('');
   const [clientFilter, setClientFilter] = useState('');
   const [technicianFilter, setTechnicianFilter] = useState('');
   const [selectedProof, setSelectedProof] = useState(null);
+  const [equipmentReturnJob, setEquipmentReturnJob] = useState(null);
+  const [documentError, setDocumentError] = useState('');
+  const [downloadingDocument, setDownloadingDocument] = useState('');
+  const [exporting, setExporting] = useState(false);
   const searchTimeout = useRef(null);
   const hasLoadedOnce = useRef(false);
 
@@ -381,6 +397,10 @@ export default function AdminJobHistory() {
       if (clientFilter) filters.client = clientFilter;
       if (technicianFilter) filters.technician = technicianFilter;
       if (search.trim()) filters.search = search.trim();
+      filters.page = page;
+      filters.pageSize = pageSize;
+      filters.ordering = sortField;
+      filters.direction = sortDirection;
 
       const result = await fetchCompletedJobsHistory(filters);
       setData(result);
@@ -394,12 +414,13 @@ export default function AdminJobHistory() {
   };
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
     fetchServiceTypes().then(setServiceTypes).catch(() => {});
   }, []);
 
   useEffect(() => {
     setPage(1);
-  }, [search, daysFilter, serviceTypeFilter, clientFilter, technicianFilter]);
+  }, [search, daysFilter, serviceTypeFilter, clientFilter, technicianFilter, page, pageSize, sortField, sortDirection]);
 
   useEffect(() => {
     if (searchTimeout.current) {
@@ -421,46 +442,15 @@ export default function AdminJobHistory() {
 
   const jobs = data?.results || [];
 
-  const sortedJobs = useMemo(() => {
-    const getSortValue = (job) => {
-      switch (sortField) {
-        case 'ticket_id':
-          return Number(job.ticket_id || job.id || 0);
-        case 'client':
-          return String(job.client || '').toLowerCase();
-        case 'service_type':
-          return String(job.service_type || '').toLowerCase();
-        case 'technician':
-          return String(job.technician || '').toLowerCase();
-        case 'location':
-          return `${job.city || ''} ${job.address || ''}`.trim().toLowerCase();
-        case 'client_rating':
-          return Number(job.client_rating || 0);
-        case 'completed_date':
-        default:
-          return new Date(job.completed_date || job.scheduled_date || 0).getTime();
-      }
-    };
-
-    return [...jobs].sort((left, right) => {
-      const leftValue = getSortValue(left);
-      const rightValue = getSortValue(right);
-
-      if (leftValue === rightValue) return 0;
-
-      const result = leftValue > rightValue ? 1 : -1;
-      return sortDirection === 'asc' ? result : -result;
-    });
-  }, [jobs, sortDirection, sortField]);
-
-  const totalJobs = sortedJobs.length;
-  const totalPages = Math.max(1, Math.ceil(totalJobs / pageSize));
-  const currentPage = Math.min(page, totalPages);
+  const sortedJobs = jobs;
+  const totalJobs = Number(data?.total || 0);
+  const totalPages = Math.max(1, Number(data?.total_pages || 1));
+  const currentPage = Math.min(Number(data?.page || page), totalPages);
   const pageStartIndex = (currentPage - 1) * pageSize;
-  const paginatedJobs = sortedJobs.slice(pageStartIndex, pageStartIndex + pageSize);
+  const paginatedJobs = sortedJobs;
   const selectedJob = sortedJobs.find((job) => job.id === selectedJobId) || null;
   const detailsJob = sortedJobs.find((job) => job.id === detailsJobId) || null;
-  const ratedJobsCount = sortedJobs.filter((job) => job.client_rating).length;
+  const ratedJobsCount = Number(data?.rated_jobs || 0);
   const detailsRegisteredEquipment = Array.isArray(detailsJob?.installed_equipment)
     ? detailsJob.installed_equipment
     : [];
@@ -493,7 +483,19 @@ export default function AdminJobHistory() {
     }
   }, [selectedJobId, sortedJobs]);
 
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      if (equipmentReturnJob) return;
+      setSelectedProof(null);
+      setDetailsJobId(null);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [equipmentReturnJob]);
+
   const handleSort = (field) => {
+    setPage(1);
     if (field === sortField) {
       setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
       return;
@@ -509,11 +511,51 @@ export default function AdminJobHistory() {
 
   const openJobDetails = (job) => {
     handleRowClick(job);
+    setDocumentError('');
     setDetailsJobId(job.id);
   };
 
-  const handleExportCsv = () => {
-    if (!sortedJobs.length) return;
+  const handleDocumentDownload = async (job, documentType, reportId = null) => {
+    const actionKey = `${documentType}-${reportId || 'default'}`;
+    setDownloadingDocument(actionKey);
+    setDocumentError('');
+    try {
+      await downloadTicketDocument(job.ticket_id || job.id, documentType, { reportId });
+    } catch (downloadError) {
+      setDocumentError(downloadError.message || 'Unable to download this document.');
+    } finally {
+      setDownloadingDocument('');
+    }
+  };
+
+  const handleExportCsv = async () => {
+    if (!totalJobs || exporting) return;
+    setExporting(true);
+    setError('');
+
+    let exportJobs = [];
+    try {
+      const commonFilters = {
+        days: daysFilter,
+        serviceType: serviceTypeFilter,
+        client: clientFilter,
+        technician: technicianFilter,
+        search: search.trim(),
+        pageSize: 100,
+        ordering: sortField,
+        direction: sortDirection,
+      };
+      const firstPage = await fetchCompletedJobsHistory({ ...commonFilters, page: 1 });
+      exportJobs = [...(firstPage.results || [])];
+      for (let exportPage = 2; exportPage <= Number(firstPage.total_pages || 1); exportPage += 1) {
+        const nextPage = await fetchCompletedJobsHistory({ ...commonFilters, page: exportPage });
+        exportJobs.push(...(nextPage.results || []));
+      }
+    } catch (exportError) {
+      setError(exportError.message || 'Unable to export completed jobs.');
+      setExporting(false);
+      return;
+    }
 
     const rows = [
       [
@@ -532,7 +574,7 @@ export default function AdminJobHistory() {
         'Warranty',
         'Completion Notes',
       ].map(escapeCsvValue).join(','),
-      ...sortedJobs.map((job) => [
+      ...exportJobs.map((job) => [
         job.ticket_id || job.id,
         job.completed_date || job.scheduled_date || '',
         job.client || '',
@@ -557,6 +599,7 @@ export default function AdminJobHistory() {
     link.download = `completed-jobs-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     window.URL.revokeObjectURL(url);
+    setExporting(false);
   };
 
   const renderSortIcon = (field) => {
@@ -583,7 +626,7 @@ export default function AdminJobHistory() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-[13px] font-medium text-slate-500">Rated Jobs</p>
           <p className="mt-1.5 text-3xl font-bold text-blue-600">{ratedJobsCount}</p>
-          <p className="mt-1 text-xs text-slate-500">with client feedback</p>
+          <p className="mt-1 text-xs text-slate-500">with a client rating</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-[13px] font-medium text-slate-500">Service Types</p>
@@ -599,62 +642,29 @@ export default function AdminJobHistory() {
         </div>
       </section>
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[minmax(18rem,1.6fr)_repeat(4,minmax(9rem,1fr))]">
-          <div className="relative">
-            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search client, technician, address, service..."
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-9 pr-4 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
-            />
-          </div>
-          <select
-            value={daysFilter}
-            onChange={(event) => setDaysFilter(event.target.value)}
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
-          >
-            <option value="">All Time</option>
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="180">Last 6 months</option>
-            <option value="365">Last year</option>
-          </select>
-          <select
-            value={serviceTypeFilter}
-            onChange={(event) => setServiceTypeFilter(event.target.value)}
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
-          >
-            <option value="">All Services</option>
-            {serviceTypes.map((serviceType) => (
-              <option key={serviceType.id} value={serviceType.id}>{serviceType.name}</option>
-            ))}
-          </select>
-          <select
-            value={clientFilter}
-            onChange={(event) => setClientFilter(event.target.value)}
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
-          >
-            <option value="">All Clients</option>
-            {(data?.client_options || []).map((client) => (
-              <option key={client.id} value={client.id}>{client.name}</option>
-            ))}
-          </select>
-          <select
-            value={technicianFilter}
-            onChange={(event) => setTechnicianFilter(event.target.value)}
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
-          >
-            <option value="">All Technicians</option>
-            {(data?.technician_options || []).map((technician) => (
-              <option key={technician.id} value={technician.id}>{technician.name}</option>
-            ))}
-          </select>
-        </div>
-      </section>
+      <SearchFilterBar
+        className="mt-5"
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel="Find a completed job"
+        searchPlaceholder="Search client, technician, address, or service"
+        filters={[
+          { key: 'period', label: 'Completed during', value: daysFilter, defaultValue: '', onChange: setDaysFilter, options: [
+            { value: '', label: 'Any time' }, { value: '7', label: 'Last 7 days' }, { value: '30', label: 'Last 30 days' },
+            { value: '90', label: 'Last 90 days' }, { value: '180', label: 'Last 6 months' }, { value: '365', label: 'Last year' },
+          ] },
+          { key: 'service', label: 'Service', value: serviceTypeFilter, defaultValue: '', onChange: setServiceTypeFilter, options: [{ value: '', label: 'Any service' }, ...serviceTypes.map((serviceType) => ({ value: String(serviceType.id), label: serviceType.name }))] },
+          { key: 'client', label: 'Client', value: clientFilter, defaultValue: '', onChange: setClientFilter, options: [{ value: '', label: 'Any client' }, ...(data?.client_options || []).map((client) => ({ value: String(client.id), label: client.name }))] },
+          { key: 'technician', label: 'Technician', value: technicianFilter, defaultValue: '', onChange: setTechnicianFilter, options: [{ value: '', label: 'Any technician' }, ...(data?.technician_options || []).map((technician) => ({ value: String(technician.id), label: technician.name }))] },
+        ]}
+        onClear={() => {
+          setSearch('');
+          setDaysFilter('');
+          setServiceTypeFilter('');
+          setClientFilter('');
+          setTechnicianFilter('');
+        }}
+      />
 
       <section className="mt-6 space-y-5">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -669,10 +679,10 @@ export default function AdminJobHistory() {
               <button
                 type="button"
                 onClick={handleExportCsv}
-                disabled={!sortedJobs.length}
+                disabled={!totalJobs || exporting}
                 className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <FiDownload className="mr-2" /> Export CSV
+                <FiDownload className="mr-2" /> {exporting ? 'Preparing…' : 'Export CSV'}
               </button>
             </div>
           </div>
@@ -699,7 +709,7 @@ export default function AdminJobHistory() {
                       onChange={(event) => setPageSize(Number(event.target.value))}
                       className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
                     >
-                      {[15, 30, 50, 100].map((size) => (
+                      {[10, 25, 50, 100].map((size) => (
                         <option key={size} value={size}>{size}</option>
                       ))}
                     </select>
@@ -837,23 +847,24 @@ export default function AdminJobHistory() {
 
       {detailsJob && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6"
           onClick={() => setDetailsJobId(null)}
         >
           <div
-            className="max-h-[90vh] w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-job-history-details-title"
+            className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
+            <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-700">
-                      Completed Job Record
-                    </span>
-                    <span className="text-sm font-semibold text-slate-500">{formatTicketId(detailsJob.ticket_id)}</span>
+                    <StatusBadge status={detailsJob.status || 'completed'} size="sm" />
+                    <span className="font-mono text-xs font-semibold tracking-wide text-slate-500">{formatTicketId(detailsJob.ticket_id)}</span>
                   </div>
-                  <h3 className="mt-2 text-xl font-semibold text-slate-950">{detailsJob.service_type}</h3>
+                  <h3 id="admin-job-history-details-title" className="mt-2 text-xl font-semibold text-slate-950">{detailsJob.service_type}</h3>
                   <p className="mt-1 max-w-3xl text-sm text-slate-600">{detailsLocation}</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -890,7 +901,7 @@ export default function AdminJobHistory() {
               </div>
             </div>
 
-            <div className="max-h-[calc(90vh-150px)] overflow-y-auto px-6 py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 px-6 py-5">
               <div className="mb-4 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
                 <section className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="mb-4 flex items-center gap-2">
@@ -912,8 +923,11 @@ export default function AdminJobHistory() {
                     </div>
                     <div>
                       <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Completed Date</dt>
-                      <dd className="mt-1 font-semibold text-emerald-700">{formatDate(detailsJob.completed_date || detailsJob.scheduled_date)}</dd>
+                      <dd className="mt-1 font-semibold text-emerald-700">{formatDateTime(detailsJob.completed_date || detailsJob.scheduled_date)}</dd>
                     </div>
+                    <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Started</dt><dd className="mt-1 font-semibold text-slate-900">{formatDateTime(detailsJob.start_time)}</dd></div>
+                    <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Finished</dt><dd className="mt-1 font-semibold text-slate-900">{formatDateTime(detailsJob.end_time)}</dd></div>
+                    <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Actual Duration</dt><dd className="mt-1 font-semibold text-slate-900">{detailsJob.duration_minutes != null ? `${detailsJob.duration_minutes} minutes` : '-'}</dd></div>
                   </dl>
                 </section>
 
@@ -961,6 +975,123 @@ export default function AdminJobHistory() {
                   ) : null}
                 </section>
               )}
+
+              <section className="mb-4 grid gap-4 lg:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <h4 className="text-sm font-semibold text-slate-950">Assigned Team</h4>
+                  <p className="mt-2 text-sm text-slate-700"><span className="font-semibold">Lead:</span> {detailsJob.technician || 'Unassigned'}</p>
+                  <p className="mt-1 text-sm text-slate-700"><span className="font-semibold">Crew:</span> {detailsJob.crew_members?.length ? detailsJob.crew_members.map((member) => member.name).join(', ') : 'None'}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-950">Materials Used / Reserved</h4>
+                      <p className="mt-1 text-xs text-slate-500">Ticket-linked stock movements remain traceable in the inventory ledger.</p>
+                    </div>
+                    {canReconcileEquipment ? (
+                      <button
+                        type="button"
+                        onClick={() => setEquipmentReturnJob(detailsJob)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                      >
+                        <FiRotateCcw size={14} /> Review equipment returns
+                      </button>
+                    ) : null}
+                  </div>
+                  {detailsJob.inventory_reservations?.length ? (
+                    <div className="mt-2 space-y-2">
+                      {detailsJob.inventory_reservations.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                          <span className="font-medium text-slate-900">{item.item_name} <span className="text-xs text-slate-500">{item.item_sku || ''}</span></span>
+                          <span className="text-slate-600">×{item.quantity} · {String(item.status || '').replace(/_/g, ' ')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="mt-2 text-sm text-slate-500">No inventory records linked.</p>}
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <h4 className="text-sm font-semibold text-slate-950">Warranty</h4>
+                  <p className="mt-2 text-sm text-slate-700">{String(detailsJob.warranty_status || 'not_applicable').replace(/_/g, ' ')}</p>
+                  <p className="mt-1 text-xs text-slate-500">{detailsJob.warranty_end_date ? `Coverage ends ${formatDate(detailsJob.warranty_end_date)}` : 'No warranty end date recorded'}</p>
+                  {detailsJob.warranty_notes ? <p className="mt-2 text-sm text-slate-600">{detailsJob.warranty_notes}</p> : null}
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <h4 className="text-sm font-semibold text-slate-950">Maintenance</h4>
+                  <p className="mt-2 text-sm text-slate-700">{detailsJob.maintenance_schedule?.next_due_date ? `Next due ${formatDate(detailsJob.maintenance_schedule.next_due_date)}` : 'Not scheduled'}</p>
+                  {detailsJob.maintenance_schedule?.maintenance_notes ? <p className="mt-2 text-sm text-slate-600">{detailsJob.maintenance_schedule.maintenance_notes}</p> : null}
+                </div>
+              </section>
+
+              <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-950">Official Documents</h4>
+                    <p className="mt-1 text-xs text-slate-500">Download an operational document generated from this ticket's saved record.</p>
+                  </div>
+                </div>
+                {documentError ? <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{documentError}</p> : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(detailsJob.generated_documents || []).map((document) => (
+                    <button key={document.id} type="button" disabled={Boolean(downloadingDocument)} onClick={() => handleDocumentDownload(detailsJob, document.document_type)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                      {downloadingDocument === `${document.document_type}-default` ? 'Preparing…' : `Download ${document.title}`}
+                    </button>
+                  ))}
+                  {(detailsJob.field_service_reports || []).map((report, index) => (
+                    <button key={report.id} type="button" disabled={Boolean(downloadingDocument)} onClick={() => handleDocumentDownload(detailsJob, 'field_service_report', report.id)} className="rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-50">
+                      {downloadingDocument === `field_service_report-${report.id}` ? 'Preparing…' : `Field Service Report ${index + 1}`}
+                    </button>
+                  ))}
+                  {!detailsJob.generated_documents?.length && !detailsJob.field_service_reports?.length ? <p className="text-sm text-slate-500">No generated or field-service documents are linked.</p> : null}
+                </div>
+              </section>
+
+              {detailsJob.timeline?.length ? (
+                <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+                  <h4 className="text-sm font-semibold text-slate-950">Ticket Timeline</h4>
+                  <ol className="mt-3 space-y-3">
+                    {detailsJob.timeline.map((event) => (
+                      <li key={event.id} className="border-l-2 border-brand-200 pl-3 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold text-slate-900">{event.status}</span><time className="text-xs text-slate-500">{formatDateTime(event.timestamp)}</time></div>
+                        <p className="mt-1 text-xs text-slate-500">{event.changed_by}{event.notes ? ` · ${event.notes}` : ''}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              ) : null}
+
+              {detailsJob.field_service_reports?.length ? (
+                <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+                  <h4 className="text-sm font-semibold text-slate-950">Field Service Report Details</h4>
+                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                    {detailsJob.field_service_reports.map((report, index) => (
+                      <article key={report.id} className="rounded-lg bg-slate-50 p-3 text-sm">
+                        <div className="flex items-center justify-between gap-3"><p className="font-semibold text-slate-900">Report {index + 1}</p><span className="text-xs text-slate-500">{report.client_acknowledged ? 'Client acknowledged' : 'Awaiting acknowledgment'}</span></div>
+                        <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div><dt className="text-slate-500">Voltage</dt><dd className="font-semibold text-slate-800">{report.voltage_reading || '-'}</dd></div>
+                          <div><dt className="text-slate-500">Amperage</dt><dd className="font-semibold text-slate-800">{report.ampere_reading || '-'}</dd></div>
+                          <div><dt className="text-slate-500">Indoor Temp.</dt><dd className="font-semibold text-slate-800">{report.indoor_temp || '-'}</dd></div>
+                          <div><dt className="text-slate-500">Outdoor Temp.</dt><dd className="font-semibold text-slate-800">{report.outdoor_temp || '-'}</dd></div>
+                        </dl>
+                        {report.recommendation ? <p className="mt-3 text-sm text-slate-600"><span className="font-semibold">Recommendation:</span> {report.recommendation}</p> : null}
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {detailsJob.after_sales_cases?.length ? (
+                <section className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+                  <h4 className="text-sm font-semibold text-slate-950">After-Sales Cases</h4>
+                  <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                    {detailsJob.after_sales_cases.map((caseItem) => (
+                      <div key={caseItem.id} className="rounded-lg bg-slate-50 p-3 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold text-slate-900">{caseItem.summary}</p><StatusBadge status={caseItem.status} size="sm" /></div>
+                        <p className="mt-1 text-xs text-slate-500">{String(caseItem.case_type || '').replace(/_/g, ' ')}{caseItem.due_date ? ` · Due ${formatDate(caseItem.due_date)}` : ''}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
               <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3">
@@ -1069,16 +1200,30 @@ export default function AdminJobHistory() {
 
               <ChecklistDetail inspection={detailsJob.inspection} onPreviewProof={setSelectedProof} />
             </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-6 py-4">
+              <p className="text-xs text-slate-500">Read-only completed service record</p>
+              <button type="button" onClick={() => setDetailsJobId(null)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                Close details
+              </button>
+            </div>
           </div>
         </div>
       )}
 
+      {equipmentReturnJob && (
+        <EquipmentReturnDialog
+          ticketId={equipmentReturnJob.ticket_id || equipmentReturnJob.id}
+          mode="review"
+          onClose={() => setEquipmentReturnJob(null)}
+        />
+      )}
+
       {selectedProof && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4">
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div role="dialog" aria-modal="true" aria-labelledby="admin-proof-title" className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
               <div className="min-w-0">
-                <h3 className="truncate text-lg font-bold text-slate-900">{selectedProof.name || 'Proof file'}</h3>
+                <h3 id="admin-proof-title" className="truncate text-lg font-bold text-slate-900">{selectedProof.name || 'Proof file'}</h3>
                 <p className="text-sm text-slate-500">Preview proof file</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">

@@ -8,7 +8,8 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from django.core.cache import cache
-from django.db import DatabaseError, connection
+from django.db import DatabaseError, connection, transaction
+from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -16,8 +17,10 @@ from rest_framework.response import Response
 from rest_framework import permissions, status
 from rest_framework.throttling import UserRateThrottle
 
-from services.models import ServiceTicket, InspectionChecklist
+from services.models import ServiceTicket, InspectionChecklist, TechnicianLocationHistory
+from services.tracking_config import get_tracking_config
 from services.views.helpers import (
+    ACTIVE_TICKET_STATUSES,
     _display_name,
     get_visible_service_tickets_queryset,
     normalize_proof_media_payload,
@@ -53,11 +56,23 @@ def public_landing_page_settings_view(request):
             continue
         active_promotions.append({key: value for key, value in promotion.items() if key != 'imageAssetId'})
 
+    published_projects = []
+    public_project_fields = ('id', 'title', 'serviceType', 'location', 'completedDate', 'description', 'imageUrl')
+    for project in settings_obj.landing_page_projects or []:
+        if not isinstance(project, dict):
+            continue
+        if not project.get('published') or not project.get('clientConsentConfirmed'):
+            continue
+        if not all(project.get(field) for field in ('title', 'serviceType', 'location', 'completedDate', 'description', 'imageUrl')):
+            continue
+        published_projects.append({field: project.get(field) for field in public_project_fields})
+
     return Response({
         'companyName': settings_obj.company_name,
         'landingPageContent': settings_obj.landing_page_content,
         'solarCalculatorSettings': settings_obj.solar_calculator_settings,
         'landingPagePromotions': active_promotions,
+        'landingPageProjects': published_projects,
     })
 
 
@@ -212,13 +227,20 @@ def tracking_view(request):
     if not user_has_any_capability(request.user, SUPERVISOR_TRACKING_CAPABILITIES):
         return Response({'error': 'You do not have access to tracking.'}, status=status.HTTP_403_FORBIDDEN)
 
-    online_cutoff = timezone.now() - timezone.timedelta(minutes=5)
+    generated_at = timezone.now()
+    online_cutoff = generated_at - timezone.timedelta(minutes=5)
+
+    latest_location = TechnicianLocationHistory.objects.filter(
+        technician_id=OuterRef('pk')
+    ).order_by('-timestamp', '-id')
 
     # Get technician markers
     technicians = User.objects.filter(
         role='technician',
         status='active',
-    ).select_related('technician_profile')
+    ).select_related('technician_profile').annotate(
+        last_location_accuracy=Subquery(latest_location.values('accuracy')[:1]),
+    )
 
     tech_markers = []
     for tech in technicians:
@@ -231,22 +253,30 @@ def tracking_view(request):
 
         lat = tech.technician_profile.current_latitude
         lng = tech.technician_profile.current_longitude
+        has_coordinates = lat is not None and lng is not None
+        gps_state = 'fresh' if has_recent_gps and has_coordinates else ('stale' if has_coordinates else 'missing')
 
         tech_markers.append({
             'id': tech.id,
             'name': _display_name(tech),
+            'email': tech.email or '',
+            'phone': tech.phone or '',
             'lat': float(lat) if lat is not None else None,
             'lng': float(lng) if lng is not None else None,
             'status': tracking_status,
+            'gpsState': gps_state,
+            'gpsAccuracy': tech.last_location_accuracy,
+            'isAvailable': tech.technician_profile.is_available,
             'lastLocationUpdate': (
                 last_location_update.isoformat() if last_location_update else None
             ),
+            'activeJobs': [],
         })
 
     # Get ticket markers for pending/assigned tickets
     ticket_markers = []
     base_ticket_queryset = ServiceTicket.objects.filter(
-        status__in=['Not Started', 'In Progress', 'On Hold']
+        status__in=ACTIVE_TICKET_STATUSES
     ).select_related(
         'request__location',
         'request__service_type',
@@ -287,7 +317,12 @@ def tracking_view(request):
                 'lat': lat,
                 'lng': lng,
                 'locationDesc': (loc.address if loc else None) or 'Service Location',
+                'city': (loc.city if loc else '') or '',
+                'province': (loc.province if loc else '') or '',
                 'status': ticket.status.lower().replace(' ', '_'),
+                'priority': ticket.priority,
+                'scheduledDate': ticket.scheduled_date.isoformat() if ticket.scheduled_date else None,
+                'scheduledTime': ticket.scheduled_time.isoformat() if ticket.scheduled_time else None,
                 'technicianId': ticket.technician_id,
                 'technicianName': _display_name(ticket.technician) if ticket.technician else '',
                 'leadTechnician': _display_name(ticket.technician) if ticket.technician else '',
@@ -300,14 +335,37 @@ def tracking_view(request):
         except Exception as e:
             logger.debug('Skipping ticket %s in tracking: %s', ticket.id, e)
 
+    technicians_by_id = {marker['id']: marker for marker in tech_markers}
+    for ticket in ticket_markers:
+        job_summary = {
+            'id': ticket['id'],
+            'service': ticket['service'],
+            'client': ticket['client'],
+            'status': ticket['status'],
+            'priority': ticket['priority'],
+            'scheduledDate': ticket['scheduledDate'],
+            'scheduledTime': ticket['scheduledTime'],
+            'locationDesc': ticket['locationDesc'],
+        }
+        for member in ticket['crewMembers']:
+            technician_marker = technicians_by_id.get(member['id'])
+            if technician_marker is not None:
+                technician_marker['activeJobs'].append(job_summary)
+                if technician_marker['gpsState'] == 'fresh':
+                    technician_marker['status'] = 'on_job'
+
     return Response({
         'techMarkers': tech_markers,
-        'ticketMarkers': ticket_markers
+        'ticketMarkers': ticket_markers,
+        'generatedAt': generated_at.isoformat(),
+        'onlineThresholdMinutes': 5,
+        'trackingConfig': get_tracking_config(),
     })
 
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
+@transaction.atomic
 def checklist_view(request):
     """Compatibility endpoint for technician checklist submissions."""
     if request.user.role != 'technician':
@@ -321,11 +379,11 @@ def checklist_view(request):
         ticket = get_visible_service_tickets_queryset(
             request.user,
             base_queryset=ServiceTicket.objects.all(),
-        ).get(id=ticket_id)
+        ).select_for_update().get(id=ticket_id)
     except ServiceTicket.DoesNotExist:
         return Response({'error': 'Ticket not found'}, status=404)
 
-    if ticket.status in {'Completed', 'Cancelled'}:
+    if ticket.status in {'Completed', 'Turned Over / Accepted', 'Cancelled'}:
         return Response(
             {'error': 'This job is already closed, so its checklist can no longer be edited.'},
             status=status.HTTP_400_BAD_REQUEST,
@@ -427,6 +485,12 @@ def checklist_view(request):
     else:
         follow_up_due_date = None
 
+    normalized_proof_media = normalize_proof_media_payload(
+        photos=photos,
+        videos=videos,
+        media=proof_media,
+    )
+
     uploaded_proof_media = []
     if hasattr(request.FILES, 'getlist'):
         uploaded_proof_media.extend(
@@ -446,11 +510,7 @@ def checklist_view(request):
             )
         )
 
-    normalized_proof_media = normalize_proof_media_payload(
-        photos=photos,
-        videos=videos,
-        media=proof_media,
-    ) + uploaded_proof_media
+    normalized_proof_media += uploaded_proof_media
 
     checklist, _ = InspectionChecklist.objects.update_or_create(
         ticket=ticket,

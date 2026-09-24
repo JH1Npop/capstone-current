@@ -4,7 +4,7 @@ REM This script runs analytics generation daily
 
 setlocal enabledelayedexpansion
 
-set PROJECT_ROOT=D:\Caps - Copy
+set "PROJECT_ROOT=%~dp0.."
 set BACKEND_DIR=%PROJECT_ROOT%\backend
 set VENV_PYTHON=%PROJECT_ROOT%\venv\Scripts\python.exe
 set LOG_DIR=%PROJECT_ROOT%\logs
@@ -31,17 +31,27 @@ cd /d "%BACKEND_DIR%"
 
 if "%ACTION%"=="daily" (
     echo Running daily analytics generation... >> "%LOG_FILE%"
-    %VENV_PYTHON% manage.py generate_daily_analytics >> "%LOG_FILE%" 2>&1
+    "%VENV_PYTHON%" manage.py generate_daily_analytics >> "%LOG_FILE%" 2>&1
+    if errorlevel 1 exit /b !ERRORLEVEL!
     echo Running technician performance generation... >> "%LOG_FILE%"
-    %VENV_PYTHON% manage.py generate_technician_performance >> "%LOG_FILE%" 2>&1
+    "%VENV_PYTHON%" manage.py generate_technician_performance >> "%LOG_FILE%" 2>&1
+    if errorlevel 1 exit /b !ERRORLEVEL!
+    echo Validating and refreshing demand forecasts... >> "%LOG_FILE%"
+    "%VENV_PYTHON%" manage.py generate_demand_forecasts >> "%LOG_FILE%" 2>&1
 ) else if "%ACTION%"=="backfill" (
     echo Running backfill for last 90 days... >> "%LOG_FILE%"
-    %VENV_PYTHON% manage.py generate_daily_analytics --backfill 90 >> "%LOG_FILE%" 2>&1
-    %VENV_PYTHON% manage.py generate_technician_performance --backfill 90 >> "%LOG_FILE%" 2>&1
+    "%VENV_PYTHON%" manage.py generate_daily_analytics --backfill 90 >> "%LOG_FILE%" 2>&1
+    if errorlevel 1 exit /b !ERRORLEVEL!
+    "%VENV_PYTHON%" manage.py generate_technician_performance --backfill 90 >> "%LOG_FILE%" 2>&1
+    if errorlevel 1 exit /b !ERRORLEVEL!
+    "%VENV_PYTHON%" manage.py generate_demand_forecasts >> "%LOG_FILE%" 2>&1
 ) else if "%ACTION%"=="force" (
     echo Running force regeneration... >> "%LOG_FILE%"
-    %VENV_PYTHON% manage.py generate_daily_analytics --force >> "%LOG_FILE%" 2>&1
-    %VENV_PYTHON% manage.py generate_technician_performance --force >> "%LOG_FILE%" 2>&1
+    "%VENV_PYTHON%" manage.py generate_daily_analytics --force >> "%LOG_FILE%" 2>&1
+    if errorlevel 1 exit /b !ERRORLEVEL!
+    "%VENV_PYTHON%" manage.py generate_technician_performance --force >> "%LOG_FILE%" 2>&1
+    if errorlevel 1 exit /b !ERRORLEVEL!
+    "%VENV_PYTHON%" manage.py generate_demand_forecasts >> "%LOG_FILE%" 2>&1
 )
 
 if %ERRORLEVEL% equ 0 (

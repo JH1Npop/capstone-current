@@ -3,7 +3,10 @@ import { clientTechnicianDisplayString } from '../utils/clientTechnicianDisplay'
 
 const extractList = (data) => (Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []));
 
-const normalizeStatus = (value) => String(value || '').toLowerCase().replace(/\s+/g, '_');
+const normalizeStatus = (value) => String(value || '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '');
 
 const toNumber = (value) => {
   const numericValue = Number(value);
@@ -29,12 +32,19 @@ const buildProgress = (status) => {
 const deriveClientStatus = (requestStatus, ticketStatus) => {
   switch (ticketStatus) {
     case 'completed':
+    case 'turned_over_accepted':
       return 'completed';
     case 'cancelled':
       return 'cancelled';
     case 'in_progress':
     case 'on_hold':
+    case 'navigating':
+    case 'arrived_on_site':
+    case 'inspection_completed':
+    case 'awaiting_materials':
       return 'in_progress';
+    case 'for_inspection':
+    case 'ready_for_service':
     case 'not_started':
       return requestStatus === 'pending' ? 'pending' : 'approved';
     default:
@@ -65,6 +75,7 @@ const normalizeServiceRequest = (request) => {
     operational_status: requestStatus,
     service_type: request.service_type,
     service_type_name: serviceName,
+    clientFullname: request.client_fullname || request.client_name || '',
     service_items: serviceItems,
     description: request.description,
     priority: request.priority,
@@ -104,6 +115,11 @@ const normalizeServiceRequest = (request) => {
     maintenance_schedule: null,
     after_sales_cases: [],
     progress: buildProgress(requestStatus),
+    progress_label: requestStatus === 'pending' ? 'Request under review' : 'Request received',
+    progress_basis: 'request_status',
+    progress_paused: false,
+    progress_track: 'request',
+    progress_track_label: 'Service request',
   };
 };
 
@@ -150,7 +166,14 @@ const mergeRequestWithTicket = (serviceRequest, ticket) => {
     maintenance_schedule: ticket.maintenance_schedule || null,
     after_sales_cases: Array.isArray(ticket.after_sales_cases) ? ticket.after_sales_cases : [],
     updated_at: ticket.updated_at || serviceRequest.updated_at,
-    progress: buildProgress(clientStatus),
+    progress: Number.isFinite(Number(ticket.workflow_progress))
+      ? Number(ticket.workflow_progress)
+      : buildProgress(clientStatus),
+    progress_label: ticket.workflow_progress_label || 'Current workflow stage',
+    progress_basis: ticket.workflow_progress_basis || 'workflow_status',
+    progress_paused: Boolean(ticket.workflow_progress_paused),
+    progress_track: ticket.workflow_progress_track || 'service',
+    progress_track_label: ticket.workflow_progress_track_label || 'Service job',
   };
 };
 
@@ -218,10 +241,7 @@ export const changePassword = async (passwordData) => {
     });
     return data;
   } catch (error) {
-    if (error.response?.data?.error) {
-      throw new Error(error.response.data.error);
-    }
-    throw new Error('Failed to change password');
+    throw new Error(getApiErrorMessage(error, 'Unable to change password.'));
   }
 };
 

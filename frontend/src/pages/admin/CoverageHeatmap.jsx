@@ -3,7 +3,7 @@ import Layout from '../../components/layout/Layout';
 import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
 import { MapContainer, Circle, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { FiFilter, FiMap, FiX } from 'react-icons/fi';
+import { FiMap } from 'react-icons/fi';
 import { fetchCoverageHeatmap, fetchTechnicianCoverage } from '../../api/api';
 import {
   CALABARZON_BOUNDS,
@@ -11,6 +11,7 @@ import {
   CALABARZON_MIN_ZOOM
 } from '../../utils/mapRegion';
 import MapTileLayer from '../../components/maps/MapTileLayer';
+import SearchFilterBar from '../../components/shared/SearchFilterBar';
 
 const TECH_COLORS = ['#2563eb', '#0f766e', '#7c3aed', '#ea580c', '#be123c', '#0891b2'];
 
@@ -157,79 +158,38 @@ export default function CoverageHeatmap() {
     <Layout>
       {error && <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>}
 
-      <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-          <FiFilter className="text-slate-400" />
-          Map Filters
-        </div>
-        <div className="grid gap-3 xl:grid-cols-[repeat(3,minmax(10rem,1fr))_auto]">
-          <label className="text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Client</span>
-            <select
-              value={selectedClient}
-              onChange={(event) => setSelectedClient(event.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+      <SearchFilterBar
+        className="mb-4"
+        filters={[
+          { key: 'client', label: 'Client locations', value: selectedClient, defaultValue: '', onChange: setSelectedClient, options: [{ value: '', label: 'All client locations' }, ...clientOptions.map((client) => ({ value: String(client.id), label: client.name }))] },
+          { key: 'technician', label: 'Technician coverage', value: selectedTechnician, defaultValue: '', onChange: setSelectedTechnician, options: [{ value: '', label: 'All technicians' }, ...technicianOptions.map((technician) => ({ value: String(technician.id), label: technician.name }))] },
+          { key: 'service', label: 'Service density', value: selectedServiceType, defaultValue: '', onChange: setSelectedServiceType, options: [{ value: '', label: 'All services' }, ...serviceOptions.map((service) => ({ value: String(service.id), label: service.name }))] },
+        ]}
+        onClear={resetFilters}
+        toolbarContent={(
+          <>
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Layers</span>
+            <button
+              type="button"
+              aria-pressed={showServiceDensity}
+              onClick={() => setShowServiceDensity((current) => !current)}
+              className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition ${showServiceDensity ? 'border-brand-200 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
             >
-              <option value="">All clients</option>
-              {clientOptions.map((client) => (
-                <option key={client.id} value={client.id}>{client.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Technician</span>
-            <select
-              value={selectedTechnician}
-              onChange={(event) => setSelectedTechnician(event.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+              <span className={`h-2 w-2 rounded-full ${showServiceDensity ? 'bg-brand-500' : 'bg-slate-300'}`} />
+              Service density
+            </button>
+            <button
+              type="button"
+              aria-pressed={showTechnicianCoverage}
+              onClick={() => setShowTechnicianCoverage((current) => !current)}
+              className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition ${showTechnicianCoverage ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
             >
-              <option value="">All technicians</option>
-              {technicianOptions.map((technician) => (
-                <option key={technician.id} value={technician.id}>{technician.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Service</span>
-            <select
-              value={selectedServiceType}
-              onChange={(event) => setSelectedServiceType(event.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
-            >
-              <option value="">All services</option>
-              {serviceOptions.map((service) => (
-                <option key={service.id} value={service.id}>{service.name}</option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="inline-flex h-11 items-center justify-center gap-1.5 self-end rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            <FiX size={15} />
-            Clear
-          </button>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2 text-sm">
-          <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 font-medium text-slate-700">
-            <input
-              type="checkbox"
-              checked={showServiceDensity}
-              onChange={(event) => setShowServiceDensity(event.target.checked)}
-            />
-            Completed service density
-          </label>
-          <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 font-medium text-slate-700">
-            <input
-              type="checkbox"
-              checked={showTechnicianCoverage}
-              onChange={(event) => setShowTechnicianCoverage(event.target.checked)}
-            />
-            Technician coverage
-          </label>
-        </div>
-      </div>
+              <span className={`h-2 w-2 rounded-full ${showTechnicianCoverage ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+              Technician coverage
+            </button>
+          </>
+        )}
+      />
 
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -291,7 +251,7 @@ export default function CoverageHeatmap() {
               className="h-full w-full"
             >
               <MapResizeController mapCenter={mapCenter} points={mapPoints} />
-              <MapTileLayer defaultLayer="clean2d" />
+              <MapTileLayer />
 
               {showServiceDensity && boundedHeatmapData.map((point, index) => {
                 const serviceBreakdown = getServiceBreakdown(point);

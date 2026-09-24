@@ -9,7 +9,12 @@
     "dev:full": "npm --prefix frontend run dev:full",
     "check:backend": "cd backend && ..\\venv\\Scripts\\python.exe manage.py check",
     "test:backend": "cd backend && ..\\venv\\Scripts\\python.exe manage.py test",
-    "build:frontend": "cd frontend && npm run build"
+    "build:frontend": "cd frontend && npm run build",
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test e2e/01-public-pages.spec.js e2e/02-authentication.spec.js",
+    "quality": "node scripts/release-gate.mjs",
+    "quality:full": "node scripts/release-gate.mjs --full-e2e",
+    "quality:staging": "node scripts/staging-gate.mjs"
   },
   "private": true,
   "devDependencies": {

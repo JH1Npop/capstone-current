@@ -18,7 +18,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-UNVERIFIED_CLIENT_EXPIRY_MINUTES = 5
+UNVERIFIED_CLIENT_EXPIRY_HOURS = int(
+    getattr(django_settings, 'EMAIL_VERIFICATION_EXPIRY_HOURS', 24)
+)
 
 from users.models import AdminSettings, User, UserCapabilityGrant
 from users.serializers import (
@@ -60,7 +62,7 @@ def delete_expired_unverified_clients():
     verification window. This runs opportunistically from auth/admin endpoints
     so local/dev installs do not need a background scheduler.
     """
-    cutoff = timezone.now() - timezone.timedelta(minutes=UNVERIFIED_CLIENT_EXPIRY_MINUTES)
+    cutoff = timezone.now() - timezone.timedelta(hours=UNVERIFIED_CLIENT_EXPIRY_HOURS)
     expired_clients = User.objects.filter(
         role='client',
         email_verified=False,
@@ -83,14 +85,18 @@ def authenticate_user_credentials(identifier, password):
     """
     lookup_value = (identifier or '').strip()
     user = authenticate(username=lookup_value, password=password)
-    if user:
+    if user and user.status == 'active':
         return user
 
     if not lookup_value:
         return None
 
     def authenticate_candidate(candidate):
-        if not candidate or not candidate.is_active:
+        if (
+            not candidate
+            or not candidate.is_active
+            or candidate.status != 'active'
+        ):
             return None
 
         return authenticate(username=candidate.username, password=password)
@@ -115,10 +121,32 @@ def get_password_reset_users(identifier):
         return []
 
     if '@' in lookup_value:
-        return list(User.objects.filter(email__iexact=lookup_value, is_active=True).order_by('id'))
+        return list(User.objects.filter(
+            email__iexact=lookup_value,
+            is_active=True,
+            status='active',
+            email_verified=True,
+        ).order_by('id'))
 
-    user = User.objects.filter(username__iexact=lookup_value, is_active=True).first()
+    user = User.objects.filter(
+        username__iexact=lookup_value,
+        is_active=True,
+        status='active',
+        email_verified=True,
+    ).first()
     return [user] if user else []
+
+
+def ensure_actor_can_manage_account(actor, target_user):
+    """Enforce account hierarchy and prevent self-lockout on management APIs."""
+    if not actor or not getattr(actor, 'is_authenticated', False):
+        raise PermissionError('Authentication is required to manage accounts.')
+    if target_user.pk == actor.pk:
+        raise PermissionError('Use the profile and password endpoints for your own account.')
+    if target_user.role == 'superadmin':
+        raise PermissionError('The superadmin account cannot be modified or deactivated.')
+    if target_user.role == 'admin' and not is_superadmin_role(actor.role):
+        raise PermissionError('Only the superadmin can manage administrator accounts.')
 
 
 def _frontend_base_url_from_request(request=None):

@@ -46,7 +46,7 @@
         <mxCell id="a3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#7c3aed;fontSize=12;fontStyle=1" value="Admin / Superadmin" vertex="1">
           <mxGeometry height="50" width="160" x="30" y="444" as="geometry" />
         </mxCell>
-        <mxCell id="p3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="3.0&lt;br&gt;&lt;b&gt;Manage Ticket Dispatch&lt;/b&gt;&lt;br&gt;approve request, create ticket, assign technician" vertex="1">
+        <mxCell id="p3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="3.0&lt;br&gt;&lt;b&gt;Manage Ticket Dispatch&lt;/b&gt;&lt;br&gt;approve, check overlap, schedule, assign crew" vertex="1">
           <mxGeometry height="88" width="250" x="330" y="425" as="geometry" />
         </mxCell>
         <mxCell id="d4" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D4  Service Ticket, Crew, Status, Progress, and History Records" vertex="1">
@@ -73,13 +73,13 @@
         <mxCell id="ZBTKRSe5-VzeuEa-7p8T-6" edge="1" parent="1" source="p5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="p6" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="p5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="5.0&lt;br&gt;&lt;b&gt;Manage Inventory Usage&lt;/b&gt;&lt;br&gt;requirements, stock availability, reservations, transactions" vertex="1">
+        <mxCell id="p5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="5.0&lt;br&gt;&lt;b&gt;Manage Inventory, Returns and Sales&lt;/b&gt;&lt;br&gt;reserve, issue, two-party return, purchase record" vertex="1">
           <mxGeometry height="96" width="250" x="330" y="735" as="geometry" />
         </mxCell>
         <mxCell id="d6" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D6  Inventory Item, Category, and Requirement Records" vertex="1">
           <mxGeometry height="40" width="440" x="770" y="740" as="geometry" />
         </mxCell>
-        <mxCell id="d7" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D7  Inventory Reservation and Transaction Records" vertex="1">
+        <mxCell id="d7" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D7  Reservation, Transaction, Return, Installed Equipment, and Sales Records" vertex="1">
           <mxGeometry height="40" width="425" x="770" y="790" as="geometry" />
         </mxCell>
         <mxCell id="a6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#7c3aed;fontSize=12;fontStyle=1" value="Client / Admin" vertex="1">
@@ -97,13 +97,13 @@
         <mxCell id="a7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#7c3aed;fontSize=12;fontStyle=1" value="Client / Technician / Admin" vertex="1">
           <mxGeometry height="58" width="160" x="55" y="1085" as="geometry" />
         </mxCell>
-        <mxCell id="p7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="7.0&lt;br&gt;&lt;b&gt;Manage Messages and Notifications&lt;/b&gt;&lt;br&gt;ticket messages, alerts, push/email/sms delivery" vertex="1">
+        <mxCell id="p7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="7.0&lt;br&gt;&lt;b&gt;Manage Messages and Notifications&lt;/b&gt;&lt;br&gt;ticket/support messages, in-app alerts, email delivery" vertex="1">
           <mxGeometry height="100" width="250" x="330" y="1065" as="geometry" />
         </mxCell>
         <mxCell id="d10" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D10  Message Records" vertex="1">
           <mxGeometry height="40" width="245" x="752.5" y="1046" as="geometry" />
         </mxCell>
-        <mxCell id="d11" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D11  Notification, Template, Log, and Firebase Token Records" vertex="1">
+        <mxCell id="d11" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D11  Notification and Customer Support Case Records" vertex="1">
           <mxGeometry height="40" width="475" x="752.5" y="1143" as="geometry" />
         </mxCell>
         <mxCell id="out_all" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#7c3aed;fontSize=12;fontStyle=1" value="Client / Technician / Admin" vertex="1">
