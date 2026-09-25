@@ -578,8 +578,11 @@ def validate_production_settings():
     errors = []
     if DEBUG:
         errors.append('DEBUG must be False')
-    if len(SECRET_KEY) < 50 or SECRET_KEY.startswith(('replace-', 'your-')):
-        errors.append('SECRET_KEY must be a strong, unique value of at least 50 characters')
+    # Render's Blueprint-generated secret is a 256-bit base64 value (normally
+    # 43-44 characters). Accept that cryptographically strong representation
+    # while continuing to reject short and obvious placeholder values.
+    if len(SECRET_KEY) < 43 or SECRET_KEY.startswith(('replace-', 'your-')):
+        errors.append('SECRET_KEY must be a strong, unique value of at least 43 characters')
     if not ALLOWED_HOSTS:
         errors.append('ALLOWED_HOSTS must contain the deployed backend hostname')
     if CORS_ALLOW_ALL_ORIGINS:
