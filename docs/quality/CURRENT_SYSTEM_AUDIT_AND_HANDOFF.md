@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-01 16:12 Asia/Singapore**
+Last updated: **2026-10-01 17:05 Asia/Singapore**
 Current objective: **Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -474,12 +474,12 @@ other repository path must include this living handoff file.
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
 | Branch | `staging-deploy` tracking `origin/staging-deploy` |
-| HEAD | `8a1bbbf Accept Render generated secret key` |
+| HEAD | Release implementation commit `247cf68 Harden staging workflows and role boundaries`, followed only by this required handoff publication record |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | Local `staging-deploy` is aligned with `origin/staging-deploy` before the current uncommitted safety/documentation changes |
-| Worktree | Dirty with the current remote-database guard, staging perimeter repair, tests, environment examples, and documentation |
+| Remote comparison | Local `staging-deploy` contains the validated implementation and final handoff commits pending one push to `origin/staging-deploy` |
+| Worktree | Clean after this required handoff record is committed; ignored local environments, databases, media, build output, and test output remain excluded |
 | Tracked deletions | None |
-| Commit/push status | No commit or push performed for the current safety/documentation changes |
+| Commit/push status | Implementation committed as `247cf68`; final handoff commit prepared for the same release push; push and deployment verification pending |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -1392,6 +1392,7 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date/time (Asia/Singapore) | Change | Main paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-01 17:05 | Prepared the complete validated worktree for staging publication: reviewed environment examples and new tests, staged all 44 intentional paths, ran staged integrity and masked credential scans, and created implementation commit `247cf68` before this final handoff commit | Complete current release worktree; this file | `git diff --cached --check` passed; zero high-confidence secret signatures were found; credential-like assignments were placeholders or synthetic test values; real `.env`, SQLite databases/backups, build output, and Playwright output remained ignored. The release being committed is the same snapshot that passed 445 backend tests, the 2,520-module build, Chromium 201/201, and SQLite integrity checks. |
 | 2026-10-01 16:12 | Re-ran and recorded the complete post-remediation local release gate and read-only development-database integrity checks | This file | Full gate passed 445 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module build, and Chromium 201/201 in 16.4 minutes; SQLite integrity was `ok` with zero foreign-key violations; runtime-source and diff checks passed. No application code, persistent data, remote service, commit, or push changed. |
 | 2026-10-01 15:46 | Corrected two corrupted peso labels in Documents, removed the unauthenticated development-only `test_connection` API action, added backend and browser regressions, and synchronized the current 201-test handoff inventory | `backend/users/{views/auth.py,tests.py}`, `frontend/src/pages/admin/AdminDocuments.jsx`, `e2e/03-admin-workspace.spec.js`, this file | Pre-change full gate passed 444 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module build, and Chromium 201/201. Post-change validation passed 2/2 focused backend tests, Django check, migration drift, the 2,520-module build, and the affected Chromium flow 1/1. |
 | 2026-09-28 14:39 | Removed redundant inner-page wording while preserving canonical shell context, and rewrote wordy feature explanations as short action-oriented guidance across affected admin, technician, and client workspaces | `frontend/src/pages/{admin/{AdminActivityLogs.jsx,AdminClientSupport.jsx,AdminDispatchBoard.jsx},client/{ClientRequestTracking.jsx,ClientServiceRequests.jsx,ClientSupport.jsx},follow_up/FollowUpCases.jsx,technician/{TechnicianJobHistory.jsx,TechnicianJobs.jsx}}`, this file | Final isolated Vite production build passed with 2,520 modules; focused API-backed Chromium flows passed 9/9 for Dispatch Board, After-Sales Cases, Activity Logs, Admin Client Support, technician Jobs/Job History, client New Request/My Requests, and client Client Support. Only the isolated E2E database was migrated/flushed/seeded; development SQLite and Aiven were untouched. Removed 26.38 MiB of regenerated artifacts afterward |
