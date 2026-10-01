@@ -17,7 +17,7 @@ def _period_start(today, days):
 
 class GISDashboardView(viewsets.ViewSet):
     """Geographic Information System (GIS) Dashboard - Mapping component for visualizing geographic service data."""
-    permission_classes = [IsAdminOrSupervisor]
+    permission_classes = [CanViewSupervisorTracking]
 
     @action(detail=False, methods=['get'])
     def dashboard_data(self, request):

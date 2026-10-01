@@ -226,6 +226,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'users.middleware.RoleScopedDjangoAdminMiddleware',
     'users.middleware.ChangeLogUserMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -268,6 +269,17 @@ WSGI_APPLICATION = 'afn_service_management.wsgi.application'
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 DATABASE_ENGINE = os.environ.get('DATABASE_ENGINE', 'sqlite3').lower()
 USE_STAGING_TEST_DATABASE = IS_TEST and env_bool('USE_STAGING_TEST_DATABASE', default=False)
+ALLOW_REMOTE_DATABASE_IN_DEVELOPMENT = env_bool(
+    'ALLOW_REMOTE_DATABASE_IN_DEVELOPMENT',
+    default=False,
+)
+
+if DATABASE_URL and not IS_PRODUCTION and not IS_TEST and not ALLOW_REMOTE_DATABASE_IN_DEVELOPMENT:
+    raise ImproperlyConfigured(
+        'DATABASE_URL is blocked outside production by default so local development cannot '
+        'accidentally use a remote database. Clear DATABASE_URL to use SQLite, or set '
+        'ALLOW_REMOTE_DATABASE_IN_DEVELOPMENT=True only for an intentional remote connection.'
+    )
 
 if USE_STAGING_TEST_DATABASE:
     staging_test_database_url = os.environ.get('STAGING_TEST_DATABASE_URL', '').strip()

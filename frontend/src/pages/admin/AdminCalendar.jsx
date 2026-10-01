@@ -12,7 +12,7 @@ import Layout from '../../components/layout/Layout';
 import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
 import RescheduleTicketModal from '../../components/shared/RescheduleTicketModal';
 import CalendarEventDetailsModal from '../../components/shared/CalendarEventDetailsModal';
-import { formatTicketId } from '../../utils/roleIds';
+import { formatRequestId, formatTicketId } from '../../utils/roleIds';
 import { fetchAdminCalendarEvents, fetchServiceTypes, rescheduleServiceTicket } from '../../api/api';
 import { STATUS_META } from '../../components/ui/StatusBadge';
 
@@ -564,7 +564,7 @@ export default function AdminCalendar() {
                       />
                       <span className="truncate">{event.service_type || 'Service'}</span>
                     </div>
-                    <div className="truncate text-xs text-slate-500">{event.ticket_id ? formatTicketId(event.ticket_id) : `Request #${event.request_id}`} · {event.client || 'Client'}</div>
+                    <div className="truncate text-xs text-slate-500">{event.ticket_id ? formatTicketId(event.ticket_id) : formatRequestId(event.request_id)} · {event.client || 'Client'}</div>
                   </div>
                   <div className="flex min-w-0 items-center gap-2">
                     <FiClock className="shrink-0 text-slate-400" size={14} />

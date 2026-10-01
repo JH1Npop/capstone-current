@@ -102,6 +102,7 @@ export const createCustomerSupportCase = async (caseData) => {
       subject: caseData.subject,
       category: caseData.category,
       priority: caseData.priority,
+      ticket: caseData.ticket_id || null,
     });
     return data;
   } catch (error) {

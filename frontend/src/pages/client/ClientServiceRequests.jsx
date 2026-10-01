@@ -453,7 +453,7 @@ const selectSearchResult = async (result) => {
       )}
 
       <div className="mb-4">
-        <p className="text-sm text-slate-500">Create a service request, choose a service type, and pin the location for dispatch.</p>
+        <p className="text-sm text-slate-500">Choose a service and pin its dispatch location.</p>
       </div>
 
       {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>}

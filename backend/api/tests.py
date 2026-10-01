@@ -414,8 +414,8 @@ class DataPersistenceSmokeTests(APITestCase):
                 service_type=self.service_type,
             ).exists()
         )
-    def test_admin_can_persist_and_remove_technician_skill(self):
-        self.client.force_authenticate(user=self.admin_user)
+    def test_superadmin_can_persist_and_remove_technician_skill(self):
+        self.client.force_authenticate(user=self.superadmin)
 
         response = self.client.post(
             '/api/services/technician-skills/',

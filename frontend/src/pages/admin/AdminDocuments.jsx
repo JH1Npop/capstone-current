@@ -1468,7 +1468,7 @@ function QuotationProposalPreview({
 
       <datalist id="inventory-items">
         {inventoryItems && inventoryItems.map((item) => (
-          <option key={item.id} value={item.name}>{item.sku} - â‚±{Number(item.unit_price).toLocaleString()}</option>
+          <option key={item.id} value={item.name}>{item.sku} - ₱{Number(item.unit_price).toLocaleString()}</option>
         ))}
       </datalist>
 
@@ -1489,7 +1489,7 @@ function QuotationProposalPreview({
             <th>Description</th>
             <th>Unit</th>
             <th>Qty</th>
-            <th>Unit Price (â‚±)</th>
+            <th>Unit Price (₱)</th>
             <th>Total Amount</th>
             <th className="table-actions-header">
               <button type="button" onClick={() => onAddTableRow('bom')} className="table-row-action" title="Add BOM row">

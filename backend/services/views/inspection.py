@@ -2,7 +2,7 @@
 from decimal import Decimal, InvalidOperation
 
 from rest_framework import serializers, viewsets, permissions
-from users.permissions import IsAdmin
+from users.permissions import IsSuperadmin
 
 from services.models import SolarCommissioningChecklist, TurnoverAcceptance, TechnicalDataSheet, InstallationContract
 from services.serializers import SolarCommissioningChecklistSerializer, TurnoverAcceptanceSerializer, TechnicalDataSheetSerializer, InstallationContractSerializer
@@ -16,7 +16,7 @@ class TechnicianSkillViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAdmin()]
+            return [IsSuperadmin()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -83,12 +83,12 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.request.user.role == 'technician' and self.action in ['list', 'retrieve', 'create', 'update', 'partial_update', 'complete']:
+        if getattr(self.request.user, 'role', None) == 'technician' and self.action in ['list', 'retrieve', 'create', 'update', 'partial_update', 'complete']:
             return [CanViewTechnicianChecklist()]
         if self.action in ['create', 'update', 'partial_update', 'complete']:
-            return [IsAdminOrSupervisorOrTechnician()]
+            return [CanManageServiceTickets()]
         if self.action == 'destroy':
-            return [IsAdminOrSupervisor()]
+            return [CanManageServiceTickets()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):

@@ -17,6 +17,10 @@ password recovery, and account-management authority.
   available for safe fields.
 - User deletion endpoints perform reversible deactivation rather than deleting
   business history.
+- Django's built-in administration surface requires an application role of
+  `admin` or `superadmin` in addition to Django's normal staff checks. A stale
+  or inconsistent `is_staff`/`is_superuser` flag must never authenticate a
+  client or technician into `/django-admin` or authorize an existing session.
 
 ## Tokens and sessions
 
@@ -82,6 +86,11 @@ password recovery, and account-management authority.
   to view support, preventing case subjects from leaking to restricted accounts.
 - Direct REST ticket replies to clients are support actions and require
   `communications.support.manage`, matching the WebSocket rule.
+- Legacy operational endpoints follow the same capability split: geographic
+  dashboard data requires `supervisor.tracking.view`; service-location,
+  inspection, and administrator ticket-progress mutations require
+  `services.tickets.manage`; progress reports require `reports.view` or
+  `reports.export`; and technician-skill mutations remain superadmin-only.
 
 Direct regression coverage is in `backend/users/tests.py` and
 `backend/messages_app/tests.py`.

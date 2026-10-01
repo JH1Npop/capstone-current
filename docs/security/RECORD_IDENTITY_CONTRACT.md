@@ -35,6 +35,19 @@ show `REQ` and `TKT` together when both help explain a workflow.
 `TCK` is not assigned to any current data model and must not be used as an alias
 for `TKT`.
 
+## Connected-record navigation
+
+- A client support case that is opened for a ticket persists that ticket as its
+  relationship; the selected ticket must not be treated as display-only form
+  state.
+- Admin links to a specific service ticket use
+  `/admin/service-tickets?ticketId=<numeric-id>`. The Service Tickets workspace
+  validates the parameter and opens the identified record, including completed
+  tickets that are not part of the active queue.
+- Closing the linked ticket dialog removes `ticketId` while preserving any
+  unrelated queue query state. Visible link and dialog labels use `TKT-####`,
+  while the URL and API continue to use the numeric primary key.
+
 ## Formatting and persistence
 
 - Standard business identities use at least four zero-padded digits.

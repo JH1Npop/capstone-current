@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FiMessageCircle, FiRefreshCw, FiSend, FiX } from 'react-icons/fi';
 import { fetchAdminAnalytics, fetchAdminAnalyticsAiSummary, fetchDashboardStats } from '../../api/api';
 import { api } from '../../api/core';
+import { formatTechnicianId } from '../../utils/roleIds';
 
 const QUICK_QUESTIONS = [
   'Analytics summary',
@@ -253,7 +254,7 @@ const ROUTE_HELP = [
 ];
 
 function getTechnicianName(technician) {
-  return technician?.username || technician?.name || technician?.full_name || `Technician #${technician?.technician_id || technician?.id || '-'}`;
+  return technician?.username || technician?.name || technician?.full_name || formatTechnicianId(technician?.technician_id || technician?.id);
 }
 
 function includesAny(text, terms) {

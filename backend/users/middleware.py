@@ -6,6 +6,27 @@ This allows the ChangeLog signals to know WHO made each change.
 from users.signals import set_current_request_meta, set_current_user
 
 
+class RoleScopedDjangoAdminMiddleware:
+    """Keep Django admin sessions inside the application's admin roles."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = getattr(request, 'user', None)
+        if (
+            request.path.startswith('/django-admin')
+            and user
+            and user.is_authenticated
+            and getattr(user, 'role', None) not in {'admin', 'superadmin'}
+        ):
+            from django.http import HttpResponseForbidden
+
+            return HttpResponseForbidden('Django administration requires an administrator role.')
+
+        return self.get_response(request)
+
+
 class ChangeLogUserMiddleware:
     """
     Sets the current request user in thread-local storage so that

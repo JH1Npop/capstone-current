@@ -12,7 +12,7 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi';
-import { formatTicketId } from '../../utils/roleIds';
+import { formatRequestId, formatTicketId } from '../../utils/roleIds';
 
 const Detail = ({ icon: Icon, label, value, wide = false }) => (
   <div className={`rounded-xl border border-slate-200 bg-slate-50 p-3 ${wide ? 'sm:col-span-2' : ''}`}>
@@ -52,7 +52,7 @@ export default function CalendarEventDetailsModal({ event, statusLabel, timeLabe
 
   const canReschedule = Boolean(event.ticket_id) && String(event.status || '').toLowerCase() === 'not started';
   const crew = Array.isArray(event.crew_members) && event.crew_members.length ? event.crew_members.join(', ') : 'No additional crew';
-  const title = event.ticket_id ? formatTicketId(event.ticket_id) : `Request #${event.request_id}`;
+  const title = event.ticket_id ? formatTicketId(event.ticket_id) : formatRequestId(event.request_id);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-3 sm:p-5" onMouseDown={(mouseEvent) => mouseEvent.target === mouseEvent.currentTarget && onClose()}>

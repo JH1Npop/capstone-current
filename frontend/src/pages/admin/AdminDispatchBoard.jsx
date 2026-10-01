@@ -366,7 +366,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
         <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-slate-900">Dispatch workflow</p>
-            <p className="mt-0.5 text-xs text-slate-500">Assign eligible active tickets, prepare equipment, and maintain current technician assignments.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Assign eligible tickets, reserve equipment, and manage technician teams.</p>
           </div>
           <button
             type="button"

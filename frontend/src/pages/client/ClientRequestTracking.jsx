@@ -132,7 +132,7 @@ export default function ClientRequestTracking() {
       <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm text-slate-500">Track active requests, ticket progress, technician assignment, and cancellations.</p>
+            <p className="text-sm text-slate-500">Monitor progress, technician assignment, and cancellations.</p>
           </div>
           <button
             onClick={() => navigate('/client/service-requests')}
@@ -207,7 +207,7 @@ export default function ClientRequestTracking() {
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4">
               <div>
-                <h2 className="text-base font-semibold text-slate-900">Service Requests</h2>
+                <h2 className="text-base font-semibold text-slate-900">Results</h2>
                 <p className="text-sm text-slate-500">
                   Showing {pageStartIndex + 1}-{Math.min(pageStartIndex + ITEMS_PER_PAGE, filteredRequests.length)} of {filteredRequests.length} requests
                 </p>

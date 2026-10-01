@@ -144,7 +144,11 @@ export default function ClientSupport() {
         groupKey: targetCase.group_key,
         text: supportText.trim(),
       });
-      setSupportMessages((current) => [...current, sentMessage]);
+      setSupportMessages((current) => (
+        current.some((message) => String(message.id) === String(sentMessage.id))
+          ? current.map((message) => (String(message.id) === String(sentMessage.id) ? sentMessage : message))
+          : [...current, sentMessage]
+      ));
       setSupportText('');
       setSupportForm({ subject: '', category: 'general', priority: 'normal', ticket_id: '' });
       setMessageNotice('');
@@ -172,7 +176,7 @@ export default function ClientSupport() {
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold text-slate-900">Message Customer Service</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Conversation</h3>
           <button
             type="button"
             onClick={refreshAll}
@@ -218,57 +222,69 @@ export default function ClientSupport() {
 
         {!activeSupportCase ? (
           <div className="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 lg:grid-cols-[1fr_160px_150px_200px]">
-            <input
-              value={supportForm.subject}
-              onChange={(event) => setSupportForm((current) => ({ ...current, subject: event.target.value }))}
-              placeholder={supportCategoryLabels[supportForm.category] || 'Need support'}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            />
-            <select
-              value={supportForm.category}
-              onChange={(event) => {
-                const nextCategory = event.target.value;
-                setSupportForm((current) => {
-                  const currentSubject = current.subject.trim();
-                  const shouldAutoFillSubject = !currentSubject || supportCategorySubjectValues.includes(currentSubject);
-                  return {
-                    ...current,
-                    category: nextCategory,
-                    subject: shouldAutoFillSubject ? supportCategoryLabels[nextCategory] || '' : current.subject
-                  };
-                });
-              }}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            >
-              <option value="general">Need support</option>
-              <option value="billing">Purchase record</option>
-              <option value="schedule">Schedule</option>
-              <option value="technical">Technical</option>
-              <option value="complaint">Service concern</option>
-              <option value="warranty">Warranty</option>
-            </select>
-            <select
-              value={supportForm.priority}
-              onChange={(event) => setSupportForm((current) => ({ ...current, priority: event.target.value }))}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-            <select
-              value={supportForm.ticket_id}
-              onChange={(event) => setSupportForm((current) => ({ ...current, ticket_id: event.target.value }))}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            >
-              <option value="">No related ticket</option>
-              {clientTickets.map((ticket) => (
-                <option key={ticket.id} value={ticket.id}>
-                  {formatTicketId(ticket.id)} ({ticket.service || 'Service'})
-                </option>
-              ))}
-            </select>
+            <label className="grid gap-1 text-xs font-semibold text-slate-600">
+              Subject
+              <input
+                value={supportForm.subject}
+                onChange={(event) => setSupportForm((current) => ({ ...current, subject: event.target.value }))}
+                placeholder={supportCategoryLabels[supportForm.category] || 'Need support'}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-slate-600">
+              Category
+              <select
+                value={supportForm.category}
+                onChange={(event) => {
+                  const nextCategory = event.target.value;
+                  setSupportForm((current) => {
+                    const currentSubject = current.subject.trim();
+                    const shouldAutoFillSubject = !currentSubject || supportCategorySubjectValues.includes(currentSubject);
+                    return {
+                      ...current,
+                      category: nextCategory,
+                      subject: shouldAutoFillSubject ? supportCategoryLabels[nextCategory] || '' : current.subject
+                    };
+                  });
+                }}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                <option value="general">Need support</option>
+                <option value="billing">Purchase record</option>
+                <option value="schedule">Schedule</option>
+                <option value="technical">Technical</option>
+                <option value="complaint">Service concern</option>
+                <option value="warranty">Warranty</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-slate-600">
+              Priority
+              <select
+                value={supportForm.priority}
+                onChange={(event) => setSupportForm((current) => ({ ...current, priority: event.target.value }))}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-slate-600">
+              Related ticket
+              <select
+                value={supportForm.ticket_id}
+                onChange={(event) => setSupportForm((current) => ({ ...current, ticket_id: event.target.value }))}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                <option value="">No related ticket</option>
+                {clientTickets.map((ticket) => (
+                  <option key={ticket.id} value={ticket.id}>
+                    {formatTicketId(ticket.id)} ({ticket.service || 'Service'})
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         ) : (
           <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4">

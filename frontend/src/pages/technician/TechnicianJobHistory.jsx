@@ -222,7 +222,7 @@ export default function TechnicianJobHistory() {
   return (
     <Layout>
       <div className="mb-4">
-        <p className="text-sm text-slate-500">Completed jobs, proof files, reports, and performance history.</p>
+        <p className="text-sm text-slate-500">Review completed work, proof files, reports, and performance.</p>
       </div>
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px]">

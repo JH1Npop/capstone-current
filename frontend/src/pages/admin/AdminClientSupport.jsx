@@ -146,7 +146,11 @@ export default function AdminClientSupport() {
         groupKey: selectedCase.group_key,
         text: replyText.trim(),
       });
-      setMessages((current) => [...current, sentMessage]);
+      setMessages((current) => (
+        current.some((message) => String(message.id) === String(sentMessage.id))
+          ? current.map((message) => (String(message.id) === String(sentMessage.id) ? sentMessage : message))
+          : [...current, sentMessage]
+      ));
       setReplyText('');
       if (selectedCase.status === 'open') {
         await updateStatus('in_review');
@@ -169,7 +173,7 @@ export default function AdminClientSupport() {
       ) : null}
 
       <div className="mb-4">
-        <p className="text-sm text-slate-500">Respond to customer support cases, status updates, and ongoing conversations.</p>
+        <p className="text-sm text-slate-500">Review inquiries, reply to clients, and update case status.</p>
       </div>
 
       <section className="grid gap-4 sm:grid-cols-3">
@@ -187,17 +191,14 @@ export default function AdminClientSupport() {
         </div>
       </section>
 
-      <section className="mt-6 grid h-[34rem] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:h-[40rem] lg:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="min-h-0 flex flex-col border-b border-slate-200 lg:border-b-0 lg:border-r">
+      <section className="mt-6 grid min-w-0 h-[34rem] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:h-[40rem] lg:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className="min-h-0 min-w-0 flex flex-col border-b border-slate-200 lg:border-b-0 lg:border-r">
           <div className="flex-none flex items-center justify-between gap-3 border-b border-slate-100 p-4">
-            <div>
-              <h2 className="text-base font-semibold text-slate-950">Client Support</h2>
-              <p className="text-xs text-slate-500">General inquiries and service questions</p>
-            </div>
+            <h2 className="min-w-0 text-base font-semibold text-slate-950">Cases</h2>
             <button
               type="button"
               onClick={load}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+              className="grid h-9 w-9 flex-none place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
               aria-label="Refresh client support"
             >
               <FiRefreshCw size={15} />
@@ -233,7 +234,7 @@ export default function AdminClientSupport() {
                   key={supportCase.id}
                   type="button"
                   onClick={() => setSelectedCaseId(supportCase.id)}
-                  className={`w-full rounded-xl p-3 text-left transition ${
+                  className={`min-w-0 w-full overflow-hidden rounded-xl p-3 text-left transition ${
                     selectedCase?.id === supportCase.id ? 'bg-sky-50' : 'hover:bg-slate-50'
                   }`}
                 >
@@ -257,7 +258,7 @@ export default function AdminClientSupport() {
           </div>
         </aside>
 
-        <div className="min-h-0 flex h-full flex-col bg-slate-50">
+        <div className="min-h-0 min-w-0 flex h-full flex-col bg-slate-50">
           {selectedCase ? (
             <>
               <header className="border-b border-slate-200 bg-white p-4">
@@ -275,7 +276,7 @@ export default function AdminClientSupport() {
                     {selectedCase.ticket_id ? (
                       <div className="mt-2">
                         <Link
-                          to={`/admin/services/tickets/${selectedCase.ticket_id}`}
+                          to={`/admin/service-tickets?ticketId=${selectedCase.ticket_id}`}
                           className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
                         >
                           🎫 Related to {selectedCase.ticket_code}
@@ -355,7 +356,7 @@ export default function AdminClientSupport() {
                     type="button"
                     onClick={sendReply}
                     disabled={sending || !replyText.trim()}
-                    className="grid h-10 w-10 place-items-center rounded-full bg-sky-600 text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="grid h-10 w-10 flex-none place-items-center rounded-full bg-sky-600 text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                     aria-label="Send reply"
                   >
                     <FiSend size={17} />

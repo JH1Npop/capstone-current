@@ -1,13 +1,13 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-09-25 21:35 Asia/Singapore**
-Current objective: **Finish the synced `staging-deploy` Render rollout by
-unblocking backend startup with validation compatible with Render's 256-bit
-generated `SECRET_KEY`, then
-supply its Aiven/Cloudinary secrets without committing them, and prove the green
-local release candidate against disposable production-shaped staging before
-deployment; keep the local
+Last updated: **2026-10-01 16:12 Asia/Singapore**
+Current objective: **Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
+keep ordinary development isolated on SQLite with a fail-closed guard against
+accidental remote-database use, keep every frontend, API, object, and Django-admin
+entrypoint aligned with application roles and delegated capabilities, and finish the still-pending guarded staging
+gate only after a separate disposable `test_...` PostgreSQL database is
+provisioned; keep the local
 worktree storage lean without deleting
 development data, uploaded media, recovery backups, secrets, source files, or
 installed environments; keep Admin Analytics backed by one permission-scoped,
@@ -28,9 +28,16 @@ and with complete labels instead of clipped chart axes, ellipses, or hidden
 mobile workspace tabs;
 keep record-detail dialogs truthful across admin, client,
 and technician workspaces, including turnover completion semantics, readable
-timeline identities, calendar request notes, display names, and image/video proof;
+timeline identities, calendar request notes, display names, image/video proof,
+and validated record-level support-to-ticket deep links that retain canonical
+identities and can open completed work outside the active queue, keep populated
+support conversations contained at mobile widths, and merge refreshed messages
+without duplicate rendered records;
 make notification-derived sidebar badges acknowledgeable at their destination
-while preserving unrelated unread alerts; make technician job details operationally complete with
+while preserving unrelated unread alerts, and keep its role-specific navigation
+visually distinct with locally bundled, attributed Flaticon UIcons; keep inner
+workspace headings and feature explanations concise where the canonical top bar
+already supplies context; make technician job details operationally complete with
 schedule, scope, client phone, checklist progress, active-versus-cancelled
 equipment clarity, and a state-aware next action; keep technician job completion clear and evidence-backed
 with one consistently named Finish Job action and server-enforced completion
@@ -298,6 +305,13 @@ client-scoped ticket/support summaries, safe credential refusal, and direct
 links to the appropriate client workflows; it does not expose admin analytics.
 Customer-facing support terminology treats the system as a record of delivered
 products/services rather than a billing or payment-processing platform.
+Client support creation now persists an optionally selected related ticket
+instead of discarding it at the frontend API boundary. The admin support link
+opens that exact ticket through the canonical Service Tickets route and a
+validated `ticketId` query, including completed tickets outside the active
+queue; closing the dialog clears only that deep-link parameter. The support
+form's subject, category, priority, and related-ticket controls have persistent
+accessible labels.
 The connected Sales Records flow now provides draft/confirm/void-and-replace
 lifecycle control, snapshots accepted quotations or actual inventory issues,
 retains installed-equipment/warranty evidence, and gives clients an owned
@@ -393,8 +407,8 @@ expand to the complete record. Empty optional route/contact/ownership rows are
 omitted, while active hold, reschedule, and SLA risks consolidate into one
 Needs attention block.
 The new return-control migration `inventory.0007` is applied to the user's local
-development database and the disposable test/E2E databases. It has not been
-applied to production/Aiven; remote application remains pending explicit
+development database, the disposable test/E2E databases, and the staging Aiven
+database. A future separate production target still requires explicit
 deployment authorization. Public client registration now provides persistent
 field labels, field-associated API errors, backend-aligned password guidance,
 a bounded request timeout, provider-neutral verification instructions, and a
@@ -448,7 +462,7 @@ verify the code, then update this file in the same change.
 3. Update this document with every repository change, following `AGENTS.md`.
 4. Record only validations actually executed. Keep older evidence dated if it has not been rerun.
 5. Never put `.env` values, tokens, passwords, database URLs, SMTP credentials, Cloudinary secrets, or API keys here.
-6. Development uses SQLite by default. Production is required to use PostgreSQL, with Aiven supported through `DATABASE_URL` and CA/SSL settings.
+6. Development uses SQLite by default and refuses `DATABASE_URL` unless the explicit `ALLOW_REMOTE_DATABASE_IN_DEVELOPMENT=True` override is set. Production is required to use PostgreSQL, with Aiven supported through `DATABASE_URL` and CA/SSL settings.
 7. Uploaded production media is expected to use Cloudinary unless durable local media is explicitly configured and allowed.
 
 GitHub Actions also enforces rule 3: a commit or pull request that changes any
@@ -459,13 +473,13 @@ other repository path must include this living handoff file.
 | Item | Current state |
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
-| Branch | `main` |
-| HEAD | `69326d1 security: enforce append-only ticket progress access` |
+| Branch | `staging-deploy` tracking `origin/staging-deploy` |
+| HEAD | `8a1bbbf Accept Render generated secret key` |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | `main` is ahead of `origin/main` by one pre-existing local commit |
-| Worktree | Dirty by design, including this handoff and `AGENTS.md` |
+| Remote comparison | Local `staging-deploy` is aligned with `origin/staging-deploy` before the current uncommitted safety/documentation changes |
+| Worktree | Dirty with the current remote-database guard, staging perimeter repair, tests, environment examples, and documentation |
 | Tracked deletions | None |
-| Commit/push status | No commit or push performed for the current audit/fix phases |
+| Commit/push status | No commit or push performed for the current safety/documentation changes |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -499,7 +513,9 @@ production-oriented backend example. Required production categories are:
 - Django: `DJANGO_ENV=production`, strong `SECRET_KEY`, `DEBUG=False`,
   `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, HTTPS settings.
 - PostgreSQL/Aiven: `DATABASE_URL` (preferred), SSL mode, optional Aiven CA
-  certificate/path, connection timeout, and connection lifetime.
+  certificate/path, connection timeout, and connection lifetime. Non-production
+  settings fail closed when `DATABASE_URL` is present unless
+  `ALLOW_REMOTE_DATABASE_IN_DEVELOPMENT=True` is deliberately supplied.
 - Media: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
   `CLOUDINARY_API_SECRET`, unless durable local media is deliberately allowed.
 - Realtime: `USE_REDIS=True` and `REDIS_URL` in production.
@@ -582,7 +598,9 @@ workflows. Documents has a real E2E save/reload path for quotation drafts.
 - Inventory integrity constraints, customizable catalog/category management,
   opening-balance history, retirement safeguards, ticket-reservation context,
   operational desktop/mobile stock controls, and automation safety.
-- Role/capability enforcement across frontend routes, APIs, reporting, and audit logs.
+- Role/capability enforcement across frontend routes, APIs, reporting, audit
+  logs, legacy operational endpoints, and Django's built-in administration
+  surface; client/technician staff flags cannot bypass application roles.
 - Least-privilege separation for the operations dashboard, tracking/coverage,
   completed-job evidence, and technician field inventory, including safe admin
   login fallbacks and capability-scoped dashboard stock alerts.
@@ -592,6 +610,14 @@ workflows. Documents has a real E2E save/reload path for quotation drafts.
   HTTPS/origins, and SMTP.
 - Responsive Documents actions, mobile Technician activity cards, and accessible
   icon-only Service Ticket and Messages actions.
+- Role-specific sidebar destinations use distinct semantic Flaticon UIcons rather than
+  reusing home, settings, clipboard, chart, and file symbols for unrelated
+  workflows. A restrained, static high-contrast color map differentiates
+  workflow types on the dark sidebar, with brighter active and hover treatment;
+  the locally bundled rounded icon font is rendered at 17px, navigation icons
+  remain decorative to assistive technology while their visible labels retain
+  the accessible name, and the required Flaticon attribution is visible in the
+  expanded sidebar footer.
 - Detail-dialog accuracy across roles: turned-over work remains client-complete,
   shared timelines prefer readable service/client labels, request-only calendar
   events retain scheduling notes and route to approvals, job histories preserve
@@ -609,6 +635,9 @@ workflows. Documents has a real E2E save/reload path for quotation drafts.
 - Client support labels use "Purchase record" for the legacy `billing` category;
   the stored value remains unchanged for compatibility and does not represent a
   billing ledger or payment workflow.
+- Client/admin support conversations constrain long case subjects inside both
+  panes at mobile widths, keep refresh/reply controls reachable, and deduplicate
+  a sent message when a concurrent refresh has already returned the same record.
 - Canonical connected Sales Records with one active record per completed ticket,
   accepted-quotation or actual-inventory source snapshots, installed equipment
   and warranty evidence, immutable confirmation, reasoned void/replacement, and
@@ -621,26 +650,29 @@ workflows. Documents has a real E2E save/reload path for quotation drafts.
 ## 7. Schema state
 
 The table below distinguishes migrations already applied to the user's local
-development SQLite database (`backend/db.sqlite3`). Production/Aiven deployment
-status is called out separately where applicable:
+development SQLite database (`backend/db.sqlite3`). As of 2026-09-25, every
+application migration is also applied to the current staging Aiven database.
+That staging state does not authorize migration of any future separate
+production database:
 
 | Migration | Purpose |
 | --- | --- |
 | `inventory.0005_inventory_integrity_constraints` | Inventory balance, reservation, and transaction integrity |
-| `inventory.0006_inventorycategory_inventory_category_name_ci_unique` | Normalized, case-insensitive category-name and SKU identity; applied locally and pending production review |
-| `inventory.0007_equipmentreturnrequest_equipmentreturnrequestitem` | Pending technician return declarations and separate warehouse review evidence; applied locally and to fresh test/E2E databases, pending production/Aiven deployment approval |
+| `inventory.0006_inventorycategory_inventory_category_name_ci_unique` | Normalized, case-insensitive category-name and SKU identity; applied locally and to staging Aiven |
+| `inventory.0007_equipmentreturnrequest_equipmentreturnrequestitem` | Pending technician return declarations and separate warehouse review evidence; applied locally, to fresh test/E2E databases, and to staging Aiven |
 | `services.0053_servicerequest_idempotency_key` | Client-scoped request idempotency key |
 | `services.0054_quotation_reference_and_warranty_terms` | Quotation number and warranty terms |
 | `services.0055_unique_demand_forecast_period` | One forecast per service/period/date |
-| `services.0056_aftersalescaseevent` | Append-only after-sales case activity history; applied locally and pending production deployment review |
-| `services.0057_salesrecord_salesrecordline` | Connected immutable Sales/Purchase Records; applied locally after fresh isolated tests and pending production/Aiven deployment |
-| `history.0005_delete_servicehistory` | Guarded removal of redundant completed-service summary model; applied locally and pending production application |
-| `notifications.0009_remove_notificationlog_notification_and_more` | Guarded removal of unused notification template/delivery-log models; applied locally and pending production application |
-| `users.0038_adminsettings_landing_page_projects` | Admin-managed completed-project portfolio with consent-gated public publication; applied locally and to fresh test/E2E databases, pending production/Aiven deployment approval |
+| `services.0056_aftersalescaseevent` | Append-only after-sales case activity history; applied locally and to staging Aiven |
+| `services.0057_salesrecord_salesrecordline` | Connected immutable Sales/Purchase Records; applied locally after fresh isolated tests and to staging Aiven |
+| `history.0005_delete_servicehistory` | Guarded removal of redundant completed-service summary model; applied locally and to staging Aiven |
+| `notifications.0009_remove_notificationlog_notification_and_more` | Guarded removal of unused notification template/delivery-log models; applied locally and to staging Aiven |
+| `users.0038_adminsettings_landing_page_projects` | Admin-managed completed-project portfolio with consent-gated public publication; applied locally, to fresh test/E2E databases, and to staging Aiven |
 
 Playwright applies migrations only to ignored `backend/db.e2e.sqlite3`, then
-flushes and seeds that isolated database. A production/Aiven migration still
-requires backup, release review, and explicit deployment authorization.
+flushes and seeds that isolated database. Any migration of a future separate
+production database still requires backup, release review, and explicit
+deployment authorization.
 
 ## 8. Validation ledger
 
@@ -648,6 +680,18 @@ Results are evidence, not promises. Rerun checks affected by later changes.
 
 | Date | Validation | Result | Scope/notes |
 | --- | --- | --- | --- |
+| 2026-10-01 | Complete post-remediation revalidation | **Passed** the canonical full release gate: Django check, dependency integrity, migration drift, all 445 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, and Chromium 201/201 in 16.4 minutes | The repaired Documents draft/currency scenario passed both within the ordered full suite and in the prior focused run. A separate read-only development SQLite check returned `integrity_check=ok` with zero foreign-key violations. Runtime source contains neither the removed `test_connection` action nor the corrupted `â‚±` text. `git diff --check` found no whitespace errors; only existing line-ending notices were emitted. The browser gate migrated/flushed/seeded only the isolated E2E SQLite database; development SQLite and remote services were not changed. |
+| 2026-10-01 | Post-remediation currency/API regression | **Passed** 2/2 focused backend tests, Django system check, migration drift, the 2,520-module production build, and focused Chromium 1/1 | The backend regression proves the removed development probe is unavailable to an authenticated user (404) while the unresolved anonymous path remains protected by the generic detail-route boundary (401). The first assertion expected an anonymous 404 and was corrected to represent that router behavior. The browser regression proves Documents contains the real `₱` glyph, contains no `â‚±` mojibake, and still saves/reloads a quotation draft. One initial Playwright file-selector invocation matched no tests; the corrected Windows-safe invocation passed. Browser setup migrated/flushed/seeded only the isolated E2E SQLite database; development SQLite and remote services were untouched. |
+| 2026-10-01 | Whole-system pre-remediation audit | **Passed** Django check, dependency integrity, migration drift, all 444 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, SQLite integrity/foreign-key checks, and Chromium 201/201 in 19.6 minutes | Confirmed all 51 application models/tables, 54 routed pages at desktop and mobile sizes, and the maintained public/authentication/admin/technician/client flows. The subsequent peso-encoding and public-probe removals are narrow changes covered by their own focused regression checks; this full-suite result remains the immediate baseline rather than being represented as post-change evidence. The browser run migrated/flushed/seeded only the isolated E2E SQLite database; development SQLite and remote services were not changed. |
+| 2026-09-28 | Concise authenticated-workspace copy regression | **Passed** final isolated Vite production build with 2,520 modules and focused Chromium 9/9 | Removed redundant inner heading words from Admin Client Support, client Client Support, After-Sales Follow-Ups, and client My Requests. Shortened feature explanations on Admin Client Support, Activity Logs, Dispatch Board, client New Request/My Requests, and technician Jobs/Job History while preserving warnings, requirements, permissions, form labels, record identities, counts, and workflow instructions. The focused admin, technician, and client flows loaded their real API-backed pages successfully. Browser validation migrated, flushed, and seeded only the isolated E2E SQLite database; development SQLite, Aiven, schema, deployment, commit, and push were untouched. The final temporary build, Playwright output, and disposable database were removed afterward (26.38 MiB). |
+| 2026-09-26 | Complete local release gate and populated support regression | **Passed** 444 backend tests with 3 expected PostgreSQL-only skips, 2,520-module production builds, and final uninterrupted Chromium 201/201 in 19.3 minutes | The initial complete browser run passed 200/201 and found one real state-dependent mobile containment defect on Admin Client Support after a second long support case existed: refresh, case, and reply controls were positioned outside the 390px viewport. The narrowed panes/buttons then passed both an isolated audit and an ordered sequence that followed the admin ticket deep link, created the second client case/message, and audited the populated mobile page. That sequence also exposed a duplicate React message key caused by an optimistic send racing a refresh; client and admin message merges now deduplicate by server ID. The strengthened admin test performs a real reply POST and verifies the visible response and automatic status update; the focused support regression passed 3/3 with no duplicate-key warning. A final Vite production build and then the entire 201-scenario browser suite passed. Only the disposable E2E SQLite database was migrated/flushed/seeded; development SQLite, Aiven, schema, migrations, deployment, commit, and push were untouched. The final disposable database and 194.65 MiB of regenerated Playwright output were removed afterward. |
+| 2026-09-26 | Small-flow support/ticket deep-link and identity pass | **Passed** isolated Vite production build with 2,520 modules and final focused Chromium 2/2 | A real client flow created a ticket-linked support case and message with HTTP 201 responses and proved the selected ticket ID reached the backend. A separate admin flow opened the seeded support case, followed its canonical `/admin/service-tickets?ticketId=...` link, loaded a completed ticket outside the active queue, opened the matching `TKT-####` dialog, and removed the deep-link parameter on close. Two intermediate client reruns exposed only strict-locator/string-versus-number test assertions after the real POSTs had already succeeded; both assertions were corrected before the passing final run. The isolated build and test artifacts were removed; no development database, Aiven, schema, migration, deployment, commit, or push changed. |
+| 2026-09-26 | Flaticon sidebar icon integration | **Passed** isolated Vite production build with 2,520 modules; npm install/audit reported 0 vulnerabilities | Replaced only the sidebar icon renderer with the official locally bundled rounded Flaticon UIcons package, increased icon size from 15px to 17px, retained the existing semantic color, role/capability, route, badge, active, hover, and collapsed behavior, and added the required visible attribution. The generated build uses the local WOFF2 asset rather than a third-party runtime request. Temporary build output was safely removed; no backend, schema, database, Aiven, or deployment changed. |
+| 2026-09-26 | Semantic colored sidebar icon pass | **Passed** final isolated Vite production build with 2,519 modules | Replaced ambiguous duplicate icons across admin, technician, and client navigation and added a restrained high-contrast workflow color map with active/hover emphasis, while preserving every label, route, capability check, notification badge, active state, collapsed label, and layout. Icons are marked decorative for assistive technology. The isolated build output was removed afterward; no backend, schema, database, or deployment changed. |
+| 2026-09-26 | Complete backend regression after role/capability hardening | **Passed** Django system check, migration drift, and all 444 backend tests with 3 expected PostgreSQL-only skips | A 137-test focused role suite passed first; the final Django-admin login/session boundary passed 6/6; then final full discovery passed. Direct negative tests prove an Analytics-only admin cannot mutate after-sales, service-location, technician-skill, inspection, or progress records or read tracking/report data; positive tests preserve manager/report/tracking/superadmin authority. Client- or technician-role users with inconsistent Django staff/superuser flags cannot authenticate into or use `/django-admin`. The suites used and destroyed only their test databases; local SQLite business data and Aiven were not changed. |
+| 2026-09-25 | Development database isolation and deployed perimeter repair | **Passed** 2/2 new settings-safety tests, Django system check, migration-drift check, Node syntax check, and the live Render perimeter probe | Development now rejects a populated `DATABASE_URL` by default and accepts it only with the named explicit override. The perimeter probe uses native HTTPS for `TRACE`, because Node `fetch` forbids that method, and allows a configurable 70-second default timeout for free Render cold starts. After the former 10-second timeout was observed, the repaired probe passed liveness/readiness, PostgreSQL, Redis/realtime, Cloudinary storage, HTTPS headers, hostile-origin CORS, anonymous-route denial, and server-side `TRACE` rejection. No Aiven business data was changed. |
+| 2026-09-25 | Live Render/Aiven/Cloudinary staging checkpoint | **Passed** deployed service and dependency readiness at commit `8a1bbbf`; all application migrations applied | Backend and frontend are live on their documented Render staging origins. Readiness returned HTTP 200 with database, cache, realtime, and storage ready. The explicitly authorized duplicate unused inventory category was reconciled before migration completion. This remains disposable staging, not production approval; the complete `quality:staging` database-concurrency gate is pending a separately provisioned `test_...` PostgreSQL database. |
+| 2026-09-25 | Post-deployment codebase/dependency/build audit | **Passed** Django check, migration drift, `pip check`, `pip-audit`, root/frontend npm audits, and an isolated Vite production build of 2,519 modules | Dependency audits reported zero known vulnerabilities. The ordinary `frontend/dist` build encountered a Windows file lock on a generated asset, while the same production build succeeded to a fresh isolated output directory, demonstrating a local filesystem lock rather than a source/build failure. Large Analytics/Documents/admin modules remain maintainability and bundle-splitting opportunities, not current deployment blockers. |
 | 2026-09-25 | Render-generated production `SECRET_KEY` compatibility | **Passed** the production settings boundary: a 44-character 256-bit-base64-shaped key completed `manage.py check`, while a 42-character key failed closed with the intended configuration error | The live Blueprint created its free Key Value, static frontend, and backend resources, but the backend's first build stopped before database/media access because Render's 256-bit generated secret is 43-44 base64 characters and the application required 50. Production validation now accepts at least 43 characters while retaining placeholder rejection. No database migration, data write, or remote environment/secret edit occurred during this validation. |
 | 2026-09-24 | Staging release Git publication | **Passed**; the complete audited snapshot was committed as `6b67c8f` and pushed to new remote branch `origin/staging-deploy` | Pre-commit `git diff --cached --check` passed across 287 paths; the credential-pattern scan found only documented placeholder database URLs, and ignored local `.env`, SQLite, media, backup, Playwright-output, and credential files were not staged. The branch includes the previously green 429-test/201-browser release candidate and valid Render Blueprint. `main` was not changed; no Render service or Aiven migration was created or run. |
 | 2026-09-24 | Free Render staging Blueprint validation | **Passed** Render CLI validation with three planned actions | `render blueprints validate render.yaml -o text` reported `valid: true` for the Singapore-region free Django/Daphne web service, React static site with SPA rewrite, and private Render Key Value instance. Aiven and Cloudinary credentials remain `sync: false`; Aiven certificate verification expects `/etc/secrets/aiven-ca.pem`. Free-tier SMTP, pre-deploy, persistence, sleep, and scheduler limitations are explicit. No Render resource, Aiven schema, migration, credential, commit, or push has been created or changed yet. |
@@ -828,12 +872,9 @@ Results are evidence, not promises. Rerun checks affected by later changes.
 | 2026-08-31 | Pre-structure-cleanup backup verification | Passed | Created ignored 20,545,536-byte SQLite backup and 10,258,152-byte/695-entry source ZIP; SHA-256 calculated for both, required source files were present, and archive inspection found zero `.env`, database, media, dependency, generated-output, or prior-backup entries |
 | 2026-08-31 | First structure-cleanup regression | Passed, 372 discovered | Removed only dead `history` admin/serializer/URL/view modules; 369 runnable backend tests passed with 3 expected PostgreSQL-only skips, focused 22-test retirement/notification/progress suite passed, Django check and migration drift passed |
 
-The current Playwright inventory is 198 tests in 9 files. The most recent full
-uninterrupted suite evidence remains the then-current 193/193 run on 2026-09-02;
-the newly added active-job mobile modal, two public landing interaction
-scenarios, and one Our Work publication scenario have passed in focused runs but
-have not yet been included in another
-full-suite execution. Historical runs on
+The current Playwright inventory is 201 tests in 9 maintained spec files. The
+most recent full uninterrupted suite passed 201/201 on 2026-10-01 in 19.6
+minutes, including the 54-route desktop/mobile quality matrix. Historical runs on
 2026-08-30 completed assertions but hung in Windows web-server teardown. On
 2026-08-31, direct Windows child-process ownership in global setup/teardown
 replaced that fragile boundary and the suite exits normally.
@@ -854,7 +895,9 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 | Priority | Item | Safest next action |
 | --- | --- | --- |
-| High before staging | The free Render Blueprint is synced and its Key Value, static frontend, and backend resources exist. The first backend build stopped on the remediated 50-character `SECRET_KEY` guard before reaching Aiven or Cloudinary; the fix is being published to `staging-deploy`, while the Aiven CA secret file and a successful backend deploy still require confirmation | Allow the Blueprint-managed backend to rebuild from the published fix, confirm `/etc/secrets/aiven-ca.pem` is present, then require readiness and the guarded staging gate before relying on the environment |
+| Low UX maintenance | Concise inner headings such as `Cases`, `Conversation`, and `Results` intentionally rely on the authenticated shell's canonical page title for full context | Keep these panels inside the titled shell; if any becomes reusable or standalone, supply an explicit accessible heading in that new context instead of restoring duplicate visible page titles globally |
+| High before production | The free Render staging Blueprint is live and its database, cache/realtime, and storage readiness checks pass, but the full PostgreSQL concurrency portion of `quality:staging` has not run because no separately scoped disposable `test_...` database exists | Provision a disposable test database with narrowly scoped authority, run the complete guarded gate, and retain the evidence before production approval |
+| High staging account security | A shared reset password was exposed in conversation and existing DRF tokens for two staging accounts remain valid after password changes; several staff/superuser-flagged accounts also retain the `client` role. The application now blocks those roles from `/django-admin` even when flags are inconsistent, but the underlying staging data remains incorrect | Before sharing staging, rotate affected passwords privately, revoke all existing staging API tokens/sessions, and reconcile role plus staff/superuser flags under explicit Aiven-change authorization |
 | Medium staging limitation | Render free web services sleep after idle time, free Key Value is non-persistent, common SMTP ports are blocked, paid cron jobs are omitted, and migrations must run in the single instance's startup command because free services lack pre-deploy commands | Treat this environment as disposable validation only; use logged console email and manual automation checks, then move to paid pre-deploy migrations, deliverable email, persistent Redis, and scheduled commands for production |
 | High container deployment | `frontend/Dockerfile` and `docker-compose.yml` intentionally run Vite's development server with hot reload; they are suitable for local development, not as a hardened/cached production frontend. Docker is also unavailable locally, so neither image was built during the fresh audit | Prefer a managed static host using `frontend/dist` and `_redirects`, or add a multi-stage production frontend image with a real static server and SPA fallback; build/scan the chosen images in CI or staging before release |
 | Low local storage | `backend/local_backups` still occupies about 139.57 MiB, including several 19.59 MiB database snapshots, a 12.22 MiB data-check export, and a 9.78 MiB source archive. These may be intentional recovery evidence and were not deleted. Installed environments also occupy about 357 MiB after bytecode cleanup but are needed for offline development | Review backup retention dates and recovery value before deleting any backup; remove `venv` or dependency trees only when accepting the cost and network requirement to reinstall them |
@@ -862,15 +905,11 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Low media compatibility | Structured proof records now render their declared video type, while older string-only records rely on common file extensions (`mp4`, `webm`, `ogg`, `mov`) to identify videos | Preserve the structured `type` field for new uploads; if uncommon legacy video formats exist, backfill their media type or extend the allowlist after browser-codec validation |
 | Medium before deployment | Registration city/municipality and barangay choices depend on the third-party `psgc.cloud` API; the five CALABARZON provinces remain available locally and address is optional, but the lower-level selectors cannot populate during a provider or CORS outage | Verify the live hierarchy calls from the deployed browser origin; preferably vendor a dated official PSA PSGC CALABARZON snapshot or add a same-origin cached proxy before treating address capture as availability-critical |
 | Low UX density | Route-wide geometry and representative screenshot inspection found consistent shell spacing and no clipped, overlapping, or unlabeled main actions, but the mobile Documents editor and inspection/checklist workflows remain long, information-dense surfaces | Conduct short task-based usability sessions with office and field users; prioritize progressive disclosure or saved server-side drafts only where observed completion time or error rate justifies the workflow change |
-| High before release | Service migrations `0053` through `0056` may still be unapplied to production/Aiven data | Review backup and migration plan; obtain explicit deployment approval before applying to production |
-| High before release | Sales Record migration `0057` is applied locally but not to production/Aiven | Test against staging, back up Aiven, and obtain explicit production deployment authorization before applying it there |
-| High before release | Inventory migration `0006` may still be unapplied to production/Aiven data | Test against a staging copy, review its duplicate/blank identifier prechecks, back up Aiven, then apply with explicit deployment approval |
-| High before production two-party returns | Inventory migration `0007` is applied locally but not to production/Aiven, so the new return-request tables do not yet exist remotely | Review and back up the intended deployment target, apply through the normal production migration step with explicit authorization, then run the technician-submit/admin-verify staging smoke journey |
-| High before schema cleanup deployment | Cleanup migrations `history.0005` and `notifications.0009` are applied locally but not in production; another environment could contain rows even though local tables were empty | Back up the target, verify all three retired tables are empty, export/reconcile any unexpected rows, then obtain explicit approval and apply the guarded migrations |
+| High before a separate production launch | All current migrations are applied to staging Aiven, but no future production database can inherit that evidence or authorization | Back up and preflight the exact production target, review guarded cleanup/inventory migrations against its data, obtain explicit approval, then migrate and smoke-test that target |
 | High before release | Operational commands do not run until an external scheduler is configured | Schedule `run_operational_automations --mode frequent` every 30 minutes and `--mode daily` daily; monitor both and prevent overlapping runs |
 | High before release | Real production secrets/services are not verifiable from examples | Configure host secret store; run production health/deployment checks without logging values |
 | High before release | Local automated checks are not an external penetration test and do not validate the deployed network perimeter, provider IAM, or secret-store configuration | Run a staging security review and authenticated penetration test, then resolve findings before production launch |
-| High before release | The guarded staging gate exists but has not been executed against provisioned PostgreSQL, Redis, Cloudinary, and an HTTPS staging deployment | Provision isolated staging services and a separately scoped `test_...` PostgreSQL database, then run `npm run quality:staging` and retain the result before production approval |
+| High before release | The guarded staging perimeter and dependency readiness pass, but the complete gate has not executed its destructive PostgreSQL concurrency tests | Provision a separately scoped `test_...` PostgreSQL database, then run `npm run quality:staging` and retain the complete result before production approval |
 | Medium | Local `REQ-0040` has historical `TKT-0035` inspection and `TKT-0037` installation records, each with downstream history/inventory data; Sales Record eligibility is currently ticket-based and could expose both completed tickets | Preserve both records; review them with the business owner, then restrict Sales Record preparation to eligible installation delivery tickets before creating records for this request |
 | Medium | Existing development servers can hold stale imported Python code | Restart the intended backend after changes or use isolated E2E ports |
 | Medium | Scheduler execution is verified by tests and script parsing, not by mutating live operational data | Run both modes once in staging after verifying its database/environment target, then confirm logs, notifications, assignments, reminders, and analytics |
@@ -893,6 +932,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Low before scale | Completed-job detail serialization intentionally performs bounded per-page relation reads for crew/inventory correctness; the default is now 10 and an attempted generic prefetch-cache reuse proved unsafe for same-request assignment mutations and was removed | Keep the 10-record default and page-size cap; if measured latency warrants optimization, use endpoint-local immutable snapshots or explicitly clear relation caches after mutations and retain the full assignment/inventory regression suite |
 | Low product boundary | Technicians can view official-document references but cannot generate office-controlled forms because generation remains behind the document-management capability | Keep the technician download labeled Work Summary; add a separate read-only finalized-document delivery contract only if the business approves technician access to official files |
 | Low notification-routing limitation | Contextual sidebar badges and their click-to-read acknowledgement derive destinations from normalized notification title/message/type text because notifications do not yet store an explicit destination field | Keep notification copy aligned with the current routing rules; add a validated `target_route` or destination category to the notification contract before adding many new notification types |
+| Low frontend payload | The official Flaticon rounded UIcons font keeps sidebar assets local and consistent but emits a roughly 386 KB WOFF2 font plus its stylesheet because the package is not glyph-subset during the Vite build | Keep the local package for the current small deployment; if measured first-load performance becomes material, replace it with a licensed, checked-in subset containing only the sidebar glyphs while preserving attribution |
 | Low | The client support assistant is deterministic guidance, not a generative support agent, and reads a snapshot when opened/refreshed | Keep answers curated as workflows change; direct account-specific or unresolved concerns to the existing human support case flow |
 | Low availability boundary | The public and authenticated solar calculators intentionally share published public settings and bundled defaults; during a settings-endpoint outage, either calculator can still operate with defaults that may be older than the latest published configuration | Preserve the resilient fallback, but consider displaying a settings freshness warning before estimates become contractual rather than preliminary |
 | Medium product decision | Sales Records use a read-only accepted-quotation or signed-contract value when available. A reasoned manual reference value remains available for legacy completed work with neither source; it is not independently approved and is not payment evidence | Periodically review manual-value records and decide whether future exports need tax/accounting integration; keep payment collection and accounting state outside this service-management system |
@@ -908,16 +948,20 @@ All paths below are preserved work, not cleanup candidates.
   provider secrets remain dashboard supplied. Production settings accept the
   Blueprint's 43-44-character, 256-bit generated `SECRET_KEY` representation.
 - `.env.example`, `backend/.env.example`, `.gitignore`: local/production
-  environment contracts, including verification-resend cooldown, and ignored
-  local backup/archive boundaries.
+  environment contracts, including the explicit remote-development database
+  override, verification-resend cooldown, and ignored local backup/archive
+  boundaries.
 - `backend/requirements.txt`: pinned backend dependencies, including the audited
   Django 6.0.8 security patch level.
 - `README.md`, `docs/README.md`: repository and documentation entrypoints.
-- `package.json`, `frontend/package.json`, `playwright.config.js`: build/test scripts, unified release/staging commands, and dedicated isolated E2E ports.
+- `package.json`, `frontend/{package.json,package-lock.json}`, `playwright.config.js`:
+  build/test scripts, unified release/staging commands, dedicated isolated E2E
+  ports, and the official Flaticon UIcons frontend dependency.
 - `scripts/release-gate.mjs`: cross-platform fail-fast smoke/full release-gate
   orchestrator, including installed Python dependency integrity.
 - `scripts/{staging-gate.mjs,staging-perimeter-check.mjs}`: explicit-confirmation
-  staging orchestration and read-only deployed perimeter checks.
+  staging orchestration and read-only deployed perimeter checks, including a
+  native-HTTPS `TRACE` probe and free-tier cold-start timeout.
 - `.github/`: time-bounded quality-gate workflow with Python/npm dependency audits.
 - `AGENTS.md`: mandatory living-handoff maintenance instructions.
 - `automation/`: repository-relative frequent/daily operational runners,
@@ -927,8 +971,10 @@ All paths below are preserved work, not cleanup candidates.
 ### Backend platform and health
 
 - `backend/manage.py`: repository-root-safe complete Django test discovery.
-- `backend/afn_service_management/{health.py,settings.py,settings_e2e.py,tests_health.py,websocket_auth.py}`:
+- `backend/afn_service_management/{health.py,settings.py,settings_e2e.py,tests_health.py,test_settings_safety.py,websocket_auth.py}`:
   production fail-fast settings, guarded disposable PostgreSQL test selection,
+  fail-closed development remote-database selection and its regression tests,
+  role-scoped Django-admin middleware registration,
   critical database/Redis/media readiness, isolated E2E DB/local-only E2E media,
   authenticated WebSockets, and validated non-secret tracking-region/retention
   configuration; the global DRF pagination default is 10 records.
@@ -937,6 +983,10 @@ All paths below are preserved work, not cleanup candidates.
   including canonical active-job tracking payloads, GPS freshness/accuracy,
   technician contact and workload context, generated-at metadata, and the
   consent-filtered public completed-project feed.
+- `backend/users/{admin.py,middleware.py,test_admin_role_boundary.py}`: request audit
+  context plus a fail-closed `/django-admin` role boundary that rejects client
+  and technician roles at both login and active-session access even when legacy
+  staff/superuser flags are inconsistent.
 
 ### Inventory
 
@@ -948,7 +998,7 @@ All paths below are preserved work, not cleanup candidates.
   behavior, and regression coverage.
 - `backend/inventory/migrations/{0005_inventory_integrity_constraints.py,0006_inventorycategory_inventory_category_name_ci_unique.py,0007_equipmentreturnrequest_equipmentreturnrequestitem.py}`:
   inventory integrity, case-insensitive catalog identity, and two-party return
-  requests; `0007` is applied locally and pending production/Aiven deployment.
+  requests; `0007` is applied locally and to staging Aiven.
 
 ### Messaging and notifications
 
@@ -960,7 +1010,7 @@ All paths below are preserved work, not cleanup candidates.
   active-recipient handling, per-record SLA alert deduplication, and regression coverage.
 - `backend/notifications/{models.py,serializers.py,admin.py,migrations/0009_remove_notificationlog_notification_and_more.py}`:
   active notification-only surface plus fail-closed retirement of unused template
-  and delivery-log models; cleanup migration is applied locally, not remotely.
+  and delivery-log models; cleanup migration is applied locally and to staging Aiven.
 - `backend/history/{apps.py,models.py,tests.py,migrations/0005_delete_servicehistory.py}`
   and `backend/api/urls.py`: minimal migration shell for the retired redundant
   service-history model/API; dead admin/serializer/URL/view modules were removed,
@@ -972,6 +1022,12 @@ All paths below are preserved work, not cleanup candidates.
   dispatch and lifecycle/SLA validation, including one canonical smart-ranking
   contract, minimum score enforcement, and exact-time collision rejection for
   both background and manual best-match assignment.
+- `backend/services/views/{analytics.py,inspection.py,tickets.py}`,
+  `backend/progress/views.py`, and
+  `backend/services/tests/test_role_capability_hardening.py`: capability-scoped
+  legacy GIS, service-location, inspection, ticket-progress, after-sales, and
+  superadmin technician-skill boundaries with direct allow/deny regression
+  coverage.
 - `backend/services/{apps.py,signals.py,management/commands/reconcile_technician_availability.py}`
   and `backend/services/tests/test_technician_availability_reconciliation.py`:
   model-save coverage plus dry-run-first repair for derived lead/crew technician
@@ -1085,6 +1141,8 @@ All paths below are preserved work, not cleanup candidates.
   canonical client ticket-progress mapping including turned-over completion,
   two-party equipment-return actions,
   field-aware password errors, and a 10-record technician-history fallback.
+- `frontend/src/api/communications.js`: message normalization and support-case
+  creation, including persistence of the client's optional related ticket.
 - `frontend/src/context/{AuthContext.jsx,NotificationContext.jsx}`,
   `frontend/src/components/shared/{ProfileIdentityCard.jsx,ProfileSecuritySection.jsx}`, and
   `frontend/src/utils/profile.js`: immediate authenticated-user reconciliation,
@@ -1102,6 +1160,8 @@ All paths below are preserved work, not cleanup candidates.
   client-safe portal guidance, concise nonduplicated shell context, safe
   page-owned refresh behavior, a centered accessible logout confirmation with
   cancellation focus restoration, mobile assistant clearance, direct role-scoped
+  locally bundled rounded Flaticon semantic colored destination icons with
+  decorative icon-font accessibility treatment and visible attribution,
   Notifications navigation, one shared notification request lifecycle,
   synchronized total unread badges plus contextual work badges that clear and
   persist as read when their destination is opened, notification
@@ -1110,7 +1170,8 @@ All paths below are preserved work, not cleanup candidates.
   and `frontend/src/pages/admin/AdminLandingPage.jsx`: required exception and
   schedule reasons, role-aware two-party ticket equipment submission/review,
   details-first calendar review with request-aware approval routing and
-  image/video-aware inspection evidence, and granular public-site publish/upload controls.
+  image/video-aware inspection evidence, canonical `REQ`/`TKT` event identity,
+  and granular public-site publish/upload controls.
 - `frontend/src/pages/admin/AdminCalendar.jsx`: responsive month/agenda calendar,
   operational summaries and filters, truthful legacy conflict visibility,
   synchronized date navigation, and details-first ticket/request actions.
@@ -1140,7 +1201,8 @@ All paths below are preserved work, not cleanup candidates.
   walk-in intake with explicit review/approval outcomes, grouped service and
   location data, sticky actions, guarded close/clear behavior, and URL-backed
   active/unassigned/missed-dispatch/SLA-warning/SLA-overdue queue views exposed
-  through a labeled responsive selector.
+  through a labeled responsive selector, plus validated `ticketId` deep links
+  that open the exact active or completed record and clear on dialog close.
 - `frontend/src/components/maps/MapTileLayer.jsx` and
   `frontend/src/pages/admin/CoverageHeatmap.jsx`: shared keyless OpenStreetMap
   tiles; removed the CARTO raster dependency after its key-policy change.
@@ -1177,10 +1239,14 @@ All paths below are preserved work, not cleanup candidates.
   ticket-reservation detail, and non-overlapping guarded movement actions.
 - `frontend/src/pages/admin/{AdminActivityLogs.jsx,AdminClientSupport.jsx,AdminDispatchBoard.jsx,AdminDocuments.jsx,AdminInventory.jsx,AdminLandingPage.jsx,AdminOperationsReport.jsx,AdminProfile.jsx,AdminServiceTickets.jsx,AdminServices.jsx,AdminSettings.jsx}`:
   document responsiveness and semantic print previews, numeric-ID-backed ticket
-  prefill, canonical shell titles, consistent workspace spacing/landmarks,
+  prefill, canonical shell titles with concise non-duplicating headings and
+  action-oriented feature explanations,
+  consistent workspace spacing/landmarks,
   safe profile editing and readable permission scope, ticket accessibility,
   complete filtered audit evidence/export, explicit support/ticket/client/inventory
-  identity labels, and unambiguous all-active versus ready-to-assign ticket-count
+  identity labels, exact related-ticket navigation from Client Support,
+  narrow-safe support panes/controls, duplicate-safe sent-message merges, and
+  unambiguous all-active versus ready-to-assign ticket-count
   scope across Service Tickets and Dispatch Board. Dispatch uses a responsive
   three-step select/team/review layout, guards technician actions until a valid
   ticket is selected, retains a compact current-assignments editor, and exposes
@@ -1193,13 +1259,18 @@ All paths below are preserved work, not cleanup candidates.
   completed-record dialog with restrained hierarchy and a persistent footer,
   plus a capability-guarded receiving verification entry point.
 - `frontend/src/pages/follow_up/FollowUpCases.jsx`: paginated after-sales queue,
-  case ownership, evidence-backed resolution/reopening, and activity timeline.
+  concise results heading, case ownership, evidence-backed resolution/reopening,
+  and activity timeline.
 - `frontend/src/pages/client/{ClientDashboard.jsx,ClientNotifications.jsx,ClientProfile.jsx,ClientRequestDetail.jsx,ClientRequestTracking.jsx,ClientServiceHistory.jsx,ClientServiceRequests.jsx,ClientSolarEstimates.jsx,ClientSupport.jsx}`:
-  canonical shell titles, consistent notification/profile workspace spacing,
+  canonical shell titles with concise non-duplicating conversation/results
+  headings and action-oriented feature explanations, consistent
+  notification/profile workspace spacing,
   immediate shell unread-count updates after notification read/delete actions,
   keyboard-focusable dashboard request/ticket entry controls,
   complete client contact/company profile display, and canonical request/ticket identities across submission, tracking, history,
-  detail, estimate, and support workflows; ticket details use the canonical
+  detail, estimate, and support workflows; support-case fields are persistently
+  labeled, their optional related-ticket selection is saved, and concurrent
+  send/refresh results merge by message ID; ticket details use the canonical
   backend stage label/value and no longer describe a status marker as measured
   percent complete. Solar Estimates keeps new calculations within the
   authenticated workspace and inserts successful saves into the visible list.
@@ -1211,7 +1282,8 @@ All paths below are preserved work, not cleanup candidates.
   clearly sourced Recorded contract value display, read-only connected amounts,
   and a reason-required manual fallback only when no source amount exists.
 - `frontend/src/pages/technician/{TechnicianDashboard.jsx,TechnicianJobHistory.jsx,TechnicianJobs.jsx,TechnicianMessages.jsx,TechnicianProfile.jsx,TechnicianSchedule.jsx}`:
-  canonical shell titles, mobile activity layout, message accessibility,
+  canonical shell titles, concise action-oriented feature explanations, mobile
+  activity layout, message accessibility,
   explicit session-scoped dashboard location sharing with no entry-time GPS call,
   safe profile behavior with retained performance/skills, a non-shrinking mobile
   schedule action, and recoverable/paginated completed-work history with connected
@@ -1237,7 +1309,10 @@ All paths below are preserved work, not cleanup candidates.
   role-scoped notification/sidebar-badge coverage, concrete role-dashboard
   content/action/keyboard/GPS-consent assertions, including admin refresh,
   queue totals, request-decision evidence, focus restoration, KPI routing, the
-  canonical technician stage label/value, desktop/mobile active-job modal,
+  canonical technician stage label/value, a deterministic ticket-linked support
+  case plus client-create/admin-deep-link coverage, a real verified admin support
+  reply, duplicate-message warning guards, populated mobile support containment,
+  desktop/mobile active-job modal,
   calendar summary/filter/details behavior, and desktop/mobile public landing CTA,
   section-link, navigation, dependent CALABARZON registration-address behavior
   and unchanged address payload, and Our Work
@@ -1317,6 +1392,15 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date/time (Asia/Singapore) | Change | Main paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-01 16:12 | Re-ran and recorded the complete post-remediation local release gate and read-only development-database integrity checks | This file | Full gate passed 445 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module build, and Chromium 201/201 in 16.4 minutes; SQLite integrity was `ok` with zero foreign-key violations; runtime-source and diff checks passed. No application code, persistent data, remote service, commit, or push changed. |
+| 2026-10-01 15:46 | Corrected two corrupted peso labels in Documents, removed the unauthenticated development-only `test_connection` API action, added backend and browser regressions, and synchronized the current 201-test handoff inventory | `backend/users/{views/auth.py,tests.py}`, `frontend/src/pages/admin/AdminDocuments.jsx`, `e2e/03-admin-workspace.spec.js`, this file | Pre-change full gate passed 444 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module build, and Chromium 201/201. Post-change validation passed 2/2 focused backend tests, Django check, migration drift, the 2,520-module build, and the affected Chromium flow 1/1. |
+| 2026-09-28 14:39 | Removed redundant inner-page wording while preserving canonical shell context, and rewrote wordy feature explanations as short action-oriented guidance across affected admin, technician, and client workspaces | `frontend/src/pages/{admin/{AdminActivityLogs.jsx,AdminClientSupport.jsx,AdminDispatchBoard.jsx},client/{ClientRequestTracking.jsx,ClientServiceRequests.jsx,ClientSupport.jsx},follow_up/FollowUpCases.jsx,technician/{TechnicianJobHistory.jsx,TechnicianJobs.jsx}}`, this file | Final isolated Vite production build passed with 2,520 modules; focused API-backed Chromium flows passed 9/9 for Dispatch Board, After-Sales Cases, Activity Logs, Admin Client Support, technician Jobs/Job History, client New Request/My Requests, and client Client Support. Only the isolated E2E database was migrated/flushed/seeded; development SQLite and Aiven were untouched. Removed 26.38 MiB of regenerated artifacts afterward |
+| 2026-09-26 02:47 | Ran the entire local release gate, fixed the one discovered state-dependent mobile Client Support containment defect, made client/admin support message merges duplicate-safe, and upgraded the nominal admin-response browser check into a real reply/status workflow | `frontend/src/pages/{admin/AdminClientSupport.jsx,client/ClientSupport.jsx}`, `e2e/07-side-flows.spec.js`, this file | Initial gate passed checks, dependency integrity, migration drift, all 444 backend tests (3 expected PostgreSQL skips), and the 2,520-module build; Chromium passed 200/201 and isolated one 390px support overflow. The focused populated-state regression then passed 3/3 with real client and admin HTTP 201 message requests, automatic support status update, no duplicate-key warning, and no clipped mobile controls. Final production build passed, followed by a clean uninterrupted 201/201 Chromium run in 19.3 minutes. The disposable E2E database and 194.65 MiB of regenerated Playwright output were removed; persistent data was untouched |
+| 2026-09-26 01:53 | Closed the small support/identity flow gaps: client support now submits the selected ticket, admin support routes to the real Service Tickets workspace, `ticketId` deep links validate and open the exact active or completed record, dialog close cleans the URL, support inputs have persistent labels, and remaining request/ticket/client/technician fallback copy uses canonical IDs | `frontend/src/{api/communications.js,components/shared/{CalendarEventDetailsModal.jsx,SystemAssistant.jsx},hooks/useTechnicianJobs.js,pages/{admin/{AdminCalendar.jsx,AdminClientSupport.jsx,AdminServiceTickets.jsx},client/ClientSupport.jsx}}`, `e2e/{seed-test-data-exec.py,03-admin-workspace.spec.js,07-side-flows.spec.js}`, `docs/security/RECORD_IDENTITY_CONTRACT.md`, this file | Isolated Vite production build passed with 2,520 modules; final focused Chromium passed 2/2 with actual support/message HTTP 201 responses and completed-ticket deep-link retrieval. Two intermediate client checks failed only on over-broad/type-sensitive assertions after successful product requests and were corrected. Temporary build/test output was safely removed; no development database, Aiven, schema, migration, deployment, commit, or push changed |
+| 2026-09-26 01:24 | Replaced only the role sidebars' Feather icon renderer with the official locally bundled rounded Flaticon UIcons set, raised icon size from 15px to 17px, retained the established route-specific colors and navigation behavior, and added the required expanded-sidebar attribution | `frontend/{package.json,package-lock.json,src/components/layout/Sidebar.jsx}`, this file | Official package installation completed with 0 npm vulnerabilities; isolated Vite production build passed with 2,520 modules and emitted the local font assets; temporary output was safely removed; no backend, schema, database, Aiven, deployment, commit, or push changed |
+| 2026-09-26 00:48 | Reworked sidebar icon semantics and color across every role: distinct, subtly colored symbols now identify analytics/reports, dispatch/tracking/coverage/history, documents/sales, after-sales/support, technician jobs/navigation/checklists, client request/history/purchase flows, and profiles without changing navigation behavior | `frontend/src/components/layout/Sidebar.jsx`, this file | Final isolated Vite production build passed with 2,519 modules; temporary build output was safely removed; no route, permission, badge, backend, schema, database, or deployment changed |
+| 2026-09-26 00:35 | Closed the remaining audited role-alignment gaps: legacy operational APIs now honor delegated admin capabilities, technician-skill mutation is superadmin-only, and `/django-admin` refuses client/technician roles at login and session access even if their Django flags are inconsistent | `backend/{afn_service_management/settings.py,users/{admin.py,middleware.py,test_admin_role_boundary.py},services/{views_follow_up.py,views/{analytics.py,inspection.py,tickets.py},tests/test_role_capability_hardening.py},progress/views.py,api/tests.py}`, authentication/capability contracts, this file | Focused gap suite passed 38/38; expanded role suite passed 137/137; final Django-admin boundary passed 6/6; Django check and migration drift passed; final complete backend discovery passed 444/444 with 3 expected PostgreSQL-only skips. Only disposable test databases were created/destroyed; local SQLite business data and Aiven were untouched |
+| 2026-09-25 23:53 | Protected local development from accidental Aiven/remote database use, repaired the deployed `TRACE` perimeter probe, allowed free Render cold starts, and synchronized the staging checkpoint/risks without changing remote data | `.env.example`, `backend/.env.example`, `backend/afn_service_management/{settings.py,test_settings_safety.py}`, `scripts/staging-perimeter-check.mjs`, `docs/deployment/STAGING_VALIDATION.md`, this file | New settings safety tests passed 2/2; Django check and migration drift passed; Node syntax and diff checks passed; live Render perimeter passed readiness dependencies, HTTPS/security headers, CORS, anonymous denial, and real server-side `TRACE` rejection after the timeout was adjusted. No Aiven mutation, commit, push, or redeploy occurred |
 | 2026-09-25 21:35 | Aligned production secret validation with Render Blueprint's cryptographically strong 256-bit generated key representation after the first live backend build exposed the former 50-character-only assumption; authorized for publication to `staging-deploy` | `backend/afn_service_management/settings.py`, this file | Production-shaped `manage.py check` passed with an exact 44-character key; a 42-character key failed closed with the expected minimum-43 error. No database migration, data write, or remote environment/secret edit occurred |
 | 2026-09-24 13:55 | Published the full audited release candidate and free staging Blueprint to a new GitHub deployment branch without changing `main` | Entire current worktree on `staging-deploy`; this file | Staged diff integrity passed across 287 paths; credential scan found placeholders only; commit `6b67c8f` created and `git push -u origin staging-deploy` succeeded. No Render resource or Aiven migration changed |
 | 2026-09-24 13:38 | Prepared a no-secret free Render staging Blueprint using the user's Aiven PostgreSQL and Cloudinary services, plus Render Key Value and a React static site; documented exact free-tier limitations and the Aiven CA requirement | `render.yaml`, `docs/deployment/STAGING_VALIDATION.md`, this file | `render blueprints validate render.yaml -o text` passed with `valid: true` and three planned actions; no remote service, schema, migration, secret, commit, or push changed |

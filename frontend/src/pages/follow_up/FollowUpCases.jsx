@@ -457,7 +457,7 @@ export default function FollowUpCases() {
       <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white p-0 shadow-sm">
         <div className="border-b border-slate-100 px-5 py-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Follow-Ups ({totalCases})</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Cases ({totalCases})</h2>
             <span className="text-sm text-slate-500">{loading ? 'Loading...' : `${visibleCases.length} shown`}</span>
           </div>
         </div>

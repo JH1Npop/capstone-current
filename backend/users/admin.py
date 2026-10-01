@@ -1,9 +1,27 @@
 from django.contrib import admin
+from django.contrib.admin.forms import AdminAuthenticationForm
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.core.exceptions import ValidationError
 from .models import (
     User, TechnicianProfile, ClientProfile, ManagementProfile,
     UserCapabilityGrant, AdminSettings, ActivityLog, ChangeLog
 )
+
+
+class RoleScopedAdminAuthenticationForm(AdminAuthenticationForm):
+    """Reject staff-flag drift before an admin session is established."""
+
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
+        if getattr(user, 'role', None) not in {'admin', 'superadmin'}:
+            raise ValidationError(
+                self.error_messages['invalid_login'],
+                code='invalid_login',
+                params={'username': self.username_field.verbose_name},
+            )
+
+
+admin.site.login_form = RoleScopedAdminAuthenticationForm
 
 
 class TechnicianProfileInline(admin.StackedInline):

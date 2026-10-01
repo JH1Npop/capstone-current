@@ -480,6 +480,8 @@ test.describe('Admin Workspace - All Pages', () => {
     await firstTicket.click();
     await expect(page.getByText(/document data sources/i)).toBeVisible({ timeout: 15000 });
     await expect(page.getByText(/template defaults.*must be reviewed/i)).toBeVisible();
+    await expect(page.locator('body')).not.toContainText('â‚±');
+    await expect(page.locator('body')).toContainText('₱');
 
     const saveResponse = page.waitForResponse((response) => (
       response.url().includes('/document-draft/')
@@ -788,6 +790,17 @@ test.describe('Admin Workspace - All Pages', () => {
 
   test('3.18 - Admin Client Support page', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/client-support', 'test-results/screenshots/03-admin-client-support.png');
+    const relatedTicketLink = page.getByRole('link', { name: /Related to TKT-\d+/ });
+    await expect(relatedTicketLink).toBeVisible();
+    const linkedTicketCode = (await relatedTicketLink.textContent()).match(/TKT-\d+/)?.[0];
+    const linkedTicketHref = await relatedTicketLink.getAttribute('href');
+    expect(linkedTicketHref).toMatch(/^\/admin\/service-tickets\?ticketId=\d+$/);
+
+    await relatedTicketLink.click();
+    await expect(page).toHaveURL(/\/admin\/service-tickets\?ticketId=\d+$/);
+    await expect(page.getByRole('heading', { name: linkedTicketCode })).toBeVisible();
+    await page.getByRole('button', { name: 'Close ticket actions dialog' }).click();
+    await expect(page).toHaveURL(/\/admin\/service-tickets$/);
   });
 
   test('3.19 - Admin Sales Records page', async ({ page }) => {

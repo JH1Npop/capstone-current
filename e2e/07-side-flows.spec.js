@@ -111,30 +111,63 @@ test.describe('Side Flow - Messaging', () => {
 
 test.describe('Side Flow - Client Support', () => {
   test('7.6 - Client can view support page and create case', async ({ page }) => {
+    const duplicateKeyWarnings = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error' && message.text().includes('same key')) {
+        duplicateKeyWarnings.push(message.text());
+      }
+    });
+
     await seedAuthState(page, clientAuthState);
 
     await page.goto('/client/support');
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
+    await page.getByRole('button', { name: 'Start new case', exact: true }).click();
+
+    await page.getByLabel('Subject').fill('E2E ticket-linked support request');
+    await page.getByLabel('Category').selectOption('warranty');
+    await page.getByLabel('Priority').selectOption('high');
+    await page.getByLabel('Related ticket').selectOption({ index: 1 });
+    const selectedTicketId = await page.getByLabel('Related ticket').inputValue();
+    await page.getByPlaceholder('Write your customer service concern...').fill('Please review the warranty details for this completed service.');
+
+    const createCaseResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/messages/support-cases/')
+      && response.request().method() === 'POST'
+    ));
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    const createdCaseResponse = await createCaseResponse;
+    expect(createdCaseResponse.ok()).toBeTruthy();
+    expect(String(createdCaseResponse.request().postDataJSON().ticket)).toBe(selectedTicketId);
+    await expect(page.getByText(/E2E ticket-linked support request/).first()).toBeVisible();
+    expect(duplicateKeyWarnings).toEqual([]);
 
     await page.screenshot({ path: 'test-results/screenshots/07-06-client-support.png', fullPage: true });
-
-    const createBtn = page.locator(
-      'button:has-text("New"), button:has-text("Create"), button:has-text("Submit"), button:has-text("Contact")'
-    );
-    if (await createBtn.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-      await createBtn.first().click();
-      await page.waitForTimeout(1500);
-      await page.screenshot({ path: 'test-results/screenshots/07-06-create-support-case.png', fullPage: true });
-    }
   });
 
   test('7.7 - Admin can view and respond to client support cases', async ({ page }) => {
+    const duplicateKeyWarnings = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error' && message.text().includes('same key')) {
+        duplicateKeyWarnings.push(message.text());
+      }
+    });
+
     await seedAuthState(page, adminAuthState);
 
     await page.goto('/admin/client-support');
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
+    const replyText = `E2E admin support reply ${Date.now()}`;
+    await page.getByPlaceholder(/Reply to /).fill(replyText);
+    const replyResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/messages/')
+      && !response.url().includes('/support-cases/')
+      && response.request().method() === 'POST'
+    ));
+    await page.getByRole('button', { name: 'Send reply' }).click();
+    expect((await replyResponse).ok()).toBeTruthy();
+    await expect(page.getByText(replyText, { exact: true })).toBeVisible();
+    expect(duplicateKeyWarnings).toEqual([]);
 
     await page.screenshot({ path: 'test-results/screenshots/07-07-admin-client-support.png', fullPage: true });
   });

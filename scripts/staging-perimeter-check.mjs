@@ -1,9 +1,16 @@
+import https from 'node:https';
+
 const baseUrlValue = process.env.STAGING_BASE_URL || '';
 const confirmation = process.env.STAGING_GATE_CONFIRM || '';
 const expectedHost = (process.env.STAGING_EXPECTED_HOST || '').toLowerCase();
+const requestTimeoutMs = Number.parseInt(process.env.STAGING_HTTP_TIMEOUT_MS || '70000', 10);
 
 if (confirmation !== 'disposable-staging') {
   console.error('Set STAGING_GATE_CONFIRM=disposable-staging before probing a staging deployment.');
+  process.exit(2);
+}
+if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 1000) {
+  console.error('STAGING_HTTP_TIMEOUT_MS must be an integer of at least 1000 milliseconds.');
   process.exit(2);
 }
 
@@ -36,10 +43,27 @@ const failures = [];
 async function request(pathname, options = {}) {
   const response = await fetch(new URL(pathname, baseUrl), {
     redirect: 'manual',
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(requestTimeoutMs),
     ...options,
   });
   return response;
+}
+
+function requestStatusWithNativeHttps(pathname, method) {
+  const target = new URL(pathname, baseUrl);
+
+  return new Promise((resolve, reject) => {
+    const request = https.request(target, { method }, (response) => {
+      response.resume();
+      response.on('end', () => resolve(response.statusCode || 0));
+    });
+
+    request.setTimeout(requestTimeoutMs, () => {
+      request.destroy(new Error(`${method} request timed out`));
+    });
+    request.on('error', reject);
+    request.end();
+  });
 }
 
 function expect(condition, message) {
@@ -76,8 +100,10 @@ try {
     expect([401, 403].includes(protectedResponse.status), `${protectedPath} allowed anonymous access (${protectedResponse.status})`);
   }
 
-  const traceResponse = await request('/api/health/liveness/', { method: 'TRACE' });
-  expect([405, 501].includes(traceResponse.status), `TRACE was not rejected (${traceResponse.status})`);
+  // WHATWG fetch intentionally rejects TRACE before it reaches the server. Use
+  // Node's native HTTPS client so this probe verifies the deployed perimeter.
+  const traceStatus = await requestStatusWithNativeHttps('/api/health/liveness/', 'TRACE');
+  expect([405, 501].includes(traceStatus), `TRACE was not rejected (${traceStatus})`);
 } catch (error) {
   failures.push(`perimeter probe failed (${error.name || 'Error'}: ${error.message})`);
 }

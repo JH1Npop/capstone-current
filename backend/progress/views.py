@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import TicketProgress
 from .serializers import TicketProgressSerializer, TicketProgressReportSerializer
-from users.permissions import IsAdmin, IsAdminOrSupervisorOrTechnician
+from users.permissions import CanManageServiceTickets, CanViewReports, CanViewTechnicianJobs
 from users.rbac import is_admin_workspace_role
 
 
@@ -44,9 +44,11 @@ class TicketProgressViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """Allow owned reads while limiting progress creation to field staff."""
         if self.action == 'report':
-            return [IsAdmin()]
+            return [CanViewReports()]
         if self.action == 'create':
-            return [IsAdminOrSupervisorOrTechnician()]
+            if is_admin_workspace_role(getattr(self.request.user, 'role', None)):
+                return [CanManageServiceTickets()]
+            return [CanViewTechnicianJobs()]
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):

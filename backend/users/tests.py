@@ -221,6 +221,19 @@ class RoleClassificationTests(APITestCase):
         self.assertFalse(is_admin_workspace_role('follow_up'))
         self.assertIsNone(get_default_admin_scope_for_role('follow_up'))
 
+    def test_development_connection_probe_is_not_exposed(self):
+        anonymous_response = self.client.get('/api/users/test_connection/')
+        user = User.objects.create_user(
+            username='connection-probe-check',
+            password='Password123!',
+            role='client',
+        )
+        self.client.force_authenticate(user=user)
+        authenticated_response = self.client.get('/api/users/test_connection/')
+
+        self.assertEqual(anonymous_response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(authenticated_response.status_code, status.HTTP_404_NOT_FOUND)
+
 
 class UserLoginTests(APITestCase):
     def setUp(self):

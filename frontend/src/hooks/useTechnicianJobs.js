@@ -8,6 +8,7 @@ import {
   updateJobStatus
 } from '../api/api';
 import { useAuth } from '../context/AuthContext';
+import { formatTicketId } from '../utils/roleIds';
 
 export function useTechnicianJobs() {
   const { user } = useAuth();
@@ -140,7 +141,7 @@ export function useTechnicianJobs() {
     }
 
     if (newStatus === 'in_progress' && activeJob && activeJob.id !== jobId) {
-      setError(`You already have an active job (Ticket #${activeJob.id}). Please complete or hold it first.`);
+      setError(`You already have an active job (${formatTicketId(activeJob.ticketId || activeJob.id)}). Please complete or hold it first.`);
       setTimeout(() => setError(''), 5000);
       return;
     }
@@ -202,7 +203,7 @@ export function useTechnicianJobs() {
       setProofImages([]);
       setCompletionNotes('');
       setMaterialUsage({});
-      setActionMessage(`Job ${completionJob.id} completed successfully.`);
+      setActionMessage(`${formatTicketId(completionJob.ticketId || completionJob.id)} completed successfully.`);
       setTimeout(() => setActionMessage(''), 4000);
     } catch (completeError) {
       setActionMessage(completeError.message || 'Unable to complete job.');

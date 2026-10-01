@@ -530,11 +530,6 @@ class UserViewSet(viewsets.ModelViewSet):
             'available_capabilities': CapabilityDefinitionSerializer(visible_catalog, many=True).data,
         })
 
-    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
-    def test_connection(self, request):
-        """Test endpoint to verify frontend-backend connection"""
-        return Response({'message': 'Backend is connected!', 'status': 'success'})
-
     @action(detail=False, methods=['post'])
     def verify_token(self, request):
         """Verify if token is valid"""

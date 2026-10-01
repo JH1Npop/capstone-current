@@ -2,6 +2,24 @@
 
 Status: Current contract
 
+## Current staging checkpoint
+
+As of 2026-09-25, the Render staging Blueprint is deployed from commit
+`8a1bbbf`:
+
+- backend: `https://afn-capstone-backend-staging.onrender.com`;
+- frontend: `https://afn-capstone-frontend-staging.onrender.com`;
+- the backend readiness endpoint reports the database, cache, realtime, and
+  storage checks ready;
+- all application migrations are applied to the staging Aiven database; and
+- manual HTTPS, security-header, hostile-origin CORS, anonymous-access, and
+  `TRACE` rejection checks passed.
+
+This is a staging checkpoint, not production approval. The complete guarded
+`quality:staging` gate still requires a separately provisioned disposable
+`test_...` PostgreSQL database and has not yet been run end to end. Local
+development remains on SQLite and must not use the staging Aiven database.
+
 Use this gate only against a disposable staging deployment. It verifies the
 production configuration contract, live PostgreSQL/Redis/Cloudinary
 dependencies, real PostgreSQL row-lock behavior, and the deployed HTTPS
@@ -78,6 +96,10 @@ Configure the required values in the process environment, then run:
 ```powershell
 npm run quality:staging
 ```
+
+The perimeter requests allow 70 seconds by default so a sleeping free Render
+service can wake. Set `STAGING_HTTP_TIMEOUT_MS` to a different value (minimum
+1,000 milliseconds) when validating a host with a different startup profile.
 
 The gate performs, in order:
 

@@ -21,11 +21,12 @@ import WalkInRequestDialog from '../../components/shared/WalkInRequestDialog';
 import { EmptyState, ErrorState, LoadingSkeleton } from '../../components/ui/StateDisplay';
 import StatusBadge, { formatStatusLabel } from '../../components/ui/StatusBadge';
 import SLABadge, { formatSlaSummary } from '../../components/ui/SLABadge';
-import { formatClientId, formatTechnicianId, formatTicketId } from '../../utils/roleIds';
+import { formatClientId, formatRequestId, formatTechnicianId, formatTicketId } from '../../utils/roleIds';
 import {
   approveServiceRequest,
   createServiceRequest,
   fetchAdminClients,
+  fetchServiceTicket,
   fetchServiceTicketSummary,
   fetchServiceTickets,
   fetchServiceTypes,
@@ -67,7 +68,7 @@ const timeSlotOptions = [
 
 const getServiceTypeName = (serviceType) => serviceType?.name || serviceType?.service || `Service #${serviceType?.id}`;
 const getClientLabel = (client) => {
-  const mainLabel = client?.name || client?.full_name || client?.username || client?.email || `Client #${client?.id}`;
+  const mainLabel = client?.name || client?.full_name || client?.username || client?.email || formatClientId(client?.id);
   return `${mainLabel}${client?.email ? ` (${client.email})` : ''}`;
 };
 
@@ -162,8 +163,11 @@ export default function AdminServiceTickets() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectingTicket, setRejectingTicket] = useState(false);
   const [documentDownloadId, setDocumentDownloadId] = useState(null);
+  const [linkedTicketLoading, setLinkedTicketLoading] = useState(false);
+  const [linkedTicketError, setLinkedTicketError] = useState('');
   const debouncedWalkInSearchQuery = useDebounce(walkInSearchQuery, 500);
   const requestedQueueFocus = searchParams.get('focus') || 'active';
+  const requestedTicketId = searchParams.get('ticketId');
   const queueFocus = VALID_QUEUE_FOCUSES.has(requestedQueueFocus) ? requestedQueueFocus : 'active';
 
   const loadData = async (isInitial = false) => {
@@ -190,6 +194,51 @@ export default function AdminServiceTickets() {
   };
 
   useEffect(() => { loadData(true); }, [canReviewRequests]);
+
+  useEffect(() => {
+    if (!requestedTicketId || loading) {
+      if (!requestedTicketId) {
+        setLinkedTicketLoading(false);
+        setLinkedTicketError('');
+      }
+      return undefined;
+    }
+
+    const numericTicketId = Number(String(requestedTicketId).replace(/^TKT-/i, ''));
+    if (!Number.isInteger(numericTicketId) || numericTicketId <= 0) {
+      setLinkedTicketLoading(false);
+      setLinkedTicketError(`The ticket link "${requestedTicketId}" is invalid.`);
+      return undefined;
+    }
+
+    const queuedTicket = tickets.find((ticket) => Number(ticket.id) === numericTicketId);
+    if (queuedTicket) {
+      setActionModalTicket(queuedTicket);
+      setLinkedTicketLoading(false);
+      setLinkedTicketError('');
+      return undefined;
+    }
+
+    let cancelled = false;
+    setLinkedTicketLoading(true);
+    setLinkedTicketError('');
+    fetchServiceTicket(numericTicketId)
+      .then((ticket) => {
+        if (!cancelled) setActionModalTicket(ticket);
+      })
+      .catch((ticketError) => {
+        if (!cancelled) {
+          setLinkedTicketError(ticketError.message || `Unable to open ${formatTicketId(numericTicketId)}.`);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLinkedTicketLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, requestedTicketId, tickets]);
 
   useEffect(() => {
     const searchWalkInLocation = async () => {
@@ -328,6 +377,21 @@ export default function AdminServiceTickets() {
     setError('');
   };
 
+  const openTicketActions = (ticket) => {
+    setActionModalTicket(ticket);
+    setLinkedTicketError('');
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set('ticketId', String(ticket.id));
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
+  const closeTicketActions = () => {
+    setActionModalTicket(null);
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('ticketId');
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
   const openTimelineModal = async (ticket) => {
     setTimelineTicket(ticket);
     setTimelineEvents([]);
@@ -348,7 +412,7 @@ export default function AdminServiceTickets() {
     try {
       await approveServiceRequest(ticketId);
       await loadData();
-      setActionModalTicket(null);
+      closeTicketActions();
       setError('');
     } catch (err) {
       setError(err.message || 'Unable to approve ticket.');
@@ -378,7 +442,7 @@ export default function AdminServiceTickets() {
     try {
       await rejectServiceRequest(rejectDecision.id, rejectReason.trim() || 'Request rejected during admin review.');
       await loadData();
-      setActionModalTicket(null);
+      closeTicketActions();
       setRejectDecision(null);
       setRejectReason('');
       setError('');
@@ -462,8 +526,8 @@ export default function AdminServiceTickets() {
       setWalkInDiscardAction(null);
       setWalkInMessage(
         walkInForm.approveNow
-          ? `Walk-in request #${createdRequest.id} approved and added to dispatch.`
-          : `Walk-in request #${createdRequest.id} saved for review.`
+          ? `${formatRequestId(createdRequest.id)} approved and added to dispatch.`
+          : `${formatRequestId(createdRequest.id)} saved for review.`
       );
     } catch (submitError) {
       setWalkInError(submitError.message || 'Unable to create walk-in request.');
@@ -568,6 +632,18 @@ export default function AdminServiceTickets() {
       {walkInMessage && (
         <div role="status" className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
           {walkInMessage}
+        </div>
+      )}
+
+      {linkedTicketLoading && (
+        <div role="status" className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
+          Opening the linked ticket...
+        </div>
+      )}
+
+      {linkedTicketError && (
+        <div role="alert" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+          {linkedTicketError}
         </div>
       )}
 
@@ -762,7 +838,7 @@ export default function AdminServiceTickets() {
                 <div className="mt-4 flex justify-end">
                   <button
                     type="button"
-                    onClick={() => setActionModalTicket(ticket)}
+                    onClick={() => openTicketActions(ticket)}
                     className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition"
                     aria-label={`Open actions for ${formatTicketId(ticket.id)}`}
                   >
@@ -856,7 +932,7 @@ export default function AdminServiceTickets() {
                     <td className="border-b border-slate-100 px-3 py-2 align-middle text-right">
                       <button
                         type="button"
-                        onClick={() => setActionModalTicket(ticket)}
+                        onClick={() => openTicketActions(ticket)}
                         className="inline-flex items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-surface-100 hover:text-slate-700 transition"
                         aria-label={`Open actions for ${formatTicketId(ticket.id)}`}
                       >
@@ -936,7 +1012,7 @@ export default function AdminServiceTickets() {
                 </p>
               </div>
               <button
-                onClick={() => setActionModalTicket(null)}
+                onClick={closeTicketActions}
                 className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
                 aria-label="Close ticket actions dialog"
               >
@@ -974,7 +1050,7 @@ export default function AdminServiceTickets() {
               <div className="mt-4 space-y-2">
                 <button
                   onClick={() => {
-                    setActionModalTicket(null);
+                    closeTicketActions();
                     openTimelineModal(actionModalTicket);
                   }}
                   className="flex w-full items-center justify-between gap-3 rounded-2xl border border-surface-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50"
@@ -1001,7 +1077,7 @@ export default function AdminServiceTickets() {
                 {actionModalTicket.inspection?.id && (
                   <button
                     onClick={() => {
-                      setActionModalTicket(null);
+                      closeTicketActions();
                       setInspectionDetailsTicket(actionModalTicket);
                     }}
                     className="flex w-full items-center justify-between gap-3 rounded-2xl border border-surface-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50"
@@ -1016,7 +1092,7 @@ export default function AdminServiceTickets() {
                 {canManageTickets && (actionModalTicket.status === 'inspection_completed' || actionModalTicket.status === 'Inspection Completed') && (
                   <button
                     onClick={() => {
-                      setActionModalTicket(null);
+                      closeTicketActions();
                       setInspectionReviewTicket(actionModalTicket);
                     }}
                     className="flex w-full items-center justify-between gap-3 rounded-2xl border border-emerald-200 px-4 py-3 text-left text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
@@ -1031,7 +1107,7 @@ export default function AdminServiceTickets() {
                 {canManageTickets && (!actionModalTicket.assignedTech || actionModalTicket.status === 'not_started') && (
                   <button
                     onClick={() => {
-                      setActionModalTicket(null);
+                      closeTicketActions();
                       openRescheduleModal(actionModalTicket);
                     }}
                     className="flex w-full items-center justify-between gap-3 rounded-2xl border border-surface-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50"
@@ -1046,7 +1122,7 @@ export default function AdminServiceTickets() {
                 {canDispatch && !actionModalTicket.assignedTech && (
                   <button
                     onClick={() => {
-                      setActionModalTicket(null);
+                      closeTicketActions();
                       navigate('/admin/dispatch-board');
                     }}
                     className="flex w-full items-center justify-between gap-3 rounded-2xl border border-surface-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50"

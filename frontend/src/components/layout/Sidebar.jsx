@@ -1,25 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import {
-  FiActivity,
-  FiBell,
-  FiCalendar,
-  FiClipboard,
-  FiFileText,
-  FiGlobe,
-  FiHome,
-  FiLayers,
-  FiMap,
-  FiMessageSquare,
-  FiPackage,
-  FiRefreshCw,
-  FiSettings,
-  FiSun,
-    FiTool,
-    FiTrendingUp,
-  FiUser,
-  FiUsers
-} from 'react-icons/fi';
+import '@flaticon/flaticon-uicons/css/regular/rounded.css';
 import { fetchDashboardStats } from '../../api/api';
 import ConfirmationDialog from '../shared/ConfirmationDialog';
 import {
@@ -54,6 +35,49 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 
+const flaticonIcon = (name) => {
+  const FlaticonIcon = ({ size = 17, className = '', ...props }) => (
+    <i
+      className={`fi fi-rr-${name} ${className}`}
+      style={{ fontSize: size, lineHeight: 1 }}
+      {...props}
+    />
+  );
+
+  return FlaticonIcon;
+};
+
+const FiActivity = flaticonIcon('time-past');
+const FiArchive = flaticonIcon('archive');
+const FiBarChart2 = flaticonIcon('chart-histogram');
+const FiBell = flaticonIcon('bell');
+const FiBookOpen = flaticonIcon('book-alt');
+const FiBriefcase = flaticonIcon('briefcase');
+const FiCalendar = flaticonIcon('calendar');
+const FiCheckSquare = flaticonIcon('clipboard-list-check');
+const FiClipboard = flaticonIcon('clipboard-list');
+const FiClock = flaticonIcon('clock');
+const FiCompass = flaticonIcon('compass-alt');
+const FiFileText = flaticonIcon('document');
+const FiGlobe = flaticonIcon('globe');
+const FiHelpCircle = flaticonIcon('interrogation');
+const FiHome = flaticonIcon('home');
+const FiList = flaticonIcon('list');
+const FiMap = flaticonIcon('map');
+const FiMapPin = flaticonIcon('marker');
+const FiMessageSquare = flaticonIcon('comments');
+const FiPackage = flaticonIcon('boxes');
+const FiPieChart = flaticonIcon('chart-pie');
+const FiPlusCircle = flaticonIcon('add');
+const FiRefreshCw = flaticonIcon('refresh');
+const FiSettings = flaticonIcon('settings');
+const FiShoppingBag = flaticonIcon('shopping-bag');
+const FiSun = flaticonIcon('sun');
+const FiTool = flaticonIcon('tools');
+const FiTruck = flaticonIcon('truck-side');
+const FiUser = flaticonIcon('user');
+const FiUsers = flaticonIcon('users');
+
 /* ─── Menu builders (unchanged logic, same as before) ─── */
 
 const getAfterSalesItems = (stats, user) => {
@@ -66,7 +90,7 @@ const getAfterSalesItems = (stats, user) => {
     items.push({
       label: 'After-Sales Cases',
       path: '/admin/after-sales-cases',
-      icon: FiHome
+      icon: FiRefreshCw
     });
   }
 
@@ -92,26 +116,26 @@ const getAdminMenu = (user, afterSalesItems) => {
 
   const overviewItems = [
     canViewDashboard ? { label: 'Dashboard', path: '/admin/dashboard', icon: FiHome } : null,
-    canViewAnalytics ? { label: 'Analytics', path: '/admin/analytics', icon: FiTrendingUp } : null,
-    canViewReports ? { label: 'Reports', path: '/admin/reports', icon: FiFileText } : null
+    canViewAnalytics ? { label: 'Analytics', path: '/admin/analytics', icon: FiBarChart2 } : null,
+    canViewReports ? { label: 'Reports', path: '/admin/reports', icon: FiPieChart } : null
   ].filter(Boolean);
   const serviceOperationsItems = [
     canViewDispatch ? { label: 'Calendar', path: '/admin/calendar', icon: FiCalendar } : null,
     canViewTickets ? { label: 'Service Tickets', path: '/admin/service-tickets', icon: FiClipboard } : null,
-    canViewDispatch ? { label: 'Dispatch Board', path: '/admin/dispatch-board', icon: FiLayers } : null,
-    canViewTracking ? { label: 'Technician Tracking', path: '/admin/technician-tracking', icon: FiMap } : null,
-    canViewTracking ? { label: 'Coverage Heatmap', path: '/admin/coverage-heatmap', icon: FiTrendingUp } : null,
-    canViewJobHistory ? { label: 'Job History', path: '/admin/job-history', icon: FiFileText } : null
+    canViewDispatch ? { label: 'Dispatch Board', path: '/admin/dispatch-board', icon: FiTruck } : null,
+    canViewTracking ? { label: 'Technician Tracking', path: '/admin/technician-tracking', icon: FiMapPin } : null,
+    canViewTracking ? { label: 'Coverage Heatmap', path: '/admin/coverage-heatmap', icon: FiMap } : null,
+    canViewJobHistory ? { label: 'Job History', path: '/admin/job-history', icon: FiArchive } : null
   ].filter(Boolean);
   const serviceSetupItems = [
     canViewServices ? { label: 'Services', path: '/admin/services', icon: FiTool } : null,
     canViewInventory ? { label: 'Inventory', path: '/admin/inventory', icon: FiPackage } : null,
     canViewDocuments ? { label: 'Documents', path: '/admin/documents', icon: FiFileText } : null,
-    canViewDocuments ? { label: 'Sales Records', path: '/admin/sales-records', icon: FiFileText } : null
+    canViewDocuments ? { label: 'Sales Records', path: '/admin/sales-records', icon: FiBookOpen } : null
   ].filter(Boolean);
   const communicationItems = [];
   if (canViewStaffMessages) communicationItems.push({ label: 'Messages', path: '/admin/messages', icon: FiMessageSquare });
-  if (canViewClientSupport) communicationItems.push({ label: 'Client Support', path: '/admin/client-support', icon: FiMessageSquare });
+  if (canViewClientSupport) communicationItems.push({ label: 'Client Support', path: '/admin/client-support', icon: FiHelpCircle });
   communicationItems.push({ label: 'Notifications', path: '/admin/notifications', icon: FiBell });
   const adminControlItems = [];
   const canViewDirectory = canViewAdminUserDirectory(user);
@@ -157,13 +181,13 @@ const getTechnicianMenu = (user) => {
   const accountItems = [];
 
   if (hasAnyCapability(user, TECHNICIAN_DASHBOARD_CAPABILITIES)) homeItems.push({ label: 'Dashboard', path: '/technician/dashboard', icon: FiHome });
-  if (hasAnyCapability(user, TECHNICIAN_JOBS_CAPABILITIES)) workItems.push({ label: 'Jobs', path: '/technician/my-jobs', icon: FiClipboard });
+  if (hasAnyCapability(user, TECHNICIAN_JOBS_CAPABILITIES)) workItems.push({ label: 'Jobs', path: '/technician/my-jobs', icon: FiBriefcase });
   if (hasAnyCapability(user, TECHNICIAN_SCHEDULE_CAPABILITIES)) workItems.push({ label: 'Schedule', path: '/technician/schedule', icon: FiCalendar });
-  if (hasAnyCapability(user, TECHNICIAN_NAVIGATION_CAPABILITIES)) workItems.push({ label: 'Navigation', path: '/technician/map-navigation', icon: FiMap });
-  if (hasAnyCapability(user, TECHNICIAN_CHECKLIST_CAPABILITIES)) workItems.push({ label: 'Checklist', path: '/technician/checklist', icon: FiClipboard });
+  if (hasAnyCapability(user, TECHNICIAN_NAVIGATION_CAPABILITIES)) workItems.push({ label: 'Navigation', path: '/technician/map-navigation', icon: FiCompass });
+  if (hasAnyCapability(user, TECHNICIAN_CHECKLIST_CAPABILITIES)) workItems.push({ label: 'Checklist', path: '/technician/checklist', icon: FiCheckSquare });
   if (hasAnyCapability(user, TECHNICIAN_MESSAGES_CAPABILITIES)) communicationItems.push({ label: 'Messages', path: '/technician/messages', icon: FiMessageSquare });
   communicationItems.push({ label: 'Notifications', path: '/technician/notifications', icon: FiBell });
-  if (hasAnyCapability(user, TECHNICIAN_PROFILE_CAPABILITIES)) accountItems.push({ label: 'Profile', path: '/technician/profile', icon: FiSettings });
+  if (hasAnyCapability(user, TECHNICIAN_PROFILE_CAPABILITIES)) accountItems.push({ label: 'Profile', path: '/technician/profile', icon: FiUser });
 
   return {
     label: '',
@@ -186,19 +210,19 @@ const roleMenu = {
       {
         title: 'Service',
         items: [
-          { label: 'New Request', path: '/client/service-requests', icon: FiClipboard },
+          { label: 'New Request', path: '/client/service-requests', icon: FiPlusCircle },
           { label: 'Solar Estimates', path: '/client/solar-estimates', icon: FiSun },
-          { label: 'My Requests', path: '/client/requests', icon: FiClipboard },
-          { label: 'Service History', path: '/client/service-history', icon: FiFileText },
-          { label: 'Purchase Records', path: '/client/purchase-records', icon: FiPackage },
-          { label: 'Client Support', path: '/client/support', icon: FiMessageSquare }
+          { label: 'My Requests', path: '/client/requests', icon: FiList },
+          { label: 'Service History', path: '/client/service-history', icon: FiClock },
+          { label: 'Purchase Records', path: '/client/purchase-records', icon: FiShoppingBag },
+          { label: 'Client Support', path: '/client/support', icon: FiHelpCircle }
         ]
       },
       {
         title: 'Account',
         items: [
           { label: 'Notifications', path: '/client/notifications', icon: FiBell },
-          { label: 'Profile', path: '/client/profile', icon: FiSettings }
+          { label: 'Profile', path: '/client/profile', icon: FiUser }
         ]
       }
     ]
@@ -216,6 +240,50 @@ const badgeColors = {
   violet:  'bg-violet-400/20 text-violet-300',
   slate:   'bg-slate-400/20 text-slate-300',
 };
+
+const sidebarIconColors = {
+  '/admin/dashboard': 'text-sky-300',
+  '/admin/analytics': 'text-violet-300',
+  '/admin/reports': 'text-cyan-300',
+  '/admin/calendar': 'text-blue-300',
+  '/admin/service-tickets': 'text-amber-300',
+  '/admin/dispatch-board': 'text-orange-300',
+  '/admin/technician-tracking': 'text-emerald-300',
+  '/admin/coverage-heatmap': 'text-teal-300',
+  '/admin/job-history': 'text-indigo-300',
+  '/admin/services': 'text-cyan-300',
+  '/admin/inventory': 'text-yellow-300',
+  '/admin/documents': 'text-fuchsia-300',
+  '/admin/sales-records': 'text-lime-300',
+  '/admin/after-sales-cases': 'text-rose-300',
+  '/admin/messages': 'text-blue-300',
+  '/admin/client-support': 'text-pink-300',
+  '/admin/notifications': 'text-red-300',
+  '/admin/user-management': 'text-cyan-300',
+  '/admin/landing-page': 'text-green-300',
+  '/admin/activity-logs': 'text-purple-300',
+  '/admin/settings': 'text-slate-200',
+  '/admin/profile': 'text-sky-200',
+  '/technician/dashboard': 'text-sky-300',
+  '/technician/my-jobs': 'text-amber-300',
+  '/technician/schedule': 'text-blue-300',
+  '/technician/map-navigation': 'text-emerald-300',
+  '/technician/checklist': 'text-cyan-300',
+  '/technician/messages': 'text-violet-300',
+  '/technician/notifications': 'text-red-300',
+  '/technician/profile': 'text-sky-200',
+  '/client/dashboard': 'text-sky-300',
+  '/client/service-requests': 'text-orange-300',
+  '/client/solar-estimates': 'text-yellow-300',
+  '/client/requests': 'text-cyan-300',
+  '/client/service-history': 'text-violet-300',
+  '/client/purchase-records': 'text-emerald-300',
+  '/client/support': 'text-pink-300',
+  '/client/notifications': 'text-red-300',
+  '/client/profile': 'text-sky-200',
+};
+
+const iconColorForPath = (path) => sidebarIconColors[path] || 'text-brand-100/60';
 
 let cachedAfterSalesStats = null;
 let cachedAfterSalesStatsAt = 0;
@@ -513,7 +581,11 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
                     title={item.title || ''}
                     className={`flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-slate-300 ${collapsed ? 'lg:justify-center lg:px-1.5' : ''}`}
                   >
-                    <Icon size={15} className="shrink-0" />
+                    <Icon
+                      size={17}
+                      className={`shrink-0 opacity-50 ${iconColorForPath(item.path)}`}
+                      aria-hidden="true"
+                    />
                     <span className={`min-w-0 truncate ${collapsed ? 'lg:sr-only' : ''}`}>
                       {item.label}
                     </span>
@@ -547,13 +619,14 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
                     <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-brand-300" />
                   )}
 
-                  <span className="relative grid h-[18px] w-[18px] shrink-0 place-items-center">
+                  <span className="relative grid h-5 w-5 shrink-0 place-items-center">
                     <Icon
-                      size={15}
-                      className={`transition-colors duration-200 ${
+                      size={17}
+                      aria-hidden="true"
+                      className={`transition duration-200 ${iconColorForPath(item.path)} ${
                         itemIsActive
-                          ? 'text-brand-200'
-                          : 'text-brand-100/60 group-hover:text-brand-100'
+                          ? 'brightness-125'
+                          : 'opacity-80 group-hover:opacity-100 group-hover:brightness-110'
                       }`}
                     />
                   </span>
@@ -625,6 +698,15 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
       <span className={collapsed ? 'lg:sr-only' : ''}>Logout</span>
       <span className={`hidden text-[11px] ${collapsed ? 'lg:inline' : ''}`}>Out</span>
     </button>
+
+    <a
+      href="https://www.flaticon.com/uicons"
+      target="_blank"
+      rel="noreferrer"
+      className={`mt-2 block text-center text-[9px] text-brand-100/45 transition hover:text-brand-100/75 ${collapsed ? 'lg:sr-only' : ''}`}
+    >
+      UIcons by Flaticon
+    </a>
   </div>
 </aside>
       {showLogoutConfirm ? (

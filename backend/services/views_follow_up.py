@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from users.permissions import CanAccessAfterSales, CanManageAfterSalesCases, IsAdmin
+from users.permissions import CanAccessAfterSales, CanManageAfterSalesCases
 
 from .maintenance import process_maintenance_alerts
 from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent, MaintenanceSchedule, ServiceTicket
@@ -45,7 +45,7 @@ class FollowUpCaseViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'update', 'partial_update']:
             return [permissions.IsAuthenticated(), CanManageAfterSalesCases()]
         if self.action == 'destroy':
-            return [permissions.IsAuthenticated(), IsAdmin()]
+            return [permissions.IsAuthenticated(), CanManageAfterSalesCases()]
         return [permissions.IsAuthenticated(), CanAccessAfterSales()]
 
     def get_queryset(self):

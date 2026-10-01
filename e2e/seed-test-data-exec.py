@@ -13,6 +13,7 @@ django.setup()
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from inventory.models import InventoryCategory, InventoryItem, InventoryTransaction
+from messages_app.models import CustomerSupportCase
 from services.models import ServiceLocation, ServiceRequest, ServiceRequestService, ServiceTicket, ServiceType
 from users.models import TechnicianProfile, ClientProfile, ManagementProfile, UserCapabilityGrant
 from users.rbac import ROLE_CAPABILITY_MAP
@@ -99,6 +100,15 @@ completed_ticket = ServiceTicket.objects.create(
     status='Completed',
     completed_date=timezone.now(),
     completion_notes='E2E completed service fixture.',
+)
+CustomerSupportCase.objects.create(
+    client=client,
+    ticket=completed_ticket,
+    group_key='customer_support_client_e2e_linked_ticket',
+    subject='E2E linked completed-ticket support case',
+    category='warranty',
+    priority='normal',
+    status='open',
 )
 equipment_category = InventoryCategory.objects.create(
     name='E2E Field Equipment',

@@ -139,7 +139,7 @@ export default function TechnicianJobs() {
     <Layout>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm text-slate-500">Active assignments, job actions, checklists, and navigation links.</p>
+          <p className="text-sm text-slate-500">Open assignments, complete field steps, and navigate to each site.</p>
         </div>
         <Link
           to="/technician/job-history"

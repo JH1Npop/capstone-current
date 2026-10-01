@@ -501,7 +501,7 @@ export default function AdminActivityLogs() {
     <Layout>
       <section className="space-y-5">
         <div>
-          <p className="text-sm text-slate-500">Activity timeline for user actions, ticket updates, and system events.</p>
+          <p className="text-sm text-slate-500">Review user actions, ticket updates, and system events.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">

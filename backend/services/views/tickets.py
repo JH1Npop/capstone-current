@@ -219,7 +219,7 @@ class ServiceLocationViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAdminOrSupervisor()]
+            return [CanManageServiceTickets()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
