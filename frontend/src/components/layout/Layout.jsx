@@ -76,7 +76,7 @@ export default function Layout({ children }) {
             canCollapseSidebar={collapsibleWorkspace}
           />
 
-          <main className={`min-h-0 flex-1 touch-pan-y overflow-visible px-2 pb-4 pt-1 sm:px-4 md:px-5 lg:overflow-y-auto lg:overscroll-contain lg:px-6 lg:pb-6 lg:pt-1 ${adminWorkspace ? 'admin-workspace-density' : ''} ${showAssistant ? 'max-sm:pr-16' : ''}`}>
+          <main className={`min-h-0 flex-1 touch-pan-y overflow-visible px-2 pb-4 pt-1 sm:px-4 md:px-5 lg:overflow-y-auto lg:overscroll-contain lg:px-6 lg:pb-6 lg:pt-1 ${adminWorkspace ? 'admin-workspace-density' : ''} ${showAssistant ? 'max-sm:pb-24' : ''}`}>
             <div className="mx-auto w-full max-w-[1500px]">
               <OnlineStatusBanner />
               {children}

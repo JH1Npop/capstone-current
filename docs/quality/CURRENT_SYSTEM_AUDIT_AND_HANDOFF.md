@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-07 23:15 Asia/Singapore**
+Last updated: **2026-10-07 23:48 Asia/Singapore**
 Current objective: **Complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -220,8 +220,9 @@ job record open.
 A restrained UI-consistency pass now keeps one compact shell context header,
 removes the unsafe/redundant global hard-refresh action, reduces double workspace
 padding on profile/settings/editor surfaces, uses valid single-main landmark
-structure, shortens the clipped after-sales navigation label, and reserves mobile
-space for the assistant without redesigning role workflows. Logout confirmation
+structure, shortens the clipped after-sales navigation label, and gives mobile
+content its full width while reserving bottom safe space for the assistant without
+redesigning role workflows. Logout confirmation
 now uses the shared centered dialog instead of cramped controls inside the
 sidebar, with a clear consequence message, safe Cancel action, pending state,
 Escape/focus-trap behavior from the shared dialog, and focus restoration to the
@@ -474,12 +475,12 @@ other repository path must include this living handoff file.
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
 | Branch | `staging-deploy` tracking `origin/staging-deploy` |
-| HEAD | Runtime release `247cf68 Harden staging workflows and role boundaries`; staging publication record `6d28304`; current tip adds only this post-deployment evidence |
+| HEAD | `fa121a2 Add operational readiness and administrator MFA`, deployed to staging before the current responsive worktree change |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | Local and `origin/staging-deploy` are synchronized after publishing this documentation-only deployment-evidence successor |
-| Worktree | Intentionally dirty with the current uncommitted MFA/observability/operations-readiness phase; ignored local environments, databases, media, build output, and test output remain excluded |
+| Remote comparison | Local and `origin/staging-deploy` are synchronized at `fa121a2`; the current responsive change is not committed or pushed |
+| Worktree | Intentionally dirty only with the current mobile assistant-clearance responsiveness fix, its focused regression, and this handoff update; ignored local environments, databases, media, build output, and test output remain excluded |
 | Tracked deletions | None |
-| Commit/push status | Runtime commit `247cf68` and handoff commit `6d28304` were previously pushed and deployed. The current MFA/operations-readiness work is uncommitted, unpushed, and undeployed. |
+| Commit/push status | `fa121a2` is pushed and live on staging with its request-ID fingerprint and all readiness dependencies healthy. The current responsive fix is uncommitted, unpushed, and undeployed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -673,7 +674,7 @@ production database:
 | `history.0005_delete_servicehistory` | Guarded removal of redundant completed-service summary model; applied locally and to staging Aiven |
 | `notifications.0009_remove_notificationlog_notification_and_more` | Guarded removal of unused notification template/delivery-log models; applied locally and to staging Aiven |
 | `users.0038_adminsettings_landing_page_projects` | Admin-managed completed-project portfolio with consent-gated public publication; applied locally, to fresh test/E2E databases, and to staging Aiven |
-| `users.0039_user_mfa_fields` | Administrator MFA enabled state, encrypted TOTP secret, hashed one-time recovery codes, and confirmation timestamp; exercised only on fresh isolated test databases, not applied to development SQLite or staging |
+| `users.0039_user_mfa_fields` | Administrator MFA enabled state, encrypted TOTP secret, hashed one-time recovery codes, and confirmation timestamp; applied to fresh isolated test databases and staging by the successful `fa121a2` startup, but not applied to development SQLite |
 
 Playwright applies migrations only to ignored `backend/db.e2e.sqlite3`, then
 flushes and seeds that isolated database. Any migration of a future separate
@@ -686,6 +687,7 @@ Results are evidence, not promises. Rerun checks affected by later changes.
 
 | Date | Validation | Result | Scope/notes |
 | --- | --- | --- | --- |
+| 2026-10-07 | Mobile dashboard width regression | **Passed** production build and focused Chromium 1/1 at 390x844 | Replaced the assistant's permanent 4rem mobile right gutter with 6rem of bottom safe space, restoring the dashboard KPI cards to at least 350px width without horizontal overflow. The final Playwright screenshot was visually inspected and confirmed full-width cards, readable snapshot copy, and reachable controls. The test migrated/flushed/seeded only isolated E2E SQLite; development SQLite and staging data were untouched. |
 | 2026-10-07 | Pre-publication regression and live dependency verification | **Passed the canonical local quality gate and live Render readiness checks** | Django check, dependency integrity, and migration drift passed; all 453 backend tests passed with 3 expected PostgreSQL-only skips; the 2,520-module production build passed; Chromium smoke passed 16/16. The live frontend returned HTTP 200 and the backend readiness response reported `ready` for database, cache, realtime, and storage after the free-tier service wake-up. Development SQLite remained unmigrated for `users.0039` and was not changed; Render startup is responsible for applying the migration after publication. |
 | 2026-10-01 | MFA, observability, and operations-readiness validation | **Passed Django check, dependency integrity, migration drift, all 453 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, Chromium smoke 16/16, and passing evidence for all 201 maintained browser scenarios** | Focused coverage proves enrollment, encrypted-at-rest secret handling, token withholding until MFA, one-time recovery, guarded disable/token revocation, role boundary, request IDs, and JSON logs. Node load-script syntax and both PowerShell backup/restore parser checks passed; `pip check` reported no broken requirements and confirmed `cryptography 49.0.0`. The exhaustive browser run passed 200/201 over 1.8 hours; the only miss was a 180-second `beforeEach` authentication-state timeout with no product assertion reached. Its captured context showed only that setup timeout, and the exact technician location-sharing scenario passed immediately on focused rerun in 6.9 seconds (1/1). Browser runs migrated/flushed/seeded only isolated E2E SQLite. No persistent database, backup, restore, load target, staging service, persistent migration, commit, push, or deployment was touched. The attempted local Bandit install was not authorized, so no static application scan result is claimed. External/provider gates still prevent a production-ready claim. |
 | 2026-10-01 | Live Render staging deployment verification | **Passed** exact-commit deployment, dependency/security perimeter, and release-specific frontend/backend fingerprints | `origin/staging-deploy` received runtime commit `247cf68` and handoff commit `6d28304`. Render auto-deployed exact commit `6d28304`: the frontend reached `live` at 17:13 and backend at 17:14 Asia/Singapore. The read-only perimeter probe passed liveness/readiness, PostgreSQL, cache, realtime, Cloudinary storage, HTTPS headers, hostile-origin CORS, anonymous denial, and server-side `TRACE` rejection. The retired `/api/users/test_connection/` no longer returns its former public success response (anonymous request returned 401), and the deployed environment-specific Documents chunk contains `Unit Price (₱)` with no `â‚±` mojibake. No staging business data was intentionally mutated beyond the deployment start command's no-op application migration check; the guarded destructive/concurrency gate remains pending a separate disposable `test_...` PostgreSQL database. |
@@ -1194,7 +1196,8 @@ All paths below are preserved work, not cleanup candidates.
   gutter, capability-aligned routes/navigation, role-separated assistants,
   client-safe portal guidance, concise nonduplicated shell context, safe
   page-owned refresh behavior, a centered accessible logout confirmation with
-  cancellation focus restoration, mobile assistant clearance, direct role-scoped
+  cancellation focus restoration, full-width mobile content with bottom assistant
+  clearance, direct role-scoped
   locally bundled rounded Flaticon semantic colored destination icons with
   decorative icon-font accessibility treatment and visible attribution,
   Notifications navigation, one shared notification request lifecycle,
@@ -1432,6 +1435,7 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date/time (Asia/Singapore) | Change | Main paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-07 23:48 | Removed the assistant's page-wide mobile right gutter and moved its clearance to the bottom so the admin dashboard uses the full narrow viewport | `frontend/src/components/layout/Layout.jsx`, `e2e/08-responsive-accessibility.spec.js`, this file | Production build passed with 2,520 modules; focused isolated Chromium passed 1/1 at 390x844, asserted no horizontal overflow and a KPI-card width of at least 350px, and produced a visually inspected screenshot. |
 | 2026-10-07 23:15 | Revalidated the complete pending industry-readiness release and confirmed the existing staging dependencies were operational before publication | Complete pending MFA, observability, operations-readiness, environment, test, and documentation worktree; this file | Canonical quality gate passed 453 backend tests, build, and Chromium smoke 16/16; live frontend returned HTTP 200 and live backend readiness reported database, cache, realtime, and storage ready. Publication and exact-commit deployment verification follow this entry. |
 | 2026-10-01 20:50 | Added and fully locally exercised the repository-controlled industry-readiness baseline: optional administrator TOTP MFA and recovery codes, correlated structured logs, guarded PostgreSQL backup/restore tooling, bounded read-only load smoke, and incident/privacy operating contracts | MFA backend migration/API/tests; login/profile frontend; observability settings/tests; environment examples; operations scripts/docs; root package scripts; this file | Django check, dependency integrity, and migration drift passed; all 453 backend tests passed with 3 expected PostgreSQL-only skips; production build passed with 2,520 modules; browser smoke passed 16/16. Exhaustive browser passed 200/201, with the sole setup-timeout scenario then passing focused 1/1; thus every maintained scenario has current passing evidence, without misrepresenting the run as uninterrupted 201/201. Node and PowerShell syntax checks passed. SAST, disposable PostgreSQL concurrency/restore, live load, SMTP, alert, UAT, penetration, persistent migration, commit, push, and deployment evidence remain pending and are not claimed. |
 | 2026-10-01 17:39 | Published the clean validated release to `origin/staging-deploy`, verified both Render services live on `6d28304`, and recorded the live dependency/security and release-fingerprint evidence | This file; remote `staging-deploy`; Render staging frontend/backend | Git push advanced the branch from `8a1bbbf` to `6d28304`; Render reported both deployments `live`; the staging perimeter passed; the backend retired-probe response and deployed Documents chunk confirm the new runtime is active. This successor changes documentation only. |

@@ -99,6 +99,12 @@ test.describe('Responsive and keyboard smoke coverage', () => {
       await page.goto(workspace.path);
       await expect(page.locator('main')).toBeVisible({ timeout: 30000 });
       await expectNoHorizontalOverflow(page);
+      if (workspace.role === 'admin') {
+        const firstStatCard = page.locator('main .stat-card').first();
+        await expect(firstStatCard).toBeVisible();
+        const cardBox = await firstStatCard.boundingBox();
+        expect(cardBox?.width).toBeGreaterThanOrEqual(350);
+      }
       await expectKeyboardFocus(page);
     });
   }
