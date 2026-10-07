@@ -14,7 +14,8 @@
     "test:e2e:smoke": "playwright test e2e/01-public-pages.spec.js e2e/02-authentication.spec.js",
     "quality": "node scripts/release-gate.mjs",
     "quality:full": "node scripts/release-gate.mjs --full-e2e",
-    "quality:staging": "node scripts/staging-gate.mjs"
+    "quality:staging": "node scripts/staging-gate.mjs",
+    "load:smoke": "node scripts/load-smoke.mjs"
   },
   "private": true,
   "devDependencies": {

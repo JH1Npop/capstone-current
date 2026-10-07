@@ -135,6 +135,9 @@ if not SECRET_KEY:
     else:
         raise ValueError('SECRET_KEY environment variable must be set in production')
 
+MFA_ENCRYPTION_KEY = os.environ.get('MFA_ENCRYPTION_KEY', '').strip()
+MFA_ISSUER_NAME = os.environ.get('MFA_ISSUER_NAME', 'AFN Service Management').strip() or 'AFN Service Management'
+
 DEFAULT_ALLOWED_HOSTS = 'localhost,127.0.0.1,testserver' if DEBUG else ''
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', DEFAULT_ALLOWED_HOSTS)
 
@@ -220,6 +223,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'afn_service_management.observability.RequestObservabilityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -513,20 +517,31 @@ EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS = int(
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or os.environ.get('EMAIL_HOST_USER') or 'AFN Service <noreply@afnservice.com>'
 
-# Logging
+# Logging. JSON stdout is the production default and can be ingested by most
+# hosted log/alert providers without coupling the application to one vendor.
+LOG_FORMAT = os.environ.get('LOG_FORMAT', 'json' if IS_PRODUCTION else 'text').strip().lower()
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
+            'format': '{levelname} {asctime} request_id={request_id} {module} {message}',
             'style': '{',
+        },
+        'json': {
+            '()': 'afn_service_management.observability.JsonLogFormatter',
+        },
+    },
+    'filters': {
+        'request_id': {
+            '()': 'afn_service_management.observability.RequestIdFilter',
         },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
+            'formatter': 'json' if LOG_FORMAT == 'json' else 'verbose',
+            'filters': ['request_id'],
         },
     },
     'root': {

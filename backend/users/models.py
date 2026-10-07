@@ -82,6 +82,10 @@ class User(AbstractUser):
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
     pending_email = models.EmailField(blank=True, null=True)
     pending_email_verification_sent_at = models.DateTimeField(blank=True, null=True)
+    mfa_enabled = models.BooleanField(default=False)
+    mfa_secret_encrypted = models.TextField(blank=True, default='')
+    mfa_recovery_code_hashes = models.JSONField(blank=True, default=list)
+    mfa_confirmed_at = models.DateTimeField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)

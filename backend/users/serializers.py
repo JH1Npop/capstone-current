@@ -95,11 +95,12 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'email', 'first_name', 'middle_name', 'last_name',
                   'role', 'phone', 'landline', 'address', 'status', 'is_active',
                   'email_verified', 'pending_email', 'profile_image', 'profile_image_url',
+                  'mfa_enabled',
                   'capabilities', 'created_at', 'updated_at',
                   'current_latitude', 'current_longitude', 'is_available',
                   'skill_level', 'max_daily_assignments',
                   'technician_profile', 'client_profile', 'management_profile']
-        read_only_fields = ['id', 'created_at', 'updated_at', 'pending_email', 'profile_image_url']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'pending_email', 'profile_image_url', 'mfa_enabled']
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -224,6 +225,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class UserLoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True)
+    mfa_code = serializers.CharField(required=False, allow_blank=True, max_length=32, trim_whitespace=True)
 
 
 class ChangeLogSerializer(serializers.ModelSerializer):

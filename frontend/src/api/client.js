@@ -245,6 +245,49 @@ export const changePassword = async (passwordData) => {
   }
 };
 
+export const getMfaStatus = async () => {
+  try {
+    const { data } = await api.get('/users/mfa_status/');
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load MFA status.'));
+  }
+};
+
+export const startMfaSetup = async (currentPassword) => {
+  try {
+    const { data } = await api.post('/users/mfa_setup/', { current_password: currentPassword });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to start MFA setup.'));
+  }
+};
+
+export const confirmMfaSetup = async ({ currentPassword, setupToken, code }) => {
+  try {
+    const { data } = await api.post('/users/mfa_confirm/', {
+      current_password: currentPassword,
+      setup_token: setupToken,
+      code,
+    });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to confirm MFA setup.'));
+  }
+};
+
+export const disableMfa = async ({ currentPassword, code }) => {
+  try {
+    const { data } = await api.post('/users/mfa_disable/', {
+      current_password: currentPassword,
+      code,
+    });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to disable MFA.'));
+  }
+};
+
 export const fetchRequestDetail = async (requestId, options = {}) => {
   try {
     const entityType = options.entityType || 'request';

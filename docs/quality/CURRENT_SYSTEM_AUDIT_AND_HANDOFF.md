@@ -1,8 +1,8 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-01 17:39 Asia/Singapore**
-Current objective: **Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
+Last updated: **2026-10-07 23:15 Asia/Singapore**
+Current objective: **Complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
 entrypoint aligned with application roles and delegated capabilities, and finish the still-pending guarded staging
@@ -477,9 +477,9 @@ other repository path must include this living handoff file.
 | HEAD | Runtime release `247cf68 Harden staging workflows and role boundaries`; staging publication record `6d28304`; current tip adds only this post-deployment evidence |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
 | Remote comparison | Local and `origin/staging-deploy` are synchronized after publishing this documentation-only deployment-evidence successor |
-| Worktree | Clean after this deployment-evidence record is committed; ignored local environments, databases, media, build output, and test output remain excluded |
+| Worktree | Intentionally dirty with the current uncommitted MFA/observability/operations-readiness phase; ignored local environments, databases, media, build output, and test output remain excluded |
 | Tracked deletions | None |
-| Commit/push status | Runtime commit `247cf68` and handoff commit `6d28304` were pushed; both Render services deployed `6d28304` live; this documentation-only successor records that verification |
+| Commit/push status | Runtime commit `247cf68` and handoff commit `6d28304` were previously pushed and deployed. The current MFA/operations-readiness work is uncommitted, unpushed, and undeployed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -491,7 +491,8 @@ The real `.env` exists locally but must not be inspected merely to populate docs
 | --- | --- | --- |
 | Frontend | React 18, React Router 7, Vite 8, Tailwind-style utilities, Recharts, Leaflet | `frontend/src`, `frontend/vite.config.js` |
 | Backend | Django 6, Django REST Framework, Channels/Daphne | `backend/afn_service_management`, backend apps |
-| Authentication | DRF token authentication with custom user roles/capability grants | `backend/users`, `frontend/src/context`, `frontend/src/rbac.js` |
+| Authentication | DRF token authentication with custom user roles/capability grants; optional RFC 6238 TOTP MFA and one-time recovery codes for admin/superadmin accounts | `backend/users`, `frontend/src/context`, `frontend/src/rbac.js` |
+| Observability | Correlated `X-Request-ID` responses and text/JSON stdout request logging; external ingestion and alerts remain provider configuration | `backend/afn_service_management/observability.py`, `settings.py` |
 | Realtime | Django Channels; in-memory locally, Redis required for production | `backend/*/consumers.py`, `backend/afn_service_management/settings.py` |
 | Development database | SQLite by default | `backend/db.sqlite3` through `DATABASE_ENGINE=sqlite3` |
 | Browser-test database | Isolated SQLite, flushed and reseeded by Playwright global setup | `backend/db.e2e.sqlite3`, `settings_e2e.py`, `e2e/global-setup.js` |
@@ -499,7 +500,7 @@ The real `.env` exists locally but must not be inspected merely to populate docs
 | Production media | Cloudinary when credentials are configured | `settings.py`, upload validation helpers |
 | Static files | WhiteNoise/Django static root; Vite production assets | backend settings and root/frontend build scripts |
 | Deployment forms | Docker Compose, backend Dockerfile/Procfile, PythonAnywhere build, production checklist | root, `backend`, `docs/deployment` |
-| CI/release gate | Time-bounded GitHub Actions living-handoff, backend, frontend, and browser smoke jobs; local smoke/full release commands | `.github/workflows/quality.yml`, `scripts/release-gate.mjs`, root `package.json` |
+| CI/release gate | Time-bounded GitHub Actions living-handoff, backend, frontend, dependency-audit, and browser smoke jobs; local smoke/full/staging commands plus bounded read-only load smoke | `.github/workflows/quality.yml`, `scripts/*.mjs`, root `package.json` |
 
 Backend domain apps are `users`, `services`, `inventory`, `messages_app`,
 `notifications`, `progress`, `history`, and `api`. Document templates live in
@@ -520,6 +521,10 @@ production-oriented backend example. Required production categories are:
   `CLOUDINARY_API_SECRET`, unless durable local media is deliberately allowed.
 - Realtime: `USE_REDIS=True` and `REDIS_URL` in production.
 - Email: SMTP backend, host/port/TLS-or-SSL, user, app password, and default sender.
+- Security/observability: a stable `MFA_ENCRYPTION_KEY` should be configured
+  before real administrator enrollment (otherwise encryption derives from
+  `SECRET_KEY`), plus `MFA_ISSUER_NAME` and production-default JSON stdout via
+  `LOG_FORMAT=json`.
 - Optional integrations: route-service and analytics/AI API keys only when those
   features are enabled.
 - Technician location: `TRACKING_REGION_NAME`, validated south/west/north/east
@@ -668,6 +673,7 @@ production database:
 | `history.0005_delete_servicehistory` | Guarded removal of redundant completed-service summary model; applied locally and to staging Aiven |
 | `notifications.0009_remove_notificationlog_notification_and_more` | Guarded removal of unused notification template/delivery-log models; applied locally and to staging Aiven |
 | `users.0038_adminsettings_landing_page_projects` | Admin-managed completed-project portfolio with consent-gated public publication; applied locally, to fresh test/E2E databases, and to staging Aiven |
+| `users.0039_user_mfa_fields` | Administrator MFA enabled state, encrypted TOTP secret, hashed one-time recovery codes, and confirmation timestamp; exercised only on fresh isolated test databases, not applied to development SQLite or staging |
 
 Playwright applies migrations only to ignored `backend/db.e2e.sqlite3`, then
 flushes and seeds that isolated database. Any migration of a future separate
@@ -680,6 +686,8 @@ Results are evidence, not promises. Rerun checks affected by later changes.
 
 | Date | Validation | Result | Scope/notes |
 | --- | --- | --- | --- |
+| 2026-10-07 | Pre-publication regression and live dependency verification | **Passed the canonical local quality gate and live Render readiness checks** | Django check, dependency integrity, and migration drift passed; all 453 backend tests passed with 3 expected PostgreSQL-only skips; the 2,520-module production build passed; Chromium smoke passed 16/16. The live frontend returned HTTP 200 and the backend readiness response reported `ready` for database, cache, realtime, and storage after the free-tier service wake-up. Development SQLite remained unmigrated for `users.0039` and was not changed; Render startup is responsible for applying the migration after publication. |
+| 2026-10-01 | MFA, observability, and operations-readiness validation | **Passed Django check, dependency integrity, migration drift, all 453 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, Chromium smoke 16/16, and passing evidence for all 201 maintained browser scenarios** | Focused coverage proves enrollment, encrypted-at-rest secret handling, token withholding until MFA, one-time recovery, guarded disable/token revocation, role boundary, request IDs, and JSON logs. Node load-script syntax and both PowerShell backup/restore parser checks passed; `pip check` reported no broken requirements and confirmed `cryptography 49.0.0`. The exhaustive browser run passed 200/201 over 1.8 hours; the only miss was a 180-second `beforeEach` authentication-state timeout with no product assertion reached. Its captured context showed only that setup timeout, and the exact technician location-sharing scenario passed immediately on focused rerun in 6.9 seconds (1/1). Browser runs migrated/flushed/seeded only isolated E2E SQLite. No persistent database, backup, restore, load target, staging service, persistent migration, commit, push, or deployment was touched. The attempted local Bandit install was not authorized, so no static application scan result is claimed. External/provider gates still prevent a production-ready claim. |
 | 2026-10-01 | Live Render staging deployment verification | **Passed** exact-commit deployment, dependency/security perimeter, and release-specific frontend/backend fingerprints | `origin/staging-deploy` received runtime commit `247cf68` and handoff commit `6d28304`. Render auto-deployed exact commit `6d28304`: the frontend reached `live` at 17:13 and backend at 17:14 Asia/Singapore. The read-only perimeter probe passed liveness/readiness, PostgreSQL, cache, realtime, Cloudinary storage, HTTPS headers, hostile-origin CORS, anonymous denial, and server-side `TRACE` rejection. The retired `/api/users/test_connection/` no longer returns its former public success response (anonymous request returned 401), and the deployed environment-specific Documents chunk contains `Unit Price (₱)` with no `â‚±` mojibake. No staging business data was intentionally mutated beyond the deployment start command's no-op application migration check; the guarded destructive/concurrency gate remains pending a separate disposable `test_...` PostgreSQL database. |
 | 2026-10-01 | Complete post-remediation revalidation | **Passed** the canonical full release gate: Django check, dependency integrity, migration drift, all 445 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, and Chromium 201/201 in 16.4 minutes | The repaired Documents draft/currency scenario passed both within the ordered full suite and in the prior focused run. A separate read-only development SQLite check returned `integrity_check=ok` with zero foreign-key violations. Runtime source contains neither the removed `test_connection` action nor the corrupted `â‚±` text. `git diff --check` found no whitespace errors; only existing line-ending notices were emitted. The browser gate migrated/flushed/seeded only the isolated E2E SQLite database; development SQLite and remote services were not changed. |
 | 2026-10-01 | Post-remediation currency/API regression | **Passed** 2/2 focused backend tests, Django system check, migration drift, the 2,520-module production build, and focused Chromium 1/1 | The backend regression proves the removed development probe is unavailable to an authenticated user (404) while the unresolved anonymous path remains protected by the generic detail-route boundary (401). The first assertion expected an anonymous 404 and was corrected to represent that router behavior. The browser regression proves Documents contains the real `₱` glyph, contains no `â‚±` mojibake, and still saves/reloads a quotation draft. One initial Playwright file-selector invocation matched no tests; the corrected Windows-safe invocation passed. Browser setup migrated/flushed/seeded only the isolated E2E SQLite database; development SQLite and remote services were untouched. |
@@ -896,6 +904,12 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 | Priority | Item | Safest next action |
 | --- | --- | --- |
+| High before deploying this phase | The current MFA/observability/schema/UI changes pass all 453 backend tests, production build, browser smoke, and every maintained browser scenario (200/201 exhaustive plus the sole setup-timeout scenario 1/1 focused), but the phase has not been migrated on staging, committed, pushed, or deployed | Review the diff and secret scan, then explicitly authorize commit/push/deployment; configure a stable MFA encryption key, back up, and approve the staging migration separately |
+| High operations evidence | Backup and guarded restore tooling now exists, but no real PostgreSQL backup or disposable `test_...` restore drill has been performed | Configure encrypted off-host retention, create a backup, restore it only to a disposable guarded database, validate representative data and recovery time, and record the evidence |
+| High account rollout | Administrator MFA is optional and existing admin accounts remain unenrolled; a stable `MFA_ENCRYPTION_KEY` is not yet provider-configured | Configure a stable key in the secret store before enrollment, deploy the migration, enroll each administrator individually, store recovery codes securely, and verify recovery/disable ownership procedures |
+| High monitoring rollout | Structured correlated logs exist, but no external log retention, uptime check, alert recipient, or escalation route is configured | Connect stdout to the selected provider, create readiness/5xx/auth/latency/database/email alerts, name on-call recipients, and exercise one alert before production |
+| High security assurance | Dependency audits are active, but static application scanning is not part of the verified gate; the local Bandit install needed to validate it was not authorized, and no penetration test has run | Approve and baseline a pinned SAST tool or enable current GitHub CodeQL where the repository plan supports it; triage findings and run an authenticated staging penetration test |
+| Medium upload assurance | File signatures, type allowlists, and size limits exist, but uploads are not malware-scanned | Add a provider or isolated scanner with quarantine/fail-closed behavior if the business accepts untrusted customer/staff files in production |
 | Low UX maintenance | Concise inner headings such as `Cases`, `Conversation`, and `Results` intentionally rely on the authenticated shell's canonical page title for full context | Keep these panels inside the titled shell; if any becomes reusable or standalone, supply an explicit accessible heading in that new context instead of restoring duplicate visible page titles globally |
 | High before production | The free Render staging Blueprint is live and its database, cache/realtime, and storage readiness checks pass, but the full PostgreSQL concurrency portion of `quality:staging` has not run because no separately scoped disposable `test_...` database exists | Provision a disposable test database with narrowly scoped authority, run the complete guarded gate, and retain the evidence before production approval |
 | High staging account security | A shared reset password was exposed in conversation and existing DRF tokens for two staging accounts remain valid after password changes; several staff/superuser-flagged accounts also retain the `client` role. The application now blocks those roles from `/django-admin` even when flags are inconsistent, but the underlying staging data remains incorrect | Before sharing staging, rotate affected passwords privately, revoke all existing staging API tokens/sessions, and reconcile role plus staff/superuser flags under explicit Aiven-change authorization |
@@ -950,10 +964,11 @@ All paths below are preserved work, not cleanup candidates.
   Blueprint's 43-44-character, 256-bit generated `SECRET_KEY` representation.
 - `.env.example`, `backend/.env.example`, `.gitignore`: local/production
   environment contracts, including the explicit remote-development database
-  override, verification-resend cooldown, and ignored local backup/archive
-  boundaries.
+  override, verification-resend cooldown, MFA encryption/issuer and log-format
+  settings, and ignored local backup/archive boundaries.
 - `backend/requirements.txt`: pinned backend dependencies, including the audited
-  Django 6.0.8 security patch level.
+  Django 6.0.8 security patch level and direct `cryptography` declaration for
+  MFA secret encryption.
 - `README.md`, `docs/README.md`: repository and documentation entrypoints.
 - `package.json`, `frontend/{package.json,package-lock.json}`, `playwright.config.js`:
   build/test scripts, unified release/staging commands, dedicated isolated E2E
@@ -963,6 +978,11 @@ All paths below are preserved work, not cleanup candidates.
 - `scripts/{staging-gate.mjs,staging-perimeter-check.mjs}`: explicit-confirmation
   staging orchestration and read-only deployed perimeter checks, including a
   native-HTTPS `TRACE` probe and free-tier cold-start timeout.
+- `scripts/load-smoke.mjs`: HTTPS-by-default, read-only liveness/readiness load
+  probe with bounded request/concurrency inputs and p95/error thresholds.
+- `scripts/{postgres-backup.ps1,postgres-restore-drill.ps1}` and `backups/.gitkeep`:
+  custom-format PostgreSQL backup plus checksum, and destructive restore guarded
+  to an explicitly confirmed disposable database named `test_...`.
 - `.github/`: time-bounded quality-gate workflow with Python/npm dependency audits.
 - `AGENTS.md`: mandatory living-handoff maintenance instructions.
 - `automation/`: repository-relative frequent/daily operational runners,
@@ -970,6 +990,10 @@ All paths below are preserved work, not cleanup candidates.
   logging, and deployment instructions.
 
 ### Backend platform and health
+
+- `backend/afn_service_management/{observability.py,test_observability.py,settings.py}`:
+  safe inbound/generated correlation IDs, `X-Request-ID`, request duration/status
+  logs, production-default JSON stdout, and focused regression coverage.
 
 - `backend/manage.py`: repository-root-safe complete Django test discovery.
 - `backend/afn_service_management/{health.py,settings.py,settings_e2e.py,tests_health.py,test_settings_safety.py,websocket_auth.py}`:
@@ -1103,6 +1127,12 @@ All paths below are preserved work, not cleanup candidates.
 
 ### Users and security
 
+- `backend/users/{mfa.py,test_mfa.py,models.py,serializers.py,views/auth.py,migrations/0039_user_mfa_fields.py}`:
+  optional admin/superadmin TOTP enrollment, encrypted confirmed secrets,
+  short-lived signed setup state, hashed one-time recovery codes, login token
+  withholding, reauthenticated disable, token revocation, serializer state, and
+  isolated regression coverage.
+
 - `backend/users/{middleware.py,permissions.py,rbac.py,serializers.py,signals.py,tests.py}`
   and `backend/users/views/{admin_activity.py,admin_settings.py,admin_users.py,auth.py,helpers.py}`:
   audit attribution, account/authentication validation, communication and system
@@ -1118,6 +1148,10 @@ All paths below are preserved work, not cleanup candidates.
   in disposable E2E migrations, while production/Aiven remains pending approval.
 
 ### Frontend
+
+- `frontend/src/{context/AuthContext.jsx,pages/Login.jsx,api/client.js,components/shared/ProfileSecuritySection.jsx}`:
+  two-step administrator sign-in plus profile enrollment, one-time recovery-code
+  display, status, and reauthenticated disable flows.
 
 - `frontend/src/index.css`: shared card and responsive workspace styling,
   including the existing stat-card hover feedback.
@@ -1304,6 +1338,11 @@ All paths below are preserved work, not cleanup candidates.
 
 ### E2E and documentation
 
+- `docs/deployment/OPERATIONS_READINESS_RUNBOOK.md` and
+  `docs/quality/PRIVACY_AND_DATA_HANDLING_BASELINE.md`: release/load/backup/
+  monitoring/incident procedures and the owner decisions required for lawful,
+  least-privileged real-world data handling.
+
 - `e2e/{01-public-pages.spec.js,03-admin-workspace.spec.js,04-technician-workspace.spec.js,05-client-workspace.spec.js,07-side-flows.spec.js,08-responsive-accessibility.spec.js,09-all-pages-quality.spec.js,global-setup.js,helpers.js,seed-test-data-exec.py}`:
   document persistence, responsive/accessibility, all-page matrix, isolated setup,
   real profile save/cancel/photo/security behavior, client assistant and
@@ -1393,6 +1432,8 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date/time (Asia/Singapore) | Change | Main paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-07 23:15 | Revalidated the complete pending industry-readiness release and confirmed the existing staging dependencies were operational before publication | Complete pending MFA, observability, operations-readiness, environment, test, and documentation worktree; this file | Canonical quality gate passed 453 backend tests, build, and Chromium smoke 16/16; live frontend returned HTTP 200 and live backend readiness reported database, cache, realtime, and storage ready. Publication and exact-commit deployment verification follow this entry. |
+| 2026-10-01 20:50 | Added and fully locally exercised the repository-controlled industry-readiness baseline: optional administrator TOTP MFA and recovery codes, correlated structured logs, guarded PostgreSQL backup/restore tooling, bounded read-only load smoke, and incident/privacy operating contracts | MFA backend migration/API/tests; login/profile frontend; observability settings/tests; environment examples; operations scripts/docs; root package scripts; this file | Django check, dependency integrity, and migration drift passed; all 453 backend tests passed with 3 expected PostgreSQL-only skips; production build passed with 2,520 modules; browser smoke passed 16/16. Exhaustive browser passed 200/201, with the sole setup-timeout scenario then passing focused 1/1; thus every maintained scenario has current passing evidence, without misrepresenting the run as uninterrupted 201/201. Node and PowerShell syntax checks passed. SAST, disposable PostgreSQL concurrency/restore, live load, SMTP, alert, UAT, penetration, persistent migration, commit, push, and deployment evidence remain pending and are not claimed. |
 | 2026-10-01 17:39 | Published the clean validated release to `origin/staging-deploy`, verified both Render services live on `6d28304`, and recorded the live dependency/security and release-fingerprint evidence | This file; remote `staging-deploy`; Render staging frontend/backend | Git push advanced the branch from `8a1bbbf` to `6d28304`; Render reported both deployments `live`; the staging perimeter passed; the backend retired-probe response and deployed Documents chunk confirm the new runtime is active. This successor changes documentation only. |
 | 2026-10-01 17:05 | Prepared the complete validated worktree for staging publication: reviewed environment examples and new tests, staged all 44 intentional paths, ran staged integrity and masked credential scans, and created implementation commit `247cf68` before this final handoff commit | Complete current release worktree; this file | `git diff --cached --check` passed; zero high-confidence secret signatures were found; credential-like assignments were placeholders or synthetic test values; real `.env`, SQLite databases/backups, build output, and Playwright output remained ignored. The release being committed is the same snapshot that passed 445 backend tests, the 2,520-module build, Chromium 201/201, and SQLite integrity checks. |
 | 2026-10-01 16:12 | Re-ran and recorded the complete post-remediation local release gate and read-only development-database integrity checks | This file | Full gate passed 445 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module build, and Chromium 201/201 in 16.4 minutes; SQLite integrity was `ok` with zero foreign-key violations; runtime-source and diff checks passed. No application code, persistent data, remote service, commit, or push changed. |

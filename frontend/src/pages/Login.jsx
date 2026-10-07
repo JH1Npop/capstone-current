@@ -14,6 +14,8 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -31,7 +33,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const result = await login(submittedUsername, submittedPassword);
+      const result = await login(submittedUsername, submittedPassword, mfaCode.trim());
 
       if (!result || typeof result !== 'object') {
         setError('Login service error. Please try again.');
@@ -39,6 +41,9 @@ export default function Login() {
       }
 
       if (!result.success) {
+        if (result.mfaRequired) {
+          setMfaRequired(true);
+        }
         setError(result.message || 'Login failed. Please try again.');
         return;
       }
@@ -63,7 +68,7 @@ export default function Login() {
       variant="solar"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
+        <div className={mfaRequired ? 'hidden' : ''}>
           <label className="mb-2 block text-sm font-semibold text-slate-700">Username or Email</label>
           <input
             value={username}
@@ -75,7 +80,7 @@ export default function Login() {
           />
         </div>
 
-        <div>
+        <div className={mfaRequired ? 'hidden' : ''}>
           <label className="mb-2 block text-sm font-semibold text-slate-700">Password</label>
           <div className="relative">
             <input
@@ -103,6 +108,32 @@ export default function Login() {
             </Link>
           </div>
         </div>
+
+        {mfaRequired ? (
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Authentication code</label>
+            <input
+              value={mfaCode}
+              onChange={(event) => setMfaCode(event.target.value)}
+              className={inputClass}
+              placeholder="6-digit code or recovery code"
+              autoComplete="one-time-code"
+              autoFocus
+              required
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setMfaRequired(false);
+                setMfaCode('');
+                setError('');
+              }}
+              className="mt-3 text-sm font-semibold text-brand-700 hover:text-brand-900"
+            >
+              Use a different account
+            </button>
+          </div>
+        ) : null}
 
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">

@@ -7,6 +7,18 @@ from rest_framework import serializers as drf_serializers
 from rest_framework.exceptions import PermissionDenied
 from users.rbac import CAPABILITY_DEFINITIONS
 from users.signals import log_activity
+from django.core import signing
+from users.mfa import (
+    create_setup_token,
+    encrypt_secret,
+    generate_recovery_codes,
+    generate_totp_secret,
+    hash_recovery_codes,
+    provisioning_uri,
+    read_setup_token,
+    verify_mfa_code,
+    verify_totp,
+)
 
 class IsAdminOrReadOnly(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -273,6 +285,37 @@ class UserViewSet(viewsets.ModelViewSet):
                         {'error': 'Please verify your email address before signing in.'},
                         status=status.HTTP_403_FORBIDDEN,
                     )
+                if is_admin_workspace_role(user.role) and user.mfa_enabled:
+                    mfa_code = serializer.validated_data.get('mfa_code', '')
+                    if not mfa_code:
+                        return Response(
+                            {
+                                'mfa_required': True,
+                                'message': 'Enter the code from your authenticator app or a recovery code.',
+                            },
+                            status=status.HTTP_202_ACCEPTED,
+                        )
+                    with transaction.atomic():
+                        locked_user = User.objects.select_for_update().get(pk=user.pk)
+                        valid_mfa, remaining_hashes = verify_mfa_code(locked_user, mfa_code)
+                        if not valid_mfa:
+                            ip = request.META.get('REMOTE_ADDR') if hasattr(request, 'META') else ''
+                            log_activity(
+                                actor=locked_user,
+                                category='security',
+                                action='error',
+                                target=locked_user,
+                                message=f'{locked_user.get_full_name().strip() or locked_user.username} supplied an invalid MFA code',
+                                metadata={'ip_address': ip},
+                            )
+                            return Response(
+                                {'error': 'Invalid authentication code', 'mfa_required': True},
+                                status=status.HTTP_401_UNAUTHORIZED,
+                            )
+                        if remaining_hashes is not None:
+                            locked_user.mfa_recovery_code_hashes = remaining_hashes
+                            locked_user.save(update_fields=['mfa_recovery_code_hashes'])
+                        user = locked_user
                 existing_token = Token.objects.filter(user=user).first()
                 if existing_token:
                     log_activity(
@@ -334,6 +377,124 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get'])
+    def mfa_status(self, request):
+        return Response({
+            'available': is_admin_workspace_role(request.user.role),
+            'enabled': bool(request.user.mfa_enabled),
+            'recovery_codes_remaining': len(request.user.mfa_recovery_code_hashes or []),
+            'confirmed_at': request.user.mfa_confirmed_at,
+        })
+
+    @action(detail=False, methods=['post'])
+    def mfa_setup(self, request):
+        if not is_admin_workspace_role(request.user.role):
+            return Response(
+                {'error': 'MFA enrollment is available to administrator accounts.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if request.user.mfa_enabled:
+            return Response({'error': 'MFA is already enabled.'}, status=status.HTTP_409_CONFLICT)
+        current_password = str(request.data.get('current_password') or '')
+        if not request.user.check_password(current_password):
+            return Response({'current_password': 'Current password is incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        secret = generate_totp_secret()
+        return Response({
+            'secret': secret,
+            'provisioning_uri': provisioning_uri(request.user, secret),
+            'setup_token': create_setup_token(request.user, secret),
+            'expires_in_seconds': 600,
+        })
+
+    @action(detail=False, methods=['post'])
+    def mfa_confirm(self, request):
+        if not is_admin_workspace_role(request.user.role):
+            return Response(
+                {'error': 'MFA enrollment is available to administrator accounts.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if request.user.mfa_enabled:
+            return Response({'error': 'MFA is already enabled.'}, status=status.HTTP_409_CONFLICT)
+        if not request.user.check_password(str(request.data.get('current_password') or '')):
+            return Response({'current_password': 'Current password is incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            secret = read_setup_token(request.user, str(request.data.get('setup_token') or ''))
+        except (signing.BadSignature, signing.SignatureExpired, KeyError, TypeError):
+            return Response({'setup_token': 'MFA setup expired or is invalid. Start again.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not verify_totp(secret, request.data.get('code')):
+            return Response({'code': 'The authentication code is invalid.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        recovery_codes = generate_recovery_codes()
+        with transaction.atomic():
+            user = User.objects.select_for_update().get(pk=request.user.pk)
+            if user.mfa_enabled:
+                return Response({'error': 'MFA is already enabled.'}, status=status.HTTP_409_CONFLICT)
+            user.mfa_secret_encrypted = encrypt_secret(secret)
+            user.mfa_recovery_code_hashes = hash_recovery_codes(recovery_codes)
+            user.mfa_enabled = True
+            user.mfa_confirmed_at = timezone.now()
+            user.save(update_fields=[
+                'mfa_secret_encrypted',
+                'mfa_recovery_code_hashes',
+                'mfa_enabled',
+                'mfa_confirmed_at',
+            ])
+            log_activity(
+                actor=user,
+                category='security',
+                action='update',
+                target=user,
+                message=f'{user.get_full_name().strip() or user.username} enabled multi-factor authentication',
+                metadata={'field_name': 'mfa_enabled'},
+            )
+        return Response({
+            'message': 'MFA enabled. Store these recovery codes securely; they will not be shown again.',
+            'recovery_codes': recovery_codes,
+        })
+
+    @action(detail=False, methods=['post'])
+    def mfa_disable(self, request):
+        if not is_admin_workspace_role(request.user.role):
+            return Response(
+                {'error': 'MFA management is available to administrator accounts.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not request.user.check_password(str(request.data.get('current_password') or '')):
+            return Response({'current_password': 'Current password is incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            user = User.objects.select_for_update().get(pk=request.user.pk)
+            if not user.mfa_enabled:
+                return Response({'error': 'MFA is not enabled.'}, status=status.HTTP_409_CONFLICT)
+            valid_mfa, remaining_hashes = verify_mfa_code(user, request.data.get('code'))
+            if not valid_mfa:
+                return Response({'code': 'The authentication code is invalid.'}, status=status.HTTP_400_BAD_REQUEST)
+            user.mfa_enabled = False
+            user.mfa_secret_encrypted = ''
+            user.mfa_recovery_code_hashes = []
+            user.mfa_confirmed_at = None
+            user.save(update_fields=[
+                'mfa_enabled',
+                'mfa_secret_encrypted',
+                'mfa_recovery_code_hashes',
+                'mfa_confirmed_at',
+            ])
+            Token.objects.filter(user=user).delete()
+            log_activity(
+                actor=user,
+                category='security',
+                action='update',
+                target=user,
+                message=f'{user.get_full_name().strip() or user.username} disabled multi-factor authentication',
+                metadata={'field_name': 'mfa_enabled'},
+            )
+        return Response({
+            'message': 'MFA disabled. Please sign in again.',
+            'reauthentication_required': True,
+        })
 
     @action(detail=False, methods=['post'])
     def logout(self, request):

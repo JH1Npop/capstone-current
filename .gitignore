@@ -37,6 +37,10 @@ venv/
 *.drawio.bkp
 playwright-report/
 test-results/
+backups/*.dump
+backups/*.sha256
+backups/*.log
+!backups/.gitkeep
 # Preserve obsolete local cleanup/debug artifacts without publishing them.
 docs/archive/code-cleanup/
 e2e/debug_login.spec.js

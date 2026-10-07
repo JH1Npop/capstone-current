@@ -158,14 +158,29 @@ export const AuthProvider = ({ children }) => {
    * Authenticate against the Django backend.
    * Returns { success: true } or { success: false, message: string }
    */
-  const login = useCallback(async (username, password) => {
+  const login = useCallback(async (username, password, mfaCode = '') => {
     try {
       clearStoredAuth();
       setToken(null);
       setUser(null);
 
-      const response = await api.post('/users/login/', { username, password }, { timeout: 15_000 });
+      const response = await api.post(
+        '/users/login/',
+        { username, password, ...(mfaCode ? { mfa_code: mfaCode } : {}) },
+        { timeout: 15_000 },
+      );
+      if (response.data?.mfa_required) {
+        return {
+          success: false,
+          mfaRequired: true,
+          message: response.data.message || 'Enter your authentication code.',
+        };
+      }
       const { user: userData, token: authToken } = response.data;
+
+      if (!userData || !authToken) {
+        return { success: false, message: 'The login response was incomplete. Please try again.' };
+      }
 
       sessionStorage.setItem('afn_token', authToken);
       sessionStorage.setItem('afn_user', JSON.stringify(userData));
@@ -183,7 +198,7 @@ export const AuthProvider = ({ children }) => {
         err.response?.data?.error ||
         err.response?.data?.detail ||
         'Invalid username or password';
-      return { success: false, message };
+      return { success: false, message, mfaRequired: Boolean(err.response?.data?.mfa_required) };
     }
   }, []);
 
