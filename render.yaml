@@ -71,6 +71,10 @@ services:
       # messages to service logs; production must use a deliverable provider.
       - key: EMAIL_BACKEND
         value: django.core.mail.backends.console.EmailBackend
+      # Demo-only: make staging registrations usable without log-only email.
+      # Backend startup rejects this flag outside DEPLOYMENT_STAGE=staging.
+      - key: STAGING_AUTO_VERIFY_REGISTRATIONS
+        value: "True"
       - key: DEFAULT_FROM_EMAIL
         value: AFN Service Staging <noreply@example.invalid>
       - key: TRACKING_REGION_NAME

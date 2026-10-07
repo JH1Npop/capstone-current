@@ -150,12 +150,21 @@ class UserViewSet(viewsets.ModelViewSet):
             )
         serializer = UserRegistrationSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
+            auto_verify = (
+                getattr(django_settings, 'STAGING_AUTO_VERIFY_REGISTRATIONS', False)
+                and getattr(django_settings, 'DEPLOYMENT_STAGE', '') == 'staging'
+            )
             try:
                 with transaction.atomic():
                     user = serializer.save()
-                    send_email_verification_email(user, request=request)
-                    user.email_verification_sent_at = timezone.now()
-                    user.save(update_fields=['email_verification_sent_at'])
+                    if auto_verify:
+                        user.email_verified = True
+                        user.email_verification_sent_at = None
+                        user.save(update_fields=['email_verified', 'email_verification_sent_at'])
+                    else:
+                        send_email_verification_email(user, request=request)
+                        user.email_verification_sent_at = timezone.now()
+                        user.save(update_fields=['email_verification_sent_at'])
             except Exception as exc:
                 logger.error('Email verification send failed during registration: %s', exc, exc_info=True)
                 return Response(
@@ -164,7 +173,12 @@ class UserViewSet(viewsets.ModelViewSet):
                 )
             return Response({
                 'user': UserSerializer(user, context={'request': request}).data,
-                'message': 'Account created. Please check your email to verify your account before signing in.'
+                'verification_required': not auto_verify,
+                'message': (
+                    'Staging account created and activated. You can sign in now.'
+                    if auto_verify
+                    else 'Account created. Please check your email to verify your account before signing in.'
+                ),
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

@@ -518,6 +518,10 @@ EMAIL_VERIFICATION_EXPIRY_HOURS = int(os.environ.get('EMAIL_VERIFICATION_EXPIRY_
 EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS = int(
     os.environ.get('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', '60')
 )
+# Disposable staging can activate demo registrations immediately when its
+# hosting tier cannot deliver verification email. Production is forbidden from
+# enabling this escape hatch by validate_production_settings().
+STAGING_AUTO_VERIFY_REGISTRATIONS = env_bool('STAGING_AUTO_VERIFY_REGISTRATIONS', default=False)
 
 # Email settings (configure for your email provider)
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
@@ -644,6 +648,8 @@ def validate_production_settings():
         errors.append('REDIS_URL must be set when USE_REDIS=True')
     if EMAIL_USE_TLS and EMAIL_USE_SSL:
         errors.append('EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be True')
+    if STAGING_AUTO_VERIFY_REGISTRATIONS and DEPLOYMENT_STAGE != 'staging':
+        errors.append('STAGING_AUTO_VERIFY_REGISTRATIONS is allowed only when DEPLOYMENT_STAGE=staging')
     if EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
         if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD:
             errors.append('EMAIL_HOST_USER and EMAIL_HOST_PASSWORD are required for SMTP email')

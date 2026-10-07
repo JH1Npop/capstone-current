@@ -400,6 +400,46 @@ class EmailVerificationTests(APITestCase):
         user = User.objects.get(username='verify_client')
         self.assertFalse(user.email_verified)
         self.assertIsNotNone(user.email_verification_sent_at)
+        self.assertTrue(response.data['verification_required'])
+
+    @override_settings(STAGING_AUTO_VERIFY_REGISTRATIONS=True, DEPLOYMENT_STAGE='staging')
+    def test_staging_auto_verify_registration_can_login_immediately(self):
+        response = self.client.post(self.register_url, {
+            'username': 'staging_client',
+            'email': 'staging-client@example.com',
+            'password': 'Password123!',
+            'password_confirm': 'Password123!',
+            'role': 'client',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(response.data['verification_required'])
+        self.assertEqual(len(mail.outbox), 0)
+        user = User.objects.get(username='staging_client')
+        self.assertTrue(user.email_verified)
+        self.assertIsNone(user.email_verification_sent_at)
+
+        login_response = self.client.post(self.login_url, {
+            'username': user.email,
+            'password': 'Password123!',
+        }, format='json')
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.assertIn('token', login_response.data)
+
+    @override_settings(STAGING_AUTO_VERIFY_REGISTRATIONS=True, DEPLOYMENT_STAGE='production')
+    def test_auto_verify_flag_is_ignored_outside_staging(self):
+        response = self.client.post(self.register_url, {
+            'username': 'production_client',
+            'email': 'production-client@example.com',
+            'password': 'Password123!',
+            'password_confirm': 'Password123!',
+            'role': 'client',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(response.data['verification_required'])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertFalse(User.objects.get(username='production_client').email_verified)
 
     def test_unverified_client_can_request_an_enumeration_safe_verification_resend(self):
         user = User.objects.create_user(

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiArrowRight, FiEye, FiEyeOff, FiMail } from 'react-icons/fi';
+import { FiArrowRight, FiCheckCircle, FiEye, FiEyeOff, FiMail } from 'react-icons/fi';
 import AuthShell from '../components/AuthShell';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -23,6 +23,7 @@ export default function Register() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState('');
   const [registeredEmail, setRegisteredEmail] = useState('');
+  const [verificationRequired, setVerificationRequired] = useState(true);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
@@ -216,8 +217,9 @@ export default function Register() {
       }
 
       setRegisteredEmail(formData.email);
+      setVerificationRequired(result.verificationRequired !== false);
       setSuccessMessage(result.message || 'Account created. Please check your email to verify your account before signing in.');
-      setResendCooldown(60);
+      setResendCooldown(result.verificationRequired === false ? 0 : 60);
     } catch (err) {
       setLoading(false);
       setError('Something went wrong.');
@@ -237,20 +239,30 @@ export default function Register() {
   return (
     <AuthShell
       title="Create account"
-      subtitle={successMessage ? 'Verify your email address to activate your account.' : 'Register as a client to request and track AFN services.'}
+      subtitle={successMessage
+        ? (verificationRequired ? 'Verify your email address to activate your account.' : 'Your staging account is ready to use.')
+        : 'Register as a client to request and track AFN services.'}
       maxWidth="max-w-[520px]"
     >
       {successMessage ? (
         <div className="space-y-5">
-          <div className="rounded-2xl border border-sky-100 bg-sky-50/80 px-5 py-5 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white text-brand-700 shadow-sm">
-              <FiMail size={26} />
+          <div className={`rounded-2xl px-5 py-5 text-center ${verificationRequired ? 'border border-sky-100 bg-sky-50/80' : 'border border-emerald-200 bg-emerald-50'}`}>
+            <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-sm ${verificationRequired ? 'text-brand-700' : 'text-emerald-700'}`}>
+              {verificationRequired ? <FiMail size={26} /> : <FiCheckCircle size={26} />}
             </div>
-            <h2 className="mt-4 text-xl font-bold text-slate-950">Check your email</h2>
+            <h2 className="mt-4 text-xl font-bold text-slate-950">
+              {verificationRequired ? 'Check your email' : 'Account ready'}
+            </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              We sent a verification link to{' '}
-              <span className="font-semibold text-slate-900">{registeredEmail}</span>.
-              Open it within 24 hours and verify your account before signing in. Check your spam or junk folder if it does not appear.
+              {verificationRequired ? (
+                <>
+                  We sent a verification link to{' '}
+                  <span className="font-semibold text-slate-900">{registeredEmail}</span>.
+                  {' '}Open it within 24 hours and verify your account before signing in. Check your spam or junk folder if it does not appear.
+                </>
+              ) : (
+                <>Your deployed staging account for <span className="font-semibold text-slate-900">{registeredEmail}</span> is active. You can sign in now.</>
+              )}
             </p>
           </div>
 
@@ -258,7 +270,7 @@ export default function Register() {
             {successMessage}
           </div>
 
-          <div className="text-center">
+          {verificationRequired && <div className="text-center">
             <button
               type="button"
               onClick={handleResendVerification}
@@ -272,10 +284,10 @@ export default function Register() {
                   : 'Resend verification email'}
             </button>
             {resendMessage && <p className="mt-2 text-xs leading-5 text-slate-600" role="status">{resendMessage}</p>}
-          </div>
+          </div>}
 
           <p className="text-center text-sm text-slate-600">
-            Already verified?{' '}
+            {verificationRequired ? 'Already verified? ' : ''}
             <Link to="/login" className="font-bold text-brand-700 hover:text-brand-900">
               Sign in
             </Link>
