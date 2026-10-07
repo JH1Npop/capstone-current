@@ -51,7 +51,9 @@ services:
       - key: DB_CONNECT_TIMEOUT
         value: "10"
       - key: DB_CONN_MAX_AGE
-        value: "60"
+        value: "0"
+      - key: DB_CONN_HEALTH_CHECKS
+        value: "True"
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY

@@ -107,7 +107,12 @@ def build_postgres_config_from_url(database_url):
         'HOST': parsed.hostname or '',
         'PORT': str(parsed.port or 5432),
         'OPTIONS': options,
-        'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '60')),
+        # Daphne serves the application through ASGI. Django recommends
+        # disabling persistent database connections for ASGI deployments;
+        # doing so also avoids reusing a socket invalidated by a hosted
+        # database restart or an outbound network route change.
+        'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '0')),
+        'CONN_HEALTH_CHECKS': env_bool('DB_CONN_HEALTH_CHECKS', default=True),
     }
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -335,7 +340,8 @@ elif DATABASE_ENGINE == 'postgresql':
                     else {}
                 ),
             },
-            'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '60')),
+            'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '0')),
+            'CONN_HEALTH_CHECKS': env_bool('DB_CONN_HEALTH_CHECKS', default=True),
         }
     }
     _settings_logger.info('Using PostgreSQL database from DB_* env vars')

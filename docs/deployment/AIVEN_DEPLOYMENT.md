@@ -26,6 +26,8 @@ ALLOWED_HOSTS=your-domain.com,www.your-domain.com
 DATABASE_URL=postgresql://avnadmin:your-password@your-project.aivencloud.com:12345/defaultdb?sslmode=verify-full
 DB_SSLMODE=verify-full
 DB_SSLROOTCERT=/absolute/path/to/aiven-ca.pem
+DB_CONN_MAX_AGE=0
+DB_CONN_HEALTH_CHECKS=True
 CORS_ALLOWED_ORIGINS=https://your-domain.com
 CSRF_TRUSTED_ORIGINS=https://your-domain.com
 FRONTEND_BASE_URL=https://your-domain.com
@@ -33,6 +35,12 @@ ENABLE_HTTPS=True
 USE_REDIS=True
 REDIS_URL=rediss://default:password@your-managed-redis-host:6379/0
 ```
+
+The repository runs Django through Daphne/ASGI, so database connections are
+nonpersistent by default. This prevents a request from reusing a PostgreSQL
+socket invalidated by a Render outbound-route change or an Aiven restart. Keep
+`DB_CONN_HEALTH_CHECKS=True` if another synchronous deployment intentionally
+sets a positive connection lifetime.
 
 If you use a separate frontend domain, add it to `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS`.
 

@@ -2,8 +2,11 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
+
+from afn_service_management.settings import build_postgres_config_from_url
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -45,3 +48,23 @@ class DevelopmentDatabaseSafetyTests(SimpleTestCase):
         result = self.import_settings(allow_remote='True')
 
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class HostedDatabaseConnectionTests(SimpleTestCase):
+    def test_postgres_connections_are_nonpersistent_and_health_checked_by_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            config = build_postgres_config_from_url(REMOTE_DATABASE_URL)
+
+        self.assertEqual(config['CONN_MAX_AGE'], 0)
+        self.assertIs(config['CONN_HEALTH_CHECKS'], True)
+
+    def test_postgres_connection_policy_accepts_explicit_overrides(self):
+        with patch.dict(
+            os.environ,
+            {'DB_CONN_MAX_AGE': '30', 'DB_CONN_HEALTH_CHECKS': 'False'},
+            clear=True,
+        ):
+            config = build_postgres_config_from_url(REMOTE_DATABASE_URL)
+
+        self.assertEqual(config['CONN_MAX_AGE'], 30)
+        self.assertIs(config['CONN_HEALTH_CHECKS'], False)

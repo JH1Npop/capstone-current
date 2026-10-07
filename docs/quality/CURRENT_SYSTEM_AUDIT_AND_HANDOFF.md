@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-07 23:54 Asia/Singapore**
+Last updated: **2026-10-08 00:16 Asia/Singapore**
 Current objective: **Complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -478,9 +478,9 @@ other repository path must include this living handoff file.
 | HEAD | Runtime release `ced0797 Fix mobile dashboard content width`; the current tip adds only this post-deployment evidence |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
 | Remote comparison | Local and `origin/staging-deploy` are synchronized after publishing the documentation-only deployment-evidence successor |
-| Worktree | Clean after publishing the responsive runtime commit and this documentation-only successor; ignored local environments, databases, media, build output, and test output remain excluded |
+| Worktree | Intentionally dirty only with the current ASGI/Aiven connection-stability fix, regression coverage, deployment contracts, and this handoff update; ignored local environments, databases, media, build output, and test output remain excluded |
 | Tracked deletions | None |
-| Commit/push status | Runtime commit `ced0797` is pushed and live on staging. The frontend artifact timestamp advanced to 2026-10-07 15:51:59 UTC, and backend readiness remained healthy after deployment. |
+| Commit/push status | Runtime commit `ced0797` is pushed and live on staging. The current database connection-stability fix is validated locally but is not yet committed, pushed, or deployed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -515,7 +515,9 @@ production-oriented backend example. Required production categories are:
 - Django: `DJANGO_ENV=production`, strong `SECRET_KEY`, `DEBUG=False`,
   `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, HTTPS settings.
 - PostgreSQL/Aiven: `DATABASE_URL` (preferred), SSL mode, optional Aiven CA
-  certificate/path, connection timeout, and connection lifetime. Non-production
+  certificate/path, connection timeout, ASGI-safe nonpersistent connections
+  (`DB_CONN_MAX_AGE=0`), and health checks for any intentionally persistent
+  deployment. Non-production
   settings fail closed when `DATABASE_URL` is present unless
   `ALLOW_REMOTE_DATABASE_IN_DEVELOPMENT=True` is deliberately supplied.
 - Media: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
@@ -687,6 +689,7 @@ Results are evidence, not promises. Rerun checks affected by later changes.
 
 | Date | Validation | Result | Scope/notes |
 | --- | --- | --- | --- |
+| 2026-10-08 | ASGI/Aiven connection-stability regression | **Passed** focused settings tests 4/4, all 455 backend tests with 3 expected PostgreSQL-only skips, dependency integrity, and migration drift | PostgreSQL URL configuration now defaults to `CONN_MAX_AGE=0` for Daphne/ASGI and enables `CONN_HEALTH_CHECKS`; Render and environment contracts set the same policy. Before the change, the live readiness endpoint was healthy and a bounded read-only 20-request probe passed 20/20 with p95 1,025 ms, confirming the reported warning was intermittent rather than an active outage. Tests used only disposable databases; development SQLite and staging business data were not changed. |
 | 2026-10-07 | Live mobile-width release verification | **Passed** publication and post-deployment service checks | `origin/staging-deploy` advanced to runtime commit `ced0797`; Render served a new frontend artifact timestamped 15:51:59 UTC. The backend returned HTTP 200, echoed the supplied `release-ced0797` request ID, and reported database, cache, realtime, and storage ready. No staging business record was mutated by these read-only checks. |
 | 2026-10-07 | Mobile dashboard width regression | **Passed** production build and focused Chromium 1/1 at 390x844 | Replaced the assistant's permanent 4rem mobile right gutter with 6rem of bottom safe space, restoring the dashboard KPI cards to at least 350px width without horizontal overflow. The final Playwright screenshot was visually inspected and confirmed full-width cards, readable snapshot copy, and reachable controls. The test migrated/flushed/seeded only isolated E2E SQLite; development SQLite and staging data were untouched. |
 | 2026-10-07 | Pre-publication regression and live dependency verification | **Passed the canonical local quality gate and live Render readiness checks** | Django check, dependency integrity, and migration drift passed; all 453 backend tests passed with 3 expected PostgreSQL-only skips; the 2,520-module production build passed; Chromium smoke passed 16/16. The live frontend returned HTTP 200 and the backend readiness response reported `ready` for database, cache, realtime, and storage after the free-tier service wake-up. Development SQLite remained unmigrated for `users.0039` and was not changed; Render startup is responsible for applying the migration after publication. |
@@ -916,7 +919,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Low UX maintenance | Concise inner headings such as `Cases`, `Conversation`, and `Results` intentionally rely on the authenticated shell's canonical page title for full context | Keep these panels inside the titled shell; if any becomes reusable or standalone, supply an explicit accessible heading in that new context instead of restoring duplicate visible page titles globally |
 | High before production | The free Render staging Blueprint is live and its database, cache/realtime, and storage readiness checks pass, but the full PostgreSQL concurrency portion of `quality:staging` has not run because no separately scoped disposable `test_...` database exists | Provision a disposable test database with narrowly scoped authority, run the complete guarded gate, and retain the evidence before production approval |
 | High staging account security | A shared reset password was exposed in conversation and existing DRF tokens for two staging accounts remain valid after password changes; several staff/superuser-flagged accounts also retain the `client` role. The application now blocks those roles from `/django-admin` even when flags are inconsistent, but the underlying staging data remains incorrect | Before sharing staging, rotate affected passwords privately, revoke all existing staging API tokens/sessions, and reconcile role plus staff/superuser flags under explicit Aiven-change authorization |
-| Medium staging limitation | Render free web services sleep after idle time, free Key Value is non-persistent, common SMTP ports are blocked, paid cron jobs are omitted, and migrations must run in the single instance's startup command because free services lack pre-deploy commands | Treat this environment as disposable validation only; use logged console email and manual automation checks, then move to paid pre-deploy migrations, deliverable email, persistent Redis, and scheduled commands for production |
+| Medium staging limitation | Render free web services sleep after idle time, free Key Value is non-persistent, common SMTP ports are blocked, paid cron jobs are omitted, and migrations must run in the single instance's startup command because free services lack pre-deploy commands. Intermittent PostgreSQL errors were reported while Daphne was configured to reuse connections; the current release candidate disables ASGI persistence and retains health checks. | Deploy and verify the connection-policy fix, continue treating this environment as disposable validation only, and move to paid pre-deploy migrations, deliverable email, persistent Redis, and scheduled commands for production. Free-tier cold starts can still delay the first request. |
 | High container deployment | `frontend/Dockerfile` and `docker-compose.yml` intentionally run Vite's development server with hot reload; they are suitable for local development, not as a hardened/cached production frontend. Docker is also unavailable locally, so neither image was built during the fresh audit | Prefer a managed static host using `frontend/dist` and `_redirects`, or add a multi-stage production frontend image with a real static server and SPA fallback; build/scan the chosen images in CI or staging before release |
 | Low local storage | `backend/local_backups` still occupies about 139.57 MiB, including several 19.59 MiB database snapshots, a 12.22 MiB data-check export, and a 9.78 MiB source archive. These may be intentional recovery evidence and were not deleted. Installed environments also occupy about 357 MiB after bytecode cleanup but are needed for offline development | Review backup retention dates and recovery value before deleting any backup; remove `venv` or dependency trees only when accepting the cost and network requirement to reinstall them |
 | Low forecasting maturity | The model lifecycle now trains, rolling-backtests, stores validation evidence, refreshes through the daily automation, and publishes only qualifying service models. The current development data still has only 20 genuine requests across about 4.4 months, so no model is publishable. Item quantities additionally depend on genuine ticket-linked issue history and configured service-item mappings. The 7/30-day view is a monthly-forecast allocation, and the location view is explicitly an allocation by recent historical density rather than a separate geographic model | Continue collecting genuine history (three years is materially stronger), keep issue transactions linked to tickets and requirement mappings current, monitor WAPE/bias after each run, and retain the descriptive trend whenever validation fails. Do not lower the publication gates merely to display a forecast |
@@ -967,8 +970,9 @@ All paths below are preserved work, not cleanup candidates.
   Blueprint's 43-44-character, 256-bit generated `SECRET_KEY` representation.
 - `.env.example`, `backend/.env.example`, `.gitignore`: local/production
   environment contracts, including the explicit remote-development database
-  override, verification-resend cooldown, MFA encryption/issuer and log-format
-  settings, and ignored local backup/archive boundaries.
+  override, ASGI-safe nonpersistent PostgreSQL connections with reusable-
+  connection health checks, verification-resend cooldown, MFA encryption/issuer
+  and log-format settings, and ignored local backup/archive boundaries.
 - `backend/requirements.txt`: pinned backend dependencies, including the audited
   Django 6.0.8 security patch level and direct `cryptography` declaration for
   MFA secret encryption.
@@ -1002,6 +1006,7 @@ All paths below are preserved work, not cleanup candidates.
 - `backend/afn_service_management/{health.py,settings.py,settings_e2e.py,tests_health.py,test_settings_safety.py,websocket_auth.py}`:
   production fail-fast settings, guarded disposable PostgreSQL test selection,
   fail-closed development remote-database selection and its regression tests,
+  ASGI-safe PostgreSQL connection lifetime and health-check policy,
   role-scoped Django-admin middleware registration,
   critical database/Redis/media readiness, isolated E2E DB/local-only E2E media,
   authenticated WebSockets, and validated non-secret tracking-region/retention
@@ -1436,6 +1441,7 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date/time (Asia/Singapore) | Change | Main paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-08 00:16 | Disabled persistent PostgreSQL sockets for the Daphne/ASGI deployment and enabled reusable-connection health checks to prevent transient stale-connection 503 responses after hosted restarts or route changes | `backend/afn_service_management/{settings.py,test_settings_safety.py}`, `.env.example`, `backend/.env.example`, `render.yaml`, `docs/deployment/AIVEN_DEPLOYMENT.md`, this file | Focused settings tests passed 4/4; all 455 backend tests passed with 3 expected PostgreSQL-only skips; `pip check` and migration drift passed. The pre-change live service was ready and a read-only 20-request probe passed without errors, establishing an intermittent connection-lifecycle defect rather than a current database outage. |
 | 2026-10-07 23:54 | Published the mobile dashboard width fix to `origin/staging-deploy` and verified the new Render frontend artifact plus healthy backend dependencies | Runtime commit `ced0797`; Render staging frontend/backend; this file | GitHub advanced from `fa121a2` to `ced0797`; frontend `Last-Modified` advanced to 15:51:59 UTC; backend returned HTTP 200 with the release request ID and all readiness checks green. This successor changes documentation only. |
 | 2026-10-07 23:48 | Removed the assistant's page-wide mobile right gutter and moved its clearance to the bottom so the admin dashboard uses the full narrow viewport | `frontend/src/components/layout/Layout.jsx`, `e2e/08-responsive-accessibility.spec.js`, this file | Production build passed with 2,520 modules; focused isolated Chromium passed 1/1 at 390x844, asserted no horizontal overflow and a KPI-card width of at least 350px, and produced a visually inspected screenshot. |
 | 2026-10-07 23:15 | Revalidated the complete pending industry-readiness release and confirmed the existing staging dependencies were operational before publication | Complete pending MFA, observability, operations-readiness, environment, test, and documentation worktree; this file | Canonical quality gate passed 453 backend tests, build, and Chromium smoke 16/16; live frontend returned HTTP 200 and live backend readiness reported database, cache, realtime, and storage ready. Publication and exact-commit deployment verification follow this entry. |
