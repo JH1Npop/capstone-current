@@ -1,8 +1,8 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-08 01:47 Asia/Singapore**
-Current objective: **Restore deploy-time client registration and immediate authentication on disposable Render/Aiven staging without weakening the production verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
+Last updated: **2026-10-08 02:53 Asia/Singapore**
+Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
 entrypoint aligned with application roles and delegated capabilities, and finish the still-pending guarded staging
@@ -523,12 +523,12 @@ production-oriented backend example. Required production categories are:
 - Media: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
   `CLOUDINARY_API_SECRET`, unless durable local media is deliberately allowed.
 - Realtime: `USE_REDIS=True` and `REDIS_URL` in production.
-- Email: SMTP backend, host/port/TLS-or-SSL, user, app password, and default sender.
-  Disposable staging may explicitly set `STAGING_AUTO_VERIFY_REGISTRATIONS=True`
-  when its hosting tier cannot deliver verification mail. The registration API
-  then marks only newly registered staging clients verified and tells the UI
-  that no verification step is required. The setting defaults false and
-  production startup rejects it unless `DEPLOYMENT_STAGE=staging`.
+- Email: SMTP backend, host/port/TLS-or-SSL, user, app password, and default
+  sender where SMTP is available. Free Render staging instead uses
+  `afn_service_management.email_backends.BrevoEmailBackend`, `BREVO_API_KEY`,
+  `BREVO_API_TIMEOUT_SECONDS`, and a verified `DEFAULT_FROM_EMAIL` sender to
+  deliver the same Django verification/reset messages over HTTPS. Production
+  settings fail closed if the API key is absent or the sender is a placeholder.
 - Security/observability: a stable `MFA_ENCRYPTION_KEY` should be configured
   before real administrator enrollment (otherwise encryption derives from
   `SECRET_KEY`), plus `MFA_ISSUER_NAME` and production-default JSON stdout via
@@ -545,6 +545,13 @@ durable media, Redis, or SMTP requirements are inconsistent. Never deploy the
 development SQLite database as the production source of truth. Follow
 `docs/deployment/PRODUCTION_DEPLOYMENT_CHECKLIST.md` and
 `docs/deployment/AIVEN_DEPLOYMENT.md`.
+
+Environment ownership is intentionally separate: routine local development
+uses `backend/db.sqlite3`; automated backend/browser tests use disposable
+SQLite databases; Render staging alone uses the staging Aiven PostgreSQL
+service; a future production launch requires a separate PostgreSQL target.
+`npm run env:check` reports the active stage, database target, and email backend
+without credentials. Migrations synchronize schema, not environment data.
 
 ## 5. Routes and page coverage
 
@@ -566,11 +573,11 @@ fed only by published project entries that have complete details, a project
 photo, and confirmed client permission; drafts and unapproved entries remain
 private.
 
-Registration responses explicitly expose `verification_required`. Normal
-environments send verification mail and block login until verification. The
-disposable Render staging Blueprint instead enables immediate activation so a
-browser-created account can authenticate against staging Aiven even though the
-free hosting configuration cannot deliver its console-only email.
+Registration responses explicitly expose `verification_required=True`, send a
+verification link through the configured Django email backend, and block login
+until that link is used. The Render staging Blueprint uses Brevo's HTTPS API so
+the verification boundary remains intact despite the free host's SMTP-port
+restriction. Password resets and pending-email changes share that backend.
 
 ### Admin pages (26)
 
@@ -700,7 +707,8 @@ Results are evidence, not promises. Rerun checks affected by later changes.
 
 | Date | Validation | Result | Scope/notes |
 | --- | --- | --- | --- |
-| 2026-10-08 | Staging registration/immediate-authentication regression | **Passed** all 458 backend tests with 3 expected PostgreSQL-only skips, 2,520-module production build, focused Chromium 1/1, Django check, migration drift, and diff check | The backend proves staging registration creates a verified client without email and permits immediate token login, while the same flag is ignored outside staging; production configuration rejects it, and ordinary verification remains intact. The browser proves `verification_required=false` presents Account ready and Sign in without a resend control. The first focused backend invocation used the nonexistent `backend/venv` path and failed before testing; the corrected focused suite passed 9/9 before complete discovery passed. Tests used only disposable databases; development SQLite and Aiven were not changed. |
+| 2026-10-08 | Pre-commit email correction regression and live frontend/backend connection health | **Passed** all 461 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, frontend HTTP 200, backend liveness/readiness/database HTTP 200, deployed bundle API-target inspection, and CORS origin inspection | The deployed frontend bundle targets `https://afn-capstone-backend-staging.onrender.com/api`; backend readiness reported database, cache, realtime, and storage ready; the database-specific probe was ready; and the backend allowed the exact deployed frontend origin. Tests used disposable databases. These checks do not expose or independently prove the private Render `FRONTEND_BASE_URL` value or deployed email delivery. |
+| 2026-10-08 | HTTPS transactional-email and environment-boundary regression | **Passed** all 461 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, focused registration Chromium 1/1, Django check, migration drift, environment-target check, diff check, and live Brevo API acceptance | The Brevo backend posts sender, recipients, reply-to, plain text, and HTML through the official HTTPS endpoint, fails closed on provider errors, and production validation rejects a missing key or placeholder sender. Registration remains unverified, login remains blocked until verification, and password reset remains token-gated. `npm run env:check` confirmed local SQLite. After the user authorized the workstation IP, a real test email was accepted with `send=1`; inbox receipt remains user confirmation, while Render key/sender/outbound-IP configuration and deployed end-to-end verification remain pending. |
 | 2026-10-08 | Live ASGI/Aiven connection-fix verification | **Passed** deployment recovery, dependency readiness, and 40/40 read-only health requests | `origin/staging-deploy` advanced to runtime commit `43be830`. After the expected Render cutover window, backend readiness returned HTTP 200 with database, cache, realtime, and storage ready. A bounded 40-request, concurrency-4 liveness/readiness probe passed with zero errors, p95 1,753 ms, and maximum 1,882 ms. The static frontend also returned HTTP 200. No staging business data was mutated. |
 | 2026-10-08 | ASGI/Aiven connection-stability regression | **Passed** focused settings tests 4/4, all 455 backend tests with 3 expected PostgreSQL-only skips, dependency integrity, and migration drift | PostgreSQL URL configuration now defaults to `CONN_MAX_AGE=0` for Daphne/ASGI and enables `CONN_HEALTH_CHECKS`; Render and environment contracts set the same policy. Before the change, the live readiness endpoint was healthy and a bounded read-only 20-request probe passed 20/20 with p95 1,025 ms, confirming the reported warning was intermittent rather than an active outage. Tests used only disposable databases; development SQLite and staging business data were not changed. |
 | 2026-10-07 | Live mobile-width release verification | **Passed** publication and post-deployment service checks | `origin/staging-deploy` advanced to runtime commit `ced0797`; Render served a new frontend artifact timestamped 15:51:59 UTC. The backend returned HTTP 200, echoed the supplied `release-ced0797` request ID, and reported database, cache, realtime, and storage ready. No staging business record was mutated by these read-only checks. |
@@ -923,7 +931,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 | Priority | Item | Safest next action |
 | --- | --- | --- |
-| High before production | Disposable staging now intentionally auto-verifies newly registered client accounts because its free Render tier cannot deliver verification email. This is appropriate for the professor demo but is not a production identity-proofing control. | Keep `STAGING_AUTO_VERIFY_REGISTRATIONS` disabled everywhere except disposable staging. Before production, configure deliverable transactional email, exercise verification/password-reset delivery, and remove the staging override. |
+| High before deploying the email fix | The real Brevo HTTPS backend is implemented and fail-closed, and Brevo accepted a live message after workstation IP authorization. Render will use different outbound IPs, so this local acceptance does not yet prove deployed delivery. `BREVO_API_KEY` and a verified `DEFAULT_FROM_EMAIL` remain intentionally outside source control. | Confirm the test message reached the inbox; configure the key/sender in Render and authorize the backend service's outbound IP ranges in Brevo, then exercise deployed registration, inbox delivery, verification, login, and password reset before pushing traffic. |
 | High before deploying this phase | The current MFA/observability/schema/UI changes pass all 453 backend tests, production build, browser smoke, and every maintained browser scenario (200/201 exhaustive plus the sole setup-timeout scenario 1/1 focused), but the phase has not been migrated on staging, committed, pushed, or deployed | Review the diff and secret scan, then explicitly authorize commit/push/deployment; configure a stable MFA encryption key, back up, and approve the staging migration separately |
 | High operations evidence | Backup and guarded restore tooling now exists, but no real PostgreSQL backup or disposable `test_...` restore drill has been performed | Configure encrypted off-host retention, create a backup, restore it only to a disposable guarded database, validate representative data and recovery time, and record the evidence |
 | High account rollout | Administrator MFA is optional and existing admin accounts remain unenrolled; a stable `MFA_ENCRYPTION_KEY` is not yet provider-configured | Configure a stable key in the secret store before enrollment, deploy the migration, enroll each administrator individually, store recovery codes securely, and verify recovery/disable ownership procedures |
@@ -987,14 +995,10 @@ All paths below are preserved work, not cleanup candidates.
   override, ASGI-safe nonpersistent PostgreSQL connections with reusable-
   connection health checks, verification-resend cooldown, MFA encryption/issuer
   and log-format settings, and ignored local backup/archive boundaries.
-- `backend/afn_service_management/{settings.py,test_settings_safety.py}`,
+- `backend/afn_service_management/{email_backends.py,settings.py,test_email_backend.py,test_settings_safety.py}`,
   `backend/users/{views/auth.py,tests.py}`:
-  fail-closed staging-only registration activation, the normal verification
-  path, and regressions proving immediate staging login plus verification
-  retention outside staging.
-- `frontend/src/{context/AuthContext.jsx,pages/Register.jsx}` and
-  `e2e/01-public-pages.spec.js`: API-contract propagation and distinct
-  account-ready versus email-verification registration results.
+  Brevo HTTPS transactional delivery, fail-closed provider configuration,
+  normal registration verification/password-reset paths, and regressions.
 - `backend/requirements.txt`: pinned backend dependencies, including the audited
   Django 6.0.8 security patch level and direct `cryptography` declaration for
   MFA secret encryption.
@@ -1007,6 +1011,13 @@ All paths below are preserved work, not cleanup candidates.
 - `scripts/{staging-gate.mjs,staging-perimeter-check.mjs}`: explicit-confirmation
   staging orchestration and read-only deployed perimeter checks, including a
   native-HTTPS `TRACE` probe and free-tier cold-start timeout.
+- `backend/users/management/commands/show_environment.py`,
+  `backend/users/test_environment_command.py`, root `package.json`, `README.md`,
+  and `docs/deployment/AIVEN_DEPLOYMENT.md`: credential-safe `npm run env:check`
+  plus explicit local/test/staging/production database ownership.
+- `docs/deployment/EMAIL_SMTP_SETUP.md`: Brevo HTTPS setup and live
+  registration/verification/login/password-reset acceptance steps for Render,
+  while retaining SMTP guidance for hosts that allow it.
 - `scripts/load-smoke.mjs`: HTTPS-by-default, read-only liveness/readiness load
   probe with bounded request/concurrency inputs and p95/error thresholds.
 - `scripts/{postgres-backup.ps1,postgres-restore-drill.ps1}` and `backups/.gitkeep`:
@@ -1463,7 +1474,11 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date/time (Asia/Singapore) | Change | Main paths | Validation |
 | --- | --- | --- | --- |
-| 2026-10-08 01:47 | Added a staging-only immediate-activation registration path so accounts created on the deployed frontend can authenticate against Aiven without Render's log-only email; retained normal verification everywhere else, added a production-startup safety regression, and taught the UI to show the truthful next step | `backend/afn_service_management/{settings.py,test_settings_safety.py}`, `backend/users/{views/auth.py,tests.py}`, `frontend/src/{context/AuthContext.jsx,pages/Register.jsx}`, `e2e/01-public-pages.spec.js`, `.env.example`, `backend/.env.example`, `render.yaml`, this file | All 458 backend tests passed with 3 expected PostgreSQL-only skips; production frontend build passed with 2,520 modules; focused Chromium passed 1/1; Django check, migration drift, and diff check passed. The initial focused backend command used the wrong virtual-environment path and did not run tests; its corrected run passed 9/9. No persistent database was touched. |
+| 2026-10-08 02:53 | Rechecked the complete backend and frontend regression plus the live Render perimeter before committing the real-email correction | backend test suite, frontend production build, Render staging frontend/backend, deployed frontend bundles, this file | All 461 backend tests passed with 3 expected PostgreSQL-only skips; the 2,520-module frontend build passed; frontend, backend liveness, readiness, and database probes returned HTTP 200; all readiness dependencies were ready; deployed JavaScript targeted the staging backend API; and CORS allowed the exact staging frontend origin. Tests used disposable databases, and no staging account, email, or business record was created. |
+| 2026-10-08 02:26 | Re-ran the real Brevo delivery probe after the user authorized the workstation outbound IP | ignored local `.env`, Brevo HTTPS API, this file | Brevo accepted one message and Django returned `BREVO_TEST_SENT=1`; no credential was printed. Inbox receipt and Render-specific configuration remain pending. |
+| 2026-10-08 02:23 | Exercised the locally configured Brevo credential without printing it; recorded the provider-side network authorization gate | ignored local `.env`, Brevo HTTPS API, this file | Key was present with the expected prefix/length, but both account validation and a real send returned HTTP 401 stating the current outbound IP was unrecognized. No email was accepted or delivered; Brevo workstation and later Render outbound-IP authorization remain pending. |
+| 2026-10-08 02:18 | Added empty Brevo API configuration slots to the ignored local environment without changing its current SMTP backend or recording any credential; Render still requires its own privately configured API key and verified sender | ignored local `.env`, this file | Confirmed only the Brevo key name and 15-second timeout were added; no API key value was supplied, logged, staged, or committed. |
+| 2026-10-08 02:04 | Rejected the unpushed staging auto-verification approach and replaced it with real Brevo transactional-email delivery over HTTPS; registration remains unverified until the delivered link is used. Also made local SQLite, disposable tests, staging Aiven, and future production ownership explicit through a credential-safe environment command and deployment workflow. | `backend/afn_service_management/{email_backends.py,settings.py,test_email_backend.py,test_settings_safety.py}`, `backend/users/{views/auth.py,tests.py,management/commands/show_environment.py,test_environment_command.py}`, `.env.example`, `backend/.env.example`, `render.yaml`, `package.json`, `README.md`, `docs/deployment/{AIVEN_DEPLOYMENT.md,EMAIL_SMTP_SETUP.md}`, reverted bypass-only frontend/E2E paths, this file | All 461 backend tests passed with 3 expected PostgreSQL-only skips; the production frontend build passed with 2,520 modules; focused registration Chromium passed 1/1; Django check, migration drift, local environment-target output, and diff check passed. Real provider delivery remains pending the user's Brevo API key and verified sender in Render; nothing was pushed or deployed. |
 | 2026-10-08 01:07 | Published the ASGI-safe PostgreSQL connection policy to `origin/staging-deploy` and verified the recovered Render services under a bounded read-only burst | Runtime commit `43be830`; Render staging frontend/backend; this file | GitHub advanced from `d33ee6d` to `43be830`; backend readiness returned HTTP 200 with all dependencies ready; 40/40 concurrency-4 health requests passed with zero errors; frontend returned HTTP 200. This successor changes documentation only. |
 | 2026-10-08 00:16 | Disabled persistent PostgreSQL sockets for the Daphne/ASGI deployment and enabled reusable-connection health checks to prevent transient stale-connection 503 responses after hosted restarts or route changes | `backend/afn_service_management/{settings.py,test_settings_safety.py}`, `.env.example`, `backend/.env.example`, `render.yaml`, `docs/deployment/AIVEN_DEPLOYMENT.md`, this file | Focused settings tests passed 4/4; all 455 backend tests passed with 3 expected PostgreSQL-only skips; `pip check` and migration drift passed. The pre-change live service was ready and a read-only 20-request probe passed without errors, establishing an intermittent connection-lifecycle defect rather than a current database outage. |
 | 2026-10-07 23:54 | Published the mobile dashboard width fix to `origin/staging-deploy` and verified the new Render frontend artifact plus healthy backend dependencies | Runtime commit `ced0797`; Render staging frontend/backend; this file | GitHub advanced from `fa121a2` to `ced0797`; frontend `Last-Modified` advanced to 15:51:59 UTC; backend returned HTTP 200 with the release request ID and all readiness checks green. This successor changes documentation only. |

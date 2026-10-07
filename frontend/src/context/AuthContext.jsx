@@ -254,14 +254,9 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
 
       const response = await axios.post(`${API_BASE_URL}/users/register/`, userData, { timeout: 15_000 });
-      const { user: newUser, message, verification_required: verificationRequired } = response.data;
+      const { user: newUser, message } = response.data;
 
-      return {
-        success: true,
-        user: newUser,
-        message,
-        verificationRequired: verificationRequired !== false,
-      };
+      return { success: true, user: newUser, message };
     } catch (err) {
       return {
         success: false,

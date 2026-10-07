@@ -2,6 +2,26 @@
 
 This project is already configured to use PostgreSQL through `DATABASE_URL`, which is the easiest way to connect to Aiven.
 
+## Environment ownership (do not mix these)
+
+| Environment | Database | Where connection settings live | Purpose |
+| --- | --- | --- | --- |
+| Local development | `backend/db.sqlite3` | local `.env` with no `DATABASE_URL` | Fast feature work; never changes staging data |
+| Automated backend/browser tests | disposable test SQLite / `backend/db.e2e.sqlite3` | test settings and Playwright setup | Repeatable destructive testing in isolation |
+| Render staging | Aiven PostgreSQL | Render backend environment only | Deployed integration and professor/UAT checks |
+| Future production | separate PostgreSQL service/database | production host secret store only | Real operational data after release approval |
+
+Run `npm run env:check` before local work or any database-sensitive command.
+Ordinary local output must report SQLite and `Safe local-development target
+confirmed.` The settings module already rejects a local `DATABASE_URL` unless
+`ALLOW_REMOTE_DATABASE_IN_DEVELOPMENT=True` is deliberately supplied; do not
+set that override for routine development.
+
+Develop and test locally first, push a validated commit second, and test the
+deployed workflow against Aiven last. Do not try to keep SQLite and Aiven rows
+automatically synchronized: migrations synchronize schema, while each
+environment owns separate data.
+
 ## 1. Create the Aiven database
 
 1. Create a PostgreSQL service in Aiven.

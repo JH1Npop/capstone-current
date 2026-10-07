@@ -213,31 +213,6 @@ test.describe('Public Pages', () => {
     await expect(page.getByLabel('Email *')).toHaveAttribute('aria-invalid', 'true');
   });
 
-  test('1.4c - staging registration can proceed directly to sign in', async ({ page }) => {
-    await page.route('**/api/users/register/', async (route) => {
-      const registration = route.request().postDataJSON();
-      await route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          user: { username: registration.username, email: registration.email },
-          verification_required: false,
-          message: 'Staging account created and activated. You can sign in now.',
-        }),
-      });
-    });
-    await page.goto('/register');
-    await page.getByLabel('Username *').fill('staging_ready_client');
-    await page.getByLabel('Email *').fill('staging-ready@example.com');
-    await page.getByLabel('Password *', { exact: true }).fill('StrongPass123!');
-    await page.getByLabel('Confirm password *').fill('StrongPass123!');
-    await page.getByRole('button', { name: /create account/i }).click();
-
-    await expect(page.getByRole('heading', { name: 'Account ready' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /resend/i })).toHaveCount(0);
-  });
-
   test('1.5 — Forgot Password page renders with email input', async ({ page }) => {
     await page.goto('/forgot-password');
     await page.waitForLoadState('networkidle');

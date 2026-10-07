@@ -72,17 +72,29 @@ class HostedDatabaseConnectionTests(SimpleTestCase):
         self.assertIs(config['CONN_HEALTH_CHECKS'], False)
 
 
-class StagingRegistrationSafetyTests(SimpleTestCase):
-    def test_auto_verification_is_rejected_outside_staging(self):
-        with patch.multiple(
-            project_settings,
-            IS_PRODUCTION=True,
-            IS_TEST=False,
-            DEPLOYMENT_STAGE='production',
-            STAGING_AUTO_VERIFY_REGISTRATIONS=True,
+class BrevoConfigurationSafetyTests(SimpleTestCase):
+    def _validate_with(self, **overrides):
+        values = {
+            'IS_PRODUCTION': True,
+            'IS_TEST': False,
+            'EMAIL_BACKEND': 'afn_service_management.email_backends.BrevoEmailBackend',
+            'BREVO_API_KEY': 'configured-key',
+            'DEFAULT_FROM_EMAIL': 'AFN Service <verified@example.org>',
+        }
+        values.update(overrides)
+        with patch.multiple(project_settings, **values):
+            project_settings.validate_production_settings()
+
+    def test_brevo_backend_requires_api_key(self):
+        with self.assertRaisesRegex(
+            ImproperlyConfigured,
+            'BREVO_API_KEY is required for the Brevo email backend',
         ):
-            with self.assertRaisesRegex(
-                ImproperlyConfigured,
-                'STAGING_AUTO_VERIFY_REGISTRATIONS is allowed only when DEPLOYMENT_STAGE=staging',
-            ):
-                project_settings.validate_production_settings()
+            self._validate_with(BREVO_API_KEY='')
+
+    def test_brevo_backend_rejects_placeholder_sender(self):
+        with self.assertRaisesRegex(
+            ImproperlyConfigured,
+            'DEFAULT_FROM_EMAIL must contain a verified non-placeholder Brevo sender',
+        ):
+            self._validate_with(DEFAULT_FROM_EMAIL='AFN Service <noreply@example.invalid>')

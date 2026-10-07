@@ -14,6 +14,7 @@ import os
 import logging
 import sys
 import tempfile
+from email.utils import parseaddr
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 from django.core.exceptions import ImproperlyConfigured
@@ -518,10 +519,8 @@ EMAIL_VERIFICATION_EXPIRY_HOURS = int(os.environ.get('EMAIL_VERIFICATION_EXPIRY_
 EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS = int(
     os.environ.get('EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', '60')
 )
-# Disposable staging can activate demo registrations immediately when its
-# hosting tier cannot deliver verification email. Production is forbidden from
-# enabling this escape hatch by validate_production_settings().
-STAGING_AUTO_VERIFY_REGISTRATIONS = env_bool('STAGING_AUTO_VERIFY_REGISTRATIONS', default=False)
+BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '').strip()
+BREVO_API_TIMEOUT_SECONDS = int(os.environ.get('BREVO_API_TIMEOUT_SECONDS', '15'))
 
 # Email settings (configure for your email provider)
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
@@ -648,8 +647,12 @@ def validate_production_settings():
         errors.append('REDIS_URL must be set when USE_REDIS=True')
     if EMAIL_USE_TLS and EMAIL_USE_SSL:
         errors.append('EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be True')
-    if STAGING_AUTO_VERIFY_REGISTRATIONS and DEPLOYMENT_STAGE != 'staging':
-        errors.append('STAGING_AUTO_VERIFY_REGISTRATIONS is allowed only when DEPLOYMENT_STAGE=staging')
+    if EMAIL_BACKEND == 'afn_service_management.email_backends.BrevoEmailBackend':
+        if not BREVO_API_KEY:
+            errors.append('BREVO_API_KEY is required for the Brevo email backend')
+        sender_email = parseaddr(DEFAULT_FROM_EMAIL)[1]
+        if not sender_email or sender_email.endswith(('@example.com', '@example.invalid')):
+            errors.append('DEFAULT_FROM_EMAIL must contain a verified non-placeholder Brevo sender')
     if EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
         if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD:
             errors.append('EMAIL_HOST_USER and EMAIL_HOST_PASSWORD are required for SMTP email')

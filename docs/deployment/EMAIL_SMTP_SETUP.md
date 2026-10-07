@@ -1,7 +1,39 @@
-# Email and SMTP Setup
+# Email Delivery Setup
 
 The backend sends email through Django's email backend. Configure SMTP in the
 root `.env` file when you want real emails to reach inboxes.
+
+## Render free staging: Brevo HTTPS API
+
+Render free web services block outbound SMTP ports 25, 465, and 587. Staging
+therefore uses the repository's Brevo HTTPS backend instead of bypassing email
+verification:
+
+```env
+EMAIL_BACKEND=afn_service_management.email_backends.BrevoEmailBackend
+BREVO_API_KEY=your_brevo_api_key
+BREVO_API_TIMEOUT_SECONDS=15
+DEFAULT_FROM_EMAIL=AFN Service <the-exact-verified-sender@example.com>
+```
+
+Before deployment:
+
+1. Create or select a Brevo account.
+2. Register and verify the sender address or sending domain in Brevo.
+3. Create a Brevo API key.
+4. In the Render backend service, set `BREVO_API_KEY` as a secret and
+   `DEFAULT_FROM_EMAIL` to the exact verified sender (a display name is allowed).
+5. Deploy, register with an inbox you control, open the verification link, then
+   confirm login and password reset.
+
+Production startup fails closed if the Brevo key is missing or the sender is a
+placeholder. Never place the API key in `.env.example`, `render.yaml`, frontend
+variables, logs, screenshots, commits, or chat. Brevo's endpoint contract is
+documented at https://developers.brevo.com/docs/send-a-transactional-email and
+Render's SMTP restriction at
+https://render.com/changelog/free-web-services-will-no-longer-allow-outbound-traffic-to-smtp-ports.
+
+## SMTP-capable environments
 
 ## Environment
 

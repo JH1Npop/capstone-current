@@ -7,6 +7,7 @@
     "build:pythonanywhere": "npm --prefix frontend run build:pythonanywhere",
     "dev": "npm --prefix frontend run dev",
     "dev:full": "npm --prefix frontend run dev:full",
+    "env:check": "cd backend && ..\\venv\\Scripts\\python.exe manage.py show_environment",
     "check:backend": "cd backend && ..\\venv\\Scripts\\python.exe manage.py check",
     "test:backend": "cd backend && ..\\venv\\Scripts\\python.exe manage.py test",
     "build:frontend": "cd frontend && npm run build",

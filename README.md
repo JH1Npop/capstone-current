@@ -35,10 +35,23 @@ Runtime data, generated builds, dependencies, uploaded media, logs, secrets, and
 
 The frontend normally runs at `http://localhost:5174`; the Django API runs at `http://127.0.0.1:8000`.
 
+Keep local development on SQLite: do not put `DATABASE_URL` in the local `.env`.
+Render staging owns the Aiven connection through its private environment
+variables. Before starting work, confirm the active target with:
+
+```powershell
+npm run env:check
+```
+
+The command prints the deployment stage, database engine/target, and email
+backend without printing credentials. A normal local result says `SQLite`,
+`local`, and `Safe local-development target confirmed.`
+
 ## Common commands
 
 ```powershell
 npm run dev:full
+npm run env:check
 npm run check:backend
 npm run test:backend
 npm run build:frontend
