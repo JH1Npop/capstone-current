@@ -68,14 +68,13 @@ services:
           name: afn-capstone-redis-staging
           property: connectionString
       # Free Render blocks common SMTP ports, so use Brevo's HTTPS API.
+      # The existing Blueprint cannot prompt for newly added sync:false values,
+      # so the user-managed group supplies the provider key and verified sender.
+      - fromGroup: afn-staging-email
       - key: EMAIL_BACKEND
         value: afn_service_management.email_backends.BrevoEmailBackend
-      - key: BREVO_API_KEY
-        sync: false
       - key: BREVO_API_TIMEOUT_SECONDS
         value: "15"
-      - key: DEFAULT_FROM_EMAIL
-        sync: false
       - key: TRACKING_REGION_NAME
         value: CALABARZON
       - key: TRACKING_REGION_SOUTH_LAT

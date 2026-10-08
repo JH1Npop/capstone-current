@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-08 02:53 Asia/Singapore**
+Last updated: **2026-10-08 11:27 Asia/Singapore**
 Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -527,8 +527,11 @@ production-oriented backend example. Required production categories are:
   sender where SMTP is available. Free Render staging instead uses
   `afn_service_management.email_backends.BrevoEmailBackend`, `BREVO_API_KEY`,
   `BREVO_API_TIMEOUT_SECONDS`, and a verified `DEFAULT_FROM_EMAIL` sender to
-  deliver the same Django verification/reset messages over HTTPS. Production
-  settings fail closed if the API key is absent or the sender is a placeholder.
+  deliver the same Django verification/reset messages over HTTPS. The existing
+  Blueprint links the user-managed `afn-staging-email` environment group for
+  the key and sender because Render does not prompt for newly added
+  `sync: false` values on an existing Blueprint. Production settings fail
+  closed if the API key is absent or the sender is a placeholder.
 - Security/observability: a stable `MFA_ENCRYPTION_KEY` should be configured
   before real administrator enrollment (otherwise encryption derives from
   `SECRET_KEY`), plus `MFA_ISSUER_NAME` and production-default JSON stdout via
@@ -707,6 +710,7 @@ Results are evidence, not promises. Rerun checks affected by later changes.
 
 | Date | Validation | Result | Scope/notes |
 | --- | --- | --- | --- |
+| 2026-10-08 | Render Brevo environment-group link pre-deploy check | **Passed** focused email/settings tests 8/8, Django system check, exact Blueprint structure assertions, diff check, and tracked-secret scan | `render.yaml` now contains exactly one `fromGroup: afn-staging-email` link and no direct `BREVO_API_KEY` or `DEFAULT_FROM_EMAIL` declarations. No credential is tracked. PyYAML and a Node YAML parser are not installed, so Render's Blueprint sync remains the authoritative schema validation. |
 | 2026-10-08 | Pre-commit email correction regression and live frontend/backend connection health | **Passed** all 461 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, frontend HTTP 200, backend liveness/readiness/database HTTP 200, deployed bundle API-target inspection, and CORS origin inspection | The deployed frontend bundle targets `https://afn-capstone-backend-staging.onrender.com/api`; backend readiness reported database, cache, realtime, and storage ready; the database-specific probe was ready; and the backend allowed the exact deployed frontend origin. Tests used disposable databases. These checks do not expose or independently prove the private Render `FRONTEND_BASE_URL` value or deployed email delivery. |
 | 2026-10-08 | HTTPS transactional-email and environment-boundary regression | **Passed** all 461 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, focused registration Chromium 1/1, Django check, migration drift, environment-target check, diff check, and live Brevo API acceptance | The Brevo backend posts sender, recipients, reply-to, plain text, and HTML through the official HTTPS endpoint, fails closed on provider errors, and production validation rejects a missing key or placeholder sender. Registration remains unverified, login remains blocked until verification, and password reset remains token-gated. `npm run env:check` confirmed local SQLite. After the user authorized the workstation IP, a real test email was accepted with `send=1`; inbox receipt remains user confirmation, while Render key/sender/outbound-IP configuration and deployed end-to-end verification remain pending. |
 | 2026-10-08 | Live ASGI/Aiven connection-fix verification | **Passed** deployment recovery, dependency readiness, and 40/40 read-only health requests | `origin/staging-deploy` advanced to runtime commit `43be830`. After the expected Render cutover window, backend readiness returned HTTP 200 with database, cache, realtime, and storage ready. A bounded 40-request, concurrency-4 liveness/readiness probe passed with zero errors, p95 1,753 ms, and maximum 1,882 ms. The static frontend also returned HTTP 200. No staging business data was mutated. |
@@ -931,7 +935,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 | Priority | Item | Safest next action |
 | --- | --- | --- |
-| High before deploying the email fix | The real Brevo HTTPS backend is implemented and fail-closed, and Brevo accepted a live message after workstation IP authorization. Render will use different outbound IPs, so this local acceptance does not yet prove deployed delivery. `BREVO_API_KEY` and a verified `DEFAULT_FROM_EMAIL` remain intentionally outside source control. | Confirm the test message reached the inbox; configure the key/sender in Render and authorize the backend service's outbound IP ranges in Brevo, then exercise deployed registration, inbox delivery, verification, login, and password reset before pushing traffic. |
+| High before accepting the email deployment | The first `8502f25` Blueprint and auto-deploy attempts failed because the existing Blueprint ignored newly added `sync: false` values; the previous console-email backend remained live and a successful registration therefore produced no Brevo event. The user has now created `afn-staging-email` with the provider key and verified sender, and the Blueprint link is pending deployment. Render will use different outbound IPs, so local Brevo acceptance still does not prove deployed delivery. | Deploy the environment-group link, confirm the backend becomes live on the successor commit, authorize Render outbound IPs in Brevo if required, then use resend verification and verify Brevo request/delivery plus verification/login/password-reset end to end. |
 | High before deploying this phase | The current MFA/observability/schema/UI changes pass all 453 backend tests, production build, browser smoke, and every maintained browser scenario (200/201 exhaustive plus the sole setup-timeout scenario 1/1 focused), but the phase has not been migrated on staging, committed, pushed, or deployed | Review the diff and secret scan, then explicitly authorize commit/push/deployment; configure a stable MFA encryption key, back up, and approve the staging migration separately |
 | High operations evidence | Backup and guarded restore tooling now exists, but no real PostgreSQL backup or disposable `test_...` restore drill has been performed | Configure encrypted off-host retention, create a backup, restore it only to a disposable guarded database, validate representative data and recovery time, and record the evidence |
 | High account rollout | Administrator MFA is optional and existing admin accounts remain unenrolled; a stable `MFA_ENCRYPTION_KEY` is not yet provider-configured | Configure a stable key in the secret store before enrollment, deploy the migration, enroll each administrator individually, store recovery codes securely, and verify recovery/disable ownership procedures |
@@ -988,8 +992,10 @@ All paths below are preserved work, not cleanup candidates.
 
 - `render.yaml`: free disposable Render staging Blueprint for the Django/Daphne
   backend, React static site, and Redis-compatible Key Value service; all
-  provider secrets remain dashboard supplied. Production settings accept the
-  Blueprint's 43-44-character, 256-bit generated `SECRET_KEY` representation.
+  provider secrets remain dashboard supplied, including Brevo credentials via
+  the user-managed `afn-staging-email` environment group. Production settings
+  accept the Blueprint's 43-44-character, 256-bit generated `SECRET_KEY`
+  representation.
 - `.env.example`, `backend/.env.example`, `.gitignore`: local/production
   environment contracts, including the explicit remote-development database
   override, ASGI-safe nonpersistent PostgreSQL connections with reusable-
@@ -1474,6 +1480,7 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date/time (Asia/Singapore) | Change | Main paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-08 11:27 | Linked the existing Render Blueprint to the user-created `afn-staging-email` environment group after Render ignored newly introduced `sync: false` email values and both `8502f25` deploy attempts failed fast | `render.yaml`, this file | Focused email/settings tests passed 8/8; Django check, exact Blueprint structure assertions, diff check, and tracked-secret scan passed. No secret value is stored in source control; Render sync remains the authoritative Blueprint schema check. |
 | 2026-10-08 02:53 | Rechecked the complete backend and frontend regression plus the live Render perimeter before committing the real-email correction | backend test suite, frontend production build, Render staging frontend/backend, deployed frontend bundles, this file | All 461 backend tests passed with 3 expected PostgreSQL-only skips; the 2,520-module frontend build passed; frontend, backend liveness, readiness, and database probes returned HTTP 200; all readiness dependencies were ready; deployed JavaScript targeted the staging backend API; and CORS allowed the exact staging frontend origin. Tests used disposable databases, and no staging account, email, or business record was created. |
 | 2026-10-08 02:26 | Re-ran the real Brevo delivery probe after the user authorized the workstation outbound IP | ignored local `.env`, Brevo HTTPS API, this file | Brevo accepted one message and Django returned `BREVO_TEST_SENT=1`; no credential was printed. Inbox receipt and Render-specific configuration remain pending. |
 | 2026-10-08 02:23 | Exercised the locally configured Brevo credential without printing it; recorded the provider-side network authorization gate | ignored local `.env`, Brevo HTTPS API, this file | Key was present with the expected prefix/length, but both account validation and a real send returned HTTP 401 stating the current outbound IP was unrecognized. No email was accepted or delivered; Brevo workstation and later Render outbound-IP authorization remain pending. |
