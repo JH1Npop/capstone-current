@@ -162,11 +162,11 @@ export default function ClientNotifications() {
     <Layout>
       <div className="py-2">
         <div className="mx-auto max-w-3xl">
-          <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="mb-6 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div>
               <p className="text-sm text-slate-500">Alerts, updates, reminders, and request activity.</p>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAllAsRead}

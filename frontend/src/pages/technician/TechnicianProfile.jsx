@@ -202,7 +202,7 @@ export default function TechnicianProfile() {
               </span>
             </ProfileIdentityCard>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Contact Information</h3>
                 <p className="mt-1 text-sm text-slate-500">Contact details used for assignments and field coordination.</p>
@@ -210,9 +210,9 @@ export default function TechnicianProfile() {
 
             {editing ? (
               <form onSubmit={saveProfile} className="mt-6 space-y-4">
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
-                  <FiCamera size={18} />
-                  <span>{profileImageFile ? profileImageFile.name : 'Choose a new profile photo'}</span>
+                <label className="flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 sm:px-4">
+                  <FiCamera size={18} className="shrink-0" />
+                  <span className="min-w-0 truncate">{profileImageFile ? profileImageFile.name : 'Choose a new profile photo'}</span>
                   <input type="file" accept={PROFILE_IMAGE_ACCEPT} onChange={handleProfileImageChange} className="hidden" />
                 </label>
                 <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
@@ -270,12 +270,12 @@ export default function TechnicianProfile() {
             </div>
           </section>
 
-          <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-brand-600">Work summary</p>
               <h3 className="mt-1 text-lg font-semibold text-slate-900">Performance</h3>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid grid-cols-2 gap-3">
               <Metric label="Total Jobs" value={technicianProfile.totalCompleted || 0} />
               <Metric label="Last 30 Days" value={completedLast30Days || 0} />
               <Metric label="Avg Time" value={technicianProfile.avgCompletionTime || 'N/A'} />
@@ -283,7 +283,7 @@ export default function TechnicianProfile() {
             </div>
           </section>
 
-          <section className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Service Skills</h3>
@@ -293,14 +293,14 @@ export default function TechnicianProfile() {
 
             {skills.length ? (
               <>
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="mt-4 grid grid-cols-3 gap-2">
                   {['expert', 'intermediate', 'beginner'].map((level) => (
                     <Metric key={level} label={formatSkillLevel(level)} value={skillCounts[level] || 0} />
                   ))}
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {skills.map((skill, index) => (
-                    <div key={skill.id || index} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <div key={skill.id || index} className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:p-4">
                       <p className="text-sm font-semibold text-slate-900">{getSkillName(skill)}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${skillLevelClass(skill?.skill_level)}`}>

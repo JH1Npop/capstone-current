@@ -49,6 +49,16 @@ const getReservationStatusClasses = (status) => {
   return 'bg-blue-100 text-blue-800';
 };
 
+const NAVIGATION_READY_STATUSES = new Set([
+  'not_started',
+  'for_inspection',
+  'inspection_completed',
+  'ready_for_service',
+  'awaiting_materials',
+]);
+
+const ROUTE_REVIEW_STATUSES = new Set(['arrived_on_site', 'in_progress', 'on_hold']);
+
 export default function TechnicianJobs() {
   const [timelineJob, setTimelineJob] = useState(null);
   const [timelineEvents, setTimelineEvents] = useState([]);
@@ -112,6 +122,7 @@ export default function TechnicianJobs() {
   const cancelledInventoryReservations = (selectedJob?.inventoryReservations || []).filter(
     (reservation) => reservation.status === 'cancelled'
   );
+  const hasDifferentActiveJob = (job) => Boolean(activeJob && activeJob.id !== job.id);
 
   const openCompletionFromDetails = () => {
     const job = selectedJob;
@@ -226,7 +237,7 @@ export default function TechnicianJobs() {
                       }}
                       className="flex cursor-pointer flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-100 sm:p-5"
                     >
-                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <h3 className="line-clamp-2 text-base font-bold text-slate-900">{job.service}</h3>
                           <p className="text-xs text-slate-600">{formatTicketId(job.ticketId)}</p>
@@ -234,18 +245,35 @@ export default function TechnicianJobs() {
                         <StatusBadge status={job.status} size="sm" />
                       </div>
 
-                      <div className="mb-3 grid gap-2 rounded-lg bg-slate-50 p-3 text-xs sm:grid-cols-2">
+                      <div className="mb-3 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-xs">
                         <div className="min-w-0">
-                          <p className="truncate font-medium text-slate-700">{job.client?.full_name || job.client}</p>
-                          <p className="mt-1 line-clamp-2 text-slate-500">{job.address || 'Location pending'}</p>
+                          <span className="text-slate-500">Client</span>
+                          <p className="mt-1 break-words font-medium text-slate-900">{job.client?.full_name || job.client}</p>
+                          {job.client?.phone ? <p className="mt-1 break-all text-slate-500">{job.client.phone}</p> : null}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-slate-500">Scheduled</span>
                           <p className="mt-1 font-medium text-slate-900">{formatDateLabel(job.scheduledDate)}</p>
+                          <p className="mt-1 text-slate-500">{formatTimeLabel(job.scheduledTime, job.scheduledTimeSlot)}</p>
+                        </div>
+                        <div className="col-span-2 flex min-w-0 items-start gap-2 border-t border-slate-200 pt-2">
+                          <FiMapPin className="mt-0.5 shrink-0 text-slate-400" />
+                          <p className="line-clamp-2 break-words text-slate-600">{job.address || 'Location pending'}</p>
+                        </div>
+                        <div className="col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-200 pt-2 text-slate-600">
+                          <span className="inline-flex items-center gap-1.5"><FiClock className="text-slate-400" /> {formatDurationLabel(job.estimatedDurationMinutes)}</span>
+                          <span>{job.crewMembers?.length ? `${job.crewMembers.length} additional crew` : 'No additional crew'}</span>
                         </div>
                       </div>
 
-                      <div className="mb-3 flex flex-wrap gap-1">
+                      {job.requestDescription ? (
+                        <div className="mb-3 rounded-lg border border-slate-200 px-3 py-2.5 text-xs">
+                          <p className="font-semibold uppercase tracking-wide text-slate-500">Job scope</p>
+                          <p className="mt-1 line-clamp-2 whitespace-pre-line text-slate-700">{job.requestDescription}</p>
+                        </div>
+                      ) : null}
+
+                      <div className="mb-3 flex flex-wrap gap-1.5">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                           job.assignmentRole === 'crew'
                             ? 'bg-emerald-100 text-emerald-800'
@@ -265,25 +293,33 @@ export default function TechnicianJobs() {
                         <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">
                           {job.requestSourceLabel}
                         </span>
+                        {job.inventoryReservations?.length ? (
+                          <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700 ring-1 ring-inset ring-violet-200">
+                            <FiPackage className="mr-1 inline" /> {job.inventoryReservations.length} equipment
+                          </span>
+                        ) : null}
+                        {job.checklistTotalSteps > 0 ? (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
+                            Checklist {job.checklistCompletedSteps}/{job.checklistTotalSteps}
+                          </span>
+                        ) : null}
                       </div>
 
                       <div className="mt-auto flex flex-col gap-2">
-                        {job.status === 'navigating' && (
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleStatusUpdate(job.id, 'arrived');
-                            }}
-                            disabled={isUpdatingStatus || (activeJob && activeJob.id !== job.id)}
-                            className={`rounded-lg px-3 py-2 text-xs font-medium text-white transition w-full ${
-                              isUpdatingStatus || (activeJob && activeJob.id !== job.id)
-                                ? 'bg-slate-300 cursor-not-allowed opacity-60'
-                                : 'bg-emerald-500 hover:bg-emerald-600'
-                            }`}
-                            title={activeJob && activeJob.id !== job.id ? `Complete ${formatTicketId(activeJob.ticketId || activeJob.id)} first` : ''}
-                          >
-                            {isUpdatingStatus ? 'Marking...' : activeJob && activeJob.id !== job.id ? 'Complete Other Job First' : 'Mark Arrived'}
-                          </button>
+                        {(NAVIGATION_READY_STATUSES.has(job.status) || job.status === 'navigating') && (
+                          hasDifferentActiveJob(job) ? (
+                            <div className="w-full rounded-lg bg-slate-100 px-3 py-2 text-center text-xs font-medium text-slate-500">
+                              Hold or finish {formatTicketId(activeJob.ticketId || activeJob.id)} first
+                            </div>
+                          ) : (
+                            <Link
+                              to={`/technician/map-navigation?ticketId=${job.ticketId}`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="flex w-full items-center justify-center gap-1 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-emerald-600"
+                            >
+                              <FiMapPin size={14} /> {job.status === 'navigating' ? 'Continue Navigation' : 'Start Navigation'}
+                            </Link>
+                          )
                         )}
                         {job.status === 'arrived_on_site' && (
                           <button
@@ -291,14 +327,14 @@ export default function TechnicianJobs() {
                               event.stopPropagation();
                               handleStatusUpdate(job.id, 'in_progress');
                             }}
-                            disabled={isUpdatingStatus || (activeJob && activeJob.id !== job.id && activeJob.status !== 'on_hold')}
+                            disabled={isUpdatingStatus || hasDifferentActiveJob(job)}
                             className={`rounded-lg px-3 py-2 text-xs font-medium text-white transition w-full ${
-                              isUpdatingStatus || (activeJob && activeJob.id !== job.id && activeJob.status !== 'on_hold')
+                              isUpdatingStatus || hasDifferentActiveJob(job)
                                 ? 'bg-slate-300 cursor-not-allowed opacity-60'
                                 : 'bg-blue-500 hover:bg-blue-600'
                             }`}
                           >
-                            {isUpdatingStatus ? 'Starting...' : activeJob && activeJob.id !== job.id && activeJob.status !== 'on_hold' ? 'Complete Other Job First' : 'Start Job'}
+                            {isUpdatingStatus ? 'Starting...' : hasDifferentActiveJob(job) ? 'Hold or Finish Other Job' : 'Start Job'}
                           </button>
                         )}
                         {job.status === 'on_hold' && (
@@ -307,14 +343,14 @@ export default function TechnicianJobs() {
                               event.stopPropagation();
                               handleStatusUpdate(job.id, 'in_progress');
                             }}
-                            disabled={isUpdatingStatus || (activeJob && activeJob.id !== job.id && activeJob.status !== 'on_hold')}
+                            disabled={isUpdatingStatus || hasDifferentActiveJob(job)}
                             className={`rounded-lg px-3 py-2 text-xs font-medium text-white transition w-full ${
-                              isUpdatingStatus || (activeJob && activeJob.id !== job.id && activeJob.status !== 'on_hold')
+                              isUpdatingStatus || hasDifferentActiveJob(job)
                                 ? 'bg-slate-300 cursor-not-allowed opacity-60'
                                 : 'bg-orange-500 hover:bg-orange-600'
                             }`}
                           >
-                            {isUpdatingStatus ? 'Starting...' : activeJob && activeJob.id !== job.id && activeJob.status !== 'on_hold' ? 'Complete Other Job First' : 'Resume Job'}
+                            {isUpdatingStatus ? 'Resuming...' : hasDifferentActiveJob(job) ? 'Hold or Finish Other Job' : 'Resume Job'}
                           </button>
                         )}
                         {job.status === 'in_progress' && job.checklistCompleted && (
@@ -343,7 +379,7 @@ export default function TechnicianJobs() {
                             <FiClipboard size={14} /> Complete Checklist First
                           </Link>
                         )}
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className={`grid gap-2 ${ROUTE_REVIEW_STATUSES.has(job.status) ? 'grid-cols-2' : 'grid-cols-1'}`}>
                           <button
                             type="button"
                             onClick={(event) => {
@@ -354,13 +390,15 @@ export default function TechnicianJobs() {
                           >
                             <FiEye size={14} /> Details
                           </button>
-                          <Link
-                            to={`/technician/map-navigation?ticketId=${job.ticketId}`}
-                            onClick={(event) => event.stopPropagation()}
-                            className="flex items-center justify-center gap-1 rounded-lg bg-emerald-500 px-2 py-2 text-xs font-medium text-white hover:bg-emerald-600"
-                          >
-                            <FiMapPin size={14} /> Navigate
-                          </Link>
+                          {ROUTE_REVIEW_STATUSES.has(job.status) && (
+                            <Link
+                              to={`/technician/map-navigation?ticketId=${job.ticketId}`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="flex items-center justify-center gap-1 rounded-lg bg-slate-700 px-2 py-2 text-xs font-medium text-white hover:bg-slate-800"
+                            >
+                              <FiMapPin size={14} /> View Route
+                            </Link>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -379,62 +417,64 @@ export default function TechnicianJobs() {
       )}
 
       {selectedJob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-2 sm:p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="technician-job-details-title" className="flex max-h-[96dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6 sm:py-4">
               <div className="min-w-0">
-                <h3 className="text-xl font-bold text-slate-900 sm:text-2xl">{selectedJob.service}</h3>
-                <p className="text-slate-600">
+                <h3 id="technician-job-details-title" className="break-words text-lg font-bold leading-snug text-slate-900 sm:text-2xl">{selectedJob.service}</h3>
+                <p className="mt-0.5 text-sm text-slate-600 sm:text-base">
                   {formatTicketId(selectedJob.ticketId)} for {selectedJob.client?.full_name || selectedJob.client}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={closeJobDetails}
-                className="rounded-lg bg-slate-100 px-3 py-2 text-slate-600 hover:bg-slate-200"
+                aria-label="Close job details"
+                className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
               >
-                Close
+                <FiX size={20} />
               </button>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <div className="rounded-lg bg-slate-50 p-2.5 sm:p-3">
                 <div className="mb-1 text-sm font-medium text-slate-500">Status</div>
                 <StatusBadge status={selectedJob.status} size="sm" />
               </div>
-              <div>
+              <div className="rounded-lg bg-slate-50 p-2.5 sm:p-3">
                 <div className="mb-1 text-sm font-medium text-slate-500">Priority</div>
                 <div className="text-slate-900">{selectedJob.priority}</div>
               </div>
-              <div>
+              <div className="rounded-lg bg-slate-50 p-2.5 sm:p-3">
                 <div className="mb-1 text-sm font-medium text-slate-500">Request Source</div>
                 <div className="text-slate-900">{selectedJob.requestSourceLabel}</div>
               </div>
-              <div>
+              <div className="rounded-lg bg-slate-50 p-2.5 sm:p-3">
                 <div className="mb-1 text-sm font-medium text-slate-500">Scheduled Date</div>
                 <div className="text-slate-900">
                   {formatDateLabel(selectedJob.scheduledDate)}
                 </div>
               </div>
-              <div>
+              <div className="rounded-lg bg-slate-50 p-2.5 sm:p-3">
                 <div className="mb-1 text-sm font-medium text-slate-500">Scheduled Time</div>
                 <div className="text-slate-900">
                   {formatTimeLabel(selectedJob.scheduledTime, selectedJob.scheduledTimeSlot)}
                 </div>
               </div>
-              <div>
+              <div className="rounded-lg bg-slate-50 p-2.5 sm:p-3">
                 <div className="mb-1 text-sm font-medium text-slate-500">Estimated Duration</div>
                 <div className="text-slate-900">{formatDurationLabel(selectedJob.estimatedDurationMinutes)}</div>
               </div>
-              <div>
+              <div className="col-span-2 rounded-lg bg-slate-50 p-2.5 sm:p-3">
                 <div className="mb-1 text-sm font-medium text-slate-500">Address</div>
                 <div className="text-slate-900">{selectedJob.address || 'Location pending'}</div>
               </div>
-              <div>
+              <div className="rounded-lg bg-slate-50 p-2.5 sm:p-3">
                 <div className="mb-1 text-sm font-medium text-slate-500">Lead Technician</div>
                 <div className="text-slate-900">{selectedJob.leadTechnician || 'Unassigned'}</div>
               </div>
-              <div>
+              <div className="rounded-lg bg-slate-50 p-2.5 sm:p-3">
                 <div className="mb-1 text-sm font-medium text-slate-500">Assignment Role</div>
                 <div className="text-slate-900">
                   {selectedJob.assignmentRole === 'crew' ? 'Crew Member' : 'Lead Technician'}
@@ -442,7 +482,7 @@ export default function TechnicianJobs() {
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+            <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 sm:mt-4 sm:p-4">
               <div className="mb-1 text-sm font-medium text-blue-700">Job Scope</div>
               <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
                 {selectedJob.requestDescription || 'No additional work description was provided.'}
@@ -459,7 +499,7 @@ export default function TechnicianJobs() {
               )}
             </div>
 
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 sm:mt-4 sm:p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-semibold text-slate-900">Checklist</div>
@@ -497,7 +537,7 @@ export default function TechnicianJobs() {
             </div>
 
             {selectedJob.crewMembers?.length > 0 && (
-              <div className="mt-4 rounded-xl bg-emerald-50 p-4">
+              <div className="mt-3 rounded-xl bg-emerald-50 p-3 sm:mt-4 sm:p-4">
                 <div className="mb-1 text-sm font-medium text-emerald-700">Assigned Crew</div>
                 <div className="text-sm text-emerald-900">
                   {selectedJob.crewMembers.map((member) => member.name).join(', ')}
@@ -506,7 +546,7 @@ export default function TechnicianJobs() {
             )}
 
             {selectedJob.ticketType !== 'inspection' && (
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:mt-4 sm:p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                   <FiPackage className="text-blue-500" />
@@ -688,30 +728,65 @@ export default function TechnicianJobs() {
             )}
 
             {selectedJob.notes && (
-              <div className="mt-4 rounded-xl bg-slate-50 p-4">
+              <div className="mt-3 rounded-xl bg-slate-50 p-3 sm:mt-4 sm:p-4">
                 <div className="mb-1 text-sm font-medium text-slate-500">Work Notes</div>
                 <div className="text-sm text-slate-700">{selectedJob.notes}</div>
               </div>
             )}
 
-            <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-3 sm:flex sm:flex-wrap sm:p-4 sm:px-6">
               <button
                 type="button"
                 onClick={() => openTimeline(selectedJob)}
-                className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50"
+                className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 sm:px-4"
               >
                 <FiClock size={16} /> View Timeline
               </button>
-              <Link
-                to={`/technician/map-navigation?ticketId=${selectedJob.ticketId}`}
-                className="flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-white hover:bg-emerald-600"
-              >
-                <FiMapPin size={16} /> Open Navigation
-              </Link>
-              {['completed', 'cancelled'].includes(selectedJob.status) ? (
+              {ROUTE_REVIEW_STATUSES.has(selectedJob.status) && (
+                <Link
+                  to={`/technician/map-navigation?ticketId=${selectedJob.ticketId}`}
+                  className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 sm:px-4"
+                >
+                  <FiMapPin size={16} /> View Route
+                </Link>
+              )}
+              {NAVIGATION_READY_STATUSES.has(selectedJob.status) || selectedJob.status === 'navigating' ? (
+                hasDifferentActiveJob(selectedJob) ? (
+                  <div className="col-span-2 rounded-lg bg-slate-200 px-4 py-2.5 text-center text-sm font-medium text-slate-600">
+                    Hold or finish {formatTicketId(activeJob.ticketId || activeJob.id)} before navigating
+                  </div>
+                ) : (
+                  <Link
+                    to={`/technician/map-navigation?ticketId=${selectedJob.ticketId}`}
+                    className="col-span-2 flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-emerald-700"
+                  >
+                    <FiMapPin size={16} /> {selectedJob.status === 'navigating' ? 'Continue Navigation' : 'Start Navigation'}
+                  </Link>
+                )
+              ) : selectedJob.status === 'arrived_on_site' ? (
+                <button
+                  type="button"
+                  onClick={() => handleStatusUpdate(selectedJob.id, 'in_progress')}
+                  disabled={isUpdatingStatus || hasDifferentActiveJob(selectedJob)}
+                  className="col-span-2 rounded-lg bg-blue-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {isUpdatingStatus ? 'Starting...' : hasDifferentActiveJob(selectedJob) ? 'Hold or Finish Other Job' : 'Start Job'}
+                </button>
+              ) : selectedJob.status === 'on_hold' ? (
+                <button
+                  type="button"
+                  onClick={() => handleStatusUpdate(selectedJob.id, 'in_progress')}
+                  disabled={isUpdatingStatus || hasDifferentActiveJob(selectedJob)}
+                  className="col-span-2 rounded-lg bg-orange-500 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {isUpdatingStatus ? 'Resuming...' : hasDifferentActiveJob(selectedJob) ? 'Hold or Finish Other Job' : 'Resume Job'}
+                </button>
+              ) : ['completed', 'cancelled'].includes(selectedJob.status) ? (
                 <Link
                   to="/technician/job-history"
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-center text-white hover:bg-blue-700"
+                  className="col-span-2 rounded-lg bg-blue-600 px-4 py-2.5 text-center text-sm text-white hover:bg-blue-700"
                 >
                   View Job History
                 </Link>
@@ -724,19 +799,19 @@ export default function TechnicianJobs() {
                   <button
                     type="button"
                     onClick={openCompletionFromDetails}
-                    className="rounded-lg bg-green-600 px-4 py-2 text-center font-medium text-white hover:bg-green-700"
+                    className="col-span-2 rounded-lg bg-green-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-green-700"
                   >
                     Finish Job
                   </button>
                 )
-              ) : (
+              ) : selectedJob.status === 'in_progress' ? (
                 <Link
                   to={selectedJob.ticketType === 'inspection' ? `/technician/inspection-checklist?ticketId=${selectedJob.ticketId}` : `/technician/checklist?ticketId=${selectedJob.ticketId}`}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-center text-white hover:bg-blue-700"
+                  className="col-span-2 rounded-lg bg-blue-600 px-4 py-2.5 text-center text-sm text-white hover:bg-blue-700"
                 >
-                  {selectedJob.status === 'in_progress' ? 'Complete Checklist' : 'Open Checklist'}
+                  Complete Checklist
                 </Link>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

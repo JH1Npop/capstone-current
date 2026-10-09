@@ -4,7 +4,6 @@ import {
   fetchTechnicianInventoryItems,
   fetchTechnicianJobs,
   requestAdditionalEquipment,
-  markTechnicianArrival,
   updateJobStatus
 } from '../api/api';
 import { useAuth } from '../context/AuthContext';
@@ -34,7 +33,7 @@ export function useTechnicianJobs() {
     try {
       const data = await fetchTechnicianJobs(techName);
       setJobs(data);
-      const active = data.find((job) => ['navigating', 'arrived_on_site', 'in_progress', 'on_hold'].includes(job.status?.toLowerCase()));
+      const active = data.find((job) => ['navigating', 'arrived_on_site', 'in_progress'].includes(job.status?.toLowerCase()));
       setActiveJob(active || null);
       setError('');
     } catch (loadError) {
@@ -118,28 +117,6 @@ export function useTechnicianJobs() {
   };
 
   const handleStatusUpdate = async (jobId, newStatus) => {
-    if (newStatus === 'arrived') {
-      try {
-        setIsUpdatingStatus(true);
-        setActionMessage('Marking arrival...');
-        const response = await markTechnicianArrival(jobId);
-        if (response.error) {
-          setError(response.error);
-          setTimeout(() => setError(''), 5000);
-          return;
-        }
-        await loadJobs();
-        setActionMessage('Arrival confirmed.');
-        setTimeout(() => setActionMessage(''), 3000);
-      } catch (statusError) {
-        setError(statusError.message || 'Unable to mark arrival.');
-        setTimeout(() => setError(''), 5000);
-      } finally {
-        setIsUpdatingStatus(false);
-      }
-      return;
-    }
-
     if (newStatus === 'in_progress' && activeJob && activeJob.id !== jobId) {
       setError(`You already have an active job (${formatTicketId(activeJob.ticketId || activeJob.id)}). Please complete or hold it first.`);
       setTimeout(() => setError(''), 5000);

@@ -358,11 +358,21 @@ class TechnicianJobsView(viewsets.ViewSet):
         """Record the first time a technician starts navigation to the job site."""
         try:
             ticket = self.get_locked_job(request.user, pk)
+            User.objects.select_for_update().get(pk=request.user.pk)
         except ServiceTicket.DoesNotExist:
             return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
 
         if ticket.status in ['Navigating', 'Arrived on Site', 'In Progress', 'Completed']:
             return Response({'status': 'already_notified', 'ticket_id': ticket.id})
+
+        active_job = get_technician_ticket_queryset(request.user).filter(
+            status__in=BUSY_TECHNICIAN_TICKET_STATUSES,
+        ).exclude(pk=ticket.pk).first()
+        if active_job:
+            return Response({
+                'error': f'Complete or hold ticket #{active_job.id} before navigating to another job.',
+                'active_job': active_job.id,
+            }, status=status.HTTP_409_CONFLICT)
 
         technician_name = request.user.get_full_name().strip() or request.user.username
         try:
@@ -575,14 +585,14 @@ class TechnicianJobsView(viewsets.ViewSet):
         new_status = status_map.get(requested_status)
         if not new_status:
             return Response({'error': 'Unsupported status'}, status=status.HTTP_400_BAD_REQUEST)
-        if new_status == 'In Progress' and ticket.status != 'Arrived on Site':
+        if new_status == 'In Progress' and ticket.status not in ['Arrived on Site', 'On Hold']:
             return Response({
-                'error': 'You must mark arrival on site before starting the job.',
+                'error': 'You must mark arrival on site before starting the job, or resume a job that is on hold.',
                 'status': ticket.status,
             }, status=status.HTTP_400_BAD_REQUEST)
         if new_status == 'In Progress':
             active_job = get_technician_ticket_queryset(request.user).filter(
-                status__in=['Navigating', 'Arrived on Site', 'In Progress', 'On Hold']
+                status__in=BUSY_TECHNICIAN_TICKET_STATUSES,
             ).exclude(pk=ticket.pk).first()
             if active_job:
                 return Response({

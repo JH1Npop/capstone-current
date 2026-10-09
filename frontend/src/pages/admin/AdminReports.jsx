@@ -393,7 +393,39 @@ export default function AdminReports() {
             <div className="p-8 text-center text-sm text-slate-600">No service tickets to display.</div>
           ) : (
             <>
-              <table className="w-full table-fixed border-separate border-spacing-0 text-sm">
+              <div className="divide-y divide-slate-200 md:hidden">
+                {paginatedTickets.map((ticket) => (
+                  <article key={`mobile-${ticket.id}`} className="space-y-3 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-brand-700">{formatTicketId(ticket.id)}</p>
+                        <p className="text-xs text-slate-500">{formatDate(ticket.created_at)}</p>
+                      </div>
+                      <StatusBadge status={ticket.status || 'Unknown'} size="sm" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="break-words font-medium text-slate-900">{ticket.client_fullname || ticket.client || 'Client'}</p>
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                        <StatusBadge status={ticket.priority || 'low'} size="sm" />
+                        <span className="break-words text-xs text-slate-600">{ticket.service || 'Service'}</span>
+                      </div>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="min-w-0 rounded-lg bg-slate-50 p-2.5">
+                        <dt className="font-semibold uppercase tracking-wide text-slate-500">Technician</dt>
+                        <dd className="mt-1 break-words text-slate-800">{ticket.technician_fullname || 'Unassigned'}</dd>
+                        <dd className="text-slate-500">{formatTechnicianId(ticket.technician_id)}</dd>
+                      </div>
+                      <div className="min-w-0 rounded-lg bg-slate-50 p-2.5">
+                        <dt className="font-semibold uppercase tracking-wide text-slate-500">SLA / Next step</dt>
+                        <dd className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${getSlaColor(ticket.sla?.status)}`}>{ticket.sla?.status || '-'}</dd>
+                        <dd className="mt-1 break-words text-slate-600">{ticket.next_step || '-'}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+              <table className="hidden w-full table-fixed border-separate border-spacing-0 text-sm md:table">
                 <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="w-[13%] border-b border-slate-200 px-3 py-3">Ticket</th>

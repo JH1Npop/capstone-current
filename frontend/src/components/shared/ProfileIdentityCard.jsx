@@ -39,10 +39,10 @@ export default function ProfileIdentityCard({
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="h-20 bg-brand-700" aria-hidden="true" />
-      <div className="px-5 pb-5 sm:px-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <div className="-mt-10 h-24 w-24 shrink-0 rounded-full bg-white p-1 shadow-md">
+      <div className="h-16 bg-brand-700 sm:h-20" aria-hidden="true" />
+      <div className="px-4 pb-4 sm:px-6 sm:pb-5">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:flex sm:gap-4">
+          <div className="-mt-8 h-20 w-20 shrink-0 rounded-full bg-white p-1 shadow-md sm:-mt-10 sm:h-24 sm:w-24">
             {profileImage ? (
               <img src={profileImage} alt={displayName} className="h-full w-full rounded-full object-cover" />
             ) : (
@@ -51,13 +51,13 @@ export default function ProfileIdentityCard({
               </div>
             )}
           </div>
-          <div className="min-w-0 flex-1 sm:pt-3">
-            <h2 className="truncate text-2xl font-bold text-slate-900">{displayName}</h2>
+          <div className="min-w-0 flex-1 pt-2 sm:pt-3">
+            <h2 className="truncate text-xl font-bold text-slate-900 sm:text-2xl">{displayName}</h2>
             <p className="mt-0.5 text-sm text-slate-500">@{username}</p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">{children}</div>
           </div>
           {!editing ? (
-            <button type="button" onClick={onEdit} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 sm:mt-3">
+            <button type="button" onClick={onEdit} className="col-span-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 sm:mt-3 sm:w-auto">
               <FiEdit2 size={16} />
               Edit Profile
             </button>
@@ -66,7 +66,7 @@ export default function ProfileIdentityCard({
       </div>
       <dl className="grid grid-cols-2 gap-px border-t border-slate-200 bg-slate-200 sm:grid-cols-4">
         {facts.map(({ icon: Icon, label, value }) => (
-          <div key={label} className="min-w-0 bg-slate-50 px-4 py-3">
+          <div key={label} className="min-w-0 bg-slate-50 px-3 py-3 sm:px-4">
             <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <Icon size={13} /> {label}
             </dt>

@@ -53,7 +53,7 @@ const DisclosureSection = ({ title, summary, icon: Icon, defaultOpen = false, ch
       open={isOpen}
       onToggle={(event) => setIsOpen(event.currentTarget.open)}
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-4 py-3 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-3 py-2.5 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 sm:px-4 sm:py-3">
         <span className="flex min-w-0 items-center gap-2">
           <Icon className="shrink-0 text-slate-500" />
           <span className="font-semibold text-slate-900">{title}</span>
@@ -63,7 +63,7 @@ const DisclosureSection = ({ title, summary, icon: Icon, defaultOpen = false, ch
           <FiChevronDown className="shrink-0 transition-transform group-open:rotate-180" />
         </span>
       </summary>
-      <div className="border-t border-slate-200 p-4">{children}</div>
+      <div className="border-t border-slate-200 p-3 sm:p-4">{children}</div>
     </details>
   );
 };
@@ -161,7 +161,7 @@ export default function ActiveJobDetailsDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-5"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-2 sm:p-5"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <div
@@ -169,9 +169,9 @@ export default function ActiveJobDetailsDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="active-job-details-title"
-        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+        className="flex max-h-[96dvh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl sm:max-h-[92vh] sm:rounded-2xl"
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+        <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${track === 'inspection' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}>
@@ -179,18 +179,18 @@ export default function ActiveJobDetailsDialog({
               </span>
               <StatusBadge status={status} size="sm" />
             </div>
-            <h2 id="active-job-details-title" className="mt-2 text-xl font-semibold text-slate-900">
+            <h2 id="active-job-details-title" className="mt-1.5 break-words text-lg font-semibold leading-snug text-slate-900 sm:mt-2 sm:text-xl">
               {formatTicketId(job.ticket_id || job.id)} · {service}
             </h2>
-            <p className="mt-1 text-sm text-slate-500">Live ticket details and recorded workflow evidence</p>
+            <p className="mt-1 hidden text-sm text-slate-500 sm:block">Live ticket details and recorded workflow evidence</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close job details" className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
             <FiX className="h-5 w-5" />
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-          <section className="rounded-xl border border-slate-200 bg-slate-50 p-4" aria-label="Workflow progress">
+        <div className="flex-1 overflow-y-auto px-3 py-3 sm:px-6 sm:py-5">
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4" aria-label="Workflow progress">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current checkpoint</p>
@@ -198,7 +198,7 @@ export default function ActiveJobDetailsDialog({
               </div>
               <span className="text-lg font-bold text-slate-800">{progress}%</span>
             </div>
-            <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200">
+            <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-slate-200 sm:mt-3 sm:h-2.5">
               <div
                 className={`h-full rounded-full ${ticket?.workflow_progress_paused || job.progress_paused ? 'bg-amber-500' : 'bg-brand-600'}`}
                 style={{ width: `${Math.min(Number(progress) || 0, 100)}%` }}
@@ -209,7 +209,7 @@ export default function ActiveJobDetailsDialog({
                 aria-valuenow={progress}
               />
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:mt-3">
               <span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${String(ticket?.priority || job.priority).toLowerCase() === 'urgent' ? 'bg-rose-100 text-rose-800' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}>
                 {ticket?.priority || job.priority || 'Normal'} priority
               </span>
@@ -230,12 +230,12 @@ export default function ActiveJobDetailsDialog({
               </button>
             </div>
           ) : (
-            <div className="mt-5 space-y-5">
+            <div className="mt-3 space-y-3 sm:mt-5 sm:space-y-5">
               <section className="overflow-hidden rounded-xl border border-slate-200" aria-labelledby="job-client-title">
-                <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="border-b border-slate-200 bg-slate-50 px-3 py-2.5 sm:px-4 sm:py-3">
                   <h3 id="job-client-title" className="flex items-center gap-2 text-sm font-semibold text-slate-900"><FiUsers /> Client details</h3>
                 </div>
-                <div className="p-4">
+                <div className="p-3 sm:p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <p className="font-semibold text-slate-900">{client}</p>
@@ -244,7 +244,7 @@ export default function ActiveJobDetailsDialog({
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{ticket?.requestSourceLabel || 'Client Portal'}</span>
                   </div>
                   {(clientPhone || clientEmail) ? (
-                    <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm sm:mt-4">
                       {clientPhone && <a href={`tel:${clientPhone}`} className="inline-flex items-center gap-2 font-medium text-brand-700 hover:underline"><FiPhone /> {clientPhone}</a>}
                       {clientEmail && <a href={`mailto:${clientEmail}`} className="inline-flex min-w-0 items-center gap-2 break-all font-medium text-brand-700 hover:underline"><FiMail className="shrink-0" /> {clientEmail}</a>}
                     </div>
@@ -289,18 +289,18 @@ export default function ActiveJobDetailsDialog({
               </DisclosureSection>
 
               <section className="grid gap-3 sm:grid-cols-2" aria-label="Assignment and visit details">
-                <div className="rounded-xl border border-slate-200 p-4">
+                <div className="rounded-xl border border-slate-200 p-3 sm:p-4">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><FiUser /> Assignment</h3>
-                  <dl className="mt-3 space-y-3 text-sm">
+                  <dl className="mt-2 space-y-2 text-sm sm:mt-3 sm:space-y-3">
                     <div><dt className="text-xs font-medium text-slate-500">Lead technician</dt><dd className="mt-0.5 font-semibold text-slate-900">{technician}</dd></div>
                     <div><dt className="text-xs font-medium text-slate-500">Additional crew</dt><dd className="mt-0.5 text-slate-700">{crew.length ? crew.map((member) => member.name).join(', ') : 'None assigned'}</dd></div>
                     {(ticket?.assignedAdminName || ticket?.assignedByName) && <div><dt className="text-xs font-medium text-slate-500">Assignment control</dt><dd className="mt-0.5 text-slate-700">{ticket?.assignedAdminName ? `Owner: ${ticket.assignedAdminName}` : ''}{ticket?.assignedByName ? `${ticket?.assignedAdminName ? ' · ' : ''}Assigned by ${ticket.assignedByName}` : ''}{ticket?.assignedAt ? ` · ${formatDateTime(ticket.assignedAt)}` : ''}</dd></div>}
                     {ticket?.dispatchLabel && <div><dt className="text-xs font-medium text-slate-500">Dispatch state</dt><dd className="mt-0.5 text-slate-700">{ticket.dispatchLabel}</dd></div>}
                   </dl>
                 </div>
-                <div className="rounded-xl border border-slate-200 p-4">
+                <div className="rounded-xl border border-slate-200 p-3 sm:p-4">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><FiCalendar /> Visit details</h3>
-                  <dl className="mt-3 space-y-3 text-sm">
+                  <dl className="mt-2 space-y-2 text-sm sm:mt-3 sm:space-y-3">
                     <div><dt className="text-xs font-medium text-slate-500">Schedule</dt><dd className="mt-0.5 font-semibold text-slate-900">{schedule ? formatDate(schedule) : 'No date recorded'}{scheduledTime ? ` · ${formatTime(scheduledTime)}` : ticket?.scheduledTimeSlot ? ` · ${displayStatus(ticket.scheduledTimeSlot)}` : ''}</dd></div>
                     <div><dt className="flex items-center gap-1 text-xs font-medium text-slate-500"><FiMapPin /> Service location</dt><dd className="mt-0.5 whitespace-pre-line text-slate-700">{location || 'No service address recorded'}</dd></div>
                     {routeSummary && <div><dt className="flex items-center gap-1 text-xs font-medium text-slate-500"><FiNavigation /> Planned route</dt><dd className="mt-0.5 text-slate-700">{routeSummary}</dd></div>}
@@ -370,10 +370,10 @@ export default function ActiveJobDetailsDialog({
           )}
         </div>
 
-        <footer className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Close</button>
-          {onOpenTickets && <button type="button" onClick={onOpenTickets} className="inline-flex items-center justify-center gap-2 rounded-lg border border-brand-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"><FiExternalLink /> Open ticket queue</button>}
-          {onOpenDispatch && <button type="button" onClick={onOpenDispatch} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"><FiExternalLink /> Open dispatch board</button>}
+        <footer className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 px-3 py-3 sm:flex sm:justify-end sm:px-6 sm:py-4">
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 sm:px-4">Close</button>
+          {onOpenTickets && <button type="button" onClick={onOpenTickets} className="inline-flex items-center justify-center gap-2 rounded-lg border border-brand-200 bg-white px-3 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 sm:px-4"><FiExternalLink /> Open ticket queue</button>}
+          {onOpenDispatch && <button type="button" onClick={onOpenDispatch} className="col-span-2 inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 sm:px-4"><FiExternalLink /> Open dispatch board</button>}
         </footer>
       </div>
     </div>

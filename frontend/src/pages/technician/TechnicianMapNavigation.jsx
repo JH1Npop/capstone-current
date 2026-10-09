@@ -159,7 +159,7 @@ export default function TechnicianMapNavigation() {
           await startJobNavigation(ticketId);
           setNavigationStarted(true);
         } catch (navigationError) {
-          console.warn('Failed to record navigation start', navigationError);
+          setError(navigationError.message || 'Unable to start navigation for this job.');
         }
       }
     } catch (routeError) {
@@ -548,11 +548,17 @@ export default function TechnicianMapNavigation() {
               {!arrived ? (
                 <button
                   onClick={markArrived}
-                  disabled={arrivalSaving}
+                  disabled={arrivalSaving || !gpsLocation || !navigationStarted}
                   className="flex w-full items-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 font-medium text-white shadow-lg transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   <FiFlag />
-                  {arrivalSaving ? 'Marking arrival...' : 'Mark Arrived'}
+                  {arrivalSaving
+                    ? 'Marking arrival...'
+                    : !gpsLocation
+                      ? 'Start Location Sharing First'
+                      : !navigationStarted
+                        ? 'Start Navigation First'
+                        : 'Mark Arrived'}
                 </button>
               ) : (
                 <div className="w-full rounded-xl border-2 border-emerald-400 bg-emerald-100 p-4 text-center font-medium text-emerald-800">

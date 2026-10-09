@@ -167,6 +167,118 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             message__icontains='started navigation',
         ).count(), 1)
 
+    def test_start_navigation_rejects_a_second_busy_job(self):
+        active_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Already navigating assignment',
+            priority='Normal',
+            status='In Progress',
+        )
+        active_ticket = ServiceTicket.objects.create(
+            request=active_request,
+            technician=self.technician_user,
+            scheduled_date=timezone.localdate(),
+            status='Navigating',
+            priority='Normal',
+        )
+        next_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Second navigation assignment',
+            priority='Normal',
+            status='Approved',
+        )
+        next_ticket = ServiceTicket.objects.create(
+            request=next_request,
+            technician=self.technician_user,
+            scheduled_date=timezone.localdate(),
+            status='Not Started',
+            priority='Normal',
+        )
+
+        self.client.force_authenticate(user=self.technician_user)
+        response = self.client.post(
+            f'/api/technician/jobs/{next_ticket.id}/start-navigation/',
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data['active_job'], active_ticket.id)
+        next_ticket.refresh_from_db()
+        self.assertEqual(next_ticket.status, 'Not Started')
+
+    def test_on_hold_job_can_resume_when_no_other_job_is_busy(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Resume held assignment',
+            priority='Normal',
+            status='In Progress',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            technician=self.technician_user,
+            scheduled_date=timezone.localdate(),
+            status='On Hold',
+            priority='Normal',
+        )
+
+        self.client.force_authenticate(user=self.technician_user)
+        response = self.client.post(
+            f'/api/technician/jobs/{ticket.id}/status/',
+            {'status': 'in_progress'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'In Progress')
+
+    def test_on_hold_job_does_not_block_starting_an_arrived_job(self):
+        held_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Held assignment',
+            priority='Normal',
+            status='In Progress',
+        )
+        held_ticket = ServiceTicket.objects.create(
+            request=held_request,
+            technician=self.technician_user,
+            scheduled_date=timezone.localdate(),
+            status='On Hold',
+            priority='Normal',
+        )
+        arrived_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Arrived replacement assignment',
+            priority='Normal',
+            status='In Progress',
+        )
+        arrived_ticket = ServiceTicket.objects.create(
+            request=arrived_request,
+            technician=self.technician_user,
+            scheduled_date=timezone.localdate(),
+            status='Arrived on Site',
+            priority='Normal',
+        )
+
+        self.client.force_authenticate(user=self.technician_user)
+        response = self.client.post(
+            f'/api/technician/jobs/{arrived_ticket.id}/status/',
+            {'status': 'in_progress'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        arrived_ticket.refresh_from_db()
+        held_ticket.refresh_from_db()
+        self.assertEqual(arrived_ticket.status, 'In Progress')
+        self.assertEqual(held_ticket.status, 'On Hold')
+
     def test_request_preferences_seed_ticket_schedule_and_reschedule_workflow(self):
         preferred_date = timezone.localdate() + timedelta(days=3)
         self.client.force_authenticate(user=self.client_user)

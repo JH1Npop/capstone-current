@@ -3846,8 +3846,8 @@ export default function AdminDocuments() {
             <div className="overflow-x-auto bg-[#eef5fb] p-4 lg:p-6">
               <div
                 id="afn-printable-document"
-                className="mx-auto w-full"
-                style={{ maxWidth: paper.previewWidth }}
+                className="mx-auto min-w-[44rem]"
+                style={{ width: paper.previewWidth, maxWidth: paper.previewWidth }}
               >
                 <DocumentPreview
                   activeTemplate={activeTemplate}

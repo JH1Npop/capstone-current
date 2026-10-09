@@ -70,12 +70,15 @@ test.describe('Technician Workspace - All Pages', () => {
     await expect(page.getByRole('heading', { name: /Active Jobs \(\d+\)/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Details', exact: true }).first()).toBeVisible();
     const detailsCount = await page.getByRole('button', { name: 'Details', exact: true }).count();
-    await expect(page.getByRole('link', { name: 'Navigate', exact: true })).toHaveCount(detailsCount);
+    await expect(page.getByRole('link', { name: 'Start Navigation', exact: true })).toHaveCount(detailsCount);
+    await expect(page.getByRole('button', { name: 'Mark Arrived', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Details', exact: true }).first().click();
     await expect(page.getByText('Scheduled Time', { exact: true })).toBeVisible();
     await expect(page.getByText('Estimated Duration', { exact: true })).toBeVisible();
     await expect(page.getByText('Job Scope', { exact: true })).toBeVisible();
     await expect(page.getByRole('main').getByText('Checklist', { exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog').getByRole('link', { name: 'Start Navigation', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog').getByRole('link', { name: /Checklist/ })).toHaveCount(0);
   });
 
   test('4.3 - Schedule view renders', async ({ page }) => {
@@ -124,11 +127,12 @@ test.describe('Technician Workspace - All Pages', () => {
     await expect(page.getByText('Location sharing policy')).toBeVisible();
     await expect(page.getByText(/History is retained for up to 30 days/)).toBeVisible();
     await expect(page.getByText(/Location sharing off.*CALABARZON/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Start location sharing' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start location sharing', exact: true })).toBeVisible();
     expect(await page.evaluate(() => window.__technicianWatchCalls)).toBe(0);
     expect(routeRequests).toBe(0);
     expect(navigationStartRequests).toBe(0);
     await expect(page.getByText('Start location sharing to calculate directions.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start Location Sharing First' })).toBeDisabled();
     await page.screenshot({ path: 'test-results/screenshots/04-tech-navigation-location-policy.png', fullPage: true });
   });
 

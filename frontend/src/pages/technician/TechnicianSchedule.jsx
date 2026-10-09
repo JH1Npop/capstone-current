@@ -82,6 +82,7 @@ export default function TechnicianSchedule() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCompletedJobs, setShowCompletedJobs] = useState(false);
+  const [selectedDateKey, setSelectedDateKey] = useState(() => getLocalDateKey(new Date()));
 
   const monthDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
   const monthRange = useMemo(() => getMonthRange(calendarMonth), [calendarMonth]);
@@ -123,17 +124,28 @@ export default function TechnicianSchedule() {
     }
     return groups;
   }, [scheduleWithDates]);
+  const selectedDayJobs = jobsByDay.get(selectedDateKey) || [];
 
   const goToPreviousMonth = () => {
-    setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));
+    setCalendarMonth((current) => {
+      const next = new Date(current.getFullYear(), current.getMonth() - 1, 1);
+      setSelectedDateKey(getLocalDateKey(next));
+      return next;
+    });
   };
 
   const goToNextMonth = () => {
-    setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1));
+    setCalendarMonth((current) => {
+      const next = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+      setSelectedDateKey(getLocalDateKey(next));
+      return next;
+    });
   };
 
   const goToCurrentMonth = () => {
-    setCalendarMonth(new Date());
+    const current = new Date();
+    setCalendarMonth(current);
+    setSelectedDateKey(getLocalDateKey(current));
   };
 
   return (
@@ -146,19 +158,19 @@ export default function TechnicianSchedule() {
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800">{error}</div>
       ) : (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50 px-3 py-3 sm:px-5 sm:py-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button type="button" onClick={goToPreviousMonth} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:border-blue-300 hover:text-blue-600" aria-label="Previous month">
                 <FiChevronLeft />
               </button>
-              <div className="min-w-48 text-center">
-                <h3 className="text-xl font-semibold text-slate-900">{monthLabel}</h3>
+              <div className="min-w-0 flex-1 text-center sm:min-w-48">
+                <h3 className="truncate text-lg font-semibold text-slate-900 sm:text-xl">{monthLabel}</h3>
                 <p className="text-xs text-slate-500">{scheduleWithDates.length} scheduled task{scheduleWithDates.length === 1 ? '' : 's'}</p>
               </div>
               <button type="button" onClick={goToNextMonth} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:border-blue-300 hover:text-blue-600" aria-label="Next month">
                 <FiChevronRight />
               </button>
-              <button type="button" onClick={goToCurrentMonth} className="ml-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:border-blue-300 hover:text-blue-600">
+              <button type="button" onClick={goToCurrentMonth} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:border-blue-300 hover:text-blue-600 sm:ml-1 sm:w-auto">
                 Today
               </button>
             </div>
@@ -186,7 +198,72 @@ export default function TechnicianSchedule() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="md:hidden">
+            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-900 text-white">
+              {WEEKDAYS.map((day) => (
+                <div key={`mobile-${day}`} className="py-2 text-center text-[10px] font-semibold uppercase">
+                  {day.slice(0, 1)}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {monthDays.map((day) => {
+                const key = getLocalDateKey(day);
+                const dayJobs = jobsByDay.get(key) || [];
+                const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+                const isToday = sameDay(day, today);
+                const isSelected = key === selectedDateKey;
+                return (
+                  <button
+                    key={`mobile-${key}`}
+                    type="button"
+                    onClick={() => setSelectedDateKey(key)}
+                    aria-label={`${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${dayJobs.length} scheduled task${dayJobs.length === 1 ? '' : 's'}`}
+                    className={`flex min-h-12 flex-col items-center justify-center border-b border-r border-slate-200 p-0.5 text-xs ${
+                      isSelected
+                        ? 'bg-blue-100 text-blue-800 ring-2 ring-inset ring-blue-400'
+                        : isCurrentMonth
+                          ? 'bg-white text-slate-700'
+                          : 'bg-slate-50 text-slate-400'
+                    }`}
+                  >
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-full font-semibold ${isToday ? 'bg-blue-600 text-white' : ''}`}>{day.getDate()}</span>
+                    {dayJobs.length > 0 ? <span className="mt-0.5 rounded-full bg-amber-100 px-1.5 text-[9px] font-bold text-amber-800">{dayJobs.length}</span> : <span className="h-3" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="border-t border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {new Date(`${selectedDateKey}T00:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+              </p>
+              {selectedDayJobs.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedDayJobs.map((item) => {
+                    const meta = getStatusMeta(item.status);
+                    const ticketId = item.ticketId || item.ticket_id || item.id;
+                    return (
+                      <button
+                        key={`mobile-job-${item.id}`}
+                        type="button"
+                        onClick={() => navigate(`/technician/my-jobs?ticketId=${ticketId}`)}
+                        className={`flex w-full items-center gap-3 rounded-lg p-3 text-left text-xs ring-1 ring-inset ${meta.tone}`}
+                      >
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold">{formatTicketId(ticketId)}: {item.service || item.serviceType || item.service_type || 'Service'}</span>
+                          <span className="mt-0.5 block truncate opacity-80">{formatTime(item)} · {item.client?.full_name || item.client || 'Client'}</span>
+                        </span>
+                        <span className="font-semibold">Open</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : <p className="text-sm text-slate-500">No scheduled tasks for this day.</p>}
+            </div>
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <div className="min-w-[46rem] md:min-w-0">
               <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-900 text-white">
                 {WEEKDAYS.map((day) => (

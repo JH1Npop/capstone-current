@@ -426,6 +426,47 @@ export default function AdminCalendar() {
           </div>
         ) : (
           <>
+            <div className="grid grid-cols-7 border-b border-slate-200 md:hidden" aria-label="Mobile month calendar">
+              {WEEKDAYS.map((day) => (
+                <div key={`mobile-${day}`} className="bg-slate-900 px-1 py-2 text-center text-[10px] font-semibold uppercase text-white">
+                  {day.slice(0, 1)}
+                </div>
+              ))}
+              {monthDays.map((day) => {
+                const key = getLocalDateKey(day);
+                const dayEvents = eventsByDay.get(key) || [];
+                const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+                const isToday = sameDay(day, today);
+                const isSelected = key === selectedDateKey;
+
+                return (
+                  <button
+                    key={`mobile-${key}`}
+                    type="button"
+                    onClick={() => setSelectedDateKey(key)}
+                    aria-label={`${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${dayEvents.length} scheduled item${dayEvents.length === 1 ? '' : 's'}`}
+                    className={`relative flex min-h-14 flex-col items-center justify-center border-b border-r border-slate-200 p-1 text-xs transition ${
+                      isSelected
+                        ? 'bg-blue-100 text-blue-800 ring-2 ring-inset ring-blue-400'
+                        : isCurrentMonth
+                          ? 'bg-white text-slate-700'
+                          : 'bg-slate-50 text-slate-400'
+                    }`}
+                  >
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-full font-semibold ${isToday ? 'bg-blue-600 text-white' : ''}`}>
+                      {day.getDate()}
+                    </span>
+                    {dayEvents.length > 0 ? (
+                      <span className="mt-1 min-w-4 rounded-full bg-amber-100 px-1 text-[10px] font-bold text-amber-800">
+                        {dayEvents.length}
+                      </span>
+                    ) : (
+                      <span className="mt-1 h-3" aria-hidden="true" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
             <div className="hidden overflow-x-auto md:block">
               <div className="min-w-[46rem] md:min-w-0">
                 <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-900 text-white">

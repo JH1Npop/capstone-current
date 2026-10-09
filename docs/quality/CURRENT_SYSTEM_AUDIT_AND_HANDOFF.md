@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-09 12:18 Asia/Singapore**
+Last updated: **2026-10-09 13:31 Asia/Singapore**
 Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -14,7 +14,19 @@ client support case fields contained at mobile widths, keep the shared solar
 calculator visually aligned with the portal's brand palette while accepting
 both preset and custom appliances, keep appliance-mode estimate persistence
 based only on its validated appliance rows rather than an irrelevant monthly
-consumption field, and finish the still-pending guarded staging
+consumption field, keep admin/superadmin Calendar, Reports, Dispatch, Services,
+Documents, and Notifications usable at phone widths without crushing desktop
+tables or printable forms, keep the technician schedule compact and directly
+navigable on phones without the desktop calendar's forced width, keep shared
+profile identity/security surfaces and technician profile summaries compact at
+phone widths without losing account or job information, keep Active Job Details
+dense and action-accessible on phones while retaining its full evidence, keep
+technician active-job cards informative enough for field decisions without
+opening each record, keep the technician Job Details sheet compact with grouped
+facts and persistent actions on phones, enforce the technician field sequence as
+navigation, GPS-backed arrival, work start, checklist, and finish without exposing
+later actions early, allow a held job to resume without treating every held job as
+active work, and finish the still-pending guarded staging
 gate only after a separate disposable `test_...` PostgreSQL database is
 provisioned; keep the local
 worktree storage lean without deleting
@@ -397,6 +409,17 @@ navigation and arrival remain active/visible, holds preserve the last recorded
 checkpoint and identify it as paused, and only completed/accepted work reaches
 100%. The UI calls these status checkpoints rather than measured task
 completion and exposes an accessible stage label/value.
+Technician My Jobs now follows the same ordered transition contract as the API:
+pre-work records offer Start Navigation, a navigating record offers Continue
+Navigation, arrival can only be recorded from the navigation workspace after
+explicit location sharing and a successfully recorded navigation start, an
+arrived record offers Start Job, and only in-progress work exposes the checklist
+or final Finish Job action. A technician cannot begin a second navigation or
+start a second job while another ticket is Navigating, Arrived on Site, or In
+Progress. On Hold is intentionally not a busy state: it may be resumed when no
+other job is busy, and it does not prevent the technician from starting another
+arrived assignment. These boundaries are enforced by both the frontend action
+presentation and backend transition/concurrency checks.
 Clicking an admin dashboard progress card now opens a live ticket-details modal
 instead of navigating immediately. The modal shows track/status progress,
 technician and crew, client/service, schedule/start time, location, priority and
@@ -750,6 +773,13 @@ deployment authorization.
 
 | Date (Asia/Singapore) | Scope | Result |
 | --- | --- | --- |
+| 2026-10-09 13:31 | Technician My Jobs ordered field workflow | The full 50-test scheduling/warranty/assignment backend module passed on isolated E2E SQLite, including new regressions for second-navigation rejection, held-job resume, and held-job non-blocking behavior. The production frontend build passed with 2,519 transformed modules. Focused connected Chromium checks passed 2/2 for My Jobs action ordering and the explicit-location navigation policy. One intermediate navigation-policy run failed only because the non-exact test locator matched both the sharing control and new disabled prerequisite control; the exact unchanged product flow passed on rerun. No development/staging database, migration, deployment, commit, or push was performed. |
+| 2026-10-09 13:15 | Technician Job Details mobile sheet | Production frontend build passed with 2,519 transformed modules. The My Jobs functional regression and authenticated 390x844 route audit passed 2/2 using isolated E2E SQLite; the complete schedule/duration/scope/checklist contract remained visible, Details/Navigate parity remained intact, and the page reported no overflow, clipped controls, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses. The sheet now has an accessible icon close control, compact two-column summary facts, one bounded detail scroller, and a persistent two-row Timeline/Navigation/Checklist-or-Finish action footer. |
+| 2026-10-09 13:12 | Technician active-job card information and mobile fit | Production frontend build passed with 2,519 transformed modules. The existing My Jobs functional regression and focused authenticated 390x844 route audit passed 2/2 using isolated E2E SQLite; Details/Navigate parity remained intact and the page reported no overflow, clipped controls, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses. Each active card now exposes client phone when available, date/time, estimated duration, service location, job-scope preview, crew count, equipment count, and checklist progress while retaining the status action and full Details flow. |
+| 2026-10-09 13:06 | Active Job Details phone density | Production frontend build passed with 2,519 transformed modules. The existing focused authenticated Chromium interaction regression passed 1/1 at 390x844 using isolated E2E SQLite: the dialog opened the real ticket detail, retained its dispatch action, fit the viewport, closed with Escape, and restored focus. Phone presentation now uses a shorter title block, compact progress/detail spacing, a 96dvh bounded scroll surface, and a two-row action grid while desktop breakpoints retain the established layout. |
+| 2026-10-09 13:03 | Shared and technician profile phone density | Production frontend build passed with 2,519 transformed modules. Focused authenticated Chromium mobile audits passed 3/3 at 390x844 for admin, technician, and client profiles using isolated E2E SQLite, with no page-wide overflow, clipped buttons, action collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses. The shared identity banner/avatar, edit action, account facts, and security card now use compact phone spacing; technician contact/photo controls, performance metrics, and skill summaries use denser responsive layouts without changing desktop presentation. |
+| 2026-10-09 12:56 | Technician Schedule phone-width calendar | Production frontend build passed with 2,519 transformed modules; focused authenticated Chromium mobile audit passed 1/1 at 390x844 using isolated E2E SQLite with no page-wide overflow, clipped buttons, action collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses. Phones now receive a compact seven-column month grid, selectable day agenda, and direct ticket-opening controls; the detailed desktop calendar remains unchanged at `md` and above. |
+| 2026-10-09 12:49 | Admin/superadmin phone-width usability | Production frontend build passed with 2,519 transformed modules. Six focused authenticated Chromium mobile audits passed 6/6 at 390x844 for Calendar, Dispatch Board, Services, Documents, Reports, and Notifications using isolated E2E SQLite; all reported no page-wide overflow, clipped buttons, action collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses. Calendar now exposes a selectable mobile month grid, dense report/assignment tables become mobile cards, service metadata/actions wrap, printable documents retain paper geometry in a deliberate local horizontal scroller, and notification header actions stack. |
 | 2026-10-09 12:18 | Appliance-mode solar-estimate persistence | Focused solar-estimate backend suite passed 7/7 and Django system check passed. Appliance mode now discards the client-supplied monthly-consumption field before decimal validation, derives and stores consumption from validated appliance rows, accepts a valid custom `Portable freezer` estimate even when the irrelevant monthly value is oversized, and returns the specific 100000 W limit error for genuinely oversized appliance wattage. The production frontend build had already passed with 2,519 transformed modules after the matching request-payload correction. |
 | 2026-10-09 12:07 | Empty deployed service-catalog bootstrap | `makemigrations --check --dry-run` passed; focused migration and service-catalog authorization suite passed 5/5 on a fresh migrated test database; the seed creates nine active services when empty and preserves any non-empty administrator-owned catalog |
 | 2026-10-08 23:30 | Read-only system-knowledge documentation inventory and hygiene | Confirmed all 22 requested/index/support Markdown files exist; source counts recorded as 8 backend domain apps, 51 active model classes, 47 DRF router registrations, 54 canonical UI destinations, and 13 service management commands; documentation secret-pattern scan returned no matches; `git diff --check -- docs/system-knowledge` passed |
@@ -1184,7 +1214,8 @@ All paths below are preserved work, not cleanup candidates.
   serializer regressions, including appliance-derived persistence, ignored
   irrelevant monthly input, and explicit appliance wattage limits.
 - `backend/services/tests/`: domain-focused modules preserving the former
-  monolithic suite plus focused completed-job history contract coverage and shared imports.
+  monolithic suite plus focused completed-job history contract coverage, technician
+  navigation/busy-state/hold-resume regressions, and shared imports.
 - `backend/services/models/{after_sales.py,analytics.py,core.py,documents.py}`:
   after-sales case events, forecast, request idempotency, and quotation/warranty fields.
 - `backend/services/models/sales.py`, `backend/services/views/sales_records.py`,
@@ -1201,7 +1232,9 @@ All paths below are preserved work, not cleanup candidates.
   reconciliation, and ordered per-service checklist configuration on technician
   jobs, including field-facing client phone, request scope, estimated duration,
   checklist progress, readable lead-technician names, and final lifecycle status
-  in technician history; location-history access supports administrator-scoped technician and
+  in technician history. Technician navigation and work start share one busy-state
+  contract, arrival remains navigation/GPS-gated, and held work can resume or free
+  the technician for another job; location-history access supports administrator-scoped technician and
   recent-minute filters for field trails; assignment and reasoned rescheduling
   share duration-capacity plus lead/crew exact-time overlap validation; admin and
   technician completed-history endpoints default to 10 records per page.
@@ -1305,7 +1338,8 @@ All paths below are preserved work, not cleanup candidates.
   shared authenticated notification loading/polling/actions, branded
   identity/account summary and contact-field hierarchy, labeled password
   behavior, structured registration errors, bounded auth requests, and
-  client-side profile-image constraints.
+  client-side profile-image constraints, plus compact phone-width identity,
+  account-fact, edit-action, and security-card spacing shared by every role.
 - `frontend/src/utils/roleIds.js`, `frontend/src/api/technician.js`: canonical
   zero-padded entity identities, six-digit ledger identities, and legacy/raw
   ticket-code normalization.
@@ -1331,7 +1365,8 @@ All paths below are preserved work, not cleanup candidates.
   and granular public-site publish/upload controls.
 - `frontend/src/pages/admin/AdminCalendar.jsx`: responsive month/agenda calendar,
   operational summaries and filters, truthful legacy conflict visibility,
-  synchronized date navigation, and details-first ticket/request actions.
+  synchronized date navigation, a compact selectable phone-width month grid,
+  and details-first ticket/request actions.
 - `frontend/src/pages/admin/AdminDashboard.jsx`,
   `frontend/src/components/shared/{ActiveJobDetailsDialog.jsx,ActiveTechnicianJobs.jsx,ConfirmationDialog.jsx}`,
   and `frontend/src/components/ui/StatsCard.jsx`: actionable capability-safe
@@ -1343,6 +1378,8 @@ All paths below are preserved work, not cleanup candidates.
   progressive service/equipment/timeline disclosure, consolidated attention
   evidence, crew/SLA/equipment context and explicit workspace actions, required
   request-rejection evidence, and keyboard-contained decision/detail dialogs.
+  Active Job Details uses compact phone-specific spacing and a two-row action
+  grid while retaining the complete scrollable operational evidence.
 - `frontend/src/components/shared/SearchFilterBar.jsx` and the Inventory,
   Activity Logs, After-Sales Cases, Job History, Reports, Operations Report,
   Coverage Heatmap, and client Service History pages: search-first progressive
@@ -1407,7 +1444,11 @@ All paths below are preserved work, not cleanup candidates.
   scope across Service Tickets and Dispatch Board. Dispatch uses a responsive
   three-step select/team/review layout, guards technician actions until a valid
   ticket is selected, retains a compact current-assignments editor, and exposes
-  one labeled, duplicate-safe, stock-aware equipment reservation plan. Its Find
+  one labeled, duplicate-safe, stock-aware equipment reservation plan; current
+  assignments switch from the desktop table to readable action cards on phones.
+  Services wrap long identity, metadata, and action groups instead of squeezing
+  them into narrow columns. Document previews preserve printable paper geometry
+  inside their own horizontal scroller rather than compressing form tables. Its Find
   Best Match control is explicitly identified as a manual action that remains
   usable when unattended automatic dispatch is disabled.
 - `frontend/src/pages/admin/AdminJobHistory.jsx`: server-paginated and sortable
@@ -1422,6 +1463,7 @@ All paths below are preserved work, not cleanup candidates.
   canonical shell titles with concise non-duplicating conversation/results
   headings and action-oriented feature explanations, consistent
   notification/profile workspace spacing,
+  phone-width notification header actions that stack without crowding,
   immediate shell unread-count updates after notification read/delete actions,
   keyboard-focusable dashboard request/ticket entry controls,
   complete client contact/company profile display, and canonical request/ticket identities across submission, tracking, history,
@@ -1450,14 +1492,23 @@ All paths below are preserved work, not cleanup candidates.
   activity layout, message accessibility,
   explicit session-scoped dashboard location sharing with no entry-time GPS call,
   safe profile behavior with retained performance/skills, a non-shrinking mobile
+  profile identity/contact area with compact two-column performance and skill summaries,
   schedule action, and recoverable/paginated completed-work history with connected
   timings, evidence, materials, equipment, field reports, office document references,
-  a technician equipment-return submission entry point, and a conventional
+  a technician equipment-return submission entry point, a compact selectable
+  phone-width schedule calendar with a day agenda and direct job access, and a conventional
   completed-service detail header and action footer. Active Job Details now
   presents schedule time, duration, work scope, a real call action, checklist
   progress, active equipment before collapsed cancelled history, and a
   context-sensitive checklist/Finish Job action without pretending staff chat
-  is direct client messaging.
+  is direct client messaging. Active-job summary cards surface client contact,
+  schedule time, duration, location, work scope, crew, reserved equipment, and
+  checklist progress before the technician opens the complete detail view. The
+  Job Details sheet groups summary facts into compact phone tiles, scrolls only
+  its evidence body, and keeps Timeline, route context, and only the valid next
+  workflow action in a persistent footer. My Jobs and Map Navigation expose the
+  ordered Start/Continue Navigation, GPS-backed arrival, Start/Resume Job,
+  Checklist, and Finish sequence without an early arrival or checklist shortcut.
 - `frontend/src/pages/technician/{TechnicianChecklist.jsx,TechnicianInspectionChecklist.jsx}`
   and `frontend/src/api/technician.js`: one-screen work procedures, explicit
   site-inspection assessment, local draft recovery, removable proof, responsive
@@ -1561,6 +1612,13 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date (Asia/Singapore) | Change | Paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-09 13:31 | Aligned technician My Jobs with the enforced field sequence: removed the unsafe no-GPS arrival shortcut and early checklist action, made card/detail controls status-specific, blocked concurrent route starts, required GPS plus a recorded navigation start before arrival, and repaired held-job resume/non-blocking semantics | `backend/services/{views/technician.py,tests/test_scheduling_warranty_and_assignment.py}`, `frontend/src/{hooks/useTechnicianJobs.js,pages/technician/{TechnicianJobs.jsx,TechnicianMapNavigation.jsx}}`, `e2e/04-technician-workspace.spec.js`, this file | Full affected backend module passed 50/50 on isolated E2E SQLite; production frontend build passed with 2,519 transformed modules; focused connected My Jobs and navigation-policy Chromium checks passed 2/2. One intermediate browser failure was a strict-locator ambiguity introduced by the two truthful location controls and was corrected with an exact assertion; no development/staging database, migration, deployment, commit, or push |
+| 2026-10-09 13:15 | Rebuilt the technician Job Details phone presentation as a bounded sheet with an accessible icon close control, compact two-column fact tiles, grouped scrollable evidence, and a persistent two-row action footer | `frontend/src/pages/technician/TechnicianJobs.jsx`, this file | Production build passed with 2,519 transformed modules; My Jobs functional regression plus authenticated 390x844 route audit passed 2/2, preserving schedule/duration/scope/checklist and Details/Navigate behavior with no page overflow, clipped controls, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses; isolated E2E SQLite only |
+| 2026-10-09 13:12 | Enriched technician active-job cards with the client phone, scheduled time, duration, location, scope preview, crew count, reserved-equipment count, and checklist progress while retaining compact status/action controls and complete detail navigation | `frontend/src/pages/technician/TechnicianJobs.jsx`, this file | Production build passed with 2,519 transformed modules; My Jobs functional regression plus authenticated 390x844 route audit passed 2/2 with Details/Navigate parity and no page overflow, clipped controls, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses; isolated E2E SQLite only |
+| 2026-10-09 13:06 | Compacted Active Job Details on phones with a shorter header, denser progress/client/assignment/visit sections, a taller bounded scroll surface, and two-row footer actions while preserving its full evidence and desktop layout | `frontend/src/components/shared/ActiveJobDetailsDialog.jsx`, this file | Production build passed with 2,519 transformed modules; existing authenticated 390x844 dialog regression passed 1/1, including viewport fit, dispatch action, Escape close, and focus restoration; isolated E2E SQLite only |
+| 2026-10-09 13:03 | Reduced profile height and crowding on phones with a compact shared identity banner/avatar, side-by-side identity content, full-width mobile edit action, tighter account/security cards, filename-safe photo input, and denser technician metrics/skills while retaining desktop breakpoints | `frontend/src/components/shared/{ProfileIdentityCard.jsx,ProfileSecuritySection.jsx}`, `frontend/src/pages/technician/TechnicianProfile.jsx`, this file | Production build passed with 2,519 transformed modules; authenticated admin, technician, and client profile mobile audits passed 3/3 at 390x844 with no page overflow, clipped actions, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses; isolated E2E SQLite only |
+| 2026-10-09 12:56 | Replaced the technician schedule's forced desktop-width phone calendar with a compact seven-column month grid, selected-day agenda, direct job access, and a wrapping month toolbar while preserving the detailed desktop calendar | `frontend/src/pages/technician/TechnicianSchedule.jsx`, this file | Production build passed with 2,519 transformed modules; focused authenticated 390x844 schedule audit passed 1/1 with no page overflow, clipped actions, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses; isolated E2E SQLite only |
+| 2026-10-09 12:49 | Reworked the reported admin/superadmin phone layouts: added a visible compact calendar month grid, changed report and current-assignment tables to mobile cards, wrapped service-card metadata/actions, preserved official document paper width inside a local preview scroller, and stacked notification header actions | `frontend/src/pages/admin/{AdminCalendar.jsx,AdminReports.jsx,AdminDispatchBoard.jsx,AdminServices.jsx,AdminDocuments.jsx}`, `frontend/src/pages/client/ClientNotifications.jsx`, this file | Production build passed with 2,519 transformed modules; six focused authenticated 390x844 route audits passed 6/6 with no page overflow, clipped actions, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses; isolated E2E SQLite only |
 | 2026-10-09 12:18 | Corrected appliance-mode solar-estimate saving so an irrelevant monthly-consumption value cannot trigger the decimal digit validator; the server now derives the authoritative total from validated appliance rows and the client sends `null` for that field | `backend/services/serializers/requests.py`, `backend/services/test_solar_estimates.py`, `frontend/src/components/SolarCalculator.jsx`, this file | Focused solar-estimate backend suite passed 7/7; Django system check passed; production frontend build had already passed with 2,519 transformed modules after the client correction |
 | 2026-10-09 12:07 | Added a non-destructive data migration that bootstraps all nine approved service catalog records only for an empty deployment, enabling client service-request creation without overwriting administrator configuration | `backend/services/migrations/0058_seed_default_service_catalog.py`, `backend/services/test_default_service_catalog_migration.py`, this file | Migration drift check passed; focused migration/catalog suite passed 5/5 on fresh isolated SQLite |
 | 2026-10-08 23:30 | Added a reusable, evidence-classified whole-system knowledge set covering architecture, structure, stack, frontend/backend, database/API, roles, modules, rules/workflows/data flow, dependencies, automations, analytics, security, errors, deployment, limitations, and future change impact; no application source, configuration, dependencies, migrations, or data changed | `docs/system-knowledge/*.md`, this file | Required-file inventory passed (22/22); secret-pattern scan clean; documentation diff check passed |

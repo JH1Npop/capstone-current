@@ -791,7 +791,49 @@ const paginatedAssignedTickets = assignedTickets.slice(
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full text-sm">
+          <div className="divide-y divide-slate-200 md:hidden">
+            {paginatedAssignedTickets.length > 0 ? paginatedAssignedTickets.map((ticket) => (
+              <article key={`mobile-${ticket.id}`} className={`space-y-3 p-4 ${selectedTicket?.id === ticket.id ? 'bg-blue-50' : ''}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-blue-700">{formatTicketId(ticket.id)}</p>
+                    <p className="mt-1 break-words font-medium text-slate-900">{ticket.service}</p>
+                  </div>
+                  <StatusBadge status={ticket.status} size="sm" />
+                </div>
+                <dl className="grid gap-3 text-xs sm:grid-cols-2">
+                  <div className="min-w-0 rounded-lg bg-slate-50 p-3">
+                    <dt className="font-semibold uppercase tracking-wide text-slate-500">Client</dt>
+                    <dd className="mt-1 break-words text-slate-800">{ticket.clientFullname || ticket.client}</dd>
+                    <dd className="text-slate-500">{formatClientId(ticket.clientId)}</dd>
+                  </div>
+                  <div className="min-w-0 rounded-lg bg-slate-50 p-3">
+                    <dt className="font-semibold uppercase tracking-wide text-slate-500">Assigned to</dt>
+                    <dd className="mt-1 break-words text-slate-800">{ticket.technicianFullname || ticket.assignedTech}</dd>
+                    <dd className="text-slate-500">{formatTechnicianId(ticket.assignedTechnicianId)}</dd>
+                  </div>
+                </dl>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className="inline-flex rounded-md bg-sky-100 px-2 py-1 text-[10px] font-semibold text-sky-700">{ticket.requestSourceLabel}</span>
+                  <button
+                    type="button"
+                    onClick={() => editAssignment(ticket)}
+                    aria-label={`Edit assignment for ${formatTicketId(ticket.id)}`}
+                    className="rounded-lg bg-blue-700 px-4 py-2 text-xs font-medium text-white transition hover:bg-slate-800"
+                  >
+                    Edit assignment
+                  </button>
+                </div>
+              </article>
+            )) : (
+              <div className="px-5 py-10 text-center">
+                <FiClipboard className="mx-auto h-5 w-5 text-slate-400" />
+                <h3 className="mt-2 text-sm font-medium text-slate-700">No Assigned Tickets</h3>
+                <p className="mt-1 text-sm text-slate-500">Confirm a dispatch assignment to move a ticket into this list.</p>
+              </div>
+            )}
+          </div>
+          <table className="hidden w-full text-sm md:table">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -964,7 +1006,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
               )}
             </tbody>
           </table>
-          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
+          <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-500">
               Showing {assignedTickets.length ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0}
               -
@@ -972,7 +1014,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
               of {assignedTickets.length}
             </p>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 disabled={currentPage === 1}

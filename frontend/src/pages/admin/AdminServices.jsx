@@ -291,15 +291,15 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4">
+      <div className="flex flex-col items-stretch gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span
               className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
               style={{ backgroundColor: service.color || '#2563eb' }}
               title={service.color || '#2563eb'}
             />
-            <h4 className="text-base font-semibold text-slate-900">{service.name}</h4>
+            <h4 className="min-w-0 basis-[calc(100%-1.5rem)] break-words text-base font-semibold text-slate-900 sm:basis-auto">{service.name}</h4>
             <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
               service.is_active === false
                 ? 'bg-slate-100 text-slate-600'
@@ -316,7 +316,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
               </span>
             )}
           </div>
-          <p className="mt-0.5 text-sm text-slate-500">{service.description || 'No description'}</p>
+          <p className="mt-2 break-words text-sm text-slate-500">{service.description || 'No description'}</p>
 
           {/* Quick stats row */}
           <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
@@ -346,7 +346,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-start gap-2 sm:justify-end">
           {canManage ? <button
             type="button"
             onClick={() => onEdit(service)}
