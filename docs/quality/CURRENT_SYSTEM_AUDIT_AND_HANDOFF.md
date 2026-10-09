@@ -694,6 +694,7 @@ production database:
 | `services.0055_unique_demand_forecast_period` | One forecast per service/period/date |
 | `services.0056_aftersalescaseevent` | Append-only after-sales case activity history; applied locally and to staging Aiven |
 | `services.0057_salesrecord_salesrecordline` | Connected immutable Sales/Purchase Records; applied locally after fresh isolated tests and to staging Aiven |
+| `services.0058_seed_default_service_catalog` | Non-destructive reference-data seed: creates nine active operational service types only when the target catalog is completely empty; pending local/staging application |
 | `history.0005_delete_servicehistory` | Guarded removal of redundant completed-service summary model; applied locally and to staging Aiven |
 | `notifications.0009_remove_notificationlog_notification_and_more` | Guarded removal of unused notification template/delivery-log models; applied locally and to staging Aiven |
 | `users.0038_adminsettings_landing_page_projects` | Admin-managed completed-project portfolio with consent-gated public publication; applied locally, to fresh test/E2E databases, and to staging Aiven |
@@ -911,6 +912,7 @@ Results are evidence, not promises. Rerun checks affected by later changes.
 | 2026-08-31 | Local dormant-schema migration application | Passed | Confirmed all three target tables had zero rows, created ignored local backup `backend/local_backups/db-before-unused-schema-cleanup-20260831-1819.sqlite3`, applied `history.0005` and `notifications.0009`, verified retired tables absent, SQLite integrity `ok`, zero foreign-key violations, and unchanged core counts (19 users, 19 requests, 20 tickets, 220 inventory transactions, 384 notifications) |
 | 2026-08-31 | Pre-structure-cleanup backup verification | Passed | Created ignored 20,545,536-byte SQLite backup and 10,258,152-byte/695-entry source ZIP; SHA-256 calculated for both, required source files were present, and archive inspection found zero `.env`, database, media, dependency, generated-output, or prior-backup entries |
 | 2026-08-31 | First structure-cleanup regression | Passed, 372 discovered | Removed only dead `history` admin/serializer/URL/view modules; 369 runnable backend tests passed with 3 expected PostgreSQL-only skips, focused 22-test retirement/notification/progress suite passed, Django check and migration drift passed |
+| 2026-10-09 | Empty deployed service-catalog bootstrap | Passed, 5 focused tests | Migration drift check passed; a fresh migrated test database received nine active services only when empty, preserved a non-empty administrator-owned catalog, and retained catalog authorization behavior |
 
 The current Playwright inventory is 201 tests in 9 maintained spec files. The
 most recent full uninterrupted suite passed 201/201 on 2026-10-01 in 19.6
@@ -1090,6 +1092,10 @@ All paths below are preserved work, not cleanup candidates.
 
 ### Services, lifecycle, analytics, and documents
 
+- `backend/services/migrations/0058_seed_default_service_catalog.py` and
+  `backend/services/test_default_service_catalog_migration.py`: bootstrap nine
+  active service types, with field-work procedures, only when a deployment has
+  an entirely empty catalog; preserve any administrator-owned non-empty catalog.
 - `backend/services/{auto_dispatch.py,sla.py,views_follow_up.py}`:
   dispatch and lifecycle/SLA validation, including one canonical smart-ranking
   contract, minimum score enforcement, and exact-time collision rejection for
@@ -1638,3 +1644,4 @@ All paths below are preserved work, not cleanup candidates.
 | 2026-08-29 19:30 | Added canonical living audit/handoff and mandatory maintenance policy | `AGENTS.md`, this file, `docs/README.md` | All 12 required references exist; secret-pattern scan clean; `git diff --check` passed |
 | 2026-08-29 19:00 | Added route-complete page audit; fixed ticket/message action names, technician mobile activity layout, Analytics scheduled-date 500, and isolated E2E ports | frontend pages, Analytics view/test, Playwright config/helpers/spec | 104/104 page checks, 6/6 focused backend tests, frontend build passed |
 | 2026-08-29 earlier | Completed phases 3-9 across security, workflow, inventory, documents, deployment, and E2E | See worktree manifest and dated checkpoints | 321-test backend checkpoint, 75 browser journeys, audits/build/checks passed |
+| 2026-10-09 12:07 | Added an empty-catalog-only migration containing nine approved active services so a new deployment can accept client service requests without overwriting administrator configuration | `backend/services/migrations/0058_seed_default_service_catalog.py`, `backend/services/test_default_service_catalog_migration.py`, this file | Migration drift passed; focused catalog and migration tests passed 5/5 |
