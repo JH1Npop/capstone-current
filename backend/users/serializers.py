@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.password_validation import validate_password
+from django.core.files.storage import FileSystemStorage
 from django.utils import timezone
 from .models import ActivityLog, AdminSettings, ChangeLog, User, TechnicianProfile, ClientProfile, ManagementProfile
 from .rbac import (
@@ -45,7 +46,22 @@ class UserSerializer(serializers.ModelSerializer):
     def get_profile_image_url(self, obj):
         if not obj.profile_image:
             return ''
-        return obj.profile_image.url
+
+        image = obj.profile_image
+        image_name = str(image.name or '').lstrip('/')
+        while image_name.startswith('media/'):
+            image_name = image_name[len('media/'):]
+        if not image_name:
+            return ''
+
+        storage = image.storage
+        if isinstance(storage, FileSystemStorage) and not storage.exists(image_name):
+            return ''
+
+        try:
+            return storage.url(image_name)
+        except (NotImplementedError, ValueError):
+            return ''
 
     def get_technician_profile(self, obj):
         if obj.role == 'technician' and hasattr(obj, 'technician_profile'):

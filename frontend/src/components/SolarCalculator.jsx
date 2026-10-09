@@ -152,13 +152,15 @@ export default function SolarCalculator({
   const selectPreset = (id, name) => {
     const preset = APPLIANCE_PRESETS.find(([presetName]) => presetName === name);
     setAppliances((rows) => rows.map((row) => row.id === id ? {
-      ...row, name, wattage: preset?.[1] || '', surgeFactor: preset?.[2] || 1,
+      ...row,
+      name,
+      ...(preset ? { wattage: preset[1], surgeFactor: preset[2] } : {}),
     } : row));
   };
 
   const buildEstimatePayload = () => ({
     calculation_mode: mode,
-    monthly_consumption: results.monthlyConsumption,
+    monthly_consumption: mode === 'monthly' ? results.monthlyConsumption : null,
     appliances: mode === 'appliances' ? appliances.map(({ id, ...item }) => item) : [],
     peak_sun_hours: numberValue(form.peakSunHours),
     system_loss_percent: numberValue(form.systemLoss),
@@ -202,34 +204,37 @@ export default function SolarCalculator({
   };
 
   return (
-    <section id="solar-calculator" className={`scroll-mt-24 bg-slate-950 text-white ${embedded ? 'overflow-hidden rounded-2xl py-8 sm:py-10' : 'py-16'}`}>
+    <section id="solar-calculator" className={`scroll-mt-24 bg-gradient-to-br from-brand-50 via-white to-brand-100 text-slate-900 ${embedded ? 'overflow-hidden rounded-2xl border border-brand-200 py-8 sm:py-10' : 'py-16'}`}>
       <div className={`mx-auto max-w-7xl ${embedded ? 'px-4 sm:px-6' : 'px-6 lg:px-10'}`}>
         <div className="mb-8 max-w-3xl">
-          <span className="inline-flex items-center gap-2 rounded-full bg-amber-400/10 px-3 py-1 text-sm font-semibold text-amber-300"><Calculator className="h-4 w-4" /> Free preliminary estimate</span>
-          <h2 className="mt-4 text-3xl font-bold sm:text-4xl">{configured.title}</h2>
-          <p className="mt-3 text-slate-300">{configured.description}</p>
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700"><Calculator className="h-4 w-4" /> Free preliminary estimate</span>
+          <h2 className="mt-4 text-3xl font-bold text-brand-900 sm:text-4xl">{configured.title}</h2>
+          <p className="mt-3 text-slate-600">{configured.description}</p>
         </div>
 
-        <div className="mb-4 inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
+        <div className="mb-4 inline-flex rounded-xl border border-brand-200 bg-white p-1 shadow-sm">
           <ModeButton active={mode === 'monthly'} onClick={() => setMode('monthly')}>Monthly kWh</ModeButton>
           <ModeButton active={mode === 'appliances'} onClick={() => setMode('appliances')}>Per appliance</ModeButton>
         </div>
 
         {mode === 'appliances' ? (
-          <div className="mb-6 rounded-2xl bg-white p-5 text-slate-900 shadow-xl sm:p-7">
+          <div className="mb-6 rounded-2xl border border-brand-100 bg-white p-5 text-slate-900 shadow-card sm:p-7">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div><h3 className="font-bold">Appliance load schedule</h3><p className="text-sm text-slate-500">Day and night hours are calculated separately for solar and battery estimates.</p></div>
-              <button type="button" onClick={() => setAppliances((rows) => [...rows, createAppliance()])} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> Add appliance</button>
+              <button type="button" onClick={() => setAppliances((rows) => [...rows, createAppliance()])} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"><Plus className="h-4 w-4" /> Add appliance</button>
             </div>
             <div className="mt-4 space-y-3">
               {appliances.map((appliance) => (
                 <div key={appliance.id} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[1.4fr_.55fr_.7fr_.7fr_.7fr_.65fr_auto] md:items-end">
-                  <label className="text-xs font-semibold text-slate-600">Appliance<select value={appliance.name} onChange={(event) => selectPreset(appliance.id, event.target.value)} className={compactInputClass}><option value="">Select…</option>{APPLIANCE_PRESETS.map(([name]) => <option key={name}>{name}</option>)}</select></label>
-                  <ApplianceInput label="Qty" value={appliance.quantity} min="1" onChange={(value) => updateAppliance(appliance.id, 'quantity', value)} />
-                  <ApplianceInput label="Wattage" value={appliance.wattage} min="1" onChange={(value) => updateAppliance(appliance.id, 'wattage', value)} />
+                  <ApplianceNameInput
+                    appliance={appliance}
+                    onChange={(name) => selectPreset(appliance.id, name)}
+                  />
+                  <ApplianceInput label="Qty" value={appliance.quantity} min="1" max="1000" onChange={(value) => updateAppliance(appliance.id, 'quantity', value)} />
+                  <ApplianceInput label="Wattage" value={appliance.wattage} min="1" max="100000" onChange={(value) => updateAppliance(appliance.id, 'wattage', value)} />
                   <ApplianceInput label="Day hours" value={appliance.dayHours} min="0" max="24" step="0.5" onChange={(value) => updateAppliance(appliance.id, 'dayHours', value)} />
                   <ApplianceInput label="Night hours" value={appliance.nightHours} min="0" max="24" step="0.5" onChange={(value) => updateAppliance(appliance.id, 'nightHours', value)} />
-                  <ApplianceInput label="Surge ×" value={appliance.surgeFactor} min="1" max="5" step="0.1" onChange={(value) => updateAppliance(appliance.id, 'surgeFactor', value)} />
+                  <ApplianceInput label="Surge ×" value={appliance.surgeFactor} min="1" max="10" step="0.1" onChange={(value) => updateAppliance(appliance.id, 'surgeFactor', value)} />
                   <button type="button" title="Remove appliance" disabled={appliances.length === 1} onClick={() => setAppliances((rows) => rows.filter((row) => row.id !== appliance.id))} className="rounded-lg p-2.5 text-rose-600 hover:bg-rose-50 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
                 </div>
               ))}
@@ -243,19 +248,19 @@ export default function SolarCalculator({
         ) : null}
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-          <div className="rounded-2xl bg-white p-5 text-slate-900 shadow-xl sm:p-7">
+          <div className="rounded-2xl border border-brand-100 bg-white p-5 text-slate-900 shadow-card sm:p-7">
             <div className="grid gap-4 sm:grid-cols-2">
-              {mode === 'monthly' ? <InputField label="Monthly consumption" suffix="kWh" min="1" step="1" value={form.monthlyConsumption} onChange={updateForm('monthlyConsumption')} /> : null}
-              <InputField label="Electricity rate" suffix="PHP/kWh" min="0.01" step="0.01" value={form.electricityRate} onChange={updateForm('electricityRate')} />
-              <InputField label="Peak sun hours" suffix="hours" min="1" max="10" step="0.1" value={form.peakSunHours} onChange={updateForm('peakSunHours')} />
-              <InputField label="System loss" suffix="%" min="0" max="50" step="1" value={form.systemLoss} onChange={updateForm('systemLoss')} />
+              {mode === 'monthly' ? <InputField label="Monthly consumption" suffix="kWh" min="1" max="1000000" step="1" value={form.monthlyConsumption} onChange={updateForm('monthlyConsumption')} /> : null}
+              <InputField label="Electricity rate" suffix="PHP/kWh" min="0.01" max="1000" step="0.01" value={form.electricityRate} onChange={updateForm('electricityRate')} />
+              <InputField label="Peak sun hours" suffix="hours" min="0.1" max="12" step="0.1" value={form.peakSunHours} onChange={updateForm('peakSunHours')} />
+              <InputField label="System loss" suffix="%" min="0" max="60" step="1" value={form.systemLoss} onChange={updateForm('systemLoss')} />
               <InputField label="Panel wattage" suffix="W" min="100" max="1000" step="5" value={form.panelWattage} onChange={updateForm('panelWattage')} />
               <InputField label="Desired bill offset" suffix="%" min="10" max="100" step="5" value={form.desiredOffset} onChange={updateForm('desiredOffset')} />
-              <InputField label="Available roof area (optional)" suffix="m²" min="0" step="1" value={form.availableRoofArea} onChange={updateForm('availableRoofArea')} />
+              <InputField label="Available roof area (optional)" suffix="m²" min="0" max="1000000" step="1" value={form.availableRoofArea} onChange={updateForm('availableRoofArea')} />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur sm:p-7">
+          <div className="rounded-2xl border border-brand-700 bg-gradient-to-br from-brand-800 to-brand-900 p-5 text-white shadow-elevated sm:p-7">
             <div className="grid gap-3 sm:grid-cols-2">
               <ResultCard icon={PanelsTopLeft} label="Recommended panels" value={`${results.panelCount} panels`} detail={`${formatNumber(results.installedCapacity, 2)} kWp installed`} />
               <ResultCard icon={Zap} label="Required PV size" value={`${formatNumber(results.requiredCapacity, 2)} kWp`} detail={`${formatNumber(results.dailyConsumption)} kWh daily use`} />
@@ -266,7 +271,7 @@ export default function SolarCalculator({
             <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${results.roofFits === false ? 'border-amber-300/30 bg-amber-300/10 text-amber-100' : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'}`}>
               Approximate roof area required: <strong>{formatNumber(results.roofAreaRequired)} m²</strong>.{results.roofFits === false ? ' The entered roof area may not fit this estimate.' : ''}
             </div>
-            <p className="mt-5 text-xs leading-5 text-slate-400">This is a preliminary estimate, not a final engineering design. Appliance duty cycles, motor starting current, shading, roof orientation, weather, equipment compatibility, and net-metering arrangements can change the final design.</p>
+            <p className="mt-5 text-xs leading-5 text-brand-100/80">This is a preliminary estimate, not a final engineering design. Appliance duty cycles, motor starting current, shading, roof orientation, weather, equipment compatibility, and net-metering arrangements can change the final design.</p>
             <div className="mt-5 flex flex-wrap gap-3">
               <button type="button" disabled={saveState.loading} onClick={saveEstimate} className="rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-amber-300 disabled:opacity-60">
                 {saveState.loading ? 'Saving…' : isAuthenticated ? 'Save estimate' : 'Sign in to save'}
@@ -288,12 +293,112 @@ export default function SolarCalculator({
 
 const compactInputClass = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-500';
 
+function ApplianceNameInput({ appliance, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const inputId = `appliance-name-${appliance.id}`;
+  const listboxId = `appliance-presets-${appliance.id}`;
+  const normalizedValue = appliance.name.trim().toLowerCase();
+  const suggestions = APPLIANCE_PRESETS.filter(([name]) => (
+    !normalizedValue || name.toLowerCase().includes(normalizedValue)
+  ));
+
+  const chooseSuggestion = (name) => {
+    onChange(name);
+    setOpen(false);
+    setActiveIndex(-1);
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      setOpen(false);
+      setActiveIndex(-1);
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      if (suggestions.length === 0) return;
+      event.preventDefault();
+      setOpen(true);
+      setActiveIndex((current) => Math.min(current + 1, suggestions.length - 1));
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      if (suggestions.length === 0) return;
+      event.preventDefault();
+      setActiveIndex((current) => Math.max(current - 1, 0));
+      return;
+    }
+    if (event.key === 'Enter' && open && activeIndex >= 0 && suggestions[activeIndex]) {
+      event.preventDefault();
+      chooseSuggestion(suggestions[activeIndex][0]);
+    }
+  };
+
+  return (
+    <div className="relative min-w-0 text-xs font-semibold text-slate-600">
+      <label htmlFor={inputId}>Appliance</label>
+      <input
+        id={inputId}
+        type="text"
+        value={appliance.name}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setOpen(true);
+          setActiveIndex(-1);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 100)}
+        onKeyDown={handleKeyDown}
+        placeholder="Choose or type an appliance"
+        className={compactInputClass}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+      />
+      {open ? (
+        <div
+          id={listboxId}
+          role="listbox"
+          className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-xl border border-brand-200 bg-white p-1.5 text-sm shadow-elevated"
+        >
+          {suggestions.map(([name, wattage], index) => (
+            <button
+              key={name}
+              id={`${listboxId}-option-${index}`}
+              type="button"
+              role="option"
+              aria-selected={activeIndex === index}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => chooseSuggestion(name)}
+              className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left font-medium transition ${
+                activeIndex === index
+                  ? 'bg-brand-100 text-brand-900'
+                  : 'text-slate-700 hover:bg-brand-50 hover:text-brand-800'
+              }`}
+            >
+              <span>{name}</span>
+              <span className="text-xs font-semibold text-slate-400">{wattage} W</span>
+            </button>
+          ))}
+          <div className="border-t border-slate-100 px-3 py-2 text-xs font-medium text-slate-500">
+            {normalizedValue && suggestions.length === 0
+              ? `Use custom appliance: ${appliance.name}`
+              : 'Type any appliance name to create a custom entry.'}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ApplianceInput({ label, value, onChange, ...props }) {
   return <label className="text-xs font-semibold text-slate-600">{label}<input {...props} type="number" value={value} onChange={(event) => onChange(event.target.value)} className={compactInputClass} /></label>;
 }
 
 function ModeButton({ active, children, onClick }) {
-  return <button type="button" onClick={onClick} className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${active ? 'bg-white text-slate-950' : 'text-slate-300 hover:text-white'}`}>{children}</button>;
+  return <button type="button" onClick={onClick} className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${active ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-brand-50 hover:text-brand-700'}`}>{children}</button>;
 }
 
 function LoadSummary({ label, value }) {
@@ -305,5 +410,5 @@ function LoadEstimate({ label, value }) {
 }
 
 function ResultCard({ icon: Icon, label, value, detail }) {
-  return <div className="rounded-xl border border-white/10 bg-slate-900/60 p-4"><Icon className="h-5 w-5 text-amber-300" /><p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p><p className="mt-1 text-xs text-slate-400">{detail}</p></div>;
+  return <div className="rounded-xl border border-white/15 bg-white/10 p-4"><Icon className="h-5 w-5 text-amber-300" /><p className="mt-3 text-xs font-semibold uppercase tracking-wide text-brand-100/75">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p><p className="mt-1 text-xs text-brand-100/75">{detail}</p></div>;
 }

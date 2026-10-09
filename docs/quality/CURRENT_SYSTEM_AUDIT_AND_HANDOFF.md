@@ -1,11 +1,20 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-08 11:27 Asia/Singapore**
+Last updated: **2026-10-09 12:18 Asia/Singapore**
 Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
-entrypoint aligned with application roles and delegated capabilities, and finish the still-pending guarded staging
+entrypoint aligned with application roles and delegated capabilities, keep the
+public registration name inputs aligned when the optional middle-name label
+wraps at narrow desktop widths, keep the tall registration surface top-aligned
+so its branding and heading cannot be clipped above the viewport, suppress
+broken legacy profile-image references without hiding valid media, keep the
+client support case fields contained at mobile widths, keep the shared solar
+calculator visually aligned with the portal's brand palette while accepting
+both preset and custom appliances, keep appliance-mode estimate persistence
+based only on its validated appliance rows rather than an irrelevant monthly
+consumption field, and finish the still-pending guarded staging
 gate only after a separate disposable `test_...` PostgreSQL database is
 provisioned; keep the local
 worktree storage lean without deleting
@@ -35,7 +44,7 @@ support conversations contained at mobile widths, and merge refreshed messages
 without duplicate rendered records;
 make notification-derived sidebar badges acknowledgeable at their destination
 while preserving unrelated unread alerts, and keep its role-specific navigation
-visually distinct with locally bundled, attributed Flaticon UIcons; keep inner
+visually distinct with dependency-local Feather SVG icons; keep inner
 workspace headings and feature explanations concise where the canonical top bar
 already supplies context; make technician job details operationally complete with
 schedule, scope, client phone, checklist progress, active-versus-cancelled
@@ -488,6 +497,12 @@ The real `.env` exists locally but must not be inspected merely to populate docs
 
 ## 3. System architecture
 
+The read-only whole-system knowledge pass on 2026-10-08 added a concise,
+source-oriented navigation set at `docs/system-knowledge/`. It does not replace
+the specialist contracts or runtime evidence in this living handoff; it indexes
+them and records confirmed, likely, and still-unverified boundaries for future
+investigation and change-impact analysis.
+
 | Layer | Implementation | Primary locations |
 | --- | --- | --- |
 | Frontend | React 18, React Router 7, Vite 8, Tailwind-style utilities, Recharts, Leaflet | `frontend/src`, `frontend/vite.config.js` |
@@ -623,6 +638,9 @@ workflows. Documents has a real E2E save/reload path for quotation drafts.
 - Document JSON contracts, retry-safe quotations, final-record immutability,
   commissioning/turnover/warranty consistency, and draft persistence.
 - Signature-checked image/video uploads, size limits, and safe media references.
+- Profile-image serialization removes repeated legacy `media/` prefixes and
+  returns the normal empty-image fallback for missing local files, preventing
+  repeated broken avatar requests while preserving valid local and hosted URLs.
 - Participant-scoped messaging and active-recipient notifications.
 - Inventory integrity constraints, customizable catalog/category management,
   opening-balance history, retirement safeguards, ticket-reservation context,
@@ -639,14 +657,13 @@ workflows. Documents has a real E2E save/reload path for quotation drafts.
   HTTPS/origins, and SMTP.
 - Responsive Documents actions, mobile Technician activity cards, and accessible
   icon-only Service Ticket and Messages actions.
-- Role-specific sidebar destinations use distinct semantic Flaticon UIcons rather than
+- Role-specific sidebar destinations use distinct semantic Feather icons rather than
   reusing home, settings, clipboard, chart, and file symbols for unrelated
   workflows. A restrained, static high-contrast color map differentiates
-  workflow types on the dark sidebar, with brighter active and hover treatment;
-  the locally bundled rounded icon font is rendered at 17px, navigation icons
-  remain decorative to assistive technology while their visible labels retain
-  the accessible name, and the required Flaticon attribution is visible in the
-  expanded sidebar footer.
+  workflow types on the dark sidebar, with brighter active and hover treatment.
+  Dependency-local SVG icons remain decorative to assistive technology while
+  their visible labels retain the accessible name; no third-party attribution
+  tag is rendered in the sidebar footer.
 - Detail-dialog accuracy across roles: turned-over work remains client-complete,
   shared timelines prefer readable service/client labels, request-only calendar
   events retain scheduling notes and route to approvals, job histories preserve
@@ -654,6 +671,27 @@ workflows. Documents has a real E2E save/reload path for quotation drafts.
 - Search-first progressive filtering with active-choice chips and consistent
   clearing across inventory, audit, after-sales, job/report, map, and client
   history workspaces.
+- Pending self-registered clients retain the internal database primary key
+  required for verification and cleanup, but the administrator directory does
+  not issue/display the public `CL-####` label or an `Active` badge until email
+  verification succeeds; it shows `Pending verification` instead.
+- The public registration name row reserves an equal responsive label area for
+  first, middle, and last name, keeping all three inputs aligned when the
+  middle-name optional marker wraps; single-column mobile labels remain compact.
+- The tall public registration surface opts into top alignment within the shared
+  authentication shell, preserving visible top padding and branding instead of
+  vertically centering oversized content above the viewport. Shorter login and
+  account-recovery surfaces remain vertically centered.
+- The shared public/authenticated solar calculator uses the portal's pale
+  brand-blue surface, white bordered input cards, blue controls, deep brand-blue
+  results panel, and restrained amber solar accents instead of a disconnected
+  near-black canvas; calculation and save behavior remain shared and unchanged.
+- Per-appliance solar estimation uses an editable preset-backed appliance field:
+  exact preset selections still populate wattage and surge factor, while any
+  custom appliance name is accepted and retains manually entered electrical
+  values for the same calculation and saved-estimate payload. Its accessible
+  suggestion menu is application-rendered in the white/brand-blue palette so it
+  does not inherit an unstyleable black browser/operating-system popup.
 - Technician checklist usability: one-screen work steps, explicit inspection
   answers/negative-finding notes, readiness progress, removable evidence,
   device-local draft recovery, mobile completion controls, and resumable
@@ -667,6 +705,9 @@ workflows. Documents has a real E2E save/reload path for quotation drafts.
 - Client/admin support conversations constrain long case subjects inside both
   panes at mobile widths, keep refresh/reply controls reachable, and deduplicate
   a sent message when a concurrent refresh has already returned the same record.
+- New client support-case subject/category/priority/related-ticket controls use
+  shrinkable grid tracks and explicitly bounded form controls, so intrinsic
+  select-option widths cannot push fields outside the mobile card.
 - Canonical connected Sales Records with one active record per completed ticket,
   accepted-quotation or actual-inventory source snapshots, installed equipment
   and warranty evidence, immutable confirmation, reasoned void/replacement, and
@@ -698,7 +739,7 @@ production database:
 | `history.0005_delete_servicehistory` | Guarded removal of redundant completed-service summary model; applied locally and to staging Aiven |
 | `notifications.0009_remove_notificationlog_notification_and_more` | Guarded removal of unused notification template/delivery-log models; applied locally and to staging Aiven |
 | `users.0038_adminsettings_landing_page_projects` | Admin-managed completed-project portfolio with consent-gated public publication; applied locally, to fresh test/E2E databases, and to staging Aiven |
-| `users.0039_user_mfa_fields` | Administrator MFA enabled state, encrypted TOTP secret, hashed one-time recovery codes, and confirmation timestamp; applied to fresh isolated test databases and staging by the successful `fa121a2` startup, but not applied to development SQLite |
+| `users.0039_user_mfa_fields` | Administrator MFA enabled state, encrypted TOTP secret, hashed one-time recovery codes, and confirmation timestamp; applied to fresh isolated test databases, staging by the successful `fa121a2` startup, and the explicitly authorized local development SQLite migration on 2026-10-08 |
 
 Playwright applies migrations only to ignored `backend/db.e2e.sqlite3`, then
 flushes and seeds that isolated database. Any migration of a future separate
@@ -707,10 +748,26 @@ deployment authorization.
 
 ## 8. Validation ledger
 
+| Date (Asia/Singapore) | Scope | Result |
+| --- | --- | --- |
+| 2026-10-09 12:18 | Appliance-mode solar-estimate persistence | Focused solar-estimate backend suite passed 7/7 and Django system check passed. Appliance mode now discards the client-supplied monthly-consumption field before decimal validation, derives and stores consumption from validated appliance rows, accepts a valid custom `Portable freezer` estimate even when the irrelevant monthly value is oversized, and returns the specific 100000 W limit error for genuinely oversized appliance wattage. The production frontend build had already passed with 2,519 transformed modules after the matching request-payload correction. |
+| 2026-10-09 12:07 | Empty deployed service-catalog bootstrap | `makemigrations --check --dry-run` passed; focused migration and service-catalog authorization suite passed 5/5 on a fresh migrated test database; the seed creates nine active services when empty and preserves any non-empty administrator-owned catalog |
+| 2026-10-08 23:30 | Read-only system-knowledge documentation inventory and hygiene | Confirmed all 22 requested/index/support Markdown files exist; source counts recorded as 8 backend domain apps, 51 active model classes, 47 DRF router registrations, 54 canonical UI destinations, and 13 service management commands; documentation secret-pattern scan returned no matches; `git diff --check -- docs/system-knowledge` passed |
+
 Results are evidence, not promises. Rerun checks affected by later changes.
 
 | Date | Validation | Result | Scope/notes |
 | --- | --- | --- | --- |
+| 2026-10-08 | Styled appliance suggestion-menu regression | **Passed** production frontend build with 2,519 transformed modules, focused preset/custom Chromium flow 1/1, and isolated mobile route audit 1/1 | The application-rendered listbox opens with a computed white background, supports preset selection and wattage autofill, shows the custom-entry state, and retains keyboard Arrow/Escape/Enter handling plus combobox semantics. The public calculator remained free of mobile overflow, clipping, action collisions, runtime/console errors, and HTTP 5xx responses. Isolated E2E SQLite only. |
+| 2026-10-08 | Preset and custom solar-appliance input regression | **Passed** production frontend build with 2,519 transformed modules and focused public Chromium flow 1/1 after one test-only correction | The flow selected the `Air conditioner` preset and observed its `1200` W autofill, replaced the name with custom `Portable freezer`, retained the custom value, entered `300` W, and continued calculation. The first browser run reached the correct `1200` value but failed because `getByLabel('Wattage')` also matched `Panel wattage`; the assertion was made exact and the unchanged product flow passed on rerun. Isolated E2E SQLite only. |
+| 2026-10-08 | Solar calculator brand-palette regression | **Passed** production frontend build with 2,519 transformed modules and isolated Chromium mobile route audits 2/2 | Both the public Solar Calculator and authenticated client Solar Estimates route passed at 390x844 with zero whole-page horizontal overflow, button collisions, clipped buttons, unnamed actions, page errors, console errors, or HTTP 5xx responses. Only presentation classes changed; calculation, persistence, authentication, promotion, and result logic were untouched. Browser tests used isolated E2E SQLite. |
+| 2026-10-08 | Client Support mobile form containment | **Passed** production frontend build with 2,519 transformed modules and isolated Chromium mobile route audit 1/1 | At 390x844, the real authenticated Client Support route reported zero whole-page horizontal overflow, button collisions, clipped buttons, unnamed actions, page errors, console errors, or HTTP 5xx responses. Grid tracks, labels, input, and selects now shrink within their containing card instead of allowing option text to expand the controls past the right edge. The browser run used only isolated E2E SQLite. |
+| 2026-10-08 | Legacy/missing profile-image serialization regression | **Passed** focused backend tests 2/2, Django system check, and direct serialization of the affected local user | A legacy `media/profiles/...` field value is normalized before URL construction, and a missing filesystem object now returns an empty `profile_image_url` instead of `/media/media/...`. The affected local record serialized to the empty fallback without modifying its database value. Hosted storage is not subjected to a per-request existence lookup. |
+| 2026-10-08 | Local `users.0039` migration and login recovery | **Passed** transaction-consistent backup integrity/foreign-key checks, targeted migration, migration-plan verification, Django system check, live direct/proxied database health, login boundary probe, and post-migration SQLite integrity checks | After explicit user approval, applied `users.0039_user_mfa_fields` only to local `backend/db.sqlite3`. The validated ignored backup is `backend/local_backups/db-consistent-before-users-0039-20261008-124846.sqlite3`; an earlier filesystem copy was preserved but is not treated as validated because the live source could not be hash-read. All four actual MFA columns are present. The proxied login endpoint now returns expected HTTP 400 required-field validation for an empty request instead of HTTP 503 `database_unavailable`. Aiven and Render were untouched. |
+| 2026-10-08 | Registration shell placement regression | **Passed** production frontend build with 2,519 transformed modules | Registration now opts into the shared shell's top-aligned mode, keeping the AFN branding and page heading inside the viewport with normal top padding. Login, verification, and password-recovery screens retain their existing centered placement. |
+| 2026-10-08 | Registration name-field alignment regression | **Passed** production frontend build with 2,519 transformed modules and diff check | The first-, middle-, and last-name controls now share an equal label height only at the three-column breakpoint, so a wrapped middle-name optional marker no longer drops its input below the adjacent controls. The single-column mobile layout does not inherit the reserved height. |
+| 2026-10-08 | Pending-client public-ID display regression | **Passed** production frontend build with 2,519 transformed modules, exact source-contract assertions, and diff check | Unverified client rows now display `Pending verification` in place of both the public `CL-####` label and the misleading active badge. Verified clients and all staff roles continue using their existing formatted role IDs and lifecycle status. No database ID, schema, verification token, or relationship changed. |
+| 2026-10-08 | Sidebar attribution/package removal regression | **Passed** production frontend build with 2,519 transformed modules, runtime/source/package reference scan, and diff check | The sidebar now uses the already-installed `react-icons/fi` SVG components, the visible `UIcons by Flaticon` tag is absent, and neither source, dependency manifests, nor production output contains Flaticon/UIcons references. The build no longer emits the roughly 386 KB UIcons font asset. |
 | 2026-10-08 | Render Brevo environment-group link pre-deploy check | **Passed** focused email/settings tests 8/8, Django system check, exact Blueprint structure assertions, diff check, and tracked-secret scan | `render.yaml` now contains exactly one `fromGroup: afn-staging-email` link and no direct `BREVO_API_KEY` or `DEFAULT_FROM_EMAIL` declarations. No credential is tracked. PyYAML and a Node YAML parser are not installed, so Render's Blueprint sync remains the authoritative schema validation. |
 | 2026-10-08 | Pre-commit email correction regression and live frontend/backend connection health | **Passed** all 461 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, frontend HTTP 200, backend liveness/readiness/database HTTP 200, deployed bundle API-target inspection, and CORS origin inspection | The deployed frontend bundle targets `https://afn-capstone-backend-staging.onrender.com/api`; backend readiness reported database, cache, realtime, and storage ready; the database-specific probe was ready; and the backend allowed the exact deployed frontend origin. Tests used disposable databases. These checks do not expose or independently prove the private Render `FRONTEND_BASE_URL` value or deployed email delivery. |
 | 2026-10-08 | HTTPS transactional-email and environment-boundary regression | **Passed** all 461 backend tests with 3 expected PostgreSQL-only skips, the 2,520-module production build, focused registration Chromium 1/1, Django check, migration drift, environment-target check, diff check, and live Brevo API acceptance | The Brevo backend posts sender, recipients, reply-to, plain text, and HTML through the official HTTPS endpoint, fails closed on provider errors, and production validation rejects a missing key or placeholder sender. Registration remains unverified, login remains blocked until verification, and password reset remains token-gated. `npm run env:check` confirmed local SQLite. After the user authorized the workstation IP, a real test email was accepted with `send=1`; inbox receipt remains user confirmation, while Render key/sender/outbound-IP configuration and deployed end-to-end verification remain pending. |
@@ -949,9 +1006,10 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | High staging account security | A shared reset password was exposed in conversation and existing DRF tokens for two staging accounts remain valid after password changes; several staff/superuser-flagged accounts also retain the `client` role. The application now blocks those roles from `/django-admin` even when flags are inconsistent, but the underlying staging data remains incorrect | Before sharing staging, rotate affected passwords privately, revoke all existing staging API tokens/sessions, and reconcile role plus staff/superuser flags under explicit Aiven-change authorization |
 | Medium staging limitation | Render free web services sleep after idle time, free Key Value is non-persistent, common SMTP ports are blocked, paid cron jobs are omitted, and migrations must run in the single instance's startup command because free services lack pre-deploy commands. Intermittent PostgreSQL errors were reported while Daphne reused connections; deployed commit `43be830` now disables ASGI persistence and retains health checks, and its 40-request post-deployment probe passed. | Continue treating this environment as disposable validation only, monitor for recurrence, and move to paid pre-deploy migrations, deliverable email, persistent Redis, and scheduled commands for production. Free-tier cold starts can still delay the first request. |
 | High container deployment | `frontend/Dockerfile` and `docker-compose.yml` intentionally run Vite's development server with hot reload; they are suitable for local development, not as a hardened/cached production frontend. Docker is also unavailable locally, so neither image was built during the fresh audit | Prefer a managed static host using `frontend/dist` and `_redirects`, or add a multi-stage production frontend image with a real static server and SPA fallback; build/scan the chosen images in CI or staging before release |
-| Low local storage | `backend/local_backups` still occupies about 139.57 MiB, including several 19.59 MiB database snapshots, a 12.22 MiB data-check export, and a 9.78 MiB source archive. These may be intentional recovery evidence and were not deleted. Installed environments also occupy about 357 MiB after bytecode cleanup but are needed for offline development | Review backup retention dates and recovery value before deleting any backup; remove `venv` or dependency trees only when accepting the cost and network requirement to reinstall them |
+| Low local storage | `backend/local_backups` now occupies about 178.76 MiB across 11 files, including the validated pre-`users.0039` SQLite snapshot and the earlier unvalidated filesystem copy that was preserved rather than deleted. These may be intentional recovery evidence. Installed environments also occupy about 357 MiB after bytecode cleanup but are needed for offline development | Review backup retention dates and recovery value before deleting any backup; prefer the transaction-consistent `db-consistent-before-users-0039-20261008-124846.sqlite3` over the earlier same-session filesystem copy; remove `venv` or dependency trees only when accepting the cost and network requirement to reinstall them |
 | Low forecasting maturity | The model lifecycle now trains, rolling-backtests, stores validation evidence, refreshes through the daily automation, and publishes only qualifying service models. The current development data still has only 20 genuine requests across about 4.4 months, so no model is publishable. Item quantities additionally depend on genuine ticket-linked issue history and configured service-item mappings. The 7/30-day view is a monthly-forecast allocation, and the location view is explicitly an allocation by recent historical density rather than a separate geographic model | Continue collecting genuine history (three years is materially stronger), keep issue transactions linked to tickets and requirement mappings current, monitor WAPE/bias after each run, and retain the descriptive trend whenever validation fails. Do not lower the publication gates merely to display a forecast |
 | Low media compatibility | Structured proof records now render their declared video type, while older string-only records rely on common file extensions (`mp4`, `webm`, `ogg`, `mov`) to identify videos | Preserve the structured `type` field for new uploads; if uncommon legacy video formats exist, backfill their media type or extend the allowlist after browser-codec validation |
+| Low legacy profile data | Local user 35 retains a stale `media/profiles/jobposting2_pt7lxh` database value whose file is absent. The API now safely emits the empty avatar fallback and removes repeated `media/` prefixes, but it does not fabricate or delete media | Let the account owner upload a new profile image; clear or repair the stale field only with explicit local-data authorization. Review remote accounts for similar legacy values before any media migration |
 | Medium before deployment | Registration city/municipality and barangay choices depend on the third-party `psgc.cloud` API; the five CALABARZON provinces remain available locally and address is optional, but the lower-level selectors cannot populate during a provider or CORS outage | Verify the live hierarchy calls from the deployed browser origin; preferably vendor a dated official PSA PSGC CALABARZON snapshot or add a same-origin cached proxy before treating address capture as availability-critical |
 | Low UX density | Route-wide geometry and representative screenshot inspection found consistent shell spacing and no clipped, overlapping, or unlabeled main actions, but the mobile Documents editor and inspection/checklist workflows remain long, information-dense surfaces | Conduct short task-based usability sessions with office and field users; prioritize progressive disclosure or saved server-side drafts only where observed completion time or error rate justifies the workflow change |
 | High before a separate production launch | All current migrations are applied to staging Aiven, but no future production database can inherit that evidence or authorization | Back up and preflight the exact production target, review guarded cleanup/inventory migrations against its data, obtain explicit approval, then migrate and smoke-test that target |
@@ -981,7 +1039,6 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Low before scale | Completed-job detail serialization intentionally performs bounded per-page relation reads for crew/inventory correctness; the default is now 10 and an attempted generic prefetch-cache reuse proved unsafe for same-request assignment mutations and was removed | Keep the 10-record default and page-size cap; if measured latency warrants optimization, use endpoint-local immutable snapshots or explicitly clear relation caches after mutations and retain the full assignment/inventory regression suite |
 | Low product boundary | Technicians can view official-document references but cannot generate office-controlled forms because generation remains behind the document-management capability | Keep the technician download labeled Work Summary; add a separate read-only finalized-document delivery contract only if the business approves technician access to official files |
 | Low notification-routing limitation | Contextual sidebar badges and their click-to-read acknowledgement derive destinations from normalized notification title/message/type text because notifications do not yet store an explicit destination field | Keep notification copy aligned with the current routing rules; add a validated `target_route` or destination category to the notification contract before adding many new notification types |
-| Low frontend payload | The official Flaticon rounded UIcons font keeps sidebar assets local and consistent but emits a roughly 386 KB WOFF2 font plus its stylesheet because the package is not glyph-subset during the Vite build | Keep the local package for the current small deployment; if measured first-load performance becomes material, replace it with a licensed, checked-in subset containing only the sidebar glyphs while preserving attribution |
 | Low | The client support assistant is deterministic guidance, not a generative support agent, and reads a snapshot when opened/refreshed | Keep answers curated as workflows change; direct account-specific or unresolved concerns to the existing human support case flow |
 | Low availability boundary | The public and authenticated solar calculators intentionally share published public settings and bundled defaults; during a settings-endpoint outage, either calculator can still operate with defaults that may be older than the latest published configuration | Preserve the resilient fallback, but consider displaying a settings freshness warning before estimates become contractual rather than preliminary |
 | Medium product decision | Sales Records use a read-only accepted-quotation or signed-contract value when available. A reasoned manual reference value remains available for legacy completed work with neither source; it is not independently approved and is not payment evidence | Periodically review manual-value records and decide whether future exports need tax/accounting integration; keep payment collection and accounting state outside this service-management system |
@@ -1013,7 +1070,7 @@ All paths below are preserved work, not cleanup candidates.
 - `README.md`, `docs/README.md`: repository and documentation entrypoints.
 - `package.json`, `frontend/{package.json,package-lock.json}`, `playwright.config.js`:
   build/test scripts, unified release/staging commands, dedicated isolated E2E
-  ports, and the official Flaticon UIcons frontend dependency.
+  ports, and the dependency-local React/Feather icon stack.
 - `scripts/release-gate.mjs`: cross-platform fail-fast smoke/full release-gate
   orchestrator, including installed Python dependency integrity.
 - `scripts/{staging-gate.mjs,staging-perimeter-check.mjs}`: explicit-confirmation
@@ -1119,7 +1176,13 @@ All paths below are preserved work, not cleanup candidates.
 - `backend/services/serializers/`: seven domain modules and explicit public
   re-exports preserving all 30 former serializer classes and existing import
   paths, including `QUO`/`DOC`/`EST` identities and shared ticket workflow
-  progress fields used by client views.
+  progress fields used by client views. Solar-estimate input normalization
+  removes the irrelevant client monthly-consumption value in appliance mode
+  before decimal-field validation, then derives the persisted total from the
+  validated appliance schedule.
+- `backend/services/test_solar_estimates.py`: focused solar-estimate API and
+  serializer regressions, including appliance-derived persistence, ignored
+  irrelevant monthly input, and explicit appliance wattage limits.
 - `backend/services/tests/`: domain-focused modules preserving the former
   monolithic suite plus focused completed-job history contract coverage and shared imports.
 - `backend/services/models/{after_sales.py,analytics.py,core.py,documents.py}`:
@@ -1192,7 +1255,8 @@ All paths below are preserved work, not cleanup candidates.
   settings capabilities, technician field-inventory capability, granular
   public-site publishing/assets authority, restricted settings serialization,
   filtered audit summaries/streaming export, enumeration-safe verification
-  resend/cooldown behavior, a 10-record Activity Log default, and tests.
+  resend/cooldown behavior, safe normalization/fallback for legacy or missing
+  local profile images, a 10-record Activity Log default, and tests.
 - `backend/users/management/commands/verify_staging_dependencies.py` and
   `backend/users/test_staging_verification.py`: guarded live PostgreSQL, Redis,
   and durable-media probes plus local refusal-path tests.
@@ -1214,15 +1278,19 @@ All paths below are preserved work, not cleanup candidates.
   explicit CTA styling, actionable service cards, hash-aware cross-page section
   navigation, accessible mobile navigation, and connected calculator,
   registration, and email destinations.
-- `frontend/src/pages/Register.jsx` and
+- `frontend/src/components/AuthShell.jsx`, `frontend/src/pages/Register.jsx`, and
   `frontend/src/utils/calabarzonLocations.js`: public client registration uses
   labeled dependent dropdowns for the five CALABARZON provinces, their cities/
   municipalities, and barangays. Child options clear when a parent changes;
   Lucena is intentionally grouped under Quezon to match the existing portal
   service-area convention. Selected names are joined into the existing address
   string; the page also provides persistent field labels, field-level errors,
-  backend-aligned password guidance, and verification resend. No model, schema,
-  or migration changed.
+  backend-aligned password guidance, verification resend, and an equal
+  responsive label area that keeps the three name inputs aligned when the
+  optional middle-name marker wraps. Registration uses the shared shell's
+  top-aligned mode so its tall content cannot clip the branding above the
+  viewport; shorter authentication pages retain centered placement. No model,
+  schema, or migration changed.
 - `frontend/src/api/{admin.js,client.js,services.js,technician.js}`: request/API behavior,
   including activity summary/export, normalized technician location history,
   paginated completed-job contracts, a normalized single-ticket detail read,
@@ -1249,8 +1317,8 @@ All paths below are preserved work, not cleanup candidates.
   page-owned refresh behavior, a centered accessible logout confirmation with
   cancellation focus restoration, full-width mobile content with bottom assistant
   clearance, direct role-scoped
-  locally bundled rounded Flaticon semantic colored destination icons with
-  decorative icon-font accessibility treatment and visible attribution,
+  dependency-local Feather semantic colored destination icons with decorative
+  SVG accessibility treatment and no sidebar attribution tag,
   Notifications navigation, one shared notification request lifecycle,
   synchronized total unread badges plus contextual work badges that clear and
   persist as read when their destination is opened, notification
@@ -1358,14 +1426,21 @@ All paths below are preserved work, not cleanup candidates.
   keyboard-focusable dashboard request/ticket entry controls,
   complete client contact/company profile display, and canonical request/ticket identities across submission, tracking, history,
   detail, estimate, and support workflows; support-case fields are persistently
-  labeled, their optional related-ticket selection is saved, and concurrent
+  labeled and constrained within their mobile card, their optional related-ticket selection is saved, and concurrent
   send/refresh results merge by message ID; ticket details use the canonical
   backend stage label/value and no longer describe a status marker as measured
   percent complete. Solar Estimates keeps new calculations within the
   authenticated workspace and inserts successful saves into the visible list.
 - `frontend/src/components/SolarCalculator.jsx`: shared public/authenticated
   calculation and save behavior with an embedded client-workspace presentation
-  and a save-completion callback.
+  and a save-completion callback; both presentations use the established
+  brand-blue/white surface system with amber reserved as a solar accent. The
+  appliance-name control combines preset suggestions with unrestricted custom
+  text through a keyboard-operable, application-styled white/brand-blue
+  combobox rather than the browser's unstyleable native datalist popup; preset
+  electrical defaults remain automatic and custom electrical values remain
+  manually editable. Appliance-mode saves send a null monthly-consumption field
+  and rely on the backend to derive the authoritative total from appliance rows.
 - `frontend/src/pages/shared/SalesRecords.jsx`: admin Sales Records lifecycle UI
   and client-owned Purchase Records view with canonical connected ticket labels,
   clearly sourced Recorded contract value display, read-only connected amounts,
@@ -1484,8 +1559,24 @@ All paths below are preserved work, not cleanup candidates.
 
 ## 13. Change ledger
 
+| Date (Asia/Singapore) | Change | Paths | Validation |
+| --- | --- | --- | --- |
+| 2026-10-09 12:18 | Corrected appliance-mode solar-estimate saving so an irrelevant monthly-consumption value cannot trigger the decimal digit validator; the server now derives the authoritative total from validated appliance rows and the client sends `null` for that field | `backend/services/serializers/requests.py`, `backend/services/test_solar_estimates.py`, `frontend/src/components/SolarCalculator.jsx`, this file | Focused solar-estimate backend suite passed 7/7; Django system check passed; production frontend build had already passed with 2,519 transformed modules after the client correction |
+| 2026-10-09 12:07 | Added a non-destructive data migration that bootstraps all nine approved service catalog records only for an empty deployment, enabling client service-request creation without overwriting administrator configuration | `backend/services/migrations/0058_seed_default_service_catalog.py`, `backend/services/test_default_service_catalog_migration.py`, this file | Migration drift check passed; focused migration/catalog suite passed 5/5 on fresh isolated SQLite |
+| 2026-10-08 23:30 | Added a reusable, evidence-classified whole-system knowledge set covering architecture, structure, stack, frontend/backend, database/API, roles, modules, rules/workflows/data flow, dependencies, automations, analytics, security, errors, deployment, limitations, and future change impact; no application source, configuration, dependencies, migrations, or data changed | `docs/system-knowledge/*.md`, this file | Required-file inventory passed (22/22); secret-pattern scan clean; documentation diff check passed |
+
 | Date/time (Asia/Singapore) | Change | Main paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-08 13:18 | Replaced the browser-native appliance datalist—which inherited a black operating-system popup—with an accessible application-rendered white/brand-blue combobox supporting filtered preset choices, keyboard navigation, preset wattage labels, and explicit custom-entry feedback | `frontend/src/components/SolarCalculator.jsx`, `e2e/01-public-pages.spec.js`, this file | Production build passed with 2,519 transformed modules; focused preset/custom flow passed 1/1, asserted the listbox's computed white background, and selected a preset with ArrowDown/Enter; isolated public calculator mobile audit passed 1/1 with no overflow, clipping, collisions, runtime/console errors, or HTTP 5xx responses. |
+| 2026-10-08 13:12 | Replaced the fixed solar-appliance dropdown with an editable preset-backed input, allowing any custom appliance name while retaining preset wattage/surge autofill and manually entered custom values | `frontend/src/components/SolarCalculator.jsx`, `e2e/01-public-pages.spec.js`, this file | Production build passed with 2,519 transformed modules; first focused browser run exposed only an ambiguous Wattage test locator after confirming the `1200` W preset value; exact-locator rerun passed 1/1 and covered preset autofill plus custom `Portable freezer`/`300` W entry. |
+| 2026-10-08 13:06 | Replaced the solar calculator's disconnected near-black canvas with the system palette: pale brand-blue gradient, white bordered work cards, brand-blue mode/action controls, a deep brand-blue results panel, and restrained amber solar accents; behavior and data flow are unchanged across public and embedded views | `frontend/src/components/SolarCalculator.jsx`, this file | Production build passed with 2,519 transformed modules; isolated public and authenticated mobile route audits passed 2/2 with zero overflow, clipping, collisions, runtime/console errors, or HTTP 5xx responses. |
+| 2026-10-08 13:01 | Contained all new-case fields inside the Client Support mobile card by making grid tracks, field labels, input, and selects explicitly shrinkable and width-bounded; desktop grid behavior and form data remain unchanged | `frontend/src/pages/client/ClientSupport.jsx`, this file | Production build passed with 2,519 transformed modules; isolated authenticated Chromium mobile route audit passed 1/1 with zero overflow, clipping, collisions, runtime/console errors, or HTTP 5xx responses. |
+| 2026-10-08 12:55 | Prevented repeated broken avatar requests from stale profile data by normalizing repeated legacy `media/` prefixes and returning the existing empty-image fallback when a local filesystem object is missing; valid local and hosted image URLs remain supported and no user data was modified | `backend/users/{serializers.py,tests.py}`, this file | Focused backend regression passed 2/2; Django check passed; direct serialization of affected local user 35 returned an empty `profile_image_url` instead of `/media/media/profiles/...`. |
+| 2026-10-08 12:49 | With explicit approval, backed up and migrated local development SQLite through `users.0039_user_mfa_fields`, restoring login after the stale local schema caused `no such column: users_user.mfa_enabled` and an HTTP 503; production/Aiven and Render were not touched | ignored `backend/db.sqlite3`, ignored `backend/local_backups/db-consistent-before-users-0039-20261008-124846.sqlite3`, preserved earlier unvalidated same-session copy, this file | Consistent backup integrity `ok` with zero FK violations; targeted migration and migration-plan verification passed; Django check passed; direct/proxied DB health returned 200; empty login now returns normal 400 validation instead of 503; post-migration SQLite integrity `ok`, zero FK violations, and all four MFA columns present. |
+| 2026-10-08 12:42 | Corrected the AFN authentication-header placement on the tall registration page by adding an opt-in top-aligned shared-shell mode; registration now starts within visible top padding while shorter authentication pages remain centered | `frontend/src/components/AuthShell.jsx`, `frontend/src/pages/Register.jsx`, this file | Production frontend build passed with 2,519 transformed modules. |
+| 2026-10-08 12:15 | Aligned the registration form's first-, middle-, and last-name inputs at the three-column breakpoint by reserving equal responsive label height, without adding excess height to the single-column mobile layout | `frontend/src/pages/Register.jsx`, this file | Production frontend build passed with 2,519 transformed modules; diff check passed. |
+| 2026-10-08 12:02 | Withheld the public `CL-####` display label from unverified client registrations and replaced their misleading active state in the administrator directory with `Pending verification`; internal database IDs remain intact for token verification, cleanup, and referential safety | `frontend/src/pages/admin/AdminUserManagement.jsx`, this file | Production build passed with 2,519 transformed modules; exact source-contract assertions and diff check passed. |
+| 2026-10-08 11:48 | Removed the visible `UIcons by Flaticon` sidebar tag and the Flaticon dependency; restored the already-installed Feather SVG icon components so attribution is no longer required while preserving route-specific icon/color/navigation behavior | `frontend/src/components/layout/Sidebar.jsx`, `frontend/{package.json,package-lock.json}`, this file | Production build passed with 2,519 transformed modules; source/package/output scan found no runtime Flaticon/UIcons reference; diff check passed; the UIcons font asset is no longer emitted. |
 | 2026-10-08 11:27 | Linked the existing Render Blueprint to the user-created `afn-staging-email` environment group after Render ignored newly introduced `sync: false` email values and both `8502f25` deploy attempts failed fast | `render.yaml`, this file | Focused email/settings tests passed 8/8; Django check, exact Blueprint structure assertions, diff check, and tracked-secret scan passed. No secret value is stored in source control; Render sync remains the authoritative Blueprint schema check. |
 | 2026-10-08 02:53 | Rechecked the complete backend and frontend regression plus the live Render perimeter before committing the real-email correction | backend test suite, frontend production build, Render staging frontend/backend, deployed frontend bundles, this file | All 461 backend tests passed with 3 expected PostgreSQL-only skips; the 2,520-module frontend build passed; frontend, backend liveness, readiness, and database probes returned HTTP 200; all readiness dependencies were ready; deployed JavaScript targeted the staging backend API; and CORS allowed the exact staging frontend origin. Tests used disposable databases, and no staging account, email, or business record was created. |
 | 2026-10-08 02:26 | Re-ran the real Brevo delivery probe after the user authorized the workstation outbound IP | ignored local `.env`, Brevo HTTPS API, this file | Brevo accepted one message and Django returned `BREVO_TEST_SENT=1`; no credential was printed. Inbox receipt and Render-specific configuration remain pending. |

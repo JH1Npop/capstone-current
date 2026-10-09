@@ -161,6 +161,7 @@ const matchesSearch = (user, query) => !query || [
   user.role,
   getRoleLabel(user.role),
   user.role === 'technician' ? getTechnicianStatusLabel(user.technicianStatus) : '',
+  user.role === 'client' && !user.email_verified ? 'pending verification' : '',
   user.active ? 'active' : 'inactive'
 ].some((value) => String(value || '').toLowerCase().includes(query));
 const getFullName = (user) => [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || '-';
@@ -673,6 +674,7 @@ export default function AdminUserManagement() {
               <tbody>
                 {paginatedUsers.map((record) => {
                   const canEditAccess = allowCapabilityManagement && canManageAccessTarget(record.role);
+                  const verificationPending = record.role === 'client' && !record.email_verified;
                   const hardDelete = false;
                   const canRemove = canManageUsers && record.id !== user?.id && record.active;
                   const removeLabel = 'Deactivate';
@@ -684,7 +686,9 @@ export default function AdminUserManagement() {
                         <div className="min-w-0">
                           <div className="truncate font-semibold text-slate-900" title={getFullName(record)}>{getFullName(record)}</div>
                           <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px] leading-4">
-                            <span className="shrink-0 font-semibold text-brand-700">{formatRoleId(record.role, record.id)}</span>
+                            <span className={`shrink-0 font-semibold ${verificationPending ? 'text-amber-700' : 'text-brand-700'}`}>
+                              {verificationPending ? 'Pending verification' : formatRoleId(record.role, record.id)}
+                            </span>
                             <span className="min-w-0 truncate text-slate-500" title={record.username}>@{record.username}</span>
                           </div>
                         </div>
@@ -717,7 +721,11 @@ export default function AdminUserManagement() {
                           </button>
                         )}
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle"><span className={`rounded-lg px-2 py-1 text-xs font-semibold ${record.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>{record.active ? 'Active' : 'Inactive'}</span></td>
+                      <td className="border-b border-slate-100 px-3 py-2 align-middle">
+                        <span className={`rounded-lg px-2 py-1 text-xs font-semibold ${verificationPending ? 'bg-amber-100 text-amber-800' : record.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
+                          {verificationPending ? 'Pending verification' : record.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
                       {canManageUsers ? (
                         <td className="min-w-[128px] border-b border-slate-100 px-3 py-2 align-middle text-right">
                           <div className="flex flex-col items-end gap-1.5">

@@ -1,6 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import '@flaticon/flaticon-uicons/css/regular/rounded.css';
+import {
+  FiActivity,
+  FiArchive,
+  FiBarChart2,
+  FiBell,
+  FiBookOpen,
+  FiBriefcase,
+  FiCalendar,
+  FiCheckSquare,
+  FiClipboard,
+  FiClock,
+  FiCompass,
+  FiFileText,
+  FiGlobe,
+  FiHelpCircle,
+  FiHome,
+  FiList,
+  FiMap,
+  FiMapPin,
+  FiMessageSquare,
+  FiPackage,
+  FiPieChart,
+  FiPlusCircle,
+  FiRefreshCw,
+  FiSettings,
+  FiShoppingBag,
+  FiSun,
+  FiTool,
+  FiTruck,
+  FiUser,
+  FiUsers,
+} from 'react-icons/fi';
 import { fetchDashboardStats } from '../../api/api';
 import ConfirmationDialog from '../shared/ConfirmationDialog';
 import {
@@ -34,49 +65,6 @@ import {
 } from '../../rbac';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
-
-const flaticonIcon = (name) => {
-  const FlaticonIcon = ({ size = 17, className = '', ...props }) => (
-    <i
-      className={`fi fi-rr-${name} ${className}`}
-      style={{ fontSize: size, lineHeight: 1 }}
-      {...props}
-    />
-  );
-
-  return FlaticonIcon;
-};
-
-const FiActivity = flaticonIcon('time-past');
-const FiArchive = flaticonIcon('archive');
-const FiBarChart2 = flaticonIcon('chart-histogram');
-const FiBell = flaticonIcon('bell');
-const FiBookOpen = flaticonIcon('book-alt');
-const FiBriefcase = flaticonIcon('briefcase');
-const FiCalendar = flaticonIcon('calendar');
-const FiCheckSquare = flaticonIcon('clipboard-list-check');
-const FiClipboard = flaticonIcon('clipboard-list');
-const FiClock = flaticonIcon('clock');
-const FiCompass = flaticonIcon('compass-alt');
-const FiFileText = flaticonIcon('document');
-const FiGlobe = flaticonIcon('globe');
-const FiHelpCircle = flaticonIcon('interrogation');
-const FiHome = flaticonIcon('home');
-const FiList = flaticonIcon('list');
-const FiMap = flaticonIcon('map');
-const FiMapPin = flaticonIcon('marker');
-const FiMessageSquare = flaticonIcon('comments');
-const FiPackage = flaticonIcon('boxes');
-const FiPieChart = flaticonIcon('chart-pie');
-const FiPlusCircle = flaticonIcon('add');
-const FiRefreshCw = flaticonIcon('refresh');
-const FiSettings = flaticonIcon('settings');
-const FiShoppingBag = flaticonIcon('shopping-bag');
-const FiSun = flaticonIcon('sun');
-const FiTool = flaticonIcon('tools');
-const FiTruck = flaticonIcon('truck-side');
-const FiUser = flaticonIcon('user');
-const FiUsers = flaticonIcon('users');
 
 /* ─── Menu builders (unchanged logic, same as before) ─── */
 
@@ -699,14 +687,6 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
       <span className={`hidden text-[11px] ${collapsed ? 'lg:inline' : ''}`}>Out</span>
     </button>
 
-    <a
-      href="https://www.flaticon.com/uicons"
-      target="_blank"
-      rel="noreferrer"
-      className={`mt-2 block text-center text-[9px] text-brand-100/45 transition hover:text-brand-100/75 ${collapsed ? 'lg:sr-only' : ''}`}
-    >
-      UIcons by Flaticon
-    </a>
   </div>
 </aside>
       {showLogoutConfirm ? (

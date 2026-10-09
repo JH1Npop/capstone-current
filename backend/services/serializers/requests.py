@@ -182,6 +182,12 @@ class SolarEstimateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Promotion metadata must be an object.')
         return value
 
+    def to_internal_value(self, data):
+        incoming = data.copy()
+        if str(incoming.get('calculation_mode') or '').strip().lower() == 'appliances':
+            incoming['monthly_consumption'] = None
+        return super().to_internal_value(incoming)
+
     def validate(self, attrs):
         current = self.instance
         calculation_inputs = {

@@ -239,6 +239,7 @@ export default function Register() {
       title="Create account"
       subtitle={successMessage ? 'Verify your email address to activate your account.' : 'Register as a client to request and track AFN services.'}
       maxWidth="max-w-[520px]"
+      topAligned
     >
       {successMessage ? (
         <div className="space-y-5">
@@ -302,9 +303,21 @@ export default function Register() {
         <div className="space-y-3">
           <SectionLabel>Client details</SectionLabel>
           <div className="grid gap-3 sm:grid-cols-3">
-            <label className="space-y-1.5 text-sm font-semibold text-slate-700">First name<input name="first_name" value={formData.first_name} onChange={handleChange} className={fieldClass('first_name')} autoComplete="given-name" aria-invalid={Boolean(fieldErrors.first_name)} />{renderFieldError('first_name')}</label>
-            <label className="space-y-1.5 text-sm font-semibold text-slate-700">Middle name <span className="font-normal text-slate-500">(optional)</span><input name="middle_name" value={formData.middle_name} onChange={handleChange} className={fieldClass('middle_name')} autoComplete="additional-name" aria-invalid={Boolean(fieldErrors.middle_name)} />{renderFieldError('middle_name')}</label>
-            <label className="space-y-1.5 text-sm font-semibold text-slate-700">Last name<input name="last_name" value={formData.last_name} onChange={handleChange} className={fieldClass('last_name')} autoComplete="family-name" aria-invalid={Boolean(fieldErrors.last_name)} />{renderFieldError('last_name')}</label>
+            <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+              <span className="block sm:min-h-10">First name</span>
+              <input name="first_name" value={formData.first_name} onChange={handleChange} className={fieldClass('first_name')} autoComplete="given-name" aria-invalid={Boolean(fieldErrors.first_name)} />
+              {renderFieldError('first_name')}
+            </label>
+            <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+              <span className="block sm:min-h-10">Middle name <span className="font-normal text-slate-500">(optional)</span></span>
+              <input name="middle_name" value={formData.middle_name} onChange={handleChange} className={fieldClass('middle_name')} autoComplete="additional-name" aria-invalid={Boolean(fieldErrors.middle_name)} />
+              {renderFieldError('middle_name')}
+            </label>
+            <label className="space-y-1.5 text-sm font-semibold text-slate-700">
+              <span className="block sm:min-h-10">Last name</span>
+              <input name="last_name" value={formData.last_name} onChange={handleChange} className={fieldClass('last_name')} autoComplete="family-name" aria-invalid={Boolean(fieldErrors.last_name)} />
+              {renderFieldError('last_name')}
+            </label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1.5 text-sm font-semibold text-slate-700">Mobile number<input name="phone" value={formData.phone} onChange={handleChange} className={fieldClass('phone')} placeholder="09123456789" inputMode="tel" autoComplete="tel" aria-invalid={Boolean(fieldErrors.phone)} aria-describedby={fieldErrors.phone ? 'phone-error' : undefined} />{renderFieldError('phone')}</label>

@@ -31,7 +31,19 @@ test.describe('Public Pages', () => {
 
     await page.getByRole('button', { name: /per appliance/i }).click();
     await expect(page.getByText(/appliance load schedule/i)).toBeVisible();
-    await page.getByLabel('Appliance').selectOption({ label: 'Air conditioner' });
+    const applianceName = page.getByLabel('Appliance');
+    await applianceName.focus();
+    const applianceChoices = page.getByRole('listbox');
+    await expect(applianceChoices).toBeVisible();
+    await expect(applianceChoices).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await applianceName.press('ArrowDown');
+    await applianceName.press('Enter');
+    const applianceWattage = page.getByRole('spinbutton', { name: 'Wattage', exact: true });
+    await expect(applianceWattage).toHaveValue('1200');
+    await applianceName.fill('Portable freezer');
+    await expect(applianceName).toHaveValue('Portable freezer');
+    await expect(page.getByText('Use custom appliance: Portable freezer')).toBeVisible();
+    await applianceWattage.fill('300');
     await page.getByLabel('Day hours').fill('8');
     await expect(page.getByText(/calculated monthly use/i)).toBeVisible();
 

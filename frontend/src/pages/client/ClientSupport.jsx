@@ -221,17 +221,17 @@ export default function ClientSupport() {
         ) : null}
 
         {!activeSupportCase ? (
-          <div className="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 lg:grid-cols-[1fr_160px_150px_200px]">
-            <label className="grid gap-1 text-xs font-semibold text-slate-600">
+          <div className="mb-4 grid min-w-0 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,160px)_minmax(0,150px)_minmax(0,200px)]">
+            <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-600">
               Subject
               <input
                 value={supportForm.subject}
                 onChange={(event) => setSupportForm((current) => ({ ...current, subject: event.target.value }))}
                 placeholder={supportCategoryLabels[supportForm.category] || 'Need support'}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="w-full min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
             </label>
-            <label className="grid gap-1 text-xs font-semibold text-slate-600">
+            <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-600">
               Category
               <select
                 value={supportForm.category}
@@ -247,7 +247,7 @@ export default function ClientSupport() {
                     };
                   });
                 }}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="w-full min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
                 <option value="general">Need support</option>
                 <option value="billing">Purchase record</option>
@@ -257,12 +257,12 @@ export default function ClientSupport() {
                 <option value="warranty">Warranty</option>
               </select>
             </label>
-            <label className="grid gap-1 text-xs font-semibold text-slate-600">
+            <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-600">
               Priority
               <select
                 value={supportForm.priority}
                 onChange={(event) => setSupportForm((current) => ({ ...current, priority: event.target.value }))}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="w-full min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
                 <option value="low">Low</option>
                 <option value="normal">Normal</option>
@@ -270,12 +270,12 @@ export default function ClientSupport() {
                 <option value="urgent">Urgent</option>
               </select>
             </label>
-            <label className="grid gap-1 text-xs font-semibold text-slate-600">
+            <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-600">
               Related ticket
               <select
                 value={supportForm.ticket_id}
                 onChange={(event) => setSupportForm((current) => ({ ...current, ticket_id: event.target.value }))}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="w-full min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
                 <option value="">No related ticket</option>
                 {clientTickets.map((ticket) => (

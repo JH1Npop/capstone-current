@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
 from django.core import mail
+from django.core.files.storage import FileSystemStorage
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.test import override_settings
@@ -16,6 +17,7 @@ from django.utils import timezone
 from inventory.models import InventoryCategory, InventoryItem, InventoryTransaction
 from services.models import ServiceLocation, ServiceRequest, ServiceTicket, ServiceType, TechnicianSkill
 from .models import ActivityLog, AdminSettings, ChangeLog, User, UserCapabilityGrant
+from .serializers import UserSerializer
 from .rbac import (
     AFTER_SALES_CASES_MANAGE,
     AFTER_SALES_CASES_VIEW,
@@ -39,6 +41,33 @@ from .rbac import (
     is_admin_scoped_role,
     is_admin_workspace_role,
 )
+
+
+class ProfileImageSerializationTests(APITestCase):
+    def test_legacy_media_prefix_is_removed_before_building_local_url(self):
+        user = User(username='legacy-profile', profile_image='media/profiles/avatar.jpg')
+        storage = user.profile_image.storage
+        self.assertIsInstance(storage, FileSystemStorage)
+
+        with patch.object(storage, 'exists', return_value=True), patch.object(
+            storage,
+            'url',
+            side_effect=lambda name: f'/media/{name}',
+        ) as url_mock:
+            image_url = UserSerializer().get_profile_image_url(user)
+
+        self.assertEqual(image_url, '/media/profiles/avatar.jpg')
+        url_mock.assert_called_once_with('profiles/avatar.jpg')
+
+    def test_missing_local_profile_image_uses_empty_fallback(self):
+        user = User(username='missing-profile', profile_image='media/profiles/missing.jpg')
+        storage = user.profile_image.storage
+
+        with patch.object(storage, 'exists', return_value=False), patch.object(storage, 'url') as url_mock:
+            image_url = UserSerializer().get_profile_image_url(user)
+
+        self.assertEqual(image_url, '')
+        url_mock.assert_not_called()
 
 
 class UserRegistrationTests(APITestCase):

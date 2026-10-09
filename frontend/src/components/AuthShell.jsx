@@ -8,6 +8,7 @@ const AuthShell = ({
   panelSubtitle = 'AFN Solar Power Engineering Services',
   maxWidth = 'max-w-[430px]',
   variant = 'simple',
+  topAligned = false,
 }) => {
   if (variant === 'solar') {
     return (
@@ -78,7 +79,7 @@ const AuthShell = ({
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <section className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
+      <section className={`flex min-h-screen justify-center px-4 py-8 sm:px-6 ${topAligned ? 'items-start' : 'items-center'}`}>
           <div className={`w-full ${maxWidth}`}>
             <div className="mb-5 flex justify-center">
               <Link to="/" className="inline-flex items-center gap-3">

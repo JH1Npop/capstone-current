@@ -85,6 +85,51 @@ class SolarEstimateApiTests(APITestCase):
         self.assertEqual(estimate.calculation_version, '1.0')
         self.assertEqual(estimate.status, 'draft')
 
+    def test_appliance_mode_ignores_client_derived_monthly_total(self):
+        self.client.force_authenticate(self.client_user)
+        payload = {
+            **self.payload,
+            'calculation_mode': 'appliances',
+            'monthly_consumption': '99999999999999999999',
+            'appliances': [{
+                'name': 'Portable freezer',
+                'quantity': 1,
+                'wattage': 300,
+                'dayHours': 8,
+                'nightHours': 4,
+                'surgeFactor': 1.5,
+            }],
+        }
+
+        response = self.client.post(self.list_url, payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        estimate = SolarEstimate.objects.get(pk=response.data['id'])
+        self.assertEqual(str(estimate.monthly_consumption), '108.00')
+        self.assertEqual(estimate.appliances[0]['name'], 'Portable freezer')
+
+    def test_appliance_mode_returns_specific_limit_error_for_oversized_wattage(self):
+        self.client.force_authenticate(self.client_user)
+        payload = {
+            **self.payload,
+            'calculation_mode': 'appliances',
+            'monthly_consumption': '99999999999999999999',
+            'appliances': [{
+                'name': 'Test appliance',
+                'quantity': 1,
+                'wattage': 100001,
+                'dayHours': 1,
+                'nightHours': 0,
+                'surgeFactor': 1,
+            }],
+        }
+
+        response = self.client.post(self.list_url, payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('100000', str(response.data))
+        self.assertNotIn('digits in total', str(response.data))
+
     def test_client_cannot_read_another_clients_estimate(self):
         estimate = self.create_estimate()
         self.client.force_authenticate(self.other_client)
