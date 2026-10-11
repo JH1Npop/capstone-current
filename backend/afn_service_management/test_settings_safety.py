@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.core.exceptions import ImproperlyConfigured
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from afn_service_management import settings as project_settings
 from afn_service_management.settings import build_postgres_config_from_url
@@ -98,3 +98,23 @@ class BrevoConfigurationSafetyTests(SimpleTestCase):
             'DEFAULT_FROM_EMAIL must contain a verified non-placeholder Brevo sender',
         ):
             self._validate_with(DEFAULT_FROM_EMAIL='AFN Service <noreply@example.invalid>')
+
+
+class ServiceRequestCorsTests(SimpleTestCase):
+    @override_settings(
+        CORS_ALLOWED_ORIGINS=['https://frontend.example.test'],
+    )
+    def test_request_preflight_allows_idempotency_key(self):
+        response = self.client.options(
+            '/api/services/service-requests/',
+            HTTP_ORIGIN='https://frontend.example.test',
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD='POST',
+            HTTP_ACCESS_CONTROL_REQUEST_HEADERS='authorization,content-type,idempotency-key',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        allowed_headers = {
+            value.strip().lower()
+            for value in response['access-control-allow-headers'].split(',')
+        }
+        self.assertIn('idempotency-key', allowed_headers)

@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-09 13:31 Asia/Singapore**
+Last updated: **2026-10-11 21:16 Asia/Singapore**
 Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -552,6 +552,8 @@ production-oriented backend example. Required production categories are:
 
 - Django: `DJANGO_ENV=production`, strong `SECRET_KEY`, `DEBUG=False`,
   `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, HTTPS settings.
+  Browser clients that create idempotent service requests also require the
+  `idempotency-key` request header in the backend `CORS_ALLOW_HEADERS` contract.
 - PostgreSQL/Aiven: `DATABASE_URL` (preferred), SSL mode, optional Aiven CA
   certificate/path, connection timeout, ASGI-safe nonpersistent connections
   (`DB_CONN_MAX_AGE=0`), and health checks for any intentionally persistent
@@ -773,6 +775,7 @@ deployment authorization.
 
 | Date (Asia/Singapore) | Scope | Result |
 | --- | --- | --- |
+| 2026-10-11 21:16 | Deployed service-request CORS preflight | Live OPTIONS probe confirmed the production backend omitted `idempotency-key`, so the browser blocked the POST before Django. The focused settings/request-lifecycle suite passed 19/19 after adding it to the configured allow-list; Django check and migration-drift check also passed. |
 | 2026-10-09 13:31 | Technician My Jobs ordered field workflow | The full 50-test scheduling/warranty/assignment backend module passed on isolated E2E SQLite, including new regressions for second-navigation rejection, held-job resume, and held-job non-blocking behavior. The production frontend build passed with 2,519 transformed modules. Focused connected Chromium checks passed 2/2 for My Jobs action ordering and the explicit-location navigation policy. One intermediate navigation-policy run failed only because the non-exact test locator matched both the sharing control and new disabled prerequisite control; the exact unchanged product flow passed on rerun. No development/staging database, migration, deployment, commit, or push was performed. |
 | 2026-10-09 13:15 | Technician Job Details mobile sheet | Production frontend build passed with 2,519 transformed modules. The My Jobs functional regression and authenticated 390x844 route audit passed 2/2 using isolated E2E SQLite; the complete schedule/duration/scope/checklist contract remained visible, Details/Navigate parity remained intact, and the page reported no overflow, clipped controls, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses. The sheet now has an accessible icon close control, compact two-column summary facts, one bounded detail scroller, and a persistent two-row Timeline/Navigation/Checklist-or-Finish action footer. |
 | 2026-10-09 13:12 | Technician active-job card information and mobile fit | Production frontend build passed with 2,519 transformed modules. The existing My Jobs functional regression and focused authenticated 390x844 route audit passed 2/2 using isolated E2E SQLite; Details/Navigate parity remained intact and the page reported no overflow, clipped controls, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses. Each active card now exposes client phone when available, date/time, estimated duration, service location, job-scope preview, crew count, equipment count, and checklist progress while retaining the status action and full Details flow. |
@@ -1139,6 +1142,9 @@ All paths below are preserved work, not cleanup candidates.
   critical database/Redis/media readiness, isolated E2E DB/local-only E2E media,
   authenticated WebSockets, and validated non-secret tracking-region/retention
   configuration; the global DRF pagination default is 10 records.
+- `backend/afn_service_management/settings.py` and
+  `test_settings_safety.py`: allow `idempotency-key` during CORS preflight so
+  browsers can submit replay-safe service requests.
 - `backend/afn_service_management/upload_validation.py`: shared upload validation.
 - `backend/api/{views.py,test_landing_page.py}`: API behavior/validation changes,
   including canonical active-job tracking payloads, GPS freshness/accuracy,
@@ -1612,6 +1618,7 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date (Asia/Singapore) | Change | Paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-11 21:16 | Repaired the deployed service-request CORS contract by allowing the frontend's `Idempotency-Key` preflight header; the live backend omitted it and browsers blocked the POST before Django could validate it | `backend/afn_service_management/{settings.py,test_settings_safety.py}`, this file | Live OPTIONS probe confirmed the defect; focused settings/request-lifecycle suite passed 19/19, plus Django check and migration-drift check |
 | 2026-10-09 13:31 | Aligned technician My Jobs with the enforced field sequence: removed the unsafe no-GPS arrival shortcut and early checklist action, made card/detail controls status-specific, blocked concurrent route starts, required GPS plus a recorded navigation start before arrival, and repaired held-job resume/non-blocking semantics | `backend/services/{views/technician.py,tests/test_scheduling_warranty_and_assignment.py}`, `frontend/src/{hooks/useTechnicianJobs.js,pages/technician/{TechnicianJobs.jsx,TechnicianMapNavigation.jsx}}`, `e2e/04-technician-workspace.spec.js`, this file | Full affected backend module passed 50/50 on isolated E2E SQLite; production frontend build passed with 2,519 transformed modules; focused connected My Jobs and navigation-policy Chromium checks passed 2/2. One intermediate browser failure was a strict-locator ambiguity introduced by the two truthful location controls and was corrected with an exact assertion; no development/staging database, migration, deployment, commit, or push |
 | 2026-10-09 13:15 | Rebuilt the technician Job Details phone presentation as a bounded sheet with an accessible icon close control, compact two-column fact tiles, grouped scrollable evidence, and a persistent two-row action footer | `frontend/src/pages/technician/TechnicianJobs.jsx`, this file | Production build passed with 2,519 transformed modules; My Jobs functional regression plus authenticated 390x844 route audit passed 2/2, preserving schedule/duration/scope/checklist and Details/Navigate behavior with no page overflow, clipped controls, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses; isolated E2E SQLite only |
 | 2026-10-09 13:12 | Enriched technician active-job cards with the client phone, scheduled time, duration, location, scope preview, crew count, reserved-equipment count, and checklist progress while retaining compact status/action controls and complete detail navigation | `frontend/src/pages/technician/TechnicianJobs.jsx`, this file | Production build passed with 2,519 transformed modules; My Jobs functional regression plus authenticated 390x844 route audit passed 2/2 with Details/Navigate parity and no page overflow, clipped controls, collisions, unnamed buttons, runtime/console errors, or HTTP 5xx responses; isolated E2E SQLite only |

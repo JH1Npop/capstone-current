@@ -18,6 +18,7 @@ from email.utils import parseaddr
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 from django.core.exceptions import ImproperlyConfigured
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 _settings_logger = logging.getLogger(__name__)
@@ -511,6 +512,10 @@ CORS_ALLOWED_ORIGIN_REGEXES = (
     ] if DEBUG else []
 )
 CORS_ALLOW_CREDENTIALS = env_bool('CORS_ALLOW_CREDENTIALS', default=True)
+# Client request submission uses this replay-safe header. It must be explicitly
+# allowed because django-cors-headers only exposes its standard header set by
+# default, causing browsers to reject the POST during CORS preflight.
+CORS_ALLOW_HEADERS = (*default_headers, 'idempotency-key')
 CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', DEFAULT_FRONTEND_ORIGINS)
 FRONTEND_BASE_URL = os.environ.get('FRONTEND_BASE_URL') or (
     CORS_ALLOWED_ORIGINS[0] if CORS_ALLOWED_ORIGINS else 'http://localhost:5173'
