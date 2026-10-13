@@ -15,6 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import { getLocalDateInputValue } from '../../utils/date';
 import { CALABARZON_BOUNDS, clampToCalabarzon } from '../../utils/mapRegion';
+import { defaultLeafletMarkerIcon } from '../../utils/leafletMarkerIcon';
 import { formatEstimateId, formatRequestId } from '../../utils/roleIds';
 import { FiCheckCircle, FiSearch } from 'react-icons/fi';
 import MapTileLayer from '../../components/maps/MapTileLayer';
@@ -92,7 +93,7 @@ function LocationPicker({ lat, lng, setLat, setLng, onLocationChange }) {
     }
   }, [lat, lng, map]);
 
-  return lat != null && lng != null ? <Marker position={[lat, lng]} /> : null;
+  return lat != null && lng != null ? <Marker position={[lat, lng]} icon={defaultLeafletMarkerIcon} /> : null;
 }
 
 export default function ClientServiceRequests() {

@@ -3,6 +3,7 @@ import { MapContainer, Marker, useMapEvents } from 'react-leaflet';
 import { FiCheck, FiChevronDown, FiMapPin, FiSearch, FiX } from 'react-icons/fi';
 import MapTileLayer from '../maps/MapTileLayer';
 import { CALABARZON_BOUNDS, CALABARZON_MIN_ZOOM, clampToCalabarzon } from '../../utils/mapRegion';
+import { defaultLeafletMarkerIcon } from '../../utils/leafletMarkerIcon';
 
 const inputClass = 'mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
 
@@ -19,7 +20,7 @@ function LocationPicker({ latitude, longitude, onChange }) {
     map.setView([latitude, longitude], map.getZoom());
   }, [latitude, longitude, map]);
 
-  return latitude != null && longitude != null ? <Marker position={[latitude, longitude]} /> : null;
+  return latitude != null && longitude != null ? <Marker position={[latitude, longitude]} icon={defaultLeafletMarkerIcon} /> : null;
 }
 
 function SectionHeading({ number, title, description }) {
