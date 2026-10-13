@@ -1345,6 +1345,25 @@ class AdminAnalyticsTests(APITestCase):
         self.assertIn('Forecasts are unavailable', response.data['summary'])
         self.assertNotIn('next 7 days forecast', response.data['summary'])
 
+    @override_settings(GEMINI_API_KEY='')
+    def test_admin_analytics_ai_summary_includes_the_selected_workspace_contract(self):
+        start_date = (timezone.localdate() - timezone.timedelta(days=9)).isoformat()
+        end_date = timezone.localdate().isoformat()
+
+        response = self.client.get('/api/admin/analytics/ai-summary/', {
+            'start_date': start_date,
+            'end_date': end_date,
+            'workspace': 'technicians',
+            'service_type_id': self.solar.id,
+            'question': 'Which technician completed the most selected jobs?',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        selected = response.data['analytics']['selectedWorkspace']
+        self.assertEqual(selected['workspace'], 'technicians')
+        self.assertEqual(selected['period']['start_date'], start_date)
+        self.assertEqual(selected['period']['end_date'], end_date)
+
     @override_settings(GEMINI_API_KEY='configured-for-test', GEMINI_ANALYTICS_MODEL='test-model')
     @patch('users.views.admin_services.urlrequest.urlopen')
     def test_admin_analytics_ai_summary_rejects_cut_off_provider_response(self, mocked_urlopen):

@@ -8,7 +8,7 @@ from .views import (
     TechnicianClientsView, StatusReportsViewSet, ORSViewSet, CoverageHeatmapViewSet,
     TechnicianDashboardView, TechnicianJobsView, TechnicianScheduleView
 )
-from .views_follow_up import FollowUpCaseViewSet
+from .views_follow_up import FollowUpCaseViewSet, MaintenanceScheduleViewSet
 from .views_dashboard import DashboardView
 from .views.solar_estimates import SolarEstimateViewSet
 from .views.sales_records import SalesRecordViewSet
@@ -36,6 +36,7 @@ router.register(r'technician-dashboard', TechnicianDashboardView, basename='tech
 router.register(r'technician-jobs', TechnicianJobsView, basename='technician-jobs')
 router.register(r'technician-schedule', TechnicianScheduleView, basename='technician-schedule')
 router.register(r'follow-up-cases', FollowUpCaseViewSet, basename='follow-up-cases')
+router.register(r'maintenance-schedules', MaintenanceScheduleViewSet, basename='maintenance-schedules')
 router.register(r'solar-estimates', SolarEstimateViewSet, basename='solar-estimate')
 router.register(r'sales-records', SalesRecordViewSet, basename='sales-record')
 router.register(r'coverage-heatmap', CoverageHeatmapViewSet, basename='coverage-heatmap')

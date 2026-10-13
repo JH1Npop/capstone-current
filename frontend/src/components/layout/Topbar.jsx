@@ -33,6 +33,7 @@ const routeMeta = [
   { prefix: '/admin/client-support', section: 'Communication', title: 'Client Support', subtitle: '' },
   { prefix: '/admin/job-history', section: 'Operations', title: 'Job History', subtitle: '' },
   { prefix: '/admin/after-sales-cases', section: 'After Sales', title: 'After-Sales Follow-Ups', subtitle: '' },
+  { prefix: '/admin/maintenance', section: 'After Sales', title: 'Maintenance Management', subtitle: '' },
   { prefix: '/technician/dashboard', section: 'Home', title: 'Dashboard', subtitle: '' },
   { prefix: '/technician/my-jobs', section: 'My Work', title: 'Jobs', subtitle: '' },
   { prefix: '/technician/schedule', section: 'My Work', title: 'Schedule', subtitle: '' },

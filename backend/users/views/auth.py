@@ -278,7 +278,7 @@ class UserViewSet(viewsets.ModelViewSet):
             if user:
                 if not user.is_active or user.status != 'active':
                     return Response(
-                        {'error': 'Invalid credentials'},
+                        {'error': 'The username/email or password is incorrect.'},
                         status=status.HTTP_401_UNAUTHORIZED,
                     )
                 if not user.email_verified:
@@ -310,7 +310,7 @@ class UserViewSet(viewsets.ModelViewSet):
                                 metadata={'ip_address': ip},
                             )
                             return Response(
-                                {'error': 'Invalid authentication code', 'mfa_required': True},
+                                {'error': 'The authentication code is incorrect or expired.', 'mfa_required': True},
                                 status=status.HTTP_401_UNAUTHORIZED,
                             )
                         if remaining_hashes is not None:
@@ -374,7 +374,7 @@ class UserViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 logger.warning("Failed to check repeated failed logins or notify admin: %s", e)
             return Response(
-                {'error': 'Invalid credentials'},
+                {'error': 'The username/email or password is incorrect.'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

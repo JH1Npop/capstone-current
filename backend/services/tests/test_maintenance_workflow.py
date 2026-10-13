@@ -1,6 +1,7 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
+from services.maintenance import process_maintenance_alerts
 
 
 class MaintenanceWorkflowTests(APITestCase):
@@ -247,3 +248,56 @@ class MaintenanceWorkflowTests(APITestCase):
         schedule.refresh_from_db()
         self.assertIsNotNone(schedule.three_day_notified_at)
         self.assertIsNone(schedule.due_soon_notified_at)
+
+    @patch('services.maintenance._send_client_maintenance_email', return_value=True)
+    def test_due_date_sends_client_reminder_once(self, mock_email):
+        previous_stage = timezone.now() - timedelta(days=3)
+        schedule = MaintenanceSchedule.objects.create(
+            service_ticket=self.ticket,
+            client=self.client_user,
+            service_type=self.service_type,
+            maintenance_profile='commercial_area',
+            interval_days=90,
+            last_service_date=timezone.localdate() - timedelta(days=90),
+            next_due_date=timezone.localdate(),
+            notify_on_date=timezone.localdate() - timedelta(days=7),
+            status='due_soon',
+            client_notified_at=previous_stage,
+            client_three_day_notified_at=previous_stage,
+        )
+
+        first_summary = process_maintenance_alerts()
+        second_summary = process_maintenance_alerts()
+
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.status, 'due')
+        self.assertIsNotNone(schedule.client_due_notified_at)
+        self.assertEqual(first_summary['client_due'], 1)
+        self.assertEqual(second_summary['client_due'], 0)
+        self.assertEqual(mock_email.call_count, 1)
+
+    def test_maintenance_workspace_api_returns_schedule_and_summary(self):
+        schedule = MaintenanceSchedule.objects.create(
+            service_ticket=self.ticket,
+            client=self.client_user,
+            service_type=self.service_type,
+            maintenance_profile='commercial_area',
+            interval_days=90,
+            last_service_date=timezone.localdate() - timedelta(days=90),
+            next_due_date=timezone.localdate(),
+            notify_on_date=timezone.localdate() - timedelta(days=7),
+            status='due',
+        )
+        self.client.force_authenticate(user=self.follow_up_user)
+
+        list_response = self.client.get('/api/services/maintenance-schedules/?status=due')
+        summary_response = self.client.get('/api/services/maintenance-schedules/summary/')
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data['count'], 1)
+        row = list_response.data['results'][0]
+        self.assertEqual(row['id'], schedule.id)
+        self.assertEqual(row['client_name'], self.client_user.username)
+        self.assertEqual(row['days_until_due'], 0)
+        self.assertEqual(summary_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(summary_response.data['due_today'], 1)

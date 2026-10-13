@@ -194,11 +194,19 @@ export const AuthProvider = ({ children }) => {
       setToken(null);
       setUser(null);
 
-      const message =
-        err.response?.data?.error ||
-        err.response?.data?.detail ||
-        'Invalid username or password';
-      return { success: false, message, mfaRequired: Boolean(err.response?.data?.mfa_required) };
+      const mfaRequired = Boolean(err.response?.data?.mfa_required);
+      const message = getApiErrorMessage(
+        err,
+        mfaRequired
+          ? 'The authentication code is incorrect or expired.'
+          : 'The username/email or password is incorrect.',
+      );
+      return {
+        success: false,
+        message,
+        mfaRequired,
+        errorField: mfaRequired ? 'mfa_code' : (err.response?.status === 401 ? 'credentials' : ''),
+      };
     }
   }, []);
 

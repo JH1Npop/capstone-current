@@ -77,6 +77,7 @@ const TechnicianJobHistory = lazy(() => import('./pages/technician/TechnicianJob
 const TechnicianProfile = lazy(() => import('./pages/technician/TechnicianProfile'));
 const AdminInventory = lazy(() => import('./pages/admin/AdminInventory'));
 const AdminJobHistory = lazy(() => import('./pages/admin/AdminJobHistory'));
+const AdminMaintenance = lazy(() => import('./pages/admin/AdminMaintenance'));
 const AdminDocuments = lazy(() => import('./pages/admin/AdminDocuments'));
 const SalesRecords = lazy(() => import('./pages/shared/SalesRecords'));
 
@@ -215,6 +216,7 @@ function AppRoutes() {
           <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={REPORTS_VIEW_CAPABILITIES}><AdminReports /></ProtectedRoute>} />
           <Route path="/admin/operations-report" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={REPORTS_VIEW_CAPABILITIES}><AdminOperationsReport /></ProtectedRoute>} />
           <Route path="/admin/after-sales-cases" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={AFTER_SALES_CASE_CAPABILITIES}><FollowUpCases /></ProtectedRoute>} />
+          <Route path="/admin/maintenance" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={AFTER_SALES_CASE_CAPABILITIES}><AdminMaintenance /></ProtectedRoute>} />
           <Route path="/supervisor/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="/supervisor/dispatch-board" element={<Navigate to="/admin/dispatch-board" replace />} />
           <Route path="/supervisor/technician-tracking" element={<Navigate to="/admin/technician-tracking" replace />} />

@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-13 10:43 Asia/Singapore**
+Last updated: **2026-10-13 13:46 Asia/Singapore**
 Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -775,6 +775,8 @@ deployment authorization.
 
 | Date (Asia/Singapore) | Scope | Result |
 | --- | --- | --- |
+| 2026-10-13 13:46 | Analytics Assistant synchronization | Production Vite build passed with 2,524 transformed modules. The new selected-workspace contract regression passed 1/1; three existing AI-summary/fallback/inventory-demand regressions passed 3/3; Django system check passed. The first broad analytics-class run was stopped after its disposable runner remained CPU-bound well beyond normal setup time; no development or staging data was touched. |
+| 2026-10-13 10:50 | Service-catalog visual metadata save | Production Vite build passed with 2,523 transformed modules after including category, color, icon, and display order in the Admin Services create/update payloads. |
 | 2026-10-13 10:43 | PostgreSQL service-request approval locking | Render log evidence identified `FOR UPDATE cannot be applied to the nullable side of an outer join`. The focused service-request lifecycle suite passed 13/13, including a regression that asserts the approval lock targets only the request row; Django check, migration-drift check, and diff check passed. No migration is required. |
 | 2026-10-13 10:19 | Leaflet default-marker asset build | Production Vite build passed with 2,523 transformed modules. The shared marker helper was emitted as a dedicated bundle and imports Leaflet's icon, retina icon, and shadow image assets rather than requesting missing root-relative files. |
 | 2026-10-11 21:25 | Deployed CORS verification | Commit `5290b8c` was pushed to `staging-deploy`. After Render's restart window, the public service-request OPTIONS response included `idempotency-key` alongside the standard allowed headers for the deployed frontend origin. |
@@ -1030,7 +1032,8 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 | Priority | Item | Safest next action |
 | --- | --- | --- |
-| High staging hotfix | PostgreSQL rejected the deployed approval lock because the request query joins nullable `location` data. The source fix now locks only the service-request row and has local regression coverage, but has not yet been committed, pushed, or verified on Render. | Commit and push the narrow hotfix, wait for the backend deployment, then approve one pending staging request once and confirm HTTP 200 plus ticket creation. |
+| Medium analytics deployment verification | The Analytics Assistant now consumes the page's session-scoped date range, dimensions, and workspace, and the AI endpoint receives the selected unified contract, but this has not yet been verified in the deployed browser. | After deployment, select a non-default workspace and filter, ask a matching specific question, and compare the cited answer with the visible workspace values. |
+| High staging verification | PostgreSQL rejected the deployed approval lock because the request query joined nullable `location` data. Commit `683dfbb` now locks only the service-request row and was pushed to `staging-deploy`, but a successful deployed approval has not yet been recorded. | After Render finishes the backend deployment, approve one pending staging request once and confirm HTTP 200 plus ticket creation. |
 | High before accepting the email deployment | The first `8502f25` Blueprint and auto-deploy attempts failed because the existing Blueprint ignored newly added `sync: false` values; the previous console-email backend remained live and a successful registration therefore produced no Brevo event. The user has now created `afn-staging-email` with the provider key and verified sender, and the Blueprint link is pending deployment. Render will use different outbound IPs, so local Brevo acceptance still does not prove deployed delivery. | Deploy the environment-group link, confirm the backend becomes live on the successor commit, authorize Render outbound IPs in Brevo if required, then use resend verification and verify Brevo request/delivery plus verification/login/password-reset end to end. |
 | High before deploying this phase | The current MFA/observability/schema/UI changes pass all 453 backend tests, production build, browser smoke, and every maintained browser scenario (200/201 exhaustive plus the sole setup-timeout scenario 1/1 focused), but the phase has not been migrated on staging, committed, pushed, or deployed | Review the diff and secret scan, then explicitly authorize commit/push/deployment; configure a stable MFA encryption key, back up, and approve the staging migration separately |
 | High operations evidence | Backup and guarded restore tooling now exists, but no real PostgreSQL backup or disposable `test_...` restore drill has been performed | Configure encrypted off-host retention, create a backup, restore it only to a disposable guarded database, validate representative data and recovery time, and record the evidence |
@@ -1306,6 +1309,9 @@ All paths below are preserved work, not cleanup candidates.
 - `backend/services/{views/service_requests.py,tests/test_service_request_ticket_lifecycle.py}`:
   approval locks only the `ServiceRequest` row, avoiding PostgreSQL's forbidden
   `FOR UPDATE` lock attempt on the nullable joined service location.
+- `backend/users/{views/admin_services.py,tests.py}`: analytics-assistant
+  summaries receive the active page selection and expose the selected unified
+  workspace contract for grounded specific-question answers.
 - `backend/users/migrations/0038_adminsettings_landing_page_projects.py`: adds
   the admin-managed public project collection; it is applied locally and included
   in disposable E2E migrations, while production/Aiven remains pending approval.
@@ -1323,6 +1329,13 @@ All paths below are preserved work, not cleanup candidates.
   `frontend/src/components/shared/WalkInRequestDialog.jsx`: Vite-bundled
   Leaflet default icon/retina/shadow assets so request-location pins do not
   resolve to broken root-relative PNG URLs in deployed builds.
+- `frontend/src/api/admin.js`: service create/update payloads preserve the
+  catalog's category, color, icon, and display-order fields instead of silently
+  omitting them when the editor saves.
+- `frontend/src/{utils/analyticsAssistantContext.js,pages/admin/AdminAnalytics.jsx,components/shared/SystemAssistant.jsx,api/admin.js}`:
+  session-scoped Analytics page selections synchronize the assistant's data
+  loads and specific-question requests with the active period, filters, and
+  workspace.
 - `frontend/src/pages/LandingPage.jsx` and
   `frontend/src/components/{LandingNavbar.jsx,LandingFooter.jsx}`: editor-backed
   public content, promotions, and permission-gated completed-project cards,
@@ -1630,6 +1643,8 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date (Asia/Singapore) | Change | Paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-13 13:46 | Synchronized the Analytics Assistant with the active Analytics page selection and forwarded that selection into the AI summary contract, allowing specific questions to use the same filtered workspace information. | `frontend/src/{utils/analyticsAssistantContext.js,pages/admin/AdminAnalytics.jsx,components/shared/SystemAssistant.jsx,api/admin.js}`, `backend/users/{views/admin_services.py,tests.py}`, this file | Production Vite build passed with 2,524 modules; selected-workspace regression passed 1/1; existing AI-summary regressions passed 3/3; Django check passed. |
+| 2026-10-13 10:50 | Corrected the Admin Services save payload so the visual catalog fields entered in the editor—category, color, icon, and display order—are persisted on both create and update. | `frontend/src/api/admin.js`, this file | Production Vite build passed with 2,523 transformed modules. |
 | 2026-10-13 10:43 | Corrected PostgreSQL service-request approval locking: the approval query retains related-data reads but locks only the request row, avoiding the forbidden nullable outer-join lock. Added a regression for the lock scope. | `backend/services/{views/service_requests.py,tests/test_service_request_ticket_lifecycle.py}`, this file | Render traceback identified the exact PostgreSQL failure; focused service-request lifecycle suite passed 13/13; Django check, migration-drift check, and diff check passed. |
 | 2026-10-13 10:19 | Repaired missing default Leaflet pin images by importing the icon, retina icon, and shadow into the Vite bundle and applying the resulting shared icon to client and administrator request-location markers | `frontend/src/{utils/leafletMarkerIcon.js,pages/client/ClientServiceRequests.jsx,components/shared/WalkInRequestDialog.jsx}`, this file | Production frontend build passed with 2,523 transformed modules and emitted the `leafletMarkerIcon` bundle |
 | 2026-10-11 21:25 | Pushed the idempotent-service-request CORS correction to `staging-deploy`; Render now serves the corrected preflight header | Remote `staging-deploy`, this file | Public OPTIONS response for the deployed frontend origin includes `idempotency-key` |
@@ -1816,3 +1831,34 @@ All paths below are preserved work, not cleanup candidates.
 | 2026-08-29 19:00 | Added route-complete page audit; fixed ticket/message action names, technician mobile activity layout, Analytics scheduled-date 500, and isolated E2E ports | frontend pages, Analytics view/test, Playwright config/helpers/spec | 104/104 page checks, 6/6 focused backend tests, frontend build passed |
 | 2026-08-29 earlier | Completed phases 3-9 across security, workflow, inventory, documents, deployment, and E2E | See worktree manifest and dated checkpoints | 321-test backend checkpoint, 75 browser journeys, audits/build/checks passed |
 | 2026-10-09 12:07 | Added an empty-catalog-only migration containing nine approved active services so a new deployment can accept client service requests without overwriting administrator configuration | `backend/services/migrations/0058_seed_default_service_catalog.py`, `backend/services/test_default_service_catalog_migration.py`, this file | Migration drift passed; focused catalog and migration tests passed 5/5 |
+# Current change: dashboard maintenance navigation
+
+- The admin dashboard's **Maintenance due** attention item now focuses a real maintenance queue instead of rendering as a non-interactive badge.
+- The queue uses the existing `maintenance_queue` response and shows the client, service/profile, status, and next due date. Users with job-history access can continue to job history from a queue item.
+
+# Current change: complete maintenance reminder stages
+
+- Maintenance automation now sends clients a separate, idempotent due-date email and in-app reminder in addition to the configurable early reminder and three-day reminder.
+- Due-today and overdue client reminder wording no longer reports zero or negative "days away" values.
+- A persisted `client_due_notified_at` timestamp prevents duplicate due-date sends when the daily automation is retried.
+- Local SQLite migrations `services.0058` and `services.0059` were applied with user approval; an authenticated admin dashboard request returned HTTP 200 afterward.
+
+# Current change: dedicated maintenance management workspace
+
+- Added `/admin/maintenance` beside After-Sales with status/search filters, attention totals, client/service/location details, reminder-stage history, and links to related workflows.
+- Added a read-only, capability-protected maintenance schedules API and summary endpoint.
+- The dashboard **Maintenance due** attention item now opens the dedicated filtered workspace.
+
+# Current change: system-wide validation error clarity
+
+- The shared frontend API error formatter now preserves field names and all unique backend validation messages instead of silently displaying only the first nested message.
+- Common backend field names are translated into user-facing labels, and network, rate-limit, and server failures receive distinct actionable messages.
+- All API modules already using `getApiErrorMessage` inherit the improvement across account, request, service, ticket, maintenance, inventory, document, communication, and analytics workflows.
+- Login no longer shows the vague **Invalid credentials** response: it safely explains that the username/email or password is incorrect, highlights both relevant inputs, clears the error as the user corrects them, and provides accessible error associations. MFA failures similarly identify the authentication-code field.
+
+# Current change: reduced decorative color noise
+
+- Sidebar route icons now use one consistent brand treatment across admin, technician, and client workspaces instead of a different rainbow color for every destination; active navigation remains clearly white and unread badges remain red.
+- Maintenance workspace chrome and primary actions now use brand blue, while amber/red/green remain reserved for due, overdue, and completed states.
+- Dashboard warning accents now consistently use amber and a non-semantic indigo action was normalized to brand blue.
+- Calendar code and its event/category colors were intentionally left unchanged.

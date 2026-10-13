@@ -169,6 +169,7 @@ class MaintenanceSchedule(models.Model):
     due_notified_at = models.DateTimeField(blank=True, null=True)
     client_notified_at = models.DateTimeField(blank=True, null=True)  # 7-day reminder
     client_three_day_notified_at = models.DateTimeField(blank=True, null=True)
+    client_due_notified_at = models.DateTimeField(blank=True, null=True)
     risk_level = models.CharField(max_length=20, default='normal')
     risk_score = models.FloatField(default=0)
     prediction_notes = models.TextField(blank=True, null=True)

@@ -3,6 +3,10 @@ import { FiMessageCircle, FiRefreshCw, FiSend, FiX } from 'react-icons/fi';
 import { fetchAdminAnalytics, fetchAdminAnalyticsAiSummary, fetchDashboardStats } from '../../api/api';
 import { api } from '../../api/core';
 import { formatTechnicianId } from '../../utils/roleIds';
+import {
+  getAnalyticsAssistantFilters,
+  subscribeToAnalyticsAssistantFilters,
+} from '../../utils/analyticsAssistantContext';
 
 const QUICK_QUESTIONS = [
   'Analytics summary',
@@ -1020,6 +1024,7 @@ export default function SystemAssistant() {
   const [dashboardStats, setDashboardStats] = useState(null);
   const [technicianPerformance, setTechnicianPerformance] = useState([]);
   const [technicianPerformanceAllTime, setTechnicianPerformanceAllTime] = useState([]);
+  const [assistantFilters, setAssistantFilters] = useState(getAnalyticsAssistantFilters);
   const [loading, setLoading] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([
@@ -1029,14 +1034,15 @@ export default function SystemAssistant() {
     }
   ]);
 
-  const loadAnalytics = async () => {
+  const loadAnalytics = async (selectedFilters = assistantFilters) => {
     setLoading(true);
     try {
+      const overviewFilters = { ...selectedFilters, workspace: 'overview' };
       const [data, forecastingData, dashboardData, performanceResponse, allTimePerformanceResponse] = await Promise.all([
-        fetchAdminAnalytics(30),
-        fetchAdminAnalytics({ days: 30, workspace: 'forecasting' }),
+        fetchAdminAnalytics(overviewFilters),
+        fetchAdminAnalytics({ ...selectedFilters, workspace: 'forecasting' }),
         fetchDashboardStats('admin'),
-        api.get('/services/technician-performance/performance_breakdown/', { params: { days: 30 } }),
+        api.get('/services/technician-performance/performance_breakdown/', { params: { days: Math.max(1, Math.round((new Date(`${selectedFilters.endDate}T00:00:00Z`) - new Date(`${selectedFilters.startDate}T00:00:00Z`)) / 86400000) + 1) } }),
         api.get('/services/technician-performance/performance_breakdown/', { params: { period: 'all' } })
       ]);
       setAnalytics({ ...(data || {}), forecasting: forecastingData || {} });
@@ -1053,11 +1059,13 @@ export default function SystemAssistant() {
     }
   };
 
+  useEffect(() => subscribeToAnalyticsAssistantFilters(setAssistantFilters), []);
+
   useEffect(() => {
-    if (isOpen && !analytics && !loading) {
-      loadAnalytics();
+    if (isOpen && !loading) {
+      loadAnalytics(assistantFilters);
     }
-  }, [isOpen]);
+  }, [isOpen, assistantFilters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const askQuestion = async (question) => {
     const text = String(question || '').trim();
@@ -1123,7 +1131,7 @@ export default function SystemAssistant() {
     setInput('');
 
     try {
-      const response = await fetchAdminAnalyticsAiSummary(30, text);
+      const response = await fetchAdminAnalyticsAiSummary(assistantFilters, text);
       const sourceLabel = response?.source === 'gemini' ? 'Gemini analytics explanation' : 'local analytics explanation';
       const answer = response?.source === 'gemini' && response?.summary
         ? withSource(response.summary, sourceLabel, response?.source === 'gemini' ? 'medium' : 'high')

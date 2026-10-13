@@ -11,7 +11,8 @@ class Command(BaseCommand):
         due_soon_total = summary.get('seven_day', 0) + summary.get('three_day', 0)
         self.stdout.write(
             self.style.SUCCESS(
-                f"Processed maintenance alerts: {due_soon_total} due soon, {summary['due']} due."
+                f"Processed maintenance alerts: {due_soon_total} due soon, "
+                f"{summary['due']} due, {summary.get('client_due', 0)} client due-date reminders."
             )
         )
 

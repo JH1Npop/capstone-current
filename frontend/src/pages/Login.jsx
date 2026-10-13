@@ -17,16 +17,19 @@ export default function Login() {
   const [mfaRequired, setMfaRequired] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState('');
+  const [errorField, setErrorField] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setErrorField('');
 
     const submittedUsername = username.trim();
     const submittedPassword = password.trim();
     if (!submittedUsername || !submittedPassword) {
       setError('Enter your username and password.');
+      setErrorField('credentials');
       return;
     }
 
@@ -45,6 +48,7 @@ export default function Login() {
           setMfaRequired(true);
         }
         setError(result.message || 'Login failed. Please try again.');
+        setErrorField(result.errorField || '');
         return;
       }
 
@@ -72,10 +76,12 @@ export default function Login() {
           <label className="mb-2 block text-sm font-semibold text-slate-700">Username or Email</label>
           <input
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className={inputClass}
+            onChange={(e) => { setUsername(e.target.value); setError(''); setErrorField(''); }}
+            className={`${inputClass} ${errorField === 'credentials' ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : ''}`}
             placeholder="Enter username or email"
             autoComplete="username"
+            aria-invalid={errorField === 'credentials'}
+            aria-describedby={errorField === 'credentials' ? 'login-error' : undefined}
             required
           />
         </div>
@@ -86,10 +92,12 @@ export default function Login() {
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={`${inputClass} pr-12`}
+              onChange={(e) => { setPassword(e.target.value); setError(''); setErrorField(''); }}
+              className={`${inputClass} pr-12 ${errorField === 'credentials' ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : ''}`}
               placeholder="Enter password"
               autoComplete="current-password"
+              aria-invalid={errorField === 'credentials'}
+              aria-describedby={errorField === 'credentials' ? 'login-error' : undefined}
               required
             />
             <button
@@ -114,10 +122,12 @@ export default function Login() {
             <label className="mb-2 block text-sm font-semibold text-slate-700">Authentication code</label>
             <input
               value={mfaCode}
-              onChange={(event) => setMfaCode(event.target.value)}
-              className={inputClass}
+              onChange={(event) => { setMfaCode(event.target.value); setError(''); setErrorField(''); }}
+              className={`${inputClass} ${errorField === 'mfa_code' ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : ''}`}
               placeholder="6-digit code or recovery code"
               autoComplete="one-time-code"
+              aria-invalid={errorField === 'mfa_code'}
+              aria-describedby={errorField === 'mfa_code' ? 'login-error' : undefined}
               autoFocus
               required
             />
@@ -127,6 +137,7 @@ export default function Login() {
                 setMfaRequired(false);
                 setMfaCode('');
                 setError('');
+                setErrorField('');
               }}
               className="mt-3 text-sm font-semibold text-brand-700 hover:text-brand-900"
             >
@@ -136,7 +147,7 @@ export default function Login() {
         ) : null}
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          <div id="login-error" role="alert" aria-live="polite" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             {error}
           </div>
         )}

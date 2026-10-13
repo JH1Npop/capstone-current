@@ -195,4 +195,44 @@ class FollowUpCaseSerializer(serializers.ModelSerializer):
         read_only_fields = ['client', 'created_by', 'resolved_at', 'created_at', 'updated_at', 'creation_source']
 
 
+class MaintenanceScheduleSerializer(serializers.ModelSerializer):
+    client_name = serializers.SerializerMethodField()
+    client_email = serializers.EmailField(source='client.email', read_only=True)
+    client_phone = serializers.CharField(source='client.phone', read_only=True)
+    service_type_name = serializers.CharField(source='service_type.name', read_only=True)
+    maintenance_profile_label = serializers.CharField(source='get_maintenance_profile_display', read_only=True)
+    ticket_id = serializers.IntegerField(source='service_ticket.id', read_only=True)
+    ticket_code = serializers.SerializerMethodField()
+    service_address = serializers.SerializerMethodField()
+    days_until_due = serializers.SerializerMethodField()
+
+    def get_client_name(self, obj):
+        return client_technician_label(obj.client) or obj.client.username
+
+    def get_ticket_code(self, obj):
+        return f"TKT-{obj.service_ticket_id:04d}"
+
+    def get_service_address(self, obj):
+        try:
+            return obj.service_ticket.request.location.address
+        except ServiceLocation.DoesNotExist:
+            return obj.client.address or None
+
+    def get_days_until_due(self, obj):
+        return (obj.next_due_date - timezone.localdate()).days
+
+    class Meta:
+        model = MaintenanceSchedule
+        fields = [
+            'id', 'ticket_id', 'ticket_code', 'client_name', 'client_email',
+            'client_phone', 'service_type_name', 'service_address',
+            'maintenance_profile', 'maintenance_profile_label', 'interval_days',
+            'last_service_date', 'next_due_date', 'notify_on_date', 'status',
+            'maintenance_notes', 'risk_level', 'risk_score', 'prediction_notes',
+            'due_soon_notified_at', 'three_day_notified_at', 'due_notified_at',
+            'client_notified_at', 'client_three_day_notified_at',
+            'client_due_notified_at', 'days_until_due', 'created_at', 'updated_at',
+        ]
+
+
 # Auto-assignment serializer

@@ -13,7 +13,7 @@ from users.permissions import CanAccessAfterSales, CanManageAfterSalesCases
 
 from .maintenance import process_maintenance_alerts
 from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent, MaintenanceSchedule, ServiceTicket
-from .serializers import FollowUpCaseSerializer
+from .serializers import FollowUpCaseSerializer, MaintenanceScheduleSerializer
 from .views.helpers import _display_name, _notify_admin_superadmin
 
 
@@ -274,4 +274,45 @@ class FollowUpCaseViewSet(viewsets.ModelViewSet):
             **summary,
             'follow_up_candidates': follow_up_candidates,
             **maintenance_summary,
+        })
+
+
+class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = MaintenanceScheduleSerializer
+    permission_classes = [permissions.IsAuthenticated, CanAccessAfterSales]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        'client__username', 'client__first_name', 'client__last_name',
+        'client__email', 'client__phone', 'service_type__name',
+        'maintenance_profile', 'maintenance_notes', 'service_ticket__request__location__address',
+    ]
+    ordering_fields = ['next_due_date', 'last_service_date', 'status', 'risk_score', 'updated_at']
+    ordering = ['next_due_date', 'id']
+
+    def get_queryset(self):
+        queryset = MaintenanceSchedule.objects.select_related(
+            'client', 'service_type', 'service_ticket__request__location',
+        )
+        status_filter = self.request.query_params.get('status')
+        today = timezone.localdate()
+        if status_filter == 'upcoming':
+            queryset = queryset.filter(status__in=['scheduled', 'due_soon'], next_due_date__gt=today)
+        elif status_filter == 'overdue':
+            queryset = queryset.exclude(status__in=['completed', 'dismissed']).filter(next_due_date__lt=today)
+        elif status_filter and status_filter != 'all':
+            queryset = queryset.filter(status=status_filter)
+        return queryset
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        today = timezone.localdate()
+        queryset = MaintenanceSchedule.objects.all()
+        active = queryset.exclude(status__in=['completed', 'dismissed'])
+        return Response({
+            'total': queryset.count(),
+            'upcoming': active.filter(next_due_date__gt=today).count(),
+            'due_today': active.filter(next_due_date=today).count(),
+            'overdue': active.filter(next_due_date__lt=today).count(),
+            'completed': queryset.filter(status='completed').count(),
+            'dismissed': queryset.filter(status='dismissed').count(),
         })

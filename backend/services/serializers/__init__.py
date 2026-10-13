@@ -30,6 +30,7 @@ from .tickets import (
 from .after_sales import (
     AfterSalesCaseEventSerializer,
     FollowUpCaseSerializer,
+    MaintenanceScheduleSerializer,
 )
 from .analytics import (
     AutoAssignSerializer,
@@ -67,6 +68,7 @@ __all__ = [
     "ServiceTicketSerializer",
     "AfterSalesCaseEventSerializer",
     "FollowUpCaseSerializer",
+    "MaintenanceScheduleSerializer",
     "AutoAssignSerializer",
     "ServiceAnalyticsSerializer",
     "TechnicianPerformanceSerializer",

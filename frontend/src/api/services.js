@@ -466,6 +466,34 @@ export const fetchFollowUpCases = async (filters = {}) => {
   }
 };
 
+export const fetchMaintenanceSchedules = async (filters = {}) => {
+  try {
+    const params = {};
+    if (filters.status && filters.status !== 'all') params.status = filters.status;
+    if (filters.search) params.search = filters.search;
+    if (filters.ordering) params.ordering = filters.ordering;
+    if (filters.page) params.page = filters.page;
+    const results = await fetchAllPages('/services/maintenance-schedules/', { params });
+    return {
+      results,
+      count: results.length,
+      next: null,
+      previous: null,
+    };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load maintenance schedules.'));
+  }
+};
+
+export const fetchMaintenanceSummary = async () => {
+  try {
+    const { data } = await api.get('/services/maintenance-schedules/summary/');
+    return data || {};
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load maintenance summary.'));
+  }
+};
+
 export const fetchFollowUpCaseSummary = async (filters = {}) => {
   try {
     const params = {};

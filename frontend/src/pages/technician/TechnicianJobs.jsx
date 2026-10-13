@@ -347,7 +347,7 @@ export default function TechnicianJobs() {
                             className={`rounded-lg px-3 py-2 text-xs font-medium text-white transition w-full ${
                               isUpdatingStatus || hasDifferentActiveJob(job)
                                 ? 'bg-slate-300 cursor-not-allowed opacity-60'
-                                : 'bg-orange-500 hover:bg-orange-600'
+                                : 'bg-brand-600 hover:bg-brand-700'
                             }`}
                           >
                             {isUpdatingStatus ? 'Resuming...' : hasDifferentActiveJob(job) ? 'Hold or Finish Other Job' : 'Resume Job'}
@@ -779,7 +779,7 @@ export default function TechnicianJobs() {
                   type="button"
                   onClick={() => handleStatusUpdate(selectedJob.id, 'in_progress')}
                   disabled={isUpdatingStatus || hasDifferentActiveJob(selectedJob)}
-                  className="col-span-2 rounded-lg bg-orange-500 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="col-span-2 rounded-lg bg-brand-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   {isUpdatingStatus ? 'Resuming...' : hasDifferentActiveJob(selectedJob) ? 'Hold or Finish Other Job' : 'Resume Job'}
                 </button>

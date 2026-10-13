@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import Layout from '../../components/layout/Layout';
 import { fetchAdminAnalytics } from '../../api/api';
+import { setAnalyticsAssistantFilters } from '../../utils/analyticsAssistantContext';
 import {
   AfterSalesWorkspace,
   ForecastingWorkspace,
@@ -323,6 +324,10 @@ export default function AdminAnalytics() {
 
     return () => controller.abort();
   }, [filters, invalidSelection, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!invalidSelection) setAnalyticsAssistantFilters(filters);
+  }, [filters, invalidSelection]);
 
   const applyPreset = (days) => setFilters((current) => ({
     ...current,

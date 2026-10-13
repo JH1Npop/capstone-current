@@ -80,6 +80,11 @@ const getAfterSalesItems = (stats, user) => {
       path: '/admin/after-sales-cases',
       icon: FiRefreshCw
     });
+    items.push({
+      label: 'Maintenance',
+      path: '/admin/maintenance',
+      icon: FiTool
+    });
   }
 
   return items;
@@ -219,59 +224,10 @@ const roleMenu = {
 
 /* ─── Badge color mapping ─── */
 const badgeColors = {
-  sky:     'bg-sky-400/20 text-sky-300',
-  rose:    'bg-rose-400/20 text-rose-300',
   red:     'bg-red-500/25 text-red-100',
-  emerald: 'bg-emerald-400/20 text-emerald-300',
-  amber:   'bg-amber-400/20 text-amber-300',
-  orange:  'bg-orange-400/20 text-orange-300',
-  violet:  'bg-violet-400/20 text-violet-300',
-  slate:   'bg-slate-400/20 text-slate-300',
 };
 
-const sidebarIconColors = {
-  '/admin/dashboard': 'text-sky-300',
-  '/admin/analytics': 'text-violet-300',
-  '/admin/reports': 'text-cyan-300',
-  '/admin/calendar': 'text-blue-300',
-  '/admin/service-tickets': 'text-amber-300',
-  '/admin/dispatch-board': 'text-orange-300',
-  '/admin/technician-tracking': 'text-emerald-300',
-  '/admin/coverage-heatmap': 'text-teal-300',
-  '/admin/job-history': 'text-indigo-300',
-  '/admin/services': 'text-cyan-300',
-  '/admin/inventory': 'text-yellow-300',
-  '/admin/documents': 'text-fuchsia-300',
-  '/admin/sales-records': 'text-lime-300',
-  '/admin/after-sales-cases': 'text-rose-300',
-  '/admin/messages': 'text-blue-300',
-  '/admin/client-support': 'text-pink-300',
-  '/admin/notifications': 'text-red-300',
-  '/admin/user-management': 'text-cyan-300',
-  '/admin/landing-page': 'text-green-300',
-  '/admin/activity-logs': 'text-purple-300',
-  '/admin/settings': 'text-slate-200',
-  '/admin/profile': 'text-sky-200',
-  '/technician/dashboard': 'text-sky-300',
-  '/technician/my-jobs': 'text-amber-300',
-  '/technician/schedule': 'text-blue-300',
-  '/technician/map-navigation': 'text-emerald-300',
-  '/technician/checklist': 'text-cyan-300',
-  '/technician/messages': 'text-violet-300',
-  '/technician/notifications': 'text-red-300',
-  '/technician/profile': 'text-sky-200',
-  '/client/dashboard': 'text-sky-300',
-  '/client/service-requests': 'text-orange-300',
-  '/client/solar-estimates': 'text-yellow-300',
-  '/client/requests': 'text-cyan-300',
-  '/client/service-history': 'text-violet-300',
-  '/client/purchase-records': 'text-emerald-300',
-  '/client/support': 'text-pink-300',
-  '/client/notifications': 'text-red-300',
-  '/client/profile': 'text-sky-200',
-};
-
-const iconColorForPath = (path) => sidebarIconColors[path] || 'text-brand-100/60';
+const iconColorForPath = () => 'text-brand-100/80';
 
 let cachedAfterSalesStats = null;
 let cachedAfterSalesStatsAt = 0;
@@ -611,10 +567,10 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
                     <Icon
                       size={17}
                       aria-hidden="true"
-                      className={`transition duration-200 ${iconColorForPath(item.path)} ${
+                      className={`transition duration-200 ${itemIsActive ? 'text-white' : iconColorForPath(item.path)} ${
                         itemIsActive
-                          ? 'brightness-125'
-                          : 'opacity-80 group-hover:opacity-100 group-hover:brightness-110'
+                          ? ''
+                          : 'opacity-80 group-hover:opacity-100'
                       }`}
                     />
                   </span>

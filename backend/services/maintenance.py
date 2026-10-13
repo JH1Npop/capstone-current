@@ -641,7 +641,16 @@ def _send_client_maintenance_email(schedule, reference_date=None):
         reference_date = reference_date or timezone.localdate()
         days_until_due = (schedule.next_due_date - reference_date).days
 
-        subject = f"Maintenance Reminder - {service_name} Due in {days_until_due} Day(s)"
+        if days_until_due == 0:
+            due_timing = 'due today'
+            subject = f"Maintenance Reminder - {service_name} Due Today"
+        elif days_until_due < 0:
+            overdue_days = abs(days_until_due)
+            due_timing = f"overdue by {overdue_days} day(s)"
+            subject = f"Maintenance Reminder - {service_name} Overdue"
+        else:
+            due_timing = f"due in {days_until_due} day(s)"
+            subject = f"Maintenance Reminder - {service_name} Due in {days_until_due} Day(s)"
 
         message_body = f"""
 Hello {client.first_name or client.username},
@@ -652,7 +661,7 @@ Maintenance Details:
 - Service Type: {service_name}
 - Maintenance Profile: {rule}
 - Due Date: {schedule.next_due_date}
-- Days Until Due: {days_until_due} day(s)
+- Timing: {due_timing}
 - Last Service Date: {schedule.last_service_date}
 - Interval: {schedule.interval_days} days
 
@@ -677,7 +686,7 @@ AFN Service Management
         )
 
         # Also create in-app notification for client
-        in_app_message = f"Maintenance reminder: {service_name} is due on {schedule.next_due_date} ({days_until_due} days away)"
+        in_app_message = f"Maintenance reminder: {service_name} is due on {schedule.next_due_date} ({due_timing})"
         Notification.objects.create(
             user=client,
             ticket=schedule.service_ticket,
@@ -698,7 +707,7 @@ AFN Service Management
 def process_maintenance_alerts(reference_date=None):
     reference_date = reference_date or timezone.localdate()
     now = timezone.now()
-    summary = {'seven_day': 0, 'three_day': 0, 'due': 0, 'client_notified': 0}
+    summary = {'seven_day': 0, 'three_day': 0, 'due': 0, 'client_notified': 0, 'client_due': 0}
     try:
         from users.models import AdminSettings
         settings_obj = AdminSettings.objects.order_by('id').first()
@@ -727,7 +736,12 @@ def process_maintenance_alerts(reference_date=None):
             stage = 'seven_day'
             schedule.due_soon_notified_at = now
 
-        if days_until_due <= 3 and schedule.client_three_day_notified_at is None:
+        if days_until_due <= 0 and schedule.client_due_notified_at is None:
+            if _send_client_maintenance_email(schedule, reference_date=reference_date):
+                schedule.client_due_notified_at = now
+                summary['client_notified'] += 1
+                summary['client_due'] += 1
+        elif days_until_due <= 3 and schedule.client_three_day_notified_at is None:
             if _send_client_maintenance_email(schedule, reference_date=reference_date):
                 schedule.client_three_day_notified_at = now
                 summary['client_notified'] += 1

@@ -239,7 +239,7 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         today = timezone.localdate()
         start_date, end_date, days = self._resolve_analytics_period(request, today)
         question = str(request.query_params.get('question') or '').strip()
-        analytics_summary = self._build_ai_analytics_summary(end_date, days)
+        analytics_summary = self._build_ai_analytics_summary(end_date, days, request.query_params)
         analytics_summary['periodStartDate'] = start_date.isoformat()
         analytics_summary['periodEndDate'] = end_date.isoformat()
         local_summary = self._build_local_ai_style_summary(analytics_summary)
@@ -263,6 +263,7 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         prompt = (
             "You are the Analytics Assistant for AFN Solar Power Engineering Services.\n"
             "Use ONLY the JSON summary below. Do not invent numbers, names, or records.\n"
+            "For the Admin's selected filters and workspace, use selectedAnalytics and selectedWorkspace as the authoritative current data.\n"
             "Treat historical analytics and forecasting readiness as separate concepts.\n"
             "Never describe historical density or inventory usage as a prediction.\n"
             "When forecast.predictions_available is false, clearly say that no validated forecast, future quantity, confidence score, or forecast accuracy is available.\n"
@@ -338,17 +339,29 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         text_parts = [part.get('text', '') for part in parts if part.get('text')]
         return '\n'.join(text_parts).strip()
 
-    def _build_ai_analytics_summary(self, today, days):
+    def _build_ai_analytics_summary(self, today, days, params=None):
         start_date = today - timezone.timedelta(days=days - 1)
-        overview_contract = build_admin_analytics({
+        selected_params = {
+            key: value
+            for key, value in (params.items() if params is not None else [])
+            if key != 'question'
+        }
+        selected_params.update({
             'start_date': start_date.isoformat(),
             'end_date': today.isoformat(),
+        })
+        selected_workspace = selected_params.get('workspace') or 'overview'
+        overview_contract = build_admin_analytics({
+            **selected_params,
             'workspace': 'overview',
         })
         forecasting_contract = build_admin_analytics({
-            'start_date': start_date.isoformat(),
-            'end_date': today.isoformat(),
+            **selected_params,
             'workspace': 'forecasting',
+        })
+        selected_workspace_contract = build_admin_analytics({
+            **selected_params,
+            'workspace': selected_workspace,
         })
         overview = overview_contract.get('overview', {})
         service_breakdown = self._build_service_breakdown(today, days)
@@ -370,6 +383,8 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         return {
             'periodDays': days,
             'generatedAt': timezone.now().isoformat(),
+            'selectedAnalytics': overview_contract,
+            'selectedWorkspace': selected_workspace_contract,
             'forecastMethod': {
                 'type': 'Readiness-gated service and inventory demand forecasting',
                 'model': (

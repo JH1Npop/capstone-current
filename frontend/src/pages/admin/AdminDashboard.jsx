@@ -270,7 +270,7 @@ export default function AdminDashboard() {
       icon: FiClock,
       actionLabel: 'Open warning queue',
       path: canOpenTickets ? '/admin/service-tickets?focus=sla-warning' : null,
-      tone: slaWarningCount ? 'text-orange-700 bg-orange-50 ring-orange-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
+      tone: slaWarningCount ? 'text-amber-700 bg-amber-50 ring-amber-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
     },
     {
       label: 'Overdue SLA',
@@ -302,15 +302,15 @@ export default function AdminDashboard() {
       icon: FiUsers,
       actionLabel: 'Open dispatch',
       path: canOpenDispatch ? '/admin/dispatch-board' : null,
-      tone: unassignedScheduleCount ? 'text-orange-700 bg-orange-50 ring-orange-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
+      tone: unassignedScheduleCount ? 'text-amber-700 bg-amber-50 ring-amber-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
     },
     {
       label: 'Maintenance due',
       value: dueMaintenanceCount,
       icon: FiTool,
       actionLabel: 'Review required',
-      path: null,
-      tone: dueMaintenanceCount ? 'text-orange-700 bg-orange-50 ring-orange-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
+      path: canOpenAfterSales ? '/admin/maintenance?status=due' : null,
+      tone: dueMaintenanceCount ? 'text-amber-700 bg-amber-50 ring-amber-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
     },
     {
       label: 'Overdue after-sales',
@@ -777,7 +777,7 @@ export default function AdminDashboard() {
                   type="button"
                   onClick={() => setRequestDecision({ type: 'approve_inspection', id: viewingRequestDetails.id, label: viewingRequestDetails.service_summary || viewingRequestDetails.service_type_name || 'this request' })}
                   disabled={approvingRequests.has(viewingRequestDetails.id)}
-                  className="inline-flex items-center justify-center rounded-lg border border-indigo-200 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50 hover:border-indigo-300 disabled:opacity-60"
+                  className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 hover:border-brand-300 disabled:opacity-60"
                 >
                   {approvingRequests.has(viewingRequestDetails.id) ? 'Processing...' : 'Require Inspection'}
                 </button>

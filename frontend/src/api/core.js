@@ -1,4 +1,7 @@
 import axios from 'axios';
+import { getApiErrorMessage, getApiValidationErrors } from '../utils/apiErrors';
+
+export { getApiErrorMessage, getApiValidationErrors } from '../utils/apiErrors';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -101,48 +104,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-const extractApiErrorMessage = (value) => {
-  if (value == null) {
-    return '';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const message = extractApiErrorMessage(item);
-      if (message) {
-        return message;
-      }
-    }
-    return '';
-  }
-
-  if (typeof value === 'object') {
-    if (typeof value.error === 'string' && value.error) {
-      return value.error;
-    }
-    if (typeof value.detail === 'string' && value.detail) {
-      return value.detail;
-    }
-
-    for (const nestedValue of Object.values(value)) {
-      const message = extractApiErrorMessage(nestedValue);
-      if (message) {
-        return message;
-      }
-    }
-  }
-
-  return '';
-};
-
-export const getApiErrorMessage = (error, fallbackMessage) => {
-  return extractApiErrorMessage(error?.response?.data) || fallbackMessage;
-};
-
 export const extractPaginatedResults = (data) =>
   Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
 
@@ -208,6 +169,8 @@ api.interceptors.response.use(
         window.location.replace('/login');
       }
     }
+    error.validationErrors = getApiValidationErrors(error);
+    error.message = getApiErrorMessage(error, error.message || 'The request could not be completed.');
     return Promise.reject(error);
   }
 );
