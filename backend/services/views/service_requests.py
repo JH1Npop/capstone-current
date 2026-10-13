@@ -114,7 +114,10 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
 
     def get_locked_request(self):
         """Lock one request for the duration of a critical decision transaction."""
-        queryset = self.filter_queryset(self.get_queryset()).select_for_update()
+        # `location` is optional, so `select_related` produces a LEFT OUTER JOIN.
+        # PostgreSQL cannot lock the nullable side of that join. Lock only the
+        # ServiceRequest row; related records are read-only during approval.
+        queryset = self.filter_queryset(self.get_queryset()).select_for_update(of=('self',))
         service_request = get_object_or_404(queryset, pk=self.kwargs.get(self.lookup_field))
         self.check_object_permissions(self.request, service_request)
         return service_request

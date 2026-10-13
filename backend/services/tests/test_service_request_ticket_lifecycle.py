@@ -1,6 +1,9 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
+from unittest.mock import sentinel
+
+from services.views.service_requests import ServiceRequestViewSet
 
 
 class ServiceRequestTicketLifecycleTests(APITestCase):
@@ -30,6 +33,20 @@ class ServiceRequestTicketLifecycleTests(APITestCase):
             password='pass',
             role='technician',
         )
+
+    def test_approval_lock_targets_only_the_request_row(self):
+        """Keep PostgreSQL from attempting to lock the nullable location join."""
+        view = ServiceRequestViewSet()
+        view.action = 'approve'
+        view.kwargs = {'pk': 1}
+        view.request = object()
+
+        with patch('services.views.service_requests.get_object_or_404', return_value=sentinel.request) as get_object:
+            with patch.object(view, 'check_object_permissions'):
+                self.assertIs(view.get_locked_request(), sentinel.request)
+
+        queryset = get_object.call_args.args[0]
+        self.assertEqual(queryset.query.select_for_update_of, ('self',))
 
     def test_creating_request_stays_pending_until_reviewed(self):
         self.client.force_authenticate(user=self.client_user)

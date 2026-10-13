@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-13 10:19 Asia/Singapore**
+Last updated: **2026-10-13 10:43 Asia/Singapore**
 Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -775,6 +775,7 @@ deployment authorization.
 
 | Date (Asia/Singapore) | Scope | Result |
 | --- | --- | --- |
+| 2026-10-13 10:43 | PostgreSQL service-request approval locking | Render log evidence identified `FOR UPDATE cannot be applied to the nullable side of an outer join`. The focused service-request lifecycle suite passed 13/13, including a regression that asserts the approval lock targets only the request row; Django check, migration-drift check, and diff check passed. No migration is required. |
 | 2026-10-13 10:19 | Leaflet default-marker asset build | Production Vite build passed with 2,523 transformed modules. The shared marker helper was emitted as a dedicated bundle and imports Leaflet's icon, retina icon, and shadow image assets rather than requesting missing root-relative files. |
 | 2026-10-11 21:25 | Deployed CORS verification | Commit `5290b8c` was pushed to `staging-deploy`. After Render's restart window, the public service-request OPTIONS response included `idempotency-key` alongside the standard allowed headers for the deployed frontend origin. |
 | 2026-10-11 21:16 | Deployed service-request CORS preflight | Live OPTIONS probe confirmed the production backend omitted `idempotency-key`, so the browser blocked the POST before Django. The focused settings/request-lifecycle suite passed 19/19 after adding it to the configured allow-list; Django check and migration-drift check also passed. |
@@ -1029,6 +1030,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 | Priority | Item | Safest next action |
 | --- | --- | --- |
+| High staging hotfix | PostgreSQL rejected the deployed approval lock because the request query joins nullable `location` data. The source fix now locks only the service-request row and has local regression coverage, but has not yet been committed, pushed, or verified on Render. | Commit and push the narrow hotfix, wait for the backend deployment, then approve one pending staging request once and confirm HTTP 200 plus ticket creation. |
 | High before accepting the email deployment | The first `8502f25` Blueprint and auto-deploy attempts failed because the existing Blueprint ignored newly added `sync: false` values; the previous console-email backend remained live and a successful registration therefore produced no Brevo event. The user has now created `afn-staging-email` with the provider key and verified sender, and the Blueprint link is pending deployment. Render will use different outbound IPs, so local Brevo acceptance still does not prove deployed delivery. | Deploy the environment-group link, confirm the backend becomes live on the successor commit, authorize Render outbound IPs in Brevo if required, then use resend verification and verify Brevo request/delivery plus verification/login/password-reset end to end. |
 | High before deploying this phase | The current MFA/observability/schema/UI changes pass all 453 backend tests, production build, browser smoke, and every maintained browser scenario (200/201 exhaustive plus the sole setup-timeout scenario 1/1 focused), but the phase has not been migrated on staging, committed, pushed, or deployed | Review the diff and secret scan, then explicitly authorize commit/push/deployment; configure a stable MFA encryption key, back up, and approve the staging migration separately |
 | High operations evidence | Backup and guarded restore tooling now exists, but no real PostgreSQL backup or disposable `test_...` restore drill has been performed | Configure encrypted off-host retention, create a backup, restore it only to a disposable guarded database, validate representative data and recovery time, and record the evidence |
@@ -1301,6 +1303,9 @@ All paths below are preserved work, not cleanup candidates.
 - `backend/users/management/commands/verify_staging_dependencies.py` and
   `backend/users/test_staging_verification.py`: guarded live PostgreSQL, Redis,
   and durable-media probes plus local refusal-path tests.
+- `backend/services/{views/service_requests.py,tests/test_service_request_ticket_lifecycle.py}`:
+  approval locks only the `ServiceRequest` row, avoiding PostgreSQL's forbidden
+  `FOR UPDATE` lock attempt on the nullable joined service location.
 - `backend/users/migrations/0038_adminsettings_landing_page_projects.py`: adds
   the admin-managed public project collection; it is applied locally and included
   in disposable E2E migrations, while production/Aiven remains pending approval.
@@ -1625,6 +1630,7 @@ All paths below are preserved work, not cleanup candidates.
 
 | Date (Asia/Singapore) | Change | Paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-13 10:43 | Corrected PostgreSQL service-request approval locking: the approval query retains related-data reads but locks only the request row, avoiding the forbidden nullable outer-join lock. Added a regression for the lock scope. | `backend/services/{views/service_requests.py,tests/test_service_request_ticket_lifecycle.py}`, this file | Render traceback identified the exact PostgreSQL failure; focused service-request lifecycle suite passed 13/13; Django check, migration-drift check, and diff check passed. |
 | 2026-10-13 10:19 | Repaired missing default Leaflet pin images by importing the icon, retina icon, and shadow into the Vite bundle and applying the resulting shared icon to client and administrator request-location markers | `frontend/src/{utils/leafletMarkerIcon.js,pages/client/ClientServiceRequests.jsx,components/shared/WalkInRequestDialog.jsx}`, this file | Production frontend build passed with 2,523 transformed modules and emitted the `leafletMarkerIcon` bundle |
 | 2026-10-11 21:25 | Pushed the idempotent-service-request CORS correction to `staging-deploy`; Render now serves the corrected preflight header | Remote `staging-deploy`, this file | Public OPTIONS response for the deployed frontend origin includes `idempotency-key` |
 | 2026-10-11 21:16 | Repaired the deployed service-request CORS contract by allowing the frontend's `Idempotency-Key` preflight header; the live backend omitted it and browsers blocked the POST before Django could validate it | `backend/afn_service_management/{settings.py,test_settings_safety.py}`, this file | Live OPTIONS probe confirmed the defect; focused settings/request-lifecycle suite passed 19/19, plus Django check and migration-drift check |
