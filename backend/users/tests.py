@@ -362,6 +362,25 @@ class UserLoginTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['user']['username'], user.username)
 
+    def test_technician_login_updates_last_seen_without_timezone_shadowing(self):
+        user = User.objects.create_user(
+            username='technician_login_user',
+            email='technician-login@example.com',
+            password='Password123!',
+            role='technician',
+        )
+
+        response = self.client.post(self.login_url, {
+            'username': user.username,
+            'password': 'Password123!',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('token', response.data)
+        profile = user._get_or_create_technician_profile()
+        profile.refresh_from_db()
+        self.assertIsNotNone(profile.last_seen_at)
+
     @override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
     def test_login_is_rate_limited_after_too_many_attempts(self):
         from notifications.models import Notification

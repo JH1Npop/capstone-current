@@ -3,6 +3,7 @@ from users.views.helpers import *  # noqa: F401,F403
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import F
+from django.utils import timezone
 from rest_framework import serializers as drf_serializers
 from rest_framework.exceptions import PermissionDenied
 from users.rbac import CAPABILITY_DEFINITIONS
@@ -374,8 +375,6 @@ class UserViewSet(viewsets.ModelViewSet):
             try:
                 from users.signals import notify_admin_security_alert
                 from users.models import ActivityLog
-                from django.db import models
-                from django.utils import timezone
                 from datetime import timedelta
                 recent_logs = ActivityLog.objects.filter(
                     category='security',
