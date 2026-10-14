@@ -550,21 +550,13 @@ def _escalate_start_overdue(ticket, evaluation, logger):
         evaluation,
     )
 
-    if ticket.technician:
-        from notifications.notification_utils import send_user_notification
-        send_user_notification(
-            user=ticket.technician,
-            title=f"URGENT: Ticket #{ticket.id} start time overdue",
-            body=evaluation.get('action_required') or 'Start work immediately.',
-            notification_type='warning',
-            ticket=ticket,
-            request=ticket.request,
-            data={
-                'ticket_id': ticket.id,
-                'alert_type': 'start_overdue',
-                'minutes_overdue': evaluation.get('minutes_overdue'),
-            },
-        )
+    _notify_assigned_technicians_overdue(
+        ticket,
+        evaluation,
+        alert_type='start_overdue',
+        title=f"URGENT: TKT-{ticket.id:04d} start time is overdue",
+        fallback_action='Start work immediately and update the ticket status.',
+    )
 
 
 def _escalate_execution_overdue(ticket, evaluation, logger):
@@ -582,6 +574,65 @@ def _escalate_execution_overdue(ticket, evaluation, logger):
         'execution_overdue',
         evaluation,
     )
+
+    _notify_assigned_technicians_overdue(
+        ticket,
+        evaluation,
+        alert_type='execution_overdue',
+        title=f"URGENT: TKT-{ticket.id:04d} job is overdue",
+        fallback_action='Complete the work or update the job status immediately.',
+    )
+
+
+def _notify_assigned_technicians_overdue(
+    ticket,
+    evaluation,
+    *,
+    alert_type,
+    title,
+    fallback_action,
+):
+    """Notify the active lead and crew once per day for an overdue assigned job."""
+    from notifications.notification_utils import send_user_notification
+
+    recipients = []
+    seen_user_ids = set()
+    if ticket.technician_id:
+        recipients.append(ticket.technician)
+        seen_user_ids.add(ticket.technician_id)
+
+    crew = ticket.crew_assignments.select_related('technician').all()
+    for assignment in crew:
+        if assignment.technician_id not in seen_user_ids:
+            recipients.append(assignment.technician)
+            seen_user_ids.add(assignment.technician_id)
+
+    minutes_overdue = evaluation.get('minutes_overdue')
+    service_name = ticket.request.service_type.name
+    overdue_detail = (
+        f" It is {minutes_overdue} minute(s) past the SLA target."
+        if minutes_overdue is not None else ''
+    )
+    body = (
+        f"{service_name} for TKT-{ticket.id:04d} needs attention.{overdue_detail} "
+        f"{evaluation.get('action_required') or fallback_action}"
+    )
+
+    for recipient in recipients:
+        send_user_notification(
+            user=recipient,
+            title=title,
+            body=body,
+            notification_type='warning',
+            ticket=ticket,
+            request=ticket.request,
+            data={
+                'ticket_id': ticket.id,
+                'alert_type': alert_type,
+                'minutes_overdue': minutes_overdue,
+            },
+            dedupe_for=timedelta(hours=24),
+        )
 
 
 def _escalate_reschedule_overdue(ticket, evaluation, logger):

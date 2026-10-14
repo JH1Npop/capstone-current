@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from datetime import timedelta
+from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.password_validation import validate_password
 from django.core.files.storage import FileSystemStorage
@@ -32,6 +34,8 @@ class UserSerializer(serializers.ModelSerializer):
     current_latitude = serializers.SerializerMethodField()
     current_longitude = serializers.SerializerMethodField()
     is_available = serializers.SerializerMethodField()
+    is_online = serializers.SerializerMethodField()
+    last_seen_at = serializers.SerializerMethodField()
     skill_level = serializers.SerializerMethodField()
     max_daily_assignments = serializers.SerializerMethodField()
 
@@ -69,6 +73,8 @@ class UserSerializer(serializers.ModelSerializer):
                 'current_latitude': obj.technician_profile.current_latitude,
                 'current_longitude': obj.technician_profile.current_longitude,
                 'is_available': obj.technician_profile.is_available,
+                'is_online': self.get_is_online(obj),
+                'last_seen_at': obj.technician_profile.last_seen_at,
                 'skill_level': obj.technician_profile.skill_level,
                 'max_daily_assignments': obj.technician_profile.max_daily_assignments,
             }
@@ -82,6 +88,21 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_is_available(self, obj):
         return obj.is_available if obj.role == 'technician' else None
+
+    def get_last_seen_at(self, obj):
+        if obj.role != 'technician':
+            return None
+        profile = getattr(obj, 'technician_profile', None)
+        return profile.last_seen_at if profile else None
+
+    def get_is_online(self, obj):
+        if obj.role != 'technician' or obj.status != 'active' or not obj.is_active:
+            return False
+        last_seen_at = self.get_last_seen_at(obj)
+        if not last_seen_at:
+            return False
+        timeout_seconds = int(getattr(settings, 'TECHNICIAN_PRESENCE_TIMEOUT_SECONDS', 120))
+        return last_seen_at >= timezone.now() - timedelta(seconds=timeout_seconds)
 
     def get_skill_level(self, obj):
         return obj.skill_level if obj.role == 'technician' else None
@@ -114,6 +135,7 @@ class UserSerializer(serializers.ModelSerializer):
                   'mfa_enabled',
                   'capabilities', 'created_at', 'updated_at',
                   'current_latitude', 'current_longitude', 'is_available',
+                  'is_online', 'last_seen_at',
                   'skill_level', 'max_daily_assignments',
                   'technician_profile', 'client_profile', 'management_profile']
         read_only_fields = ['id', 'created_at', 'updated_at', 'pending_email', 'profile_image_url', 'mfa_enabled']

@@ -147,11 +147,13 @@ class AdminTechniciansViewSet(viewsets.ViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [permissions.IsAuthenticated(), CanViewSupervisorTechnicianDirectory()]
+        if self.action == 'update':
+            return [permissions.IsAuthenticated(), CanManageUsersOrTechnicianSkills()]
         return [permissions.IsAuthenticated(), IsSuperadmin()]
 
     def list(self, request):
         """Get all technicians"""
-        technicians = User.objects.filter(role='technician').prefetch_related('capability_grants')
+        technicians = User.objects.filter(role='technician').select_related('technician_profile').prefetch_related('capability_grants')
         return Response([
             _serialize_technician_payload(technician)
             for technician in technicians
@@ -194,6 +196,24 @@ class AdminTechniciansViewSet(viewsets.ViewSet):
         try:
             technician = User.objects.get(id=pk, role='technician')
             payload, skills_payload = _extract_skills_payload(request.data)
+            can_manage_profile = (
+                is_superadmin_role(request.user.role) or
+                (
+                    request.user.role == 'admin' and
+                    user_has_any_capability(request.user, USER_MANAGEMENT_CAPABILITIES)
+                )
+            )
+            can_manage_skills = (
+                is_superadmin_role(request.user.role) or
+                (
+                    request.user.role == 'admin' and
+                    user_has_any_capability(request.user, TECHNICIAN_SKILLS_MANAGE_CAPABILITIES)
+                )
+            )
+            if payload and not can_manage_profile:
+                raise PermissionDenied('You may manage technician skills, but not technician profile fields.')
+            if skills_payload is not None and not can_manage_skills:
+                raise PermissionDenied('You do not have permission to manage technician skills.')
             serializer = UserUpdateSerializer(technician, data=payload, partial=True, context={'request': request})
             if serializer.is_valid():
                 with transaction.atomic():

@@ -282,7 +282,11 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
 
     def get_locked_ticket(self):
         """Lock one ticket before assignment or workflow-state mutation."""
-        queryset = self.filter_queryset(self.get_queryset()).select_for_update()
+        # The optimized ticket queryset joins several optional relations
+        # (technician, location, inspection, and maintenance). PostgreSQL
+        # cannot apply FOR UPDATE to the nullable side of those outer joins.
+        # Related rows are read-only here, so lock only the ServiceTicket row.
+        queryset = self.filter_queryset(self.get_queryset()).select_for_update(of=('self',))
         ticket = get_object_or_404(queryset, pk=self.kwargs.get(self.lookup_field))
         self.check_object_permissions(self.request, ticket)
         return ticket
@@ -2302,6 +2306,8 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             'request__client',
             'request__service_type',
             'technician'
+        ).prefetch_related(
+            'request__service_items__service_type'
         ).order_by('-created_at')
 
         serializer = ServiceTicketReportSerializer(queryset, many=True)

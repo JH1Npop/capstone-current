@@ -68,7 +68,7 @@ class ReportingCapabilityTests(APITestCase):
     def test_report_viewer_can_read_report_but_not_other_reporting_areas(self):
         user = self.create_admin('report-viewer', REPORTS_VIEW)
         client = User.objects.create_user(username='report-client', password='pass', role='client')
-        service_type = ServiceType.objects.create(name='Report serializer regression')
+        service_type = ServiceType.objects.create(name='Report serializer regression', color='#db2777')
         service_request = ServiceRequest.objects.create(
             client=client,
             service_type=service_type,
@@ -82,7 +82,12 @@ class ReportingCapabilityTests(APITestCase):
         )
         self.client.force_authenticate(user)
 
-        self.assertEqual(self.client.get(self.report_url).status_code, status.HTTP_200_OK)
+        report_response = self.client.get(self.report_url)
+        self.assertEqual(report_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            report_response.data[0]['services'],
+            [{'name': 'Report serializer regression', 'color': '#db2777'}],
+        )
         self.assertEqual(self.client.get(self.analytics_url).status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self.client.get(self.audit_url).status_code, status.HTTP_403_FORBIDDEN)
 

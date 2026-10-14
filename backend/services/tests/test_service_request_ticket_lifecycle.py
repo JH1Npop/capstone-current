@@ -2,8 +2,10 @@
 
 from ._imports import *  # noqa: F403,F405
 from unittest.mock import sentinel
+from types import SimpleNamespace
 
 from services.views.service_requests import ServiceRequestViewSet
+from services.views.tickets import ServiceTicketViewSet
 
 
 class ServiceRequestTicketLifecycleTests(APITestCase):
@@ -44,6 +46,20 @@ class ServiceRequestTicketLifecycleTests(APITestCase):
         with patch('services.views.service_requests.get_object_or_404', return_value=sentinel.request) as get_object:
             with patch.object(view, 'check_object_permissions'):
                 self.assertIs(view.get_locked_request(), sentinel.request)
+
+        queryset = get_object.call_args.args[0]
+        self.assertEqual(queryset.query.select_for_update_of, ('self',))
+
+    def test_ticket_mutation_lock_targets_only_the_ticket_row(self):
+        """Keep PostgreSQL from locking nullable joins during auto-assignment."""
+        view = ServiceTicketViewSet()
+        view.action = 'auto_assign'
+        view.kwargs = {'pk': 1}
+        view.request = SimpleNamespace(query_params={}, user=self.admin_user)
+
+        with patch('services.views.tickets.get_object_or_404', return_value=sentinel.ticket) as get_object:
+            with patch.object(view, 'check_object_permissions'):
+                self.assertIs(view.get_locked_ticket(), sentinel.ticket)
 
         queryset = get_object.call_args.args[0]
         self.assertEqual(queryset.query.select_for_update_of, ('self',))

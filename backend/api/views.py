@@ -4,6 +4,7 @@ Extracted from api/urls.py to keep URL configuration clean.
 """
 import logging
 import json
+import math
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -36,6 +37,57 @@ from users.rbac import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _distance_meters(latitude_a, longitude_a, latitude_b, longitude_b):
+    """Return great-circle distance without requiring an external routing service."""
+    if None in (latitude_a, longitude_a, latitude_b, longitude_b):
+        return None
+    lat_a, lng_a, lat_b, lng_b = map(
+        math.radians,
+        map(float, (latitude_a, longitude_a, latitude_b, longitude_b)),
+    )
+    delta_latitude = lat_b - lat_a
+    delta_longitude = lng_b - lng_a
+    haversine = (
+        math.sin(delta_latitude / 2) ** 2
+        + math.cos(lat_a) * math.cos(lat_b) * math.sin(delta_longitude / 2) ** 2
+    )
+    haversine = min(max(haversine, 0), 1)
+    return 6371000 * 2 * math.atan2(math.sqrt(haversine), math.sqrt(1 - haversine))
+
+
+def _movement_snapshot(technician, *, now):
+    latest_at = technician.latest_history_timestamp
+    previous_at = technician.previous_history_timestamp
+    if not latest_at or not previous_at or latest_at < now - timezone.timedelta(seconds=90):
+        return {'state': 'unknown', 'distance': None, 'speed': None, 'sample_seconds': None}
+
+    sample_seconds = (latest_at - previous_at).total_seconds()
+    if sample_seconds <= 0 or sample_seconds > 180:
+        return {'state': 'unknown', 'distance': None, 'speed': None, 'sample_seconds': sample_seconds}
+
+    distance = _distance_meters(
+        technician.latest_history_latitude,
+        technician.latest_history_longitude,
+        technician.previous_history_latitude,
+        technician.previous_history_longitude,
+    )
+    if distance is None:
+        return {'state': 'unknown', 'distance': None, 'speed': None, 'sample_seconds': sample_seconds}
+
+    latest_accuracy = max(float(technician.latest_history_accuracy or 0), 0)
+    previous_accuracy = max(float(technician.previous_history_accuracy or 0), 0)
+    movement_threshold = max(12, min(latest_accuracy + previous_accuracy, 60))
+    speed_kph = distance / sample_seconds * 3.6
+    if speed_kph > 160:
+        return {'state': 'unknown', 'distance': round(distance, 1), 'speed': None, 'sample_seconds': sample_seconds}
+    return {
+        'state': 'moving' if distance >= movement_threshold else 'stationary',
+        'distance': round(distance, 1),
+        'speed': round(speed_kph, 1) if distance >= movement_threshold else 0,
+        'sample_seconds': round(sample_seconds),
+    }
 
 
 @api_view(['GET'])
@@ -240,10 +292,19 @@ def tracking_view(request):
         status='active',
     ).select_related('technician_profile').annotate(
         last_location_accuracy=Subquery(latest_location.values('accuracy')[:1]),
+        latest_history_latitude=Subquery(latest_location.values('latitude')[:1]),
+        latest_history_longitude=Subquery(latest_location.values('longitude')[:1]),
+        latest_history_timestamp=Subquery(latest_location.values('timestamp')[:1]),
+        latest_history_accuracy=Subquery(latest_location.values('accuracy')[:1]),
+        previous_history_latitude=Subquery(latest_location.values('latitude')[1:2]),
+        previous_history_longitude=Subquery(latest_location.values('longitude')[1:2]),
+        previous_history_timestamp=Subquery(latest_location.values('timestamp')[1:2]),
+        previous_history_accuracy=Subquery(latest_location.values('accuracy')[1:2]),
     )
 
     tech_markers = []
     for tech in technicians:
+        movement = _movement_snapshot(tech, now=generated_at)
         last_location_update = tech.technician_profile.last_location_update
         has_recent_gps = bool(last_location_update and last_location_update >= online_cutoff)
         if not has_recent_gps:
@@ -266,6 +327,10 @@ def tracking_view(request):
             'status': tracking_status,
             'gpsState': gps_state,
             'gpsAccuracy': tech.last_location_accuracy,
+            'movementState': movement['state'],
+            'movementDistanceMeters': movement['distance'],
+            'movementSpeedKph': movement['speed'],
+            'movementSampleSeconds': movement['sample_seconds'],
             'isAvailable': tech.technician_profile.is_available,
             'lastLocationUpdate': (
                 last_location_update.isoformat() if last_location_update else None
@@ -346,6 +411,10 @@ def tracking_view(request):
             'scheduledDate': ticket['scheduledDate'],
             'scheduledTime': ticket['scheduledTime'],
             'locationDesc': ticket['locationDesc'],
+            'lat': ticket['lat'],
+            'lng': ticket['lng'],
+            'routeDistance': ticket['routeDistance'],
+            'routeDuration': ticket['routeDuration'],
         }
         for member in ticket['crewMembers']:
             technician_marker = technicians_by_id.get(member['id'])

@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from rest_framework import status
@@ -1116,6 +1116,49 @@ class AdminTechnicianAccessTests(APITestCase):
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+@override_settings(TECHNICIAN_PRESENCE_TIMEOUT_SECONDS=120)
+class TechnicianPresenceTests(APITestCase):
+    def setUp(self):
+        self.technician = User.objects.create_user(
+            username='presence_technician',
+            password='Password123!',
+            role='technician',
+            status='active',
+            is_available=True,
+        )
+        self.token = Token.objects.create(user=self.technician)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+
+    def test_heartbeat_marks_technician_online(self):
+        response = self.client.post('/api/users/heartbeat/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.technician.technician_profile.refresh_from_db()
+        self.assertIsNotNone(self.technician.technician_profile.last_seen_at)
+        self.assertTrue(UserSerializer(self.technician).data['is_online'])
+
+    def test_stale_heartbeat_serializes_as_offline(self):
+        profile = self.technician.technician_profile
+        profile.last_seen_at = timezone.now() - timedelta(seconds=121)
+        profile.save(update_fields=['last_seen_at'])
+
+        payload = UserSerializer(self.technician).data
+
+        self.assertFalse(payload['is_online'])
+        self.assertIsNotNone(payload['last_seen_at'])
+
+    def test_logout_clears_technician_presence(self):
+        profile = self.technician.technician_profile
+        profile.last_seen_at = timezone.now()
+        profile.save(update_fields=['last_seen_at'])
+
+        response = self.client.post('/api/users/logout/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile.refresh_from_db()
+        self.assertIsNone(profile.last_seen_at)
 
 
 class AdminUserManagementTests(APITestCase):

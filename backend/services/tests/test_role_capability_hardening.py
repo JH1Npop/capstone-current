@@ -12,6 +12,7 @@ from users.rbac import (
     REPORTS_VIEW,
     SERVICE_TICKET_MANAGE,
     SUPERVISOR_TRACKING_VIEW,
+    TECHNICIAN_SKILLS_MANAGE,
     USER_MANAGEMENT_MANAGE,
 )
 
@@ -94,6 +95,7 @@ class LegacyAdminEndpointCapabilityTests(APITestCase):
         response = self.client.delete(f'/api/services/follow-up-cases/{self.case.id}/')
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
         self.assertTrue(AfterSalesCase.objects.filter(pk=self.case.pk).exists())
 
     def test_after_sales_manager_reaches_preserved_audit_trail_delete_guard(self):
@@ -155,6 +157,14 @@ class LegacyAdminEndpointCapabilityTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+        bundled_response = self.client.put(f'/api/admin/technicians/{self.technician.id}/', {
+            'skills': [{
+                'service_type': self.service_type.id,
+                'skill_level': 'expert',
+            }],
+        }, format='json')
+        self.assertEqual(bundled_response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_superadmin_can_change_technician_skills(self):
         superadmin = User.objects.create_user(
             username='role-boundary-superadmin',
@@ -170,3 +180,28 @@ class LegacyAdminEndpointCapabilityTests(APITestCase):
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+
+    def test_delegated_skill_manager_can_change_only_technician_skills(self):
+        skill_manager = self.create_scoped_admin('skill-manager', TECHNICIAN_SKILLS_MANAGE)
+        self.client.force_authenticate(user=skill_manager)
+
+        direct_response = self.client.post('/api/services/technician-skills/', {
+            'technician': self.technician.id,
+            'service_type': self.service_type.id,
+            'skill_level': 'expert',
+        }, format='json')
+        self.assertEqual(direct_response.status_code, status.HTTP_201_CREATED, direct_response.data)
+
+        update_response = self.client.put(f'/api/admin/technicians/{self.technician.id}/', {
+            'skills': [{
+                'service_type': self.service_type.id,
+                'skill_level': 'beginner',
+            }],
+        }, format='json')
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK, update_response.data)
+        self.assertEqual(update_response.data['skill_details'][0]['skill_level'], 'beginner')
+
+        forbidden_profile_response = self.client.put(f'/api/admin/technicians/{self.technician.id}/', {
+            'email': 'unauthorized-change@example.com',
+        }, format='json')
+        self.assertEqual(forbidden_profile_response.status_code, status.HTTP_403_FORBIDDEN)

@@ -34,13 +34,15 @@ from users.serializers import (
 from users.permissions import (
     IsAdmin, IsSuperadmin, IsSupervisor, IsTechnician, IsClient,
     IsAdminOrSupervisor, IsAdminOrSupervisorOrTechnician, IsSuperadminOrSupervisor,
-    IsOwnerOrAdmin, CanManageUsers, CanManageStaffCapabilities, CanViewUserDirectory,
+    IsOwnerOrAdmin, CanManageUsers, CanManageTechnicianSkills, CanManageUsersOrTechnicianSkills, CanManageStaffCapabilities, CanViewUserDirectory,
     CanViewSupervisorTechnicianDirectory,
 )
 from users.rbac import (
     ADMIN_CONFIGURED_MARKER,
     MANAGE_STAFF_CAPABILITIES,
     USER_DIRECTORY_VIEW_CAPABILITIES,
+    USER_MANAGEMENT_CAPABILITIES,
+    TECHNICIAN_SKILLS_MANAGE_CAPABILITIES,
     can_manage_user_capabilities,
     get_assignable_capability_codes,
     get_capability_catalog,

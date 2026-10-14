@@ -37,6 +37,7 @@ SYSTEM_SETTINGS_MANAGE = 'system.settings.manage'
 MANAGE_STAFF_CAPABILITIES = 'users.capabilities.manage_staff'
 USER_DIRECTORY_VIEW = 'users.directory.view'
 USER_MANAGEMENT_MANAGE = 'users.directory.manage'
+TECHNICIAN_SKILLS_MANAGE = 'technicians.skills.manage'
 PUBLIC_SITE_VIEW = 'public_site.view'
 PUBLIC_SITE_MANAGE = 'public_site.manage'
 PUBLIC_SITE_PUBLISH = 'public_site.publish'
@@ -214,6 +215,15 @@ CAPABILITY_DEFINITIONS = OrderedDict([
         {
             'label': 'Manage users',
             'description': 'Create, edit, and deactivate other users in the directory.',
+            'category': 'Administration',
+            'assignable': True,
+        },
+    ),
+    (
+        TECHNICIAN_SKILLS_MANAGE,
+        {
+            'label': 'Manage technician skills',
+            'description': 'Add, update, and remove technician service qualifications and proficiency levels.',
             'category': 'Administration',
             'assignable': True,
         },
@@ -476,6 +486,7 @@ ADMIN_ASSIGNABLE_CAPABILITIES = {
     SUPERVISOR_TRACKING_VIEW,
     USER_DIRECTORY_VIEW,
     USER_MANAGEMENT_MANAGE,
+    TECHNICIAN_SKILLS_MANAGE,
     ADMIN_JOB_HISTORY_VIEW,
     COMMUNICATIONS_STAFF_VIEW,
     COMMUNICATIONS_SUPPORT_VIEW,
@@ -592,6 +603,10 @@ USER_MANAGEMENT_CAPABILITIES = {
     USER_MANAGEMENT_MANAGE,
 }
 
+TECHNICIAN_SKILLS_MANAGE_CAPABILITIES = {
+    TECHNICIAN_SKILLS_MANAGE,
+}
+
 ADMIN_JOB_HISTORY_CAPABILITIES = {
     ADMIN_JOB_HISTORY_VIEW,
 }
@@ -684,6 +699,7 @@ ROLE_CAPABILITY_MAP = {
         code for code in CAPABILITY_DEFINITIONS.keys()
         if code not in {
             MANAGE_STAFF_CAPABILITIES,
+            TECHNICIAN_SKILLS_MANAGE,
             ADMIN_JOB_HISTORY_VIEW,
             PUBLIC_SITE_VIEW,
             PUBLIC_SITE_MANAGE,

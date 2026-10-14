@@ -94,8 +94,18 @@ class StaffWorkspaceCapabilityAccessTests(APITestCase):
         profile = self.technician_user.technician_profile
         profile.current_latitude = Decimal('14.576400')
         profile.current_longitude = Decimal('121.085100')
-        profile.last_location_update = timezone.now()
+        current_time = timezone.now()
+        profile.last_location_update = current_time
         profile.save(update_fields=['current_latitude', 'current_longitude', 'last_location_update'])
+        previous_location = TechnicianLocationHistory.objects.create(
+            technician=self.technician_user,
+            latitude=Decimal('14.575400'),
+            longitude=Decimal('121.085100'),
+            accuracy=5,
+        )
+        TechnicianLocationHistory.objects.filter(pk=previous_location.pk).update(
+            timestamp=current_time - timezone.timedelta(seconds=30),
+        )
         TechnicianLocationHistory.objects.create(
             technician=self.technician_user,
             latitude=profile.current_latitude,
@@ -116,7 +126,12 @@ class StaffWorkspaceCapabilityAccessTests(APITestCase):
         marker = next(item for item in tracking_response.data['techMarkers'] if item['id'] == self.technician_user.id)
         self.assertEqual(marker['gpsState'], 'fresh')
         self.assertEqual(marker['gpsAccuracy'], 12.5)
+        self.assertEqual(marker['movementState'], 'moving')
+        self.assertGreater(marker['movementDistanceMeters'], 100)
+        self.assertGreater(marker['movementSpeedKph'], 0)
         self.assertEqual(marker['activeJobs'][0]['id'], self.ticket.id)
+        self.assertEqual(marker['activeJobs'][0]['lat'], 14.5764)
+        self.assertEqual(marker['activeJobs'][0]['lng'], 121.0851)
         ticket_marker = next(item for item in tracking_response.data['ticketMarkers'] if item['id'] == self.ticket.id)
         self.assertEqual(ticket_marker['city'], 'Pasig')
         self.assertEqual(ticket_marker['priority'], 'Normal')

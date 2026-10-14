@@ -265,6 +265,7 @@ class TechnicianProfile(models.Model):
     current_latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     current_longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     last_location_update = models.DateTimeField(blank=True, null=True)
+    last_seen_at = models.DateTimeField(blank=True, null=True)
     is_available = models.BooleanField(default=True)
     skill_level = models.CharField(
         max_length=20,

@@ -42,6 +42,7 @@ class ServiceTicketReportSerializer(serializers.ModelSerializer):
     client = serializers.SerializerMethodField()
     client_fullname = serializers.SerializerMethodField()
     service = serializers.SerializerMethodField()
+    services = serializers.SerializerMethodField()
     priority = serializers.CharField(read_only=True)
     status = serializers.CharField(read_only=True)
     sla = serializers.SerializerMethodField()
@@ -72,9 +73,28 @@ class ServiceTicketReportSerializer(serializers.ModelSerializer):
     def get_service(self, obj):
         if not obj.request_id or not obj.request:
             return 'Unknown'
-        items = list(obj.request.service_items.select_related('service_type').order_by('sort_order', 'id'))
+        items = list(obj.request.service_items.all())
         names = [item.service_type.name for item in items if item.service_type_id]
         return ', '.join(names) or (obj.request.service_type.name if obj.request.service_type_id else 'Unknown')
+
+    def get_services(self, obj):
+        if not obj.request_id or not obj.request:
+            return []
+        items = list(obj.request.service_items.all())
+        services = [
+            {
+                'name': item.service_type.name,
+                'color': item.service_type.color or '#2563eb',
+            }
+            for item in items
+            if item.service_type_id
+        ]
+        if services or not obj.request.service_type_id:
+            return services
+        return [{
+            'name': obj.request.service_type.name,
+            'color': obj.request.service_type.color or '#2563eb',
+        }]
 
     def get_sla(self, obj):
         """Return SLA status"""
@@ -131,7 +151,7 @@ class ServiceTicketReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = ServiceTicket
         fields = [
-            'id', 'created_at', 'updated_at', 'client', 'client_fullname', 'service', 'priority', 'status',
+            'id', 'created_at', 'updated_at', 'client', 'client_fullname', 'service', 'services', 'priority', 'status',
             'sla', 'dispatch_status', 'dispatch_label', 'dispatch_action', 'is_missed_dispatch',
             'missed_dispatch_at', 'dispatch_overdue_days', 'technician_id', 'technician_fullname',
             'next_step',

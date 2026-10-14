@@ -134,6 +134,23 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
 
+    @action(detail=False, methods=['post'])
+    def heartbeat(self, request):
+        """Record recent portal connectivity for technician presence displays."""
+        if request.user.role != 'technician':
+            return Response(
+                {'error': 'Presence heartbeat is available only to technician accounts.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        profile = request.user._get_or_create_technician_profile()
+        profile.last_seen_at = timezone.now()
+        profile.save(update_fields=['last_seen_at', 'updated_at'])
+        return Response({
+            'is_online': True,
+            'last_seen_at': profile.last_seen_at,
+        })
+
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def register(self, request):
         """Register a new user"""
@@ -329,6 +346,10 @@ class UserViewSet(viewsets.ModelViewSet):
                     )
                     existing_token.delete()
                 token = Token.objects.create(user=user)
+                if user.role == 'technician':
+                    profile = user._get_or_create_technician_profile()
+                    profile.last_seen_at = timezone.now()
+                    profile.save(update_fields=['last_seen_at', 'updated_at'])
                 ip = request.META.get('REMOTE_ADDR') if hasattr(request, 'META') else ''
                 log_activity(
                     actor=user,
@@ -507,6 +528,10 @@ class UserViewSet(viewsets.ModelViewSet):
             target=request.user,
             message=f'{request.user.get_full_name().strip() or request.user.username} logged out',
         )
+        if request.user.role == 'technician':
+            profile = request.user._get_or_create_technician_profile()
+            profile.last_seen_at = None
+            profile.save(update_fields=['last_seen_at', 'updated_at'])
         Token.objects.filter(user=request.user).delete()
         return Response({'message': 'Logged out successfully'})
 

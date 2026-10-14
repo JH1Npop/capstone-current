@@ -2,7 +2,7 @@
 from decimal import Decimal, InvalidOperation
 
 from rest_framework import serializers, viewsets, permissions
-from users.permissions import IsSuperadmin
+from users.permissions import CanManageTechnicianSkills
 
 from services.models import SolarCommissioningChecklist, TurnoverAcceptance, TechnicalDataSheet, InstallationContract
 from services.serializers import SolarCommissioningChecklistSerializer, TurnoverAcceptanceSerializer, TechnicalDataSheetSerializer, InstallationContractSerializer
@@ -16,7 +16,7 @@ class TechnicianSkillViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsSuperadmin()]
+            return [CanManageTechnicianSkills()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):

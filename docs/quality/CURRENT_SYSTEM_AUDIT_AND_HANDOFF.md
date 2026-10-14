@@ -1,7 +1,8 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-13 13:46 Asia/Singapore**
+Last updated: **2026-10-14 11:31 Asia/Singapore**
+Current focused objective: **Keep client request-location selection reliable and understandable on phones by detecting insecure local HTTP access, handling mobile geolocation permission/device failures, retrying weak high-accuracy fixes safely, and retaining address-search/manual-map fallbacks.**
 Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -46,7 +47,7 @@ WAPE, and baseline-comparison publication gates all pass,
 with complete wrapping assistant messages and a local fallback for provider
 responses stopped before completion,
 and with complete labels instead of clipped chart axes, ellipses, or hidden
-mobile workspace tabs;
+mobile workspace tabs; expand informative analytics with comparison charts, composition shares, technician scatter plots, and daily capacity heatmaps backed by existing response data;
 keep record-detail dialogs truthful across admin, client,
 and technician workspaces, including turnover completion semantics, readable
 timeline identities, calendar request notes, display names, image/video proof,
@@ -63,9 +64,9 @@ schedule, scope, client phone, checklist progress, active-versus-cancelled
 equipment clarity, and a state-aware next action; keep technician job completion clear and evidence-backed
 with one consistently named Finish Job action and server-enforced completion
 photos for regular service work, keep job cards action-focused without duplicate
-navigation controls, make Dispatch Board team availability immediately legible
-with qualified Online, Busy, and Offline technician states, keep selection
-consistent with the documented derived availability rule, preserve the completed
+navigation controls, make Dispatch Board technician connectivity immediately legible
+through expiring authenticated heartbeats and keep Online/Offline presence separate
+from Available/Busy dispatch settings, preserve the completed
 local reconciliation evidence, and advance the audited system toward production readiness for
 a small-to-medium service business while preserving the dirty worktree and
 requiring evidence at each release gate. Phase 1 release reliability is
@@ -90,7 +91,7 @@ diamonds, which also state both endpoint entities, fields, and cardinalities so
 long routes can be read without guesswork. Hub
 degree and module affinity now drive placement instead of database table order.
 The generated `ERD_CURRENT.md` is the complete end-to-end text edition with all
-51 entities, 676 typed and constrained attributes, and 102 relationships.
+51 entities, 682 typed and constrained attributes, and 102 relationships.
 `ERD_CURRENT_CONNECTIONS.md` remains the shorter connection-only companion;
 both write relationships as source-cardinality-verb-cardinality-target lines
 with exact field mappings.
@@ -171,7 +172,7 @@ A professor-format final diagram pack now provides exactly one manually laid
 out draw.io Context Diagram, one unified draw.io DFD, and one generated
 single-page exhaustive Chen draw.io ERD matching the approved pre-oral notation
 and presentation. At the user's direction, the Chen figure includes the same 51
-entities, all 676 local attributes, and all 102 in-scope relationships as the
+entities, all 682 local attributes, and all 102 in-scope relationships as the
 physical contract. It is generated directly from the DBML: wide domain lanes
 contain every canonical entity and attribute, and all relationship legs connect
 those actual entities to diamonds through clear exits, shared domain gutters,
@@ -454,7 +455,22 @@ dashboard previews, lookup limits, and full export batches retain their separate
 task-specific limits. Purchase Records now labels the amount as Recorded contract
 value: accepted-quotation and signed-contract amounts are visibly source-controlled
 and read-only, while the manual fallback exists only when neither source provides
-an amount and requires an explanation before confirmation.**
+an amount and requires an explanation before confirmation. Keep User Management
+profile editors compact and explicitly labeled, reserving the wide editor only
+for technician qualification controls, and render read notifications on an
+opaque card surface rather than allowing the workspace background through.
+Keep dashboard and notification recovery polling aligned at a visible 25-second
+interval without creating additional per-page notification timers. Give
+ticket-managing administrators an explicit, reason-required client-backout
+termination control that uses the existing audited cancellation lifecycle.
+Keep assistant launch bubbles movable by pointer without confusing a drag for
+an open action or allowing the control to leave the viewport. Present client
+My Requests results as information-grouped cards on phones while retaining the
+efficient desktop table. Keep PostgreSQL ticket mutations from attempting to
+lock nullable optimized-query joins, including manual smart assignment. Make
+the ticket Reports workspace decision-ready with accurate filtered outcomes,
+additional operational filters, visual composition, service workload, and
+formula-safe CSV export.**
 
 This is the first document a new agent should read. It records the current
 verified state so a routine handoff does not require another whole-repository
@@ -519,6 +535,8 @@ media, dependency directories, and real secrets are intended to remain ignored.
 The real `.env` exists locally but must not be inspected merely to populate docs.
 
 ## 3. System architecture
+
+Analytics visuals share `AnalyticsVisuals.jsx`: comparison bars retain full category names and exact values in tables, after-sales donuts show shares and prior counts, and technician scatter/capacity heatmap consume existing scoped data. No API/schema change.
 
 The read-only whole-system knowledge pass on 2026-10-08 added a concise,
 source-oriented navigation set at `docs/system-knowledge/`. It does not replace
@@ -765,6 +783,7 @@ production database:
 | `notifications.0009_remove_notificationlog_notification_and_more` | Guarded removal of unused notification template/delivery-log models; applied locally and to staging Aiven |
 | `users.0038_adminsettings_landing_page_projects` | Admin-managed completed-project portfolio with consent-gated public publication; applied locally, to fresh test/E2E databases, and to staging Aiven |
 | `users.0039_user_mfa_fields` | Administrator MFA enabled state, encrypted TOTP secret, hashed one-time recovery codes, and confirmation timestamp; applied to fresh isolated test databases, staging by the successful `fa121a2` startup, and the explicitly authorized local development SQLite migration on 2026-10-08 |
+| `users.0040_technicianprofile_last_seen_at` | Technician portal heartbeat timestamp used for expiring Online/Offline presence; applied to local development SQLite on 2026-10-13 after isolated tests; pending staging deployment |
 
 Playwright applies migrations only to ignored `backend/db.e2e.sqlite3`, then
 flushes and seeds that isolated database. Any migration of a future separate
@@ -773,8 +792,51 @@ deployment authorization.
 
 ## 8. Validation ledger
 
+2026-10-14 11:31: The hardened client **Use My Location** flow passed the production frontend build with 2,528 modules. It now detects phone GPS blocking on non-localhost HTTP, reports permission/unavailable/timeout failures beside the control, retries non-permission high-accuracy failures with a lower-accuracy fix, exposes progress and accuracy, and preserves manual address/map alternatives. Physical-phone browser review remains pending.
+
+2026-10-14 11:28: Report-chart service colors passed one focused API regression and the production frontend build with 2,528 modules. The report API now exposes each request service as a structured name/color pair, including multi-service requests, and the workload chart consumes those catalog colors rather than name-based guesses. Authenticated browser visual review remains pending.
+
+2026-10-14 11:25: The configurable Admin Reports service-workload chart passed the production frontend build with 2,528 modules. Each top service has a stable distinct color, including yellow for AC/air-conditioning and red for Solar, while an accessible Stacked/Grouped switch changes layout without losing the completed/not-completed comparison. The workload and workflow-composition cards retain equal grid dimensions. Authenticated browser visual review remains pending.
+
+2026-10-14 11:16: Improved Admin Reports passed the production frontend build with 2,528 modules. The page now derives accurate active/completed/cancelled/SLA measures from filtered live rows, supports status and priority filters, renders workflow composition and top-service workload visuals, and protects CSV cells from spreadsheet-formula execution. Browser visual review remains pending.
+
+2026-10-14 11:14: PostgreSQL-safe ticket mutation locking passed 2/2 focused isolated-E2E tests: the queryset locks only the `ServiceTicket` row and a complete smart auto-assignment returns HTTP 200 with metadata. Django system check passed. The first focused run had the auto-assignment pass but the new lock unit test error on an incomplete mock request; after correcting only that fixture, the complete rerun passed 2/2.
+
+2026-10-14 11:10: Client My Requests mobile result cards passed the production frontend build with 2,528 modules. Phone layouts no longer depend on horizontal scrolling for the seven-column desktop table; the desktop table remains unchanged. Authenticated phone screenshot review remains pending.
+
+2026-10-14 11:07: Shared draggable assistant-launch behavior passed the production frontend build with 2,528 modules. Analytics and client assistant bubbles now support mouse/touch dragging, suppress click after a drag, persist independent positions, and clamp stored/current coordinates to the viewport. Authenticated browser gesture review remains pending.
+
+2026-10-14 11:02: The administrator client-backout termination control passed the production frontend build with 2,527 modules. The focused backend manual-status regression passed 1/1 on isolated E2E SQLite, proving a missing reason is rejected and a reasoned cancellation is persisted in ticket history.
+
+2026-10-14 10:58: Shared admin, technician, and client dashboard auto-refresh plus the single notification-context recovery poll now run every 25 seconds. The admin's visible interval copy derives from the configured milliseconds. Production frontend build passed with 2,527 modules.
+
+2026-10-14 10:55: Read notification cards now use an explicit white background while unread cards retain their light-blue distinction. The shared admin, technician, and client Notifications page passed the production frontend build with 2,527 modules.
+
+2026-10-14 10:52: User Management profile-editor UI passed the production frontend build with 2,527 modules. Administrator and client editors now use a compact width, all account fields have persistent labels, role copy is singular, and the larger surface remains available for technician skills. Browser visual review remains pending.
+
+2026-10-14 10:44: Technician skill delegation passed 3/3 focused capability tests on isolated E2E SQLite. Superadmin remains authorized, a general user manager remains denied skill mutation, and an admin granted `technicians.skills.manage` can update skill records while profile-field mutation is rejected. Django system check and the 2,527-module production frontend build passed.
+
+2026-10-14 10:34: Overdue assigned-job notification regression passed 3/3 on isolated E2E SQLite. It proves an execution-overdue ticket sends one warning to both its lead technician and crew and remains deduplicated across repeated SLA runs. Django system check passed. The Render blueprint was inspected and contains no cron/scheduled service, so automatic deployed execution remains a deployment requirement.
+
+2026-10-13 21:22: Production build passed (2,527 modules) after replacing overview technician progress rows with grouped vertical columns and collapsing supporting chart tables. Browser appearance remains unverified.
+
+2026-10-13 21:18: Expanded Analytics production build passed (`npm.cmd --prefix frontend run build`, 2,527 modules). Browser visual verification remains pending.
+
 | Date (Asia/Singapore) | Scope | Result |
 | --- | --- | --- |
+| 2026-10-13 21:12 | Analytics visual hierarchy and density | Reduced empty chart space, stopped paired cards from stretching to the taller neighbor, added current/previous/change summaries above grouped comparisons, placed exact current values on bars, and strengthened chart cards with a restrained blue accent, soft depth, and compact eyebrow pills. The treatment stays within the semantic palette instead of adding unrelated colors. Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 21:10 | Analytics chart depth and motion | Replaced the thin requests-versus-completions line plot with a two-series gradient area chart and enabled restrained entry animation on overview areas, grouped bars, and the status donut. Hover tooltips and exact adjacent counts remain available, so motion does not replace the underlying data. Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 21:06 | Analytics overview visualization variety | Upgraded Primary service demand to a true grouped horizontal bar graph and Ticket statuses to a donut showing current workload proportions. The donut keeps exact current and previous-period counts in its adjacent labels, while time-series requests/completions remains a line graph and location demand remains grouped bars. Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 20:59 | Analytics location-demand chart | Replaced the location comparison's card-style progress rows with a true grouped horizontal bar chart. Each city now has adjacent blue current-period and slate previous-period bars, a numeric axis, legend, and hover values while retaining the semantic analytics palette. Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 20:57 | Analytics overview focus | Removed the standalone Current attention card from Admin Analytics and allowed Requests vs completions to use the full content width, keeping the workspace focused on date-filtered metrics and chart data. The compact cross-domain counts remain in the overview summary and operational alerts remain available in their dedicated workspaces. Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 20:53 | Analytics semantic color coding | Standardized the Admin Analytics visual language across all six workspaces: blue represents current or historical volume, green healthy/completed results, amber warnings and due work, rose overdue or shortage risk, violet forecasts/models, and slate the previous period. Added a compact visible color key; Calendar colors remain unchanged. Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 20:37 | Interactive tracking routes | Route polylines are now clickable: the selected technician-to-job path becomes thicker, unrelated paths dim, the technician is selected, and a compact popup identifies the destination while showing live direct distance, stored road-route distance, and ETA or an honest dashed-line fallback. Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 20:34 | Live technician movement and distance | Tracking API now classifies Moving/Stationary from the latest two fresh GPS samples using accuracy-aware drift and impossible-speed guards, and includes job coordinates in technician job summaries. The admin map pulses moving markers, reports movement/speed, and shows current straight-line distance to assigned job sites while retaining existing road-route distance/ETA. Focused API regression passed 1/1 on isolated SQLite; Django check, migration drift, scoped diff integrity, and the 2,526-module production build passed. No migration was introduced. |
+| 2026-10-13 20:26 | Dispatch presence/availability clarity | Offline technicians no longer display the contradictory Available badge. Available is shown only for an online technician with no active job; offline technicians instead receive explicit scheduling guidance, while Busy remains visible for assigned work. Production Vite build passed with 2,526 modules and scoped diff integrity passed with only the existing line-ending notice. |
+| 2026-10-13 20:13 | Dashboard SLA warning navigation | Corrected the attention chips to open and filter the unified dashboard SLA Watchlist instead of sending all risks to the ticket-only queue. The watchlist now exposes All/Warning/Overdue filters and states that it includes requests and tickets. Read-only local evaluation confirmed the reported warning belongs to service request 605 while tickets 590, 617, and 618 are overdue; production Vite build passed with 2,526 modules. |
+| 2026-10-13 20:07 | Technician Tracking job-site popup | Refocused the compact, display-only popup on the upcoming client visit: ticket/status plus labeled Client, Work, Site, and When facts. Technician assignment, action links, and priority decoration were removed from this overlay. Production Vite build passed with 2,526 modules. |
+| 2026-10-13 19:39 | Technician Online/Offline local migration | Applied `users.0040_technicianprofile_last_seen_at` only to the confirmed local SQLite database; migration is shown as applied and Django system check passes. Staging PostgreSQL remains untouched and pending later deployment. |
+| 2026-10-13 15:47 | Technician Online/Offline presence | Focused heartbeat/directory tests passed 5/5 on isolated E2E SQLite; Django system check and migration-drift check passed; production Vite build passed with 2,526 modules. The DBML and both editable Chen outputs regenerated to 51 entities, 682 attributes, and 102 relationships. Migration `users.0040` had not yet been applied to local SQLite or staging at validation time. |
 | 2026-10-13 13:46 | Analytics Assistant synchronization | Production Vite build passed with 2,524 transformed modules. The new selected-workspace contract regression passed 1/1; three existing AI-summary/fallback/inventory-demand regressions passed 3/3; Django system check passed. The first broad analytics-class run was stopped after its disposable runner remained CPU-bound well beyond normal setup time; no development or staging data was touched. |
 | 2026-10-13 10:50 | Service-catalog visual metadata save | Production Vite build passed with 2,523 transformed modules after including category, color, icon, and display order in the Admin Services create/update payloads. |
 | 2026-10-13 10:43 | PostgreSQL service-request approval locking | Render log evidence identified `FOR UPDATE cannot be applied to the nullable side of an outer join`. The focused service-request lifecycle suite passed 13/13, including a regression that asserts the approval lock targets only the request row; Django check, migration-drift check, and diff check passed. No migration is required. |
@@ -1030,8 +1092,33 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
 
+- Browser geolocation is unavailable to a second phone when local development is opened through a plain `http://192.168.x.x`-style address; this is a browser secure-context restriction, not an API failure. Use the deployed HTTPS site or an HTTPS development tunnel. The improved guidance has build evidence but still needs a physical Android/iOS permission-path check.
+
+- The configurable per-service workload chart now reuses administrator-configured catalog colors and has API/build evidence, but still needs authenticated desktop and phone review, especially with five long service names. The legend may wrap at narrow widths, while service names and exact values remain available in the chart tooltip. Older deployed backends that do not yet return structured `services` use a frontend fallback palette until deployment.
+
+- The improved Reports visual hierarchy has production-build evidence but still needs authenticated desktop/phone review with both dense and sparse filtered datasets. Its visuals summarize the rows returned by the existing report endpoint and do not replace Analytics forecasting or historical-period comparisons.
+
+- The ticket row-lock correction is local only. Deployed staging will continue returning database-derived HTTP 503 for affected `auto_assign` requests until the fix is committed, pushed to `staging-deploy`, and Render completes deployment; ticket 10 must then be retried.
+
+- Client My Requests mobile cards have production-build evidence but still need an authenticated 390x844 browser review with long service, address, technician, and workflow values.
+
+- Draggable assistant launchers have build validation but still need authenticated mouse and touch gesture review in a browser. Stored positions are clamped after viewport resize; users can always drag the bubble again, while clearing site storage resets the default bottom-right location.
+
+- “Terminate” is deliberate operator wording for a client backout, but the persisted canonical lifecycle state remains `Cancelled`; records are retained rather than deleted. The UI permits the action only from statuses already accepted by the server transition map.
+
+- Reducing dashboard and notification polling from 45 to 25 seconds improves freshness but increases authenticated dashboard and notification request volume by about 80%; monitor backend/provider load and 429/5xx rates after deployment.
+
+- The compact User Management profile editor and opaque notification-card correction have production-build evidence but have not yet received an authenticated browser screenshot review at desktop and phone widths.
+
+- An admin needs User Directory access in addition to `technicians.skills.manage` to reach the skill editor through User Management. This keeps skill authority from implicitly exposing the full user directory.
+
+- The staging Render blueprint has web, static, and key-value services but no scheduler. Technician overdue alerts require `python manage.py run_operational_automations --mode frequent` every 30 minutes. Creating a Render cron service may introduce billing and requires the production database/email environment plus the Aiven CA secret, so it was not added implicitly.
+
+- Expanded analytics visuals have compilation evidence but await browser visual review. Sparse data can contain few points; missing capacity entries are not inferred as zero.
+
 | Priority | Item | Safest next action |
 | --- | --- | --- |
+| High before technician-presence deployment | `users.0040` adds the heartbeat timestamp required by the new endpoint and technician serializer. It is applied locally but remains pending on staging PostgreSQL. | Back up the staging database, apply `users.0040` during deployment, then sign into one technician session and verify Online becomes Offline within two minutes after the session stops heartbeating. |
 | Medium analytics deployment verification | The Analytics Assistant now consumes the page's session-scoped date range, dimensions, and workspace, and the AI endpoint receives the selected unified contract, but this has not yet been verified in the deployed browser. | After deployment, select a non-default workspace and filter, ask a matching specific question, and compare the cited answer with the visible workspace values. |
 | High staging verification | PostgreSQL rejected the deployed approval lock because the request query joined nullable `location` data. Commit `683dfbb` now locks only the service-request row and was pushed to `staging-deploy`, but a successful deployed approval has not yet been recorded. | After Render finishes the backend deployment, approve one pending staging request once and confirm HTTP 200 plus ticket creation. |
 | High before accepting the email deployment | The first `8502f25` Blueprint and auto-deploy attempts failed because the existing Blueprint ignored newly added `sync: false` values; the previous console-email backend remained live and a successful registration therefore produced no Brevo event. The user has now created `afn-staging-email` with the provider key and verified sender, and the Blueprint link is pending deployment. Render will use different outbound IPs, so local Brevo acceptance still does not prove deployed delivery. | Deploy the environment-group link, confirm the backend becomes live on the successor commit, authorize Render outbound IPs in Brevo if required, then use resend verification and verify Brevo request/delivery plus verification/login/password-reset end to end. |
@@ -1085,6 +1172,26 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
+- Technician skill delegation and the compact, labeled user profile editor touch `backend/users/{rbac.py,permissions.py,views/helpers.py,views/admin_users.py}`, `backend/services/{views/inspection.py,tests/test_role_capability_hardening.py}`, `frontend/src/{rbac.js,api/admin.js,pages/admin/AdminUserManagement.jsx}`, and this handoff.
+
+- Notification card surface consistency touches `frontend/src/pages/client/ClientNotifications.jsx`, shared by admin, technician, and client notification routes, and this handoff.
+
+- The 25-second shared refresh interval touches `frontend/src/utils/dashboardHelpers.js`, `frontend/src/context/NotificationContext.jsx`, `frontend/src/pages/admin/AdminDashboard.jsx`, and this handoff.
+
+- Client-backout ticket termination touches `frontend/src/{api/services.js,pages/admin/AdminServiceTickets.jsx}` and this handoff; it intentionally reuses the existing backend `update_status` cancellation transition and its established regression.
+
+- Movable assistant launchers add `frontend/src/components/shared/DraggableAssistantButton.jsx`, update `SystemAssistant.jsx` and `ClientSupportAssistant.jsx`, and update this handoff.
+
+- Client My Requests responsive result formatting touches `frontend/src/pages/client/ClientRequestTracking.jsx` and this handoff.
+
+- PostgreSQL-safe ticket mutation locking touches `backend/services/{views/tickets.py,tests/test_service_request_ticket_lifecycle.py}` and this handoff.
+
+- Admin Reports decision-support and export hardening touches `frontend/src/pages/admin/AdminReports.jsx` and this handoff.
+
+- `backend/services/sla.py` now sends deduplicated execution/start overdue warnings to the assigned lead and crew. `backend/services/test_auto_dispatch_and_sla.py` covers execution-overdue recipients and repeat-run deduplication.
+
+- Added `frontend/src/pages/admin/analytics/AnalyticsVisuals.jsx`; updated `AnalyticsWorkspacePanels.jsx` for comparison graphs, case composition donuts, technician scatter, and daily capacity heatmap.
+
 All paths below are preserved work, not cleanup candidates.
 
 ### Root, CI, and environment contracts
@@ -1108,6 +1215,10 @@ All paths below are preserved work, not cleanup candidates.
   Django 6.0.8 security patch level and direct `cryptography` declaration for
   MFA secret encryption.
 - `README.md`, `docs/README.md`: repository and documentation entrypoints.
+- `docs/models/{AFN_ERD.dbml,AFN_ERD_CHEN_PRESENTATION.drawio,ERD_CURRENT.drawio,README.md}`
+  and `docs/academic/final_diagrams/README.md`: regenerated physical schema and
+  editable Chen references including technician `last_seen_at` and the already
+  implemented maintenance/MFA fields, now totaling 682 attributes.
 - `package.json`, `frontend/{package.json,package-lock.json}`, `playwright.config.js`:
   build/test scripts, unified release/staging commands, dedicated isolated E2E
   ports, and the dependency-local React/Feather icon stack.
@@ -1191,6 +1302,8 @@ All paths below are preserved work, not cleanup candidates.
   and completed history remains ticket-backed.
 
 ### Services, lifecycle, analytics, and documents
+
+- `backend/services/{serializers/tickets.py,views/tickets.py,test_reporting_capabilities.py}`: report rows expose structured service name/color pairs from the canonical catalog, with prefetched multi-service data and regression coverage.
 
 - `backend/services/migrations/0058_seed_default_service_catalog.py` and
   `backend/services/test_default_service_catalog_migration.py`: bootstrap nine
@@ -1303,6 +1416,10 @@ All paths below are preserved work, not cleanup candidates.
   filtered audit summaries/streaming export, enumeration-safe verification
   resend/cooldown behavior, safe normalization/fallback for legacy or missing
   local profile images, a 10-record Activity Log default, and tests.
+- `backend/{afn_service_management/settings.py,users/{models.py,serializers.py,tests.py,views/{auth.py,admin_users.py},migrations/0040_technicianprofile_last_seen_at.py}}`, `.env.example`, and `backend/.env.example`:
+  authenticated technician heartbeat persistence, configurable presence expiry,
+  directory Online/Offline serialization, immediate logout clearing, and isolated
+  presence regressions. The migration remains unapplied outside disposable tests.
 - `backend/users/management/commands/verify_staging_dependencies.py` and
   `backend/users/test_staging_verification.py`: guarded live PostgreSQL, Redis,
   and durable-media probes plus local refusal-path tests.
@@ -1318,9 +1435,16 @@ All paths below are preserved work, not cleanup candidates.
 
 ### Frontend
 
+- `frontend/src/pages/client/ClientServiceRequests.jsx`: mobile-safe current-location selection with secure-context detection, actionable GPS permission/device guidance, bounded high/low-accuracy attempts, progress state, accuracy feedback, and manual location fallbacks.
+
+- `frontend/src/pages/admin/AdminReports.jsx`: filtered report KPIs and exports plus equal-sized workflow-composition and service-workload visual cards; bars reuse canonical catalog colors, compare completed and not-completed counts, and can switch between stacked and grouped layouts.
+
 - `frontend/src/{context/AuthContext.jsx,pages/Login.jsx,api/client.js,components/shared/ProfileSecuritySection.jsx}`:
   two-step administrator sign-in plus profile enrollment, one-time recovery-code
   display, status, and reauthenticated disable flows.
+- `frontend/src/{context/AuthContext.jsx,api/core.js,pages/admin/AdminDispatchBoard.jsx}`:
+  visible-tab technician heartbeats, normalized presence fields, 30-second
+  directory refresh, and separate Online/Offline plus Available/Busy badges.
 
 - `frontend/src/index.css`: shared card and responsive workspace styling,
   including the existing stat-card hover feedback.
@@ -1641,8 +1765,45 @@ All paths below are preserved work, not cleanup candidates.
 
 ## 13. Change ledger
 
+2026-10-14 11:31: Hardened the client request **Use My Location** action for another-phone use. The page now explains that phone browsers block GPS on local HTTP LAN URLs, directs users to deployed HTTPS or an HTTPS development link, distinguishes permission denial, unavailable positioning, timeout, and unsupported browsers, retries weak non-permission fixes at lower accuracy, shows progress/accuracy, and keeps address search plus manual pin selection usable. Paths: `frontend/src/pages/client/ClientServiceRequests.jsx` and this handoff. Production frontend build passed with 2,528 modules; physical-phone validation remains pending.
+
+2026-10-14 11:28: Replaced Admin Reports' name-based chart-color guesses with the canonical colors saved for each service in Service Management. The report API now returns structured service name/color pairs and preserves multi-service request membership; the chart aggregates each actual service independently and retains a fallback palette only for older API responses. Paths: `backend/services/{serializers/tickets.py,views/tickets.py,test_reporting_capabilities.py}`, `frontend/src/pages/admin/AdminReports.jsx`, and this handoff. Focused API regression passed 1/1 and the production frontend build passed with 2,528 modules; authenticated visual review remains pending.
+
+2026-10-14 11:25: Refined Admin Reports service workload into a configurable per-service chart. Each service keeps its own legend color (AC/air-conditioning yellow, Solar red, and distinct palette colors for others), while Stacked and Grouped controls rearrange the same completed/not-completed values without changing the data. The selected control exposes pressed state, hover values remain available, and the chart card continues to match Workflow composition. Paths: `frontend/src/pages/admin/AdminReports.jsx` and this handoff. Production frontend build passed with 2,528 modules; authenticated visual review remains pending.
+
+2026-10-14 11:16: Upgraded Admin Reports from a mostly tabular ticket register to a filtered operational report: corrected active/completed/cancelled calculations, added completion-rate and SLA-attention KPIs, status/priority filtering, workflow-composition donut, top-service workload/completion bars, clearer Print/Export controls, and formula-safe CSV cells. Existing desktop/mobile ticket records and permission-scoped exports remain intact. Paths: `frontend/src/pages/admin/AdminReports.jsx` and this handoff. Production frontend build passed with 2,528 modules; browser visual review remains pending.
+
+2026-10-14 11:14: Fixed the deployed smart-assignment 503 cause in source by restricting `ServiceTicketViewSet.get_locked_ticket()` to `select_for_update(of=('self',))`. The optimized queryset retains nullable related-data joins for reads while PostgreSQL locks only the ticket row. Paths: `backend/services/{views/tickets.py,tests/test_service_request_ticket_lifecycle.py}` and this handoff. Focused lock and auto-assignment tests passed 2/2 after one test-fixture-only correction; Django check passed. Deployment remains pending.
+
+2026-10-14 11:10: Replaced the client My Requests phone-width table with compact request cards that group identity/status, service context, schedule, technician, ticket, requested date, address, workflow, and reachable View/Cancel actions. The existing table remains at tablet/desktop widths. Paths: `frontend/src/pages/client/ClientRequestTracking.jsx` and this handoff. Production frontend build passed with 2,528 modules; authenticated phone screenshot review remains pending.
+
+2026-10-14 11:07: Replaced fixed assistant launch bubbles with one shared draggable control for analytics/admin and client support. Pointer movement is viewport-clamped, persisted separately per assistant, and distinguished from click-to-open with a movement threshold; normal keyboard/click activation remains intact. Paths: `frontend/src/components/shared/{DraggableAssistantButton.jsx,SystemAssistant.jsx,ClientSupportAssistant.jsx}` and this handoff. Production frontend build passed with 2,528 modules; browser gesture review remains pending.
+
+2026-10-14 11:02: Added **Terminate — Client backed out** to active Service Ticket actions for administrators with ticket-management capability. The confirmation requires backout details, records a reason-prefixed canonical cancellation, retains the audit timeline, cancels the parent request, releases pending reservations, and recalculates technician availability through the existing transition service. Paths: `frontend/src/{api/services.js,pages/admin/AdminServiceTickets.jsx}` and this handoff. Production frontend build passed with 2,527 modules; the focused reason-required backend cancellation regression passed 1/1.
+
+2026-10-14 10:58: Reduced the shared role-dashboard auto-refresh and centralized notification recovery polling from 45 to 25 seconds. Admin interval text now derives from `AUTO_REFRESH_MS`, preventing UI/config drift. Paths: `frontend/src/{utils/dashboardHelpers.js,context/NotificationContext.jsx,pages/admin/AdminDashboard.jsx}` and this handoff. Production frontend build passed with 2,527 modules.
+
+2026-10-14 10:55: Fixed transparent read-notification cards by assigning an explicit white surface while preserving light-blue unread emphasis. The shared Notifications page therefore renders consistently for admin, technician, and client routes. Paths: `frontend/src/pages/client/ClientNotifications.jsx` and this handoff. Production frontend build passed with 2,527 modules.
+
+2026-10-14 10:52: Reworked the User Management profile dialog so administrator and client forms no longer inherit the oversized technician layout. Added persistent labels, singular role text, semantic email/phone inputs, a bounded compact width, and separated header/body/footer surfaces while retaining the wider technician skills editor. Paths: `frontend/src/pages/admin/AdminUserManagement.jsx` and this handoff. Production frontend build passed with 2,527 modules; browser visual review remains pending.
+
+2026-10-14 10:44: Added assignable `technicians.skills.manage`. Superadmins can grant it to selected admins; the skill API and User Management technician editor honor it independently from general profile management. Skill-only managers see profile fields read-only, and backend field-level enforcement blocks profile changes. Existing ticket history is unchanged. Focused tests passed 3/3, Django check passed, and the production frontend build passed with 2,527 modules.
+
+2026-10-14 10:34: Fixed missing technician notifications for overdue active jobs. Execution-overdue SLA escalation now alerts the active lead and crew with the canonical ticket ID, service, overdue duration, and required action; start-overdue alerts use the same team-aware, 24-hour-deduplicated path. Paths: `backend/services/{sla.py,test_auto_dispatch_and_sla.py}` and this handoff. Focused tests passed 3/3 and Django check passed; deployed scheduling is still required.
+
+2026-10-13 21:22: `AdminAnalytics.jsx` now plots technician assignments, completions, and previous assignments as vertical columns. `AnalyticsVisuals.jsx` moves exact-value tables under native expandable details, labels bar categories directly, and retains visible donut percentage legends. Existing visual architecture and pending browser-review limitation apply.
+
+2026-10-13 21:18: Added shared comparison charts with exact values throughout deeper Analytics tabs, case type/source composition donuts with percentages, technician workload/completion scatter, and capacity heatmap. Paths: `frontend/src/pages/admin/analytics/{AnalyticsVisuals.jsx,AnalyticsWorkspacePanels.jsx}` and this handoff. Production build passed; browser review pending.
+
 | Date (Asia/Singapore) | Change | Paths | Validation |
 | --- | --- | --- | --- |
+| 2026-10-13 21:12 | Increased Analytics visual density and hierarchy with compact chart sizing, non-stretching paired panels, comparison summary tiles, direct bar labels, and restrained accented card surfaces. | `frontend/src/pages/admin/AdminAnalytics.jsx`, this file | Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 21:10 | Made the Analytics overview visibly graphical by changing its main trend to a filled gradient area chart and enabling subtle animations for the areas, grouped bars, and donut. | `frontend/src/pages/admin/AdminAnalytics.jsx`, this file | Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 21:06 | Added purpose-fit visualization variety to the Analytics overview: grouped bars for service-category comparison and a count-backed donut for ticket-status proportions. | `frontend/src/pages/admin/AdminAnalytics.jsx`, this file | Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 20:59 | Changed Demand by location from comparison rows to a responsive grouped horizontal bar chart for clearer current-versus-previous city comparison. | `frontend/src/pages/admin/AdminAnalytics.jsx`, this file | Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 20:57 | Removed the standalone Current attention card from the Analytics overview and expanded the requests-versus-completions chart to the available width. | `frontend/src/pages/admin/AdminAnalytics.jsx`, this file | Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 20:53 | Added a visible Admin Analytics color key and normalized metric/chart colors by meaning across overview and every analytics workspace without changing Calendar colors. | `frontend/src/pages/admin/{AdminAnalytics.jsx,analytics/AnalyticsWorkspacePanels.jsx}`, this file | Production Vite build passed with 2,526 modules and scoped diff integrity passed. |
+| 2026-10-13 15:47 | Added real expiring technician presence: authenticated 45-second heartbeats persist `last_seen_at`, Online expires after two minutes, logout clears presence, and Dispatch Board refreshes every 30 seconds while displaying connectivity separately from dispatch availability. | `.env.example`, `backend/.env.example`, `backend/afn_service_management/settings.py`, `backend/users/{models.py,serializers.py,tests.py,views/{auth.py,admin_users.py},migrations/0040_technicianprofile_last_seen_at.py}`, `frontend/src/{api/core.js,context/AuthContext.jsx,pages/admin/AdminDispatchBoard.jsx}`, current schema artifacts, this file | Focused backend passed 5/5 on isolated E2E SQLite; Django check and migration drift passed; production Vite build passed with 2,526 modules; DBML/Chen scope regenerated at 51/682/102; migration not applied to local/staging databases. |
 | 2026-10-13 13:46 | Synchronized the Analytics Assistant with the active Analytics page selection and forwarded that selection into the AI summary contract, allowing specific questions to use the same filtered workspace information. | `frontend/src/{utils/analyticsAssistantContext.js,pages/admin/AdminAnalytics.jsx,components/shared/SystemAssistant.jsx,api/admin.js}`, `backend/users/{views/admin_services.py,tests.py}`, this file | Production Vite build passed with 2,524 modules; selected-workspace regression passed 1/1; existing AI-summary regressions passed 3/3; Django check passed. |
 | 2026-10-13 10:50 | Corrected the Admin Services save payload so the visual catalog fields entered in the editor—category, color, icon, and display order—are persisted on both create and update. | `frontend/src/api/admin.js`, this file | Production Vite build passed with 2,523 transformed modules. |
 | 2026-10-13 10:43 | Corrected PostgreSQL service-request approval locking: the approval query retains related-data reads but locks only the request row, avoiding the forbidden nullable outer-join lock. Added a regression for the lock scope. | `backend/services/{views/service_requests.py,tests/test_service_request_ticket_lifecycle.py}`, this file | Render traceback identified the exact PostgreSQL failure; focused service-request lifecycle suite passed 13/13; Django check, migration-drift check, and diff check passed. |
@@ -1862,3 +2023,10 @@ All paths below are preserved work, not cleanup candidates.
 - Maintenance workspace chrome and primary actions now use brand blue, while amber/red/green remain reserved for due, overdue, and completed states.
 - Dashboard warning accents now consistently use amber and a non-semantic indigo action was normalized to brand blue.
 - Calendar code and its event/category colors were intentionally left unchanged.
+
+# Current change: real technician Online/Offline presence
+
+- Authenticated technician portals send a heartbeat every 45 seconds while visible; the backend persists `last_seen_at`, treats presence as stale after the configurable 120-second default, and clears it immediately on logout.
+- Dispatch Board refreshes technician presence every 30 seconds. **Available** appears only when a technician is Online with no active job; Offline technicians no longer show a contradictory Available badge, but may still be scheduled for future work. **Busy** remains the derived active-work state and inactive accounts remain **Inactive**.
+- Technician Tracking classifies recent GPS samples as **Moving**, **Stationary**, or **Movement unknown**, animates only genuinely moving markers, and shows straight-line distance from the current position to assigned jobs alongside the existing route distance/ETA evidence.
+- Migration `users.0040_technicianprofile_last_seen_at` passed isolated tests and is applied to local SQLite; staging PostgreSQL remains untouched until the later deployment.

@@ -41,6 +41,7 @@ from .rbac import (
     TECHNICIAN_SCHEDULE_CAPABILITIES,
     USER_DIRECTORY_VIEW_CAPABILITIES,
     USER_MANAGEMENT_CAPABILITIES,
+    TECHNICIAN_SKILLS_MANAGE_CAPABILITIES,
     is_admin_workspace_role,
     is_superadmin_role,
     user_has_any_capability,
@@ -191,6 +192,30 @@ class CanManageUsers(permissions.BasePermission):
                 )
             )
         )
+
+
+class CanManageTechnicianSkills(permissions.BasePermission):
+    """Allow superadmins and explicitly delegated admins to manage skills."""
+
+    def has_permission(self, request, view):
+        return (
+            request.user and
+            request.user.is_authenticated and
+            (
+                is_superadmin_role(request.user.role) or
+                (
+                    request.user.role == 'admin' and
+                    user_has_any_capability(request.user, TECHNICIAN_SKILLS_MANAGE_CAPABILITIES)
+                )
+            )
+        )
+
+
+class CanManageUsersOrTechnicianSkills(permissions.BasePermission):
+    """Allow the technician editor for either delegated responsibility."""
+
+    def has_permission(self, request, view):
+        return CanManageUsers().has_permission(request, view) or CanManageTechnicianSkills().has_permission(request, view)
 
 
 class CanManageStaffCapabilities(permissions.BasePermission):

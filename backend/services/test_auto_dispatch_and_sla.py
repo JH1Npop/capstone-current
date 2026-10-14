@@ -31,6 +31,7 @@ from services.sla import (
     SLA_STATE_PAUSED,
 )
 from users.models import AdminSettings
+from notifications.models import Notification
 
 User = get_user_model()
 
@@ -581,6 +582,49 @@ class SLAEscalationTests(TestCase):
 
         # Should detect approaching breach
         self.assertGreater(warnings.get('approval_warning', 0), 0)
+
+    def test_execution_overdue_notifies_lead_and_crew_without_duplicates(self):
+        crew_user = User.objects.create_user(
+            username='crew_tech',
+            password='pass123',
+            role='technician',
+            status='active',
+        )
+        request = ServiceRequest.objects.create(
+            client=self.client,
+            service_type=self.service,
+            description='Overdue field job',
+            status='Approved',
+            request_date=timezone.now() - timedelta(hours=6),
+        )
+        ServiceLocation.objects.create(
+            request=request,
+            address='123 Main',
+            city='Manila',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=request,
+            technician=self.tech,
+            status='In Progress',
+            scheduled_date=timezone.localdate(),
+            start_time=timezone.now() - timedelta(hours=3),
+        )
+        TicketCrewAssignment.objects.create(ticket=ticket, technician=crew_user)
+
+        first = check_and_escalate_sla_breaches()
+        second = check_and_escalate_sla_breaches()
+
+        self.assertEqual(first['execution_overdue'], 1)
+        self.assertEqual(second['execution_overdue'], 1)
+        for technician in (self.tech, crew_user):
+            alerts = Notification.objects.filter(
+                user=technician,
+                ticket=ticket,
+                title=f'URGENT: TKT-{ticket.id:04d} job is overdue',
+                type='warning',
+            )
+            self.assertEqual(alerts.count(), 1)
+            self.assertIn('Complete work', alerts.get().message)
 
 
 class AdminSettingsAutoDispatchTests(TestCase):
