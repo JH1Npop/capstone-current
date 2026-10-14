@@ -42,6 +42,10 @@ const ROUTE_RECALCULATE_MS = 30000;
 const ROUTE_RECALCULATE_DISTANCE_KM = 0.1;
 const LOCATION_UPDATE_MS = 10000;
 const LOCATION_UPDATE_DISTANCE_KM = 0.02;
+const DEFAULT_TRAVEL_SPEED_KPH = 35;
+const MIN_RELIABLE_SPEED_KPH = 3;
+const MAX_RELIABLE_SPEED_KPH = 120;
+const MAX_SPEED_SAMPLES = 5;
 
 const calculateDistanceKm = (lat1, lng1, lat2, lng2) => {
   const earthRadiusKm = 6371;
@@ -100,10 +104,13 @@ export default function TechnicianMapNavigation() {
   const [routeLoading, setRouteLoading] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [trackingConfig, setTrackingConfig] = useState(null);
+  const [liveTravelSpeedKph, setLiveTravelSpeedKph] = useState(null);
   const [error, setError] = useState(ticketId ? '' : 'Open a job from My Jobs before starting navigation.');
   const lastRouteRequestRef = useRef({ at: 0, lat: null, lng: null });
   const lastLocationUpdateRef = useRef({ at: 0, lat: null, lng: null });
   const routeRequestSeqRef = useRef(0);
+  const previousSpeedLocationRef = useRef(null);
+  const speedSamplesRef = useRef([]);
 
   const {
     location: gpsLocation,
@@ -128,6 +135,16 @@ export default function TechnicianMapNavigation() {
     Number.isFinite(Number(job.longitude));
   const jobLoc = hasJobCoordinates ? [Number(job.latitude), Number(job.longitude)] : null;
   const loading = jobLoading;
+  const effectiveTravelSpeedKph = liveTravelSpeedKph || route.travelSpeedKph || DEFAULT_TRAVEL_SPEED_KPH;
+  const displayedTravelTimeMin = route.distanceKm > 0
+    ? Math.max(1, Math.round((route.distanceKm / effectiveTravelSpeedKph) * 60))
+    : 0;
+  const estimateStepMinutes = (distanceMeters, fallbackDurationSeconds = 0) => {
+    if (Number(distanceMeters) > 0) {
+      return Math.max(1, Math.round(((Number(distanceMeters) / 1000) / effectiveTravelSpeedKph) * 60));
+    }
+    return fallbackDurationSeconds > 0 ? Math.max(1, Math.round(fallbackDurationSeconds / 60)) : 0;
+  };
 
   const loadRoute = async (techLat = techLoc[0], techLng = techLoc[1], { force = false } = {}) => {
     if (!jobLoc) {
@@ -180,6 +197,9 @@ export default function TechnicianMapNavigation() {
       setJobLoading(false);
       setRoute(EMPTY_ROUTE);
       setNavigationStarted(false);
+      setLiveTravelSpeedKph(null);
+      previousSpeedLocationRef.current = null;
+      speedSamplesRef.current = [];
       return;
     }
 
@@ -188,6 +208,9 @@ export default function TechnicianMapNavigation() {
       setArrivalMessage('');
       setRoute(EMPTY_ROUTE);
       setNavigationStarted(false);
+      setLiveTravelSpeedKph(null);
+      previousSpeedLocationRef.current = null;
+      speedSamplesRef.current = [];
 
       try {
         const jobData = await fetchTechnicianJob(ticketId);
@@ -243,6 +266,46 @@ export default function TechnicianMapNavigation() {
 
     loadRoute(gpsLocation.latitude, gpsLocation.longitude);
   }, [ticketId, job?.latitude, job?.longitude, arrived, gpsLocation?.latitude, gpsLocation?.longitude]);
+
+  useEffect(() => {
+    if (!gpsLocation) {
+      return;
+    }
+
+    const timestamp = Number(gpsLocation.timestamp) || Date.now();
+    const previous = previousSpeedLocationRef.current;
+    let measuredSpeedKph = Number(gpsLocation.speed) * 3.6;
+
+    if ((!Number.isFinite(measuredSpeedKph) || measuredSpeedKph < MIN_RELIABLE_SPEED_KPH) && previous) {
+      const elapsedHours = (timestamp - previous.timestamp) / 3600000;
+      const hasUsableInterval = elapsedHours > 0 && elapsedHours <= (60 / 3600);
+      const accuracy = Math.max(Number(gpsLocation.accuracy) || 0, Number(previous.accuracy) || 0);
+      if (hasUsableInterval && accuracy <= 100) {
+        const movedKm = calculateDistanceKm(
+          previous.latitude,
+          previous.longitude,
+          gpsLocation.latitude,
+          gpsLocation.longitude
+        );
+        measuredSpeedKph = movedKm / elapsedHours;
+      }
+    }
+
+    previousSpeedLocationRef.current = {
+      latitude: gpsLocation.latitude,
+      longitude: gpsLocation.longitude,
+      accuracy: gpsLocation.accuracy,
+      timestamp,
+    };
+
+    if (Number.isFinite(measuredSpeedKph)
+      && measuredSpeedKph >= MIN_RELIABLE_SPEED_KPH
+      && measuredSpeedKph <= MAX_RELIABLE_SPEED_KPH) {
+      const samples = [...speedSamplesRef.current, measuredSpeedKph].slice(-MAX_SPEED_SAMPLES);
+      speedSamplesRef.current = samples;
+      setLiveTravelSpeedKph(Math.round(samples.reduce((total, speed) => total + speed, 0) / samples.length));
+    }
+  }, [gpsLocation]);
 
   useEffect(() => {
     if (!gpsLocation) {
@@ -410,7 +473,7 @@ export default function TechnicianMapNavigation() {
             <p className="text-sm font-semibold text-blue-900">Next: {currentStep.instruction}</p>
             <p className="text-xs text-blue-700">
               {currentStep.distance ? `${(currentStep.distance / 1000).toFixed(1)} km` : ''}
-              {currentStep.duration ? ` | ${Math.round(currentStep.duration / 60)} min` : ''}
+              {estimateStepMinutes(currentStep.distance, currentStep.duration) ? ` | ${estimateStepMinutes(currentStep.distance, currentStep.duration)} min` : ''}
             </p>
           </div>
         )}
@@ -455,7 +518,7 @@ export default function TechnicianMapNavigation() {
                     <br />
                     {route.distanceKm > 0 ? `${route.distanceKm} km away` : 'Route not calculated'}
                     <br />
-                    {route.estimatedTimeMin > 0 ? `~${route.estimatedTimeMin} min` : 'Start location sharing first'}
+                    {displayedTravelTimeMin > 0 ? `~${displayedTravelTimeMin} min` : 'Start location sharing first'}
                   </div>
                 </Popup>
               </Marker>
@@ -487,8 +550,10 @@ export default function TechnicianMapNavigation() {
             </div>
 
             <div className="rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 p-3 text-white shadow-lg sm:p-5">
-              <div className="mb-1 text-2xl font-bold sm:text-3xl">{route.estimatedTimeMin > 0 ? `${route.estimatedTimeMin} min` : '--'}</div>
-              <div className="text-xs text-emerald-100 sm:text-base">At {route.travelSpeedKph || 35} km/h</div>
+              <div className="mb-1 text-2xl font-bold sm:text-3xl">{displayedTravelTimeMin > 0 ? `${displayedTravelTimeMin} min` : '--'}</div>
+              <div className="text-xs text-emerald-100 sm:text-base">
+                {liveTravelSpeedKph ? `Live · ${liveTravelSpeedKph} km/h` : `Estimated · ${effectiveTravelSpeedKph} km/h`}
+              </div>
             </div>
           </div>
 
@@ -525,7 +590,7 @@ export default function TechnicianMapNavigation() {
                     </p>
                     <p className="text-xs text-slate-500">
                       {direction.distance ? `${(direction.distance / 1000).toFixed(1)} km` : ''}
-                      {direction.duration ? ` | ${Math.round(direction.duration / 60)} min` : ''}
+                      {estimateStepMinutes(direction.distance, direction.duration) ? ` | ${estimateStepMinutes(direction.distance, direction.duration)} min` : ''}
                     </p>
                   </div>
                   {index === currentStepIndex && <FiChevronRight className="flex-shrink-0 text-blue-500" size={20} />}
