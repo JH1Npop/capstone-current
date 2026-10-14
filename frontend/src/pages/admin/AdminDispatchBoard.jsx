@@ -51,15 +51,27 @@ const technicianMatchesSkill = (technician, filterSkill) => {
   return technicianSkills.includes(normalizeSkillValue(filterSkill));
 };
 
-const technicianMatchesService = (technician, serviceTypeId) => {
+const technicianMatchesService = (technician, serviceTypeId, serviceTypeName = '') => {
   if (!serviceTypeId) {
     return true;
   }
 
+  const normalizedServiceName = normalizeSkillValue(serviceTypeName);
   return Array.isArray(technician.skillDetails) && technician.skillDetails.some((skill) => (
     Number(skill.service_type) === Number(serviceTypeId) ||
+    (normalizedServiceName && normalizeSkillValue(skill.service_type_name) === normalizedServiceName) ||
     normalizeSkillValue(skill.service_type_name) === 'general_services'
   ));
+};
+
+const getTechnicianSkillLabel = (technician, serviceTypeId, serviceTypeName = '') => {
+  const normalizedServiceName = normalizeSkillValue(serviceTypeName);
+  const matchingSkill = (Array.isArray(technician.skillDetails) ? technician.skillDetails : []).find((skill) => (
+    Number(skill.service_type) === Number(serviceTypeId) ||
+    (normalizedServiceName && normalizeSkillValue(skill.service_type_name) === normalizedServiceName) ||
+    normalizeSkillValue(skill.service_type_name) === 'general_services'
+  ));
+  return matchingSkill?.service_type_name || serviceTypeName || 'No matching service skill';
 };
 
 const getDispatchPresence = (technician) => {
@@ -327,13 +339,16 @@ const paginatedAssignedTickets = assignedTickets.slice(
   const filterServiceTypeId = String(filterSkill).startsWith('service:')
     ? Number(String(filterSkill).replace('service:', ''))
     : null;
+  const filterServiceTypeName = filterServiceTypeId
+    ? serviceTypes.find((serviceType) => Number(serviceType.id) === filterServiceTypeId)?.name || ''
+    : '';
   const filteredTechs = technicians.filter((tech) => (
     filterServiceTypeId
-      ? technicianMatchesService(tech, filterServiceTypeId)
+      ? technicianMatchesService(tech, filterServiceTypeId, filterServiceTypeName)
       : technicianMatchesSkill(tech, filterSkill)
   ));
   const serviceMatchedTechs = (selectedTicket
-    ? filteredTechs.filter((tech) => technicianMatchesService(tech, selectedTicket.serviceTypeId))
+    ? filteredTechs.filter((tech) => technicianMatchesService(tech, selectedTicket.serviceTypeId, selectedTicket.service))
     : filteredTechs
   ).sort((firstTech, secondTech) => getDispatchSortRank(firstTech) - getDispatchSortRank(secondTech));
   const selectedCrew = technicians.filter((tech) => selectedCrewIds.includes(tech.id));
@@ -765,7 +780,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                             {tech.active && tech.isOnline && tech.isAvailable && <StatusBadge status="available" size="sm" />}
                             {tech.active && !tech.isAvailable && <StatusBadge status="busy" size="sm" />}
                           </div>
-                          <p className="mt-2 text-xs text-slate-500">Skill: {(tech.skill || 'general').replace('_', ' ')}</p>
+                          <p className="mt-2 text-xs text-slate-500">Skill: {getTechnicianSkillLabel(tech, selectedTicket?.serviceTypeId, selectedTicket?.service)}</p>
                         </div>
                         <div className="flex shrink-0 flex-col gap-2">
                           <button

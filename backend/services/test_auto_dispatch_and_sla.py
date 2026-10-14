@@ -169,6 +169,23 @@ class AutoDispatchTests(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result['technician'].username, 'tech_expert')
 
+    def test_find_best_technician_accepts_equivalent_duplicate_service_name(self):
+        equivalent_service = ServiceType.objects.create(
+            name='ac service',
+            estimated_duration=120,
+        )
+        skill = TechnicianSkill.objects.get(
+            technician=self.tech_expert,
+            service_type=self.ac_service,
+        )
+        skill.service_type = equivalent_service
+        skill.save(update_fields=['service_type'])
+
+        result = find_best_technician(self.ticket)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['technician'], self.tech_expert)
+
     def test_find_best_technician_enforces_minimum_score_threshold(self):
         skill = TechnicianSkill.objects.get(
             technician=self.tech_expert,

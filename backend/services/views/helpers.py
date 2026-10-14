@@ -977,6 +977,13 @@ def get_technician_service_skill(technician, service_type):
     if exact_skill:
         return exact_skill
 
+    equivalent_name_skill = TechnicianSkill.objects.filter(
+        technician=technician,
+        service_type__name__iexact=str(service_type.name or '').strip(),
+    ).select_related('service_type').first()
+    if equivalent_name_skill:
+        return equivalent_name_skill
+
     if str(service_type.name or '').casefold() == GENERAL_SERVICE_NAME.casefold():
         return None
 
@@ -994,7 +1001,11 @@ def get_eligible_technician_ids_for_service(service_type):
     if not service_type:
         return TechnicianSkill.objects.none().values_list('technician_id', flat=True)
 
-    service_ids = [service_type.id]
+    service_ids = list(ServiceType.objects.filter(
+        name__iexact=str(service_type.name or '').strip(),
+    ).values_list('id', flat=True))
+    if service_type.id not in service_ids:
+        service_ids.append(service_type.id)
     general_service = get_general_service_type()
     if (
         general_service and
