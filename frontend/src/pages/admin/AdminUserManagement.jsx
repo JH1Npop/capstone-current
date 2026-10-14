@@ -403,7 +403,16 @@ export default function AdminUserManagement() {
           service_type: Number(skill.service_type),
           skill_level: skill.skill_level || 'intermediate'
         }));
-        if (canManageUsers) {
+        const technicianProfileChanged = [
+          [editForm.name, editingProfileUser.name || ''],
+          [editForm.email, editingProfileUser.email || ''],
+          [editForm.phone, editingProfileUser.phone || ''],
+          [editForm.status, editingProfileUser.technicianStatus || 'available'],
+          [String(editForm.lat || ''), String(editingProfileUser.lat || '')],
+          [String(editForm.lng || ''), String(editingProfileUser.lng || '')]
+        ].some(([currentValue, originalValue]) => currentValue !== originalValue);
+
+        if (canManageUsers && technicianProfileChanged) {
           await updateAdminTechnician(editingProfileUser.id, {
             ...updates,
             status: editForm.status,
@@ -411,7 +420,7 @@ export default function AdminUserManagement() {
             lng: editForm.lng,
             ...(canManageTechnicianSkills ? { skills } : {})
           });
-        } else {
+        } else if (canManageTechnicianSkills) {
           await updateAdminTechnicianSkills(editingProfileUser.id, skills);
         }
       }
