@@ -1,8 +1,8 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-14 20:05 Asia/Singapore**
-Current focused objective: **Keep client request-location selection reliable and understandable on phones by detecting insecure local HTTP access, handling mobile geolocation permission/device failures, retrying weak high-accuracy fixes safely, and retaining address-search/manual-map fallbacks.**
+Last updated: **2026-10-14 20:13 Asia/Singapore**
+Current focused objective: **Keep the public navigation's complete configured company identity visible without truncation while allowing narrower desktop and tablet widths to switch to the menu before branding and actions collide.**
 Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -792,6 +792,8 @@ deployment authorization.
 
 ## 8. Validation ledger
 
+2026-10-14 20:13: The public-header company-name correction passed the production frontend build with 2,528 modules. The configured name no longer uses an ellipsis, the brand block cannot be compressed by sibling navigation, and the full desktop navigation now yields to the menu below the extra-large breakpoint. Browser screenshot review remains pending.
+
 2026-10-14 11:31: The hardened client **Use My Location** flow passed the production frontend build with 2,528 modules. It now detects phone GPS blocking on non-localhost HTTP, reports permission/unavailable/timeout failures beside the control, retries non-permission high-accuracy failures with a lower-accuracy fix, exposes progress and accuracy, and preserves manual address/map alternatives. Physical-phone browser review remains pending.
 
 2026-10-14 11:28: Report-chart service colors passed one focused API regression and the production frontend build with 2,528 modules. The report API now exposes each request service as a structured name/color pair, including multi-service requests, and the workload chart consumes those catalog colors rather than name-based guesses. Authenticated browser visual review remains pending.
@@ -1091,6 +1093,8 @@ This matters because pre-existing VS Code servers may continue serving old
 Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
+
+- The public header now favors the complete configured company name and switches to its menu below `xl`; exceptionally long administrator-configured names may still require a future two-line treatment. The production build passed, but desktop/tablet screenshot review remains pending.
 
 - Browser geolocation is unavailable to a second phone when local development is opened through a plain `http://192.168.x.x`-style address; this is a browser secure-context restriction, not an API failure. Use the deployed HTTPS site or an HTTPS development tunnel. The improved guidance has build evidence but still needs a physical Android/iOS permission-path check.
 
@@ -1435,6 +1439,8 @@ All paths below are preserved work, not cleanup candidates.
 
 ### Frontend
 
+- `frontend/src/components/LandingNavbar.jsx`: complete non-truncated company identity with a non-shrinking brand block and an earlier responsive menu breakpoint that prevents header collisions.
+
 - `frontend/src/pages/client/ClientServiceRequests.jsx`: mobile-safe current-location selection with secure-context detection, actionable GPS permission/device guidance, bounded high/low-accuracy attempts, progress state, accuracy feedback, and manual location fallbacks.
 
 - `frontend/src/pages/admin/AdminReports.jsx`: filtered report KPIs and exports plus equal-sized workflow-composition and service-workload visual cards; bars reuse canonical catalog colors, compare completed and not-completed counts, and can switch between stacked and grouped layouts.
@@ -1764,6 +1770,8 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-14 20:13: Removed the public navbar's fixed-width ellipsis from the configured company name, kept the brand identity from shrinking, and moved full navigation to the extra-large breakpoint so tablet/narrow-desktop layouts use the menu before controls can squeeze the name. Paths: `frontend/src/components/LandingNavbar.jsx` and this handoff. Production frontend build passed with 2,528 modules; browser screenshot review remains pending.
 
 2026-10-14 20:05: Prepared the verified frontend improvement bundle for its own commit after the backend deployment commit. The bundle includes Analytics and Reports visualizations, catalog-colored stacked/grouped report bars, Dispatch and Tracking presence clarity, route/movement presentation, delegated skill-management UI, SLA watchlist filtering, reasoned client-backout termination, notification styling and polling, draggable assistants, mobile request results, and hardened phone geolocation guidance. Paths: affected files under `frontend/src/` and this handoff. The latest production frontend build passed with 2,528 modules; ERD and system-knowledge documentation remain outside this frontend commit.
 

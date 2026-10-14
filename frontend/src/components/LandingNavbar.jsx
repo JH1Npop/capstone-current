@@ -19,15 +19,15 @@ export default function LandingNavbar({ companyName = 'AFN' }) {
   return (
     <nav aria-label="Public navigation" className="fixed inset-x-0 top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-        <Link to="/" aria-label={`${companyName} home`} className="flex min-w-0 items-center gap-2">
+        <Link to="/" aria-label={`${companyName} home`} className="flex shrink-0 items-center gap-2">
           <img src="/logo1.png" alt="" className="h-10 w-auto sm:h-12" />
-          <div className="hidden min-w-0 sm:block">
-            <p className="max-w-64 truncate text-sm font-bold text-slate-900 lg:text-lg">{companyName}</p>
+          <div className="hidden sm:block">
+            <p className="whitespace-nowrap text-sm font-bold text-slate-900 xl:text-lg">{companyName}</p>
             <p className="text-xs text-slate-500">Solar &bull; CCTV &bull; Aircon</p>
           </div>
         </Link>
 
-        <div className="hidden items-center gap-7 font-medium text-slate-600 lg:flex">
+        <div className="hidden items-center gap-7 font-medium text-slate-600 xl:flex">
           {publicLinks.map((item) => (
             <Link key={item.label} to={item.to} className="transition hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
               {item.label}
@@ -44,7 +44,7 @@ export default function LandingNavbar({ companyName = 'AFN' }) {
             aria-controls="public-mobile-menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((current) => !current)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 transition hover:bg-slate-100 lg:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 transition hover:bg-slate-100 xl:hidden"
           >
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -52,7 +52,7 @@ export default function LandingNavbar({ companyName = 'AFN' }) {
       </div>
 
       {menuOpen ? (
-        <div id="public-mobile-menu" className="border-t border-slate-200 bg-white px-4 py-4 shadow-lg lg:hidden">
+        <div id="public-mobile-menu" className="border-t border-slate-200 bg-white px-4 py-4 shadow-lg xl:hidden">
           <div className="mx-auto grid max-w-7xl gap-1">
             {publicLinks.map((item) => (
               <Link key={item.label} to={item.to} className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700">
