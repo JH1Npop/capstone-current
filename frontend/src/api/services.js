@@ -1,5 +1,13 @@
 import { api, fetchAllPages, getApiErrorMessage, normalizeSla, normalizeTicket } from './core';
 
+const NAVIGATION_TRAVEL_SPEED_KPH = 35;
+
+const estimateTravelSeconds = (distanceMeters) => {
+  const numericDistance = Number(distanceMeters);
+  if (!Number.isFinite(numericDistance) || numericDistance <= 0) return 0;
+  return (numericDistance / 1000 / NAVIGATION_TRAVEL_SPEED_KPH) * 60 * 60;
+};
+
 const normalizeCoordinateValue = (value) => {
   if (value === null || value === undefined || value === '') {
     return value;
@@ -45,7 +53,7 @@ export const fetchNavigationRoute = async (techLat, techLng, jobLat, jobLng) => 
       directions = primarySegment.steps.map((step) => ({
         instruction: step.instruction || 'Continue',
         distance: step.distance || 0,
-        duration: step.duration || 0,
+        duration: estimateTravelSeconds(step.distance),
         type: step.type || 0,
         modifier: step.modifier || ''
       }));
@@ -54,13 +62,14 @@ export const fetchNavigationRoute = async (techLat, techLng, jobLat, jobLng) => 
     const distanceKm = primarySegment.distance
       ? Number((primarySegment.distance / 1000).toFixed(1))
       : 0;
-    const estimatedTimeMin = primarySegment.duration
-      ? Math.round(primarySegment.duration / 60)
+    const estimatedTimeMin = primarySegment.distance
+      ? Math.max(1, Math.round(estimateTravelSeconds(primarySegment.distance) / 60))
       : 0;
 
     return {
       distanceKm,
       estimatedTimeMin,
+      travelSpeedKph: NAVIGATION_TRAVEL_SPEED_KPH,
       routeCoords,
       directions
     };

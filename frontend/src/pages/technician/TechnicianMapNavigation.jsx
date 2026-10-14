@@ -33,6 +33,7 @@ const jobIcon = L.divIcon({
 const EMPTY_ROUTE = {
   distanceKm: 0,
   estimatedTimeMin: 0,
+  travelSpeedKph: 35,
   routeCoords: [],
   directions: []
 };
@@ -359,25 +360,22 @@ export default function TechnicianMapNavigation() {
 
   return (
     <Layout>
-      <div className="mb-6 card p-4 sm:p-5">
-        <h2 className="mb-2 flex items-center gap-3 text-xl font-semibold text-slate-800 sm:text-2xl">
-          <FiNavigation className="text-blue-500" size={28} />
+      <div className="mb-3 card p-3 sm:mb-6 sm:p-5">
+        <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold text-slate-800 sm:mb-2 sm:gap-3 sm:text-2xl">
+          <FiNavigation className="shrink-0 text-blue-500" size={24} />
           Navigation to {formatTicketId(ticketId)}
         </h2>
-        <p className="text-slate-600">
+        <p className="line-clamp-2 text-sm text-slate-600 sm:text-base">
           {job ? `${job.service} for ${job.client?.full_name || job.client} | ${job.address || 'Location pending'}` : 'Loading job details...'}
         </p>
         <p className="mt-1 text-sm text-slate-500">
           {watching ? 'Location sharing active' : 'Location sharing off'} | {route.directions.length} turns | {trackingRegion.name}
         </p>
-        <div className={`mt-3 rounded-xl border px-4 py-3 text-sm ${watching ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold">Location sharing policy</p>
-              <p className="mt-1 leading-5">
-                Used for dispatch, job navigation, arrival support, and safety. Authorized supervisors can view current and recent locations. History is retained for up to {trackingPolicy.retentionDays || 30} days.
-              </p>
-              <p className="mt-1 text-xs opacity-80">Sharing starts only when you choose Start location sharing and stops when you leave this page or choose Stop sharing.</p>
+        <div className={`mt-3 rounded-xl border px-3 py-3 text-sm sm:px-4 ${watching ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-semibold">Location sharing</p>
+              <p className="truncate text-xs opacity-80">{watching ? 'Live location is visible to authorized supervisors.' : 'Required to calculate and update your route.'}</p>
             </div>
             <button
               type="button"
@@ -387,6 +385,10 @@ export default function TechnicianMapNavigation() {
               {watching ? 'Stop sharing' : 'Start location sharing'}
             </button>
           </div>
+          <details className="mt-2 text-xs opacity-80">
+            <summary className="cursor-pointer font-medium">Privacy and retention details</summary>
+            <p className="mt-1 leading-5">Used for dispatch, navigation, arrival support, and safety. Authorized supervisors can view current and recent locations. History is retained for up to {trackingPolicy.retentionDays || 30} days. Sharing stops when you leave this page or choose Stop sharing.</p>
+          </details>
         </div>
         <GPSStatusIndicator status={gpsPermission} accuracy={gpsLocation?.accuracy} className="mt-2" />
         <GPSNotice
@@ -414,10 +416,10 @@ export default function TechnicianMapNavigation() {
         )}
       </div>
 
-      <div className="mb-8 grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
+      <div className="mb-5 grid gap-3 sm:gap-5 xl:mb-8 xl:grid-cols-[1.35fr_0.65fr]">
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {loading ? (
-            <div className="h-[60vh] min-h-[24rem] p-4">
+            <div className="h-[46vh] min-h-[18rem] p-4 sm:h-[55vh] sm:min-h-[24rem] xl:h-[60vh]">
               <PanelSkeleton rows={8} />
             </div>
           ) : (
@@ -428,7 +430,7 @@ export default function TechnicianMapNavigation() {
               maxZoom={18}
               maxBounds={trackingRegion.bounds}
               maxBoundsViscosity={1.0}
-              className="h-[60vh] min-h-[24rem]"
+              className="h-[46vh] min-h-[18rem] sm:h-[55vh] sm:min-h-[24rem] xl:h-[60vh]"
             >
               <ServiceRegionController region={trackingRegion} />
               <MapBoundsUpdater routeCoords={route.routeCoords} jobLoc={jobLoc} techLoc={techLoc} />
@@ -477,18 +479,20 @@ export default function TechnicianMapNavigation() {
           )}
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 p-5 text-white shadow-lg">
-            <div className="mb-1 text-3xl font-bold">{route.distanceKm > 0 ? `${route.distanceKm} km` : '--'}</div>
-            <div className="text-blue-100">Distance</div>
+        <div className="flex flex-col gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <div className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 p-3 text-white shadow-lg sm:p-5">
+              <div className="mb-1 text-2xl font-bold sm:text-3xl">{route.distanceKm > 0 ? `${route.distanceKm} km` : '--'}</div>
+              <div className="text-xs text-blue-100 sm:text-base">Distance</div>
+            </div>
+
+            <div className="rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 p-3 text-white shadow-lg sm:p-5">
+              <div className="mb-1 text-2xl font-bold sm:text-3xl">{route.estimatedTimeMin > 0 ? `${route.estimatedTimeMin} min` : '--'}</div>
+              <div className="text-xs text-emerald-100 sm:text-base">At {route.travelSpeedKph || 35} km/h</div>
+            </div>
           </div>
 
-          <div className="rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 p-5 text-white shadow-lg">
-            <div className="mb-1 text-3xl font-bold">{route.estimatedTimeMin > 0 ? `${route.estimatedTimeMin} min` : '--'}</div>
-            <div className="text-emerald-100">Travel Time</div>
-          </div>
-
-          <div className="rounded-xl border bg-white p-4 shadow-sm sm:p-5">
+          <div className="order-3 rounded-xl border bg-white p-4 shadow-sm sm:p-5 xl:order-2">
             <h4 className="mb-4 flex items-center gap-2 font-semibold text-slate-900">
               Turn-by-Turn Directions ({route.directions.length ? `${currentStepIndex + 1}/${route.directions.length}` : '0/0'})
             </h4>
@@ -534,8 +538,8 @@ export default function TechnicianMapNavigation() {
             </div>
           </div>
 
-          <div className="rounded-xl border bg-white p-4 shadow-sm sm:p-5">
-            <h4 className="mb-4 flex items-center gap-2 font-semibold text-slate-900">Actions</h4>
+          <div className="order-2 rounded-xl border bg-white p-3 shadow-sm sm:p-5 xl:order-3">
+            <h4 className="mb-3 hidden items-center gap-2 font-semibold text-slate-900 sm:flex">Actions</h4>
             <div className="space-y-3">
               <button
                 onClick={() => loadRoute(undefined, undefined, { force: true })}
@@ -573,7 +577,7 @@ export default function TechnicianMapNavigation() {
             </div>
           </div>
 
-          <div className="rounded-xl bg-slate-50 p-3 text-center text-xs text-slate-500">
+          <div className="order-4 rounded-xl bg-slate-50 p-3 text-center text-xs text-slate-500">
             GPS updates in real time | Route recalculates automatically
           </div>
         </div>
