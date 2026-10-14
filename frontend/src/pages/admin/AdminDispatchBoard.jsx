@@ -565,7 +565,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Lead Technician</p>
                       <p className="mt-2 text-sm font-semibold text-slate-900">{selectedTech?.name || 'No lead selected'}</p>
                       <p className="mt-1 text-xs text-slate-500">
-                        {selectedTech ? `Skill: ${(selectedTech.skill || 'general').replace('_', ' ')}` : 'Select a technician from the right panel.'}
+                        {selectedTech ? `Skill: ${getTechnicianSkillLabel(selectedTech, selectedTicket.serviceTypeId, selectedTicket.service)}` : 'Select a technician from the right panel.'}
                       </p>
                     </div>
                     <div className="rounded-xl border border-surface-200 bg-white p-3">
