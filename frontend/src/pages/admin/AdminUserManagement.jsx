@@ -435,6 +435,25 @@ export default function AdminUserManagement() {
     }));
   };
 
+  const addAllServiceSkills = () => {
+    setEditForm((current) => {
+      const currentSkills = Array.isArray(current.skills) ? current.skills : [];
+      const assignedSkills = currentSkills.filter((skill) => String(skill?.service_type || '').trim());
+      const assignedServiceIds = new Set(assignedSkills.map((skill) => String(skill.service_type)));
+      const missingServiceSkills = availableServiceTypes
+        .filter((serviceType) => serviceType?.id != null && !assignedServiceIds.has(String(serviceType.id)))
+        .map((serviceType) => ({
+            service_type: String(serviceType.id),
+            skill_level: 'intermediate'
+        }));
+
+      return {
+        ...current,
+        skills: [...assignedSkills, ...missingServiceSkills]
+      };
+    });
+  };
+
   const updateSkillRow = (index, field, value) => {
     setEditForm((current) => ({
       ...current,
@@ -880,9 +899,19 @@ export default function AdminUserManagement() {
                     <h4 className="text-sm font-semibold text-slate-900">Technician skills</h4>
                     <p className="text-sm text-slate-500">Superadmins and admins granted Manage technician skills can update current qualifications. Existing ticket history stays unchanged.</p>
                   </div>
-                  <button type="button" onClick={addSkillRow} disabled={!canManageTechnicianSkills} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
-                    Add skill
-                  </button>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={addAllServiceSkills}
+                      disabled={!canManageTechnicianSkills || availableServiceTypes.length === 0}
+                      className="rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Add all services
+                    </button>
+                    <button type="button" onClick={addSkillRow} disabled={!canManageTechnicianSkills} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+                      Add skill
+                    </button>
+                  </div>
                 </div>
                 {editForm.skills.length === 0 ? (
                   <div className="mt-4 rounded-2xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">No skills assigned yet.</div>
