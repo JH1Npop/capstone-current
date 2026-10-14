@@ -1,6 +1,8 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
+from unittest.mock import MagicMock, sentinel
+from services.views.technician import TechnicianJobsView
 
 
 class SchedulingWarrantyAndAssignmentTests(APITestCase):
@@ -63,6 +65,24 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             service_type=self.service_type,
             skill_level='beginner',
         )
+
+    def test_technician_job_lock_targets_only_the_ticket_row(self):
+        """Keep PostgreSQL from locking nullable joins during field actions."""
+        view = TechnicianJobsView()
+        queryset = MagicMock()
+        locked_queryset = queryset.select_for_update.return_value
+        related_queryset = locked_queryset.select_related.return_value
+        related_queryset.get.return_value = sentinel.ticket
+
+        with patch(
+            'services.views.technician.get_technician_ticket_queryset',
+            return_value=queryset,
+        ):
+            result = view.get_locked_job(self.technician_user, 11)
+
+        self.assertIs(result, sentinel.ticket)
+        queryset.select_for_update.assert_called_once_with(of=('self',))
+        related_queryset.get.assert_called_once_with(pk=11)
 
     def test_technician_arrival_starts_job_and_notifies_client_and_admins(self):
         request_obj = ServiceRequest.objects.create(

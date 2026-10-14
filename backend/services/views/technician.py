@@ -232,7 +232,10 @@ class TechnicianJobsView(viewsets.ViewSet):
         return [permissions.IsAuthenticated()]
 
     def get_locked_job(self, user, pk):
-        return get_technician_ticket_queryset(user).select_for_update().select_related(
+        # Lock only the ticket row. The related location, assigned admin, and
+        # technician profile joins are nullable, and PostgreSQL rejects FOR
+        # UPDATE when it is applied to the nullable side of an outer join.
+        return get_technician_ticket_queryset(user).select_for_update(of=('self',)).select_related(
             'request__client',
             'request__location',
             'request__service_type',
