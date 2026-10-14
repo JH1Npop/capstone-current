@@ -1,7 +1,7 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
-from unittest.mock import MagicMock, sentinel
+from django.db import transaction
 from services.views.technician import TechnicianJobsView
 
 
@@ -67,22 +67,30 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         )
 
     def test_technician_job_lock_targets_only_the_ticket_row(self):
-        """Keep PostgreSQL from locking nullable joins during field actions."""
+        """Keep PostgreSQL from locking nullable or DISTINCT access joins."""
         view = TechnicianJobsView()
-        queryset = MagicMock()
-        locked_queryset = queryset.select_for_update.return_value
-        related_queryset = locked_queryset.select_related.return_value
-        related_queryset.get.return_value = sentinel.ticket
+        queryset = view.get_locked_job_queryset()
 
-        with patch(
-            'services.views.technician.get_technician_ticket_queryset',
-            return_value=queryset,
-        ):
-            result = view.get_locked_job(self.technician_user, 11)
+        self.assertEqual(queryset.query.select_for_update_of, ('self',))
+        self.assertFalse(queryset.query.distinct)
 
-        self.assertIs(result, sentinel.ticket)
-        queryset.select_for_update.assert_called_once_with(of=('self',))
-        related_queryset.get.assert_called_once_with(pk=11)
+    def test_technician_job_lock_rechecks_ticket_access(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Restricted navigation workflow',
+            status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            technician=self.backup_technician,
+            scheduled_date=timezone.localdate(),
+            status='Not Started',
+        )
+
+        with transaction.atomic():
+            with self.assertRaises(ServiceTicket.DoesNotExist):
+                TechnicianJobsView().get_locked_job(self.technician_user, ticket.id)
 
     def test_technician_arrival_starts_job_and_notifies_client_and_admins(self):
         request_obj = ServiceRequest.objects.create(

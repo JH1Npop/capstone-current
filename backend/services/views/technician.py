@@ -231,17 +231,26 @@ class TechnicianJobsView(viewsets.ViewSet):
             return [CanViewTechnicianJobs()]
         return [permissions.IsAuthenticated()]
 
-    def get_locked_job(self, user, pk):
+    def get_locked_job_queryset(self):
         # Lock only the ticket row. The related location, assigned admin, and
         # technician profile joins are nullable, and PostgreSQL rejects FOR
-        # UPDATE when it is applied to the nullable side of an outer join.
-        return get_technician_ticket_queryset(user).select_for_update(of=('self',)).select_related(
+        # UPDATE when it is applied to the nullable side of an outer join. Use
+        # the base ticket queryset so PostgreSQL also avoids the DISTINCT added
+        # by the lead-or-crew access query, which cannot be combined with a row
+        # lock.
+        return ServiceTicket.objects.select_for_update(of=('self',)).select_related(
             'request__client',
             'request__location',
             'request__service_type',
             'assigned_admin',
             'technician__technician_profile',
-        ).get(pk=pk)
+        )
+
+    def get_locked_job(self, user, pk):
+        ticket = self.get_locked_job_queryset().get(pk=pk)
+        if not ticket_has_technician_access(ticket, user):
+            raise ServiceTicket.DoesNotExist
+        return ticket
 
     def _serialize_job(self, ticket, technician=None):
         try:
