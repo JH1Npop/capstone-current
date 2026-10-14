@@ -5,7 +5,7 @@ import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import { EmptyState, ErrorState } from '../../components/ui/StateDisplay';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { FiCalendar, FiEye, FiPlus, FiSearch, FiX } from 'react-icons/fi';
+import { FiCalendar, FiEye, FiMapPin, FiPlus, FiSearch, FiUser, FiX } from 'react-icons/fi';
 import { cancelServiceRequest, fetchClientRequests } from '../../api/api';
 import { clientTechnicianDisplayString } from '../../utils/clientTechnicianDisplay';
 import { formatRequestId, formatTicketId } from '../../utils/roleIds';
@@ -213,7 +213,115 @@ export default function ClientRequestTracking() {
                 </p>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="space-y-3 bg-slate-50/70 p-3 md:hidden">
+              {paginatedRequests.map((request) => {
+                const technicianLabel = clientTechnicianDisplayString(request);
+                return (
+                  <article key={request.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => handleViewDetail(request.id)}
+                          className="text-sm font-bold text-brand-700 hover:underline"
+                        >
+                          {formatRequestId(request.id)}
+                        </button>
+                        <p className="mt-0.5 truncate text-sm font-semibold text-slate-900">
+                          {request.service_type_name || request.service_type || 'Service request'}
+                        </p>
+                      </div>
+                      <div className="shrink-0">
+                        <StatusBadge status={request.status} size="sm" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 px-4 py-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {request.priority && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-slate-600">
+                            {request.priority}
+                          </span>
+                        )}
+                        {request.request_source_label && (
+                          <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                            {request.request_source_label}
+                          </span>
+                        )}
+                        {request.operational_status && request.operational_status !== request.status && (
+                          <StatusBadge status={request.operational_status} size="sm" />
+                        )}
+                      </div>
+
+                      {request.description && (
+                        <p className="line-clamp-2 text-sm leading-5 text-slate-600">{request.description}</p>
+                      )}
+
+                      <dl className="grid grid-cols-2 gap-x-3 gap-y-3 rounded-xl bg-slate-50 p-3 text-sm">
+                        <div className="min-w-0">
+                          <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                            <FiCalendar size={13} /> Schedule
+                          </dt>
+                          <dd className="mt-1 font-medium text-slate-700">
+                            {request.scheduled_date ? formatDate(request.scheduled_date) : 'Not scheduled'}
+                          </dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                            <FiUser size={13} /> Technician
+                          </dt>
+                          <dd className="mt-1 truncate font-medium text-slate-700">
+                            {technicianLabel || 'Unassigned'}
+                          </dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ticket</dt>
+                          <dd className="mt-1 font-medium text-slate-700">
+                            {request.ticket_id ? formatTicketId(request.ticket_id) : 'Not created'}
+                          </dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Requested</dt>
+                          <dd className="mt-1 font-medium text-slate-700">{formatDate(request.request_date)}</dd>
+                        </div>
+                      </dl>
+
+                      <div className="flex items-start gap-2 text-sm text-slate-500">
+                        <FiMapPin className="mt-0.5 shrink-0" size={15} />
+                        <span className="line-clamp-2">{request.address || 'No service address set'}</span>
+                      </div>
+
+                      {request.workflow_label && (
+                        <p className="text-xs font-medium text-slate-500">Current step: {request.workflow_label}</p>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 border-t border-slate-100 bg-white px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => handleViewDetail(request.id)}
+                        className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-500 px-3 text-sm font-semibold text-white transition hover:bg-brand-600"
+                      >
+                        <FiEye size={16} /> View details
+                      </button>
+                      {canCancelRequest(request) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCancelTarget(request);
+                            setCancelReason('');
+                          }}
+                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
+                        >
+                          <FiX size={16} /> Cancel
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
                 <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>

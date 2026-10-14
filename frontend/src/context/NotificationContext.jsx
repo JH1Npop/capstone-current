@@ -9,6 +9,7 @@ import {
 import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext(null);
+const NOTIFICATION_REFRESH_MS = 25_000;
 
 export function NotificationProvider({ children }) {
   const { user } = useAuth();
@@ -43,7 +44,7 @@ export function NotificationProvider({ children }) {
     }
 
     refreshNotifications();
-    const intervalId = window.setInterval(refreshNotifications, 45000);
+    const intervalId = window.setInterval(refreshNotifications, NOTIFICATION_REFRESH_MS);
     window.addEventListener('afn:notifications-updated', refreshNotifications);
     return () => {
       requestVersion.current += 1;

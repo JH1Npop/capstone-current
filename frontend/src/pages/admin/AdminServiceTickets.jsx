@@ -35,7 +35,8 @@ import {
   reverseGeocodeLocation,
   rejectServiceRequest,
   rescheduleServiceTicket,
-  searchLocations
+  searchLocations,
+  terminateServiceTicketForClientWithdrawal
 } from '../../api/api';
 import { CALABARZON_BOUNDS, CALABARZON_CENTER, CALABARZON_MIN_ZOOM, clampToCalabarzon } from '../../utils/mapRegion';
 import { queueActionLabel } from '../../utils/dashboardHelpers';
@@ -77,7 +78,19 @@ const shortSourceLabel = (sourceLabel = '') =>
 
 const normalizeStatus = (status) => String(status || '').toLowerCase().replace(/\s+/g, '_');
 const CLOSED_QUEUE_STATUSES = new Set(['completed', 'cancelled']);
+const TERMINABLE_TICKET_STATUSES = new Set([
+  'not_started',
+  'for_inspection',
+  'inspection_completed',
+  'ready_for_service',
+  'awaiting_materials',
+  'navigating',
+  'arrived_on_site',
+  'in_progress',
+  'on_hold',
+]);
 const isClosedTicket = (ticket) => CLOSED_QUEUE_STATUSES.has(normalizeStatus(ticket.status));
+const canTerminateTicket = (ticket) => TERMINABLE_TICKET_STATUSES.has(normalizeStatus(ticket.status));
 const ITEMS_PER_PAGE = 10;
 const QUEUE_FOCUS_OPTIONS = [
   { value: 'active', label: 'All active' },
@@ -162,6 +175,10 @@ export default function AdminServiceTickets() {
   const [rejectDecision, setRejectDecision] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [rejectingTicket, setRejectingTicket] = useState(false);
+  const [terminationTarget, setTerminationTarget] = useState(null);
+  const [terminationReason, setTerminationReason] = useState('');
+  const [terminatingTicket, setTerminatingTicket] = useState(false);
+  const [terminationError, setTerminationError] = useState('');
   const [documentDownloadId, setDocumentDownloadId] = useState(null);
   const [linkedTicketLoading, setLinkedTicketLoading] = useState(false);
   const [linkedTicketError, setLinkedTicketError] = useState('');
@@ -458,6 +475,45 @@ export default function AdminServiceTickets() {
     await loadData();
     setRescheduleTicket(null);
     setRescheduleMessage(`${formatTicketId(ticketId)} schedule updated.`);
+  };
+
+  const openTerminationDialog = (ticket) => {
+    closeTicketActions();
+    setTerminationTarget(ticket);
+    setTerminationReason('');
+    setTerminationError('');
+  };
+
+  const closeTerminationDialog = () => {
+    if (terminatingTicket) return;
+    setTerminationTarget(null);
+    setTerminationReason('');
+    setTerminationError('');
+  };
+
+  const confirmTicketTermination = async () => {
+    if (!terminationTarget) return;
+    const details = terminationReason.trim();
+    if (details.length < 5) {
+      setTerminationError('Add a short explanation confirming why the client backed out.');
+      return;
+    }
+
+    setTerminatingTicket(true);
+    setTerminationError('');
+    try {
+      await terminateServiceTicketForClientWithdrawal(terminationTarget.id, details);
+      const terminatedTicketId = terminationTarget.id;
+      setTerminationTarget(null);
+      setTerminationReason('');
+      await loadData();
+      setRescheduleMessage(`${formatTicketId(terminatedTicketId)} terminated because the client backed out.`);
+      setError('');
+    } catch (terminationRequestError) {
+      setTerminationError(terminationRequestError.message || 'Unable to terminate the service ticket.');
+    } finally {
+      setTerminatingTicket(false);
+    }
   };
 
   const handleWalkInSubmit = async (event) => {
@@ -1133,10 +1189,53 @@ export default function AdminServiceTickets() {
                     <span className="text-xs font-medium text-slate-400">Dispatch board</span>
                   </button>
                 )}
+
+                {canManageTickets && canTerminateTicket(actionModalTicket) && (
+                  <button
+                    onClick={() => openTerminationDialog(actionModalTicket)}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 px-4 py-3 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                  >
+                    <span className="flex items-center gap-3">
+                      <FiXCircle className="text-rose-500" size={18} /> Terminate — Client backed out
+                    </span>
+                    <span className="text-xs font-medium text-rose-500">Requires reason</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {terminationTarget && (
+        <ConfirmationDialog
+          title="Terminate service ticket?"
+          message={`${formatTicketId(terminationTarget.id)} will be cancelled because the client backed out. The ticket stays in the audit history, assigned staff are released, and pending inventory reservations are returned.`}
+          tone="danger"
+          icon="warning"
+          confirmLabel="Terminate ticket"
+          cancelLabel="Keep ticket active"
+          loading={terminatingTicket}
+          disabled={terminationReason.trim().length < 5}
+          onCancel={closeTerminationDialog}
+          onConfirm={confirmTicketTermination}
+        >
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Client backout details</span>
+            <textarea
+              value={terminationReason}
+              onChange={(event) => {
+                setTerminationReason(event.target.value);
+                setTerminationError('');
+              }}
+              rows={3}
+              maxLength={500}
+              placeholder="Example: Client confirmed by phone that they no longer want to proceed."
+              className="mt-2 w-full resize-none rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
+            />
+          </label>
+          {terminationError && <p className="mt-2 text-sm font-medium text-rose-600">{terminationError}</p>}
+        </ConfirmationDialog>
       )}
 
       {rejectDecision && (

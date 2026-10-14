@@ -57,6 +57,7 @@ export default function AdminDashboard() {
   const [viewingRequestDetails, setViewingRequestDetails] = useState(null);
   const [viewingActiveJob, setViewingActiveJob] = useState(null);
   const [actionMessage, setActionMessage] = useState('');
+  const [slaWatchFilter, setSlaWatchFilter] = useState('all');
   const detailsDialogRef = useRef(null);
   const detailsTriggerRef = useRef(null);
   const activeJobTriggerRef = useRef(null);
@@ -253,7 +254,9 @@ export default function AdminDashboard() {
     [clientSchedule]
   );
 
-  const filteredSlaQueue = slaQueue;
+  const filteredSlaQueue = slaWatchFilter === 'all'
+    ? slaQueue
+    : slaQueue.filter((item) => item?.sla?.state === slaWatchFilter);
   const filteredActiveTechnicianJobs = activeTechnicianJobs;
   const attentionItems = [
     {
@@ -268,16 +271,22 @@ export default function AdminDashboard() {
       label: 'SLA warnings',
       value: slaWarningCount,
       icon: FiClock,
-      actionLabel: 'Open warning queue',
-      path: canOpenTickets ? '/admin/service-tickets?focus=sla-warning' : null,
+      actionLabel: 'Show warning items',
+      onClick: () => {
+        setSlaWatchFilter('warning');
+        focusDashboardSection('sla-watchlist');
+      },
       tone: slaWarningCount ? 'text-amber-700 bg-amber-50 ring-amber-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
     },
     {
       label: 'Overdue SLA',
       value: slaOverdueCount,
       icon: FiAlertTriangle,
-      actionLabel: 'Open overdue queue',
-      path: canOpenTickets ? '/admin/service-tickets?focus=sla-overdue' : null,
+      actionLabel: 'Show overdue items',
+      onClick: () => {
+        setSlaWatchFilter('overdue');
+        focusDashboardSection('sla-watchlist');
+      },
       tone: slaOverdueCount ? 'text-rose-700 bg-rose-50 ring-rose-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
     },
     {
@@ -336,7 +345,7 @@ export default function AdminDashboard() {
             <div>
               <p className="text-sm font-semibold text-slate-900">Live operations snapshot</p>
               <p className="mt-0.5 text-xs text-slate-500">
-                Updated <span className="font-medium text-slate-700">{formatDateTime(lastUpdated)}</span> · refreshes every 45 seconds
+                Updated <span className="font-medium text-slate-700">{formatDateTime(lastUpdated)}</span> · refreshes every {AUTO_REFRESH_MS / 1000} seconds
               </p>
             </div>
           </div>
@@ -559,12 +568,36 @@ export default function AdminDashboard() {
         />
 
         {/* ── SLA Watchlist ── */}
-        <div className="card p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-slate-900">SLA Watchlist</h2>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-100 px-3 py-1 text-xs font-medium text-slate-600">
-              Showing {Math.min(filteredSlaQueue.length, 5)} of {filteredSlaQueue.length}
-            </span>
+        <div id="sla-watchlist" tabIndex={-1} className="card scroll-mt-24 p-5 focus:outline-none">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">SLA Watchlist</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Includes pending requests and active service tickets.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2" aria-label="Filter SLA watchlist">
+              {[
+                { value: 'all', label: 'All', count: slaWarningCount + slaOverdueCount },
+                { value: 'warning', label: 'Warning', count: slaWarningCount },
+                { value: 'overdue', label: 'Overdue', count: slaOverdueCount },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setSlaWatchFilter(option.value)}
+                  aria-pressed={slaWatchFilter === option.value}
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                    slaWatchFilter === option.value
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-surface-100 text-slate-600 hover:bg-surface-200'
+                  }`}
+                >
+                  {option.label} {option.count}
+                </button>
+              ))}
+              <span className="text-xs text-slate-500">
+                Showing {Math.min(filteredSlaQueue.length, 5)} of {filteredSlaQueue.length}
+              </span>
+            </div>
           </div>
 
           {loading && !stats ? (
@@ -625,7 +658,9 @@ export default function AdminDashboard() {
               </table>
             </div>
           ) : (
-            <p className="mt-4 py-8 text-center text-sm text-slate-400">SLA queue is clear.</p>
+            <p className="mt-4 py-8 text-center text-sm text-slate-400">
+              {slaWatchFilter === 'all' ? 'SLA queue is clear.' : `No ${slaWatchFilter} SLA items.`}
+            </p>
           )}
         </div>
 

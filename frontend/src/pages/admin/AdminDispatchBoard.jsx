@@ -65,23 +65,29 @@ const technicianMatchesService = (technician, serviceTypeId) => {
 const getDispatchPresence = (technician) => {
   if (!technician.active) {
     return {
-      status: 'offline',
+      status: 'inactive',
       description: 'Account is inactive and cannot receive assignments.'
     };
   }
-  if (!technician.isAvailable) {
+  if (technician.isOnline) {
     return {
-      status: 'busy',
-      description: 'Currently navigating, on site, or working another job.'
+      status: 'online',
+      description: 'Technician portal connected recently.'
     };
   }
   return {
-    status: 'online',
-    description: 'Active and available for dispatch.'
+    status: 'offline',
+    description: technician.isAvailable
+      ? 'Offline with no active job. Can be scheduled, but is not connected now.'
+      : 'Offline and currently assigned to active work.'
   };
 };
 
-const DISPATCH_PRESENCE_ORDER = { online: 0, busy: 1, offline: 2 };
+const getDispatchSortRank = (technician) => {
+  if (!technician.active) return 4;
+  if (technician.isAvailable) return technician.isOnline ? 0 : 1;
+  return technician.isOnline ? 2 : 3;
+};
 
 const sortByDispatchUrgency = (firstTicket, secondTicket) => {
   if (firstTicket.isMissedDispatch !== secondTicket.isMissedDispatch) {
@@ -139,6 +145,30 @@ export default function AdminDispatchBoard() {
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshTechnicianPresence = async () => {
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const technicianData = await fetchAdminTechnicians();
+        if (active) setTechnicians(technicianData);
+      } catch {
+        // Keep the last known directory during a transient refresh failure.
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshTechnicianPresence();
+    };
+
+    const intervalId = window.setInterval(refreshTechnicianPresence, 30_000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -305,10 +335,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
   const serviceMatchedTechs = (selectedTicket
     ? filteredTechs.filter((tech) => technicianMatchesService(tech, selectedTicket.serviceTypeId))
     : filteredTechs
-  ).sort((firstTech, secondTech) => (
-    DISPATCH_PRESENCE_ORDER[getDispatchPresence(firstTech).status]
-    - DISPATCH_PRESENCE_ORDER[getDispatchPresence(secondTech).status]
-  ));
+  ).sort((firstTech, secondTech) => getDispatchSortRank(firstTech) - getDispatchSortRank(secondTech));
   const selectedCrew = technicians.filter((tech) => selectedCrewIds.includes(tech.id));
   const selectedServiceMaterials = selectedTicket
     ? materialTemplates.filter((requirement) => Number(requirement.service_type) === Number(selectedTicket.serviceTypeId))
@@ -693,7 +720,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                 <span><span className="mr-2 text-xs font-bold uppercase tracking-wider text-emerald-600">2</span>{selectedTicket ? `Team for ${selectedTicket.service}` : 'Choose a Team'}</span>
               </h2>
               <p className="text-xs text-slate-500">{selectedTicket ? `${serviceMatchedTechs.length} technicians match this service` : 'Select a ticket before choosing technicians'}</p>
-              <p className="mt-1 text-[11px] text-slate-400">Online means active and dispatch-ready, not live device connectivity.</p>
+              <p className="mt-1 text-[11px] text-slate-400">Available is shown only when a technician is online and has no active job. Offline technicians may still be scheduled for future work.</p>
             </div>
             <div className="border-b border-surface-200 p-3">
               <label className="mb-1 flex items-center gap-1 text-xs font-semibold text-slate-600">
@@ -733,8 +760,10 @@ const paginatedAssignedTickets = assignedTickets.slice(
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-slate-900">{tech.name}</p>
-                          <div className="mt-1">
+                          <div className="mt-1 flex flex-wrap gap-1.5">
                             <StatusBadge status={dispatchPresence.status} size="sm" />
+                            {tech.active && tech.isOnline && tech.isAvailable && <StatusBadge status="available" size="sm" />}
+                            {tech.active && !tech.isAvailable && <StatusBadge status="busy" size="sm" />}
                           </div>
                           <p className="mt-2 text-xs text-slate-500">Skill: {(tech.skill || 'general').replace('_', ' ')}</p>
                         </div>

@@ -1,3 +1,4 @@
+import { CapacityHeatmap, DataChart, TechnicianScatter } from './AnalyticsVisuals';
 import {
   CartesianGrid,
   LabelList,
@@ -71,39 +72,8 @@ function Empty({ title = 'No records in this period', detail }) {
   );
 }
 
-function ComparisonBars({ data, category, currentKey, previousKey, currentName = 'Current', previousName = 'Previous', color = '#2563eb', height, ariaLabel }) {
-  if (!data?.length) return <Empty />;
-  const normalized = data.map((row) => ({
-    ...row,
-    [currentKey]: row[currentKey] == null ? null : Number(row[currentKey]),
-    [previousKey]: row[previousKey] == null ? null : Number(row[previousKey]),
-  }));
-  const showPrevious = normalized.some((row) => row[previousKey] != null);
-  const series = [
-    { key: currentKey, name: currentName, color },
-    ...(showPrevious ? [{ key: previousKey, name: previousName, color: '#cbd5e1' }] : []),
-  ];
-  const maximum = Math.max(1, ...normalized.flatMap((row) => series.map((item) => Number(row[item.key]) || 0)));
-  return (
-    <div role="img" aria-label={ariaLabel} className="space-y-4" style={height ? { minHeight: height } : undefined}>
-      <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-slate-600">
-        {series.map((item) => <span key={item.key} className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</span>)}
-      </div>
-      <div className="space-y-4">
-        {normalized.map((row, index) => (
-          <div key={`${String(row[category])}-${index}`} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
-            <p className="break-words text-sm font-bold leading-5 text-slate-800">{row[category] || 'Unspecified'}</p>
-            <div className="mt-2 space-y-2">
-              {series.map((item) => {
-                const value = Number(row[item.key]) || 0;
-                return <div key={item.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3"><div className="h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full" style={{ width: `${(value / maximum) * 100}%`, minWidth: value ? 4 : 0, backgroundColor: item.color }} /></div><span className="min-w-8 text-right text-xs font-black tabular-nums text-slate-700">{number(value, 2)}</span></div>;
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function ComparisonBars(props) {
+  return <DataChart {...props} />;
 }
 
 function RankingCard({ item }) {
@@ -143,7 +113,7 @@ export function TechnicianWorkspace({ data }) {
           <ComparisonBars data={leaderboard} category="technician" currentKey="assigned_lead_jobs" previousKey="previous_assigned_lead_jobs" ariaLabel="Current and previous lead assignments by technician" />
         </Panel>
         <Panel title="Skill coverage" note="Active service types and the number of technicians with an explicit matching skill.">
-          <ComparisonBars data={data.skills_coverage || []} category="name" currentKey="technician_count" previousKey="unused" currentName="Skilled technicians" ariaLabel="Technician skill coverage by service" color="#7c3aed" />
+          <ComparisonBars data={data.skills_coverage || []} category="name" currentKey="technician_count" previousKey="unused" currentName="Skilled technicians" ariaLabel="Technician skill coverage by service" color="#2563eb" />
         </Panel>
         <Panel title="Completion-rate comparison" note="Completed lead jobs divided by assigned lead jobs in each period.">
           <ComparisonBars data={leaderboard} category="technician" currentKey="completion_rate" previousKey="previous_completion_rate" currentName="Current rate %" previousName="Previous rate %" ariaLabel="Current and previous lead job completion rate by technician" color="#10b981" />
@@ -153,14 +123,12 @@ export function TechnicianWorkspace({ data }) {
         </Panel>
       </div>
 
+      <Panel title="Workload and completion" note="Compare assignment volume with completion percentage for each technician.">
+        <TechnicianScatter data={leaderboard} />
+      </Panel>
+
       <Panel title="Daily capacity" note="Estimated duration only. This is not claimed as true utilization or attended work time.">
-        {(data.daily_capacity || []).length ? <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{data.daily_capacity.map((row) => (
-          <div key={`${row.technician_id}-${row.date}`} className={`rounded-xl border p-3 ${row.over_capacity ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
-            <p className="break-words text-xs font-bold leading-5 text-slate-800">{row.technician}</p>
-            <p className="mt-1 text-[11px] text-slate-500">{row.date}</p>
-            <p className={`mt-2 text-lg font-black ${row.over_capacity ? 'text-rose-700' : 'text-blue-700'}`}>{row.hours}h / {row.capacity_hours}h</p>
-          </div>
-        ))}</div> : <Empty detail="No scheduled technician capacity falls inside this period." />}
+        <CapacityHeatmap data={data.daily_capacity || []} />
       </Panel>
 
       <Panel title="Technician leaderboard" note="Exact metrics remain visible without hovering. Coordinates are never included.">
@@ -206,8 +174,8 @@ export function SalesWorkspace({ data }) {
         <Panel title="Sales by service" note="One confirmed Sales Record is counted once by its ticket's primary service.">
           <ComparisonBars data={(data.charts?.sales_by_service || []).map((row) => ({ ...row, service: row.ticket__request__service_type__name }))} category="service" currentKey="amount" previousKey="unused" currentName="Confirmed amount" ariaLabel="Confirmed sales amount by primary service" />
         </Panel>
-        <Panel title="Sales by client type"><ComparisonBars data={(data.charts?.sales_by_client_type || []).map((row) => ({ ...row, type: row.client__client_profile__client_type || 'Unspecified' }))} category="type" currentKey="amount" previousKey="unused" currentName="Confirmed amount" ariaLabel="Confirmed sales by client type" color="#7c3aed" /></Panel>
-        <Panel title="Sales composition" note="Uses valid SalesRecordLine totals; record totals are not duplicated across lines."><ComparisonBars data={(data.charts?.line_composition || []).map((row) => ({ ...row, type: row.line_type }))} category="type" currentKey="amount" previousKey="unused" currentName="Line amount" ariaLabel="Confirmed sales line composition" color="#f59e0b" /></Panel>
+        <Panel title="Sales by client type"><ComparisonBars data={(data.charts?.sales_by_client_type || []).map((row) => ({ ...row, type: row.client__client_profile__client_type || 'Unspecified' }))} category="type" currentKey="amount" previousKey="unused" currentName="Confirmed amount" ariaLabel="Confirmed sales by client type" color="#059669" /></Panel>
+        <Panel title="Sales composition" note="Uses valid SalesRecordLine totals; record totals are not duplicated across lines."><ComparisonBars data={(data.charts?.line_composition || []).map((row) => ({ ...row, type: row.line_type }))} category="type" currentKey="amount" previousKey="unused" currentName="Line amount" ariaLabel="Confirmed sales line composition" color="#2563eb" /></Panel>
       </div>
       <Panel title="Financial data quality" note="Unavailable values remain unavailable rather than being inferred from text fields.">
         <div className="grid gap-3 sm:grid-cols-3"><Metric label="Missing confirmed total" value={number(data.data_quality?.confirmed_missing_total)} tone="amber" /><Metric label="Missing sale date" value={number(data.data_quality?.confirmed_missing_sale_date)} tone="amber" /><Metric label="Quotation money" value="Unavailable" note={data.data_quality?.quotation_money_reason} /></div>
@@ -224,7 +192,7 @@ export function InventoryWorkspace({ data }) {
       <Metrics columns="xl:grid-cols-3 2xl:grid-cols-6">
         <Metric label="Inventory value" value={money(summary.total_inventory_value, 'PHP')} current />
         <Metric label="Available quantity" value={number(summary.available_quantity)} current />
-        <Metric label="Reserved quantity" value={number(summary.reserved_quantity)} tone="violet" current />
+        <Metric label="Reserved quantity" value={number(summary.reserved_quantity)} tone="blue" current />
         <Metric label="Low stock" value={number(summary.low_stock_items)} tone="amber" current />
         <Metric label="Out of stock" value={number(summary.out_of_stock_items)} tone="red" current />
         <Metric label="Pending returns" value={number(summary.pending_equipment_returns)} tone="blue" current />
@@ -233,10 +201,10 @@ export function InventoryWorkspace({ data }) {
         <strong>{number(quality.ticket_linked_issue_transactions)} of {number(quality.issue_transactions)}</strong> issue transactions are linked to tickets ({quality.ticket_linkage_rate == null ? 'no coverage rate' : `${quality.ticket_linkage_rate}% coverage`}). Unlinked issues are not assigned to a service type.
       </div>
       <div className="grid gap-5 xl:grid-cols-2">
-        <Panel title="Inventory movement" note="Current quantities versus the selected comparison period."><ComparisonBars data={data.charts?.movement_summary || []} category="label" currentKey="quantity" previousKey="previous_quantity" ariaLabel="Current and previous inventory movement by transaction type" color="#0ea5e9" /></Panel>
-        <Panel title="Most-issued items"><ComparisonBars data={(data.charts?.most_issued_items || []).map((row) => ({ ...row, item: row.item__name }))} category="item" currentKey="quantity" previousKey="unused" currentName="Issued quantity" ariaLabel="Most issued inventory items" color="#f97316" /></Panel>
+        <Panel title="Inventory movement" note="Current quantities versus the selected comparison period."><ComparisonBars data={data.charts?.movement_summary || []} category="label" currentKey="quantity" previousKey="previous_quantity" ariaLabel="Current and previous inventory movement by transaction type" color="#2563eb" /></Panel>
+        <Panel title="Most-issued items"><ComparisonBars data={(data.charts?.most_issued_items || []).map((row) => ({ ...row, item: row.item__name }))} category="item" currentKey="quantity" previousKey="unused" currentName="Issued quantity" ariaLabel="Most issued inventory items" color="#2563eb" /></Panel>
         <Panel title="Stock by category"><ComparisonBars data={(data.charts?.stock_by_category || []).map((row) => ({ ...row, category: row.category__name }))} category="category" currentKey="available" previousKey="reserved" currentName="Available" previousName="Reserved" ariaLabel="Available and reserved inventory by category" color="#10b981" /></Panel>
-        <Panel title="Ticket-linked usage by service"><ComparisonBars data={(data.charts?.usage_by_service_type || []).map((row) => ({ ...row, service: row.service_ticket__request__service_type__name }))} category="service" currentKey="quantity" previousKey="unused" currentName="Issued quantity" ariaLabel="Ticket linked inventory usage by service type" color="#7c3aed" /></Panel>
+        <Panel title="Ticket-linked usage by service"><ComparisonBars data={(data.charts?.usage_by_service_type || []).map((row) => ({ ...row, service: row.service_ticket__request__service_type__name }))} category="service" currentKey="quantity" previousKey="unused" currentName="Issued quantity" ariaLabel="Ticket linked inventory usage by service type" color="#2563eb" /></Panel>
       </div>
       <Panel title="Operational shortage risk" note="Deterministic warning from available stock, reservations, scheduled tickets, and configured service requirements—not an AI forecast.">
         {(data.shortage_risk || []).length ? <div className="overflow-x-auto"><table className="min-w-[850px] w-full text-left text-xs"><thead><tr className="border-b text-[10px] uppercase text-slate-500">{['Item', 'Service', 'Available', 'Reserved', 'Expected', 'Shortage', 'Required', 'Tickets'].map((label) => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead><tbody>{data.shortage_risk.map((row) => <tr key={`${row.item_id}-${row.service_type_id}`} className="border-b border-slate-100"><td className="px-3 py-3 font-bold">{row.item}</td><td className="px-3 py-3">{row.service_type}</td><td className="px-3 py-3">{row.available_quantity}</td><td className="px-3 py-3">{row.reserved_quantity}</td><td className="px-3 py-3">{row.expected_required_quantity}</td><td className={`px-3 py-3 font-black ${row.projected_shortage ? 'text-rose-700' : 'text-emerald-700'}`}>{row.projected_shortage}</td><td className="px-3 py-3">{row.required_date || '—'}</td><td className="px-3 py-3">{row.affected_ticket_count}</td></tr>)}</tbody></table></div> : <Empty title="No configured shortage risk in this period" />}
@@ -256,15 +224,15 @@ export function AfterSalesWorkspace({ data }) {
         <Metric label="Overdue cases" value={number(cases.overdue_cases?.current)} tone="red" current />
         <Metric label="Resolved cases" value={number(cases.resolved_cases?.current)} tone="green" />
         <Metric label="Avg. resolution" value={cases.average_resolution_hours?.current == null ? '—' : `${number(cases.average_resolution_hours.current, 1)}h`} />
-        <Metric label="Requires revisit" value={number(cases.cases_requiring_revisit?.current)} tone="violet" note="Not automatically classified as rework" />
+        <Metric label="Requires revisit" value={number(cases.cases_requiring_revisit?.current)} tone="amber" note="Not automatically classified as rework" />
       </Metrics></div>
       <div className="grid gap-5 xl:grid-cols-2">
-        <Panel title="Cases by type"><ComparisonBars data={data.case_charts?.by_type || []} category="value" currentKey="count" previousKey="previous_count" ariaLabel="Current and previous after sales cases by type" /></Panel>
-        <Panel title="Cases by status"><ComparisonBars data={data.case_charts?.by_status || []} category="value" currentKey="count" previousKey="previous_count" ariaLabel="Current and previous after sales cases by status" color="#7c3aed" /></Panel>
+        <Panel title="Cases by type"><DataChart mode="donut" data={data.case_charts?.by_type || []} category="value" currentKey="count" previousKey="previous_count" ariaLabel="Case type proportions and period counts" /></Panel>
+        <Panel title="Cases by status"><ComparisonBars data={data.case_charts?.by_status || []} category="value" currentKey="count" previousKey="previous_count" ariaLabel="Current and previous after sales cases by status" color="#2563eb" /></Panel>
         <Panel title="Cases by priority"><ComparisonBars data={data.case_charts?.by_priority || []} category="value" currentKey="count" previousKey="previous_count" ariaLabel="Current and previous after sales cases by priority" color="#f59e0b" /></Panel>
-        <Panel title="Cases by source"><ComparisonBars data={data.case_charts?.by_creation_source || []} category="value" currentKey="count" previousKey="previous_count" ariaLabel="Current and previous after sales cases by creation source" color="#0ea5e9" /></Panel>
+        <Panel title="Cases by source"><DataChart mode="donut" data={data.case_charts?.by_creation_source || []} category="value" currentKey="count" previousKey="previous_count" ariaLabel="Case source proportions and period counts" /></Panel>
       </div>
-      <div><p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-violet-600">Maintenance</p><Metrics>
+      <div><p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-amber-600">Maintenance</p><Metrics>
         <Metric label="Active schedules" value={number(maintenance.active_schedules)} current />
         <Metric label="Due soon" value={number(maintenance.due_soon)} tone="amber" current />
         <Metric label="Due today" value={number(maintenance.due_today)} tone="amber" current />
@@ -318,8 +286,8 @@ export function ForecastingWorkspace({ data }) {
   return (
     <div className="space-y-5">
       <Metrics columns="xl:grid-cols-4">
-        <Metric label="Next 7 days" value={demandForecast.available ? number(demandForecast.next_7_days, 1) : 'Unavailable'} note={demandForecast.available ? 'Expected service requests' : 'Requires a validated model'} tone={demandForecast.available ? 'green' : 'amber'} />
-        <Metric label="Next 30 days" value={demandForecast.available ? number(demandForecast.next_30_days, 1) : 'Unavailable'} note={demandForecast.available ? 'Expected service requests' : 'No fabricated quantity'} tone={demandForecast.available ? 'green' : 'amber'} />
+        <Metric label="Next 7 days" value={demandForecast.available ? number(demandForecast.next_7_days, 1) : 'Unavailable'} note={demandForecast.available ? 'Expected service requests' : 'Requires a validated model'} tone={demandForecast.available ? 'violet' : 'amber'} />
+        <Metric label="Next 30 days" value={demandForecast.available ? number(demandForecast.next_30_days, 1) : 'Unavailable'} note={demandForecast.available ? 'Expected service requests' : 'No fabricated quantity'} tone={demandForecast.available ? 'violet' : 'amber'} />
         <Metric label="Published services" value={`${number(modelStatus.published_service_count)} / ${number(modelStatus.evaluated_service_count)}`} note="Each service is validated separately" tone="violet" />
         <Metric label="Holdout WAPE" value={averageWape == null ? 'Unavailable' : `${number(averageWape, 1)}%`} note="Lower is better; calculated from unseen historical months" />
       </Metrics>
@@ -376,7 +344,7 @@ export function ForecastingWorkspace({ data }) {
         </div>
 
         <Panel title="Service-location demand allocation" note={demandForecast.location_method}>
-          <ComparisonBars data={locationOutlook} category="location_service" currentKey="allocated_30_day_requests" previousKey="unused" currentName="Allocated 30-day requests" ariaLabel="Thirty day forecast allocated using historical service location density" color="#0ea5e9" />
+          <ComparisonBars data={locationOutlook} category="location_service" currentKey="allocated_30_day_requests" previousKey="unused" currentName="Allocated 30-day requests" ariaLabel="Thirty day forecast allocated using historical service location density" color="#7c3aed" />
         </Panel>
       </> : null}
 
@@ -400,15 +368,15 @@ export function ForecastingWorkspace({ data }) {
       </Panel>
 
       <Panel title="Historical demand by service" note="All genuine request history, separated by primary service. Use the Service filter above to inspect one service.">
-        <ComparisonBars data={serviceMix} category="service" currentKey="requests" previousKey="unused" currentName="Genuine requests" ariaLabel="Historical genuine request count by service type" color="#7c3aed" />
+        <ComparisonBars data={serviceMix} category="service" currentKey="requests" previousKey="unused" currentName="Genuine requests" ariaLabel="Historical genuine request count by service type" color="#2563eb" />
       </Panel>
 
       <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Service-location density" note="Historical request concentration by primary service and city/province. Exact coordinates and client addresses are not exposed.">
-          <ComparisonBars data={locationDensity} category="location_service" currentKey="requests" previousKey="unused" currentName="Historical requests" ariaLabel="Historical service request density by service and location" color="#0ea5e9" />
+          <ComparisonBars data={locationDensity} category="location_service" currentKey="requests" previousKey="unused" currentName="Historical requests" ariaLabel="Historical service request density by service and location" color="#2563eb" />
         </Panel>
         <Panel title="Ticket-linked item consumption" note="Actual issued quantities with a service-ticket link. Unlinked inventory issues are excluded from service-demand evidence.">
-          <ComparisonBars data={itemUsage} category="item" currentKey="quantity" previousKey="unused" currentName="Issued quantity" ariaLabel="Historical ticket linked inventory item consumption" color="#f97316" />
+          <ComparisonBars data={itemUsage} category="item" currentKey="quantity" previousKey="unused" currentName="Issued quantity" ariaLabel="Historical ticket linked inventory item consumption" color="#2563eb" />
         </Panel>
       </div>
 
@@ -421,9 +389,9 @@ export function ForecastingWorkspace({ data }) {
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric label="Ticket-linked issues" value={`${number(itemReadiness.ticket_linked_issue_transactions)} / ${number(itemReadiness.required_linked_issue_transactions)}`} note={`${itemReadiness.ticket_linkage_rate == null ? 'No' : `${itemReadiness.ticket_linkage_rate}%`} linkage coverage`} />
-          <Metric label="Usage history" value={`${number(itemReadiness.linked_issue_active_months)} months`} note={`${number(itemReadiness.required_issue_history_months)} months required`} tone="violet" />
+          <Metric label="Usage history" value={`${number(itemReadiness.linked_issue_active_months)} months`} note={`${number(itemReadiness.required_issue_history_months)} months required`} tone="blue" />
           <Metric label="Requirement mappings" value={number(itemReadiness.requirement_mappings)} note={`${number(itemReadiness.mapped_service_types)} mapped services`} tone="green" />
-          <Metric label="Future quantities" value={itemReadiness.available ? number(itemPredictions30.reduce((total, row) => total + Number(row.expected_quantity || 0), 0), 1) : 'Unavailable'} note={itemReadiness.available ? 'Expected 30-day issued quantity' : 'No validated model; no fabricated item forecast'} tone={itemReadiness.available ? 'green' : 'amber'} />
+          <Metric label="Future quantities" value={itemReadiness.available ? number(itemPredictions30.reduce((total, row) => total + Number(row.expected_quantity || 0), 0), 1) : 'Unavailable'} note={itemReadiness.available ? 'Expected 30-day issued quantity' : 'No validated model; no fabricated item forecast'} tone={itemReadiness.available ? 'violet' : 'amber'} />
         </div>
         {itemReadiness.available ? <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200"><table className="min-w-[760px] w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>{['Item', '7-day expected', '30-day expected', 'Available', '30-day shortage', 'Evidence'].map((label) => <th key={label} className="px-4 py-3">{label}</th>)}</tr></thead><tbody>{itemPredictions30.map((row) => { const sevenDay = itemPredictions7.find((item) => item.item_id === row.item_id); return <tr key={row.item_id} className="border-t border-slate-100"><td className="px-4 py-3"><p className="max-w-xs break-words font-bold text-slate-900">{row.item}</p><p className="text-xs text-slate-500">{row.sku}</p></td><td className="px-4 py-3">{number(sevenDay?.expected_quantity, 1)}</td><td className="px-4 py-3">{number(row.expected_quantity, 1)} {row.unit}</td><td className="px-4 py-3">{number(row.available_quantity)}</td><td className={`px-4 py-3 font-bold ${row.projected_shortage ? 'text-rose-700' : 'text-emerald-700'}`}>{number(row.projected_shortage)}</td><td className="px-4 py-3">{number(row.usage_ticket_observations)} linked tickets</td></tr>; })}</tbody></table></div> : null}
         <p className="mt-4 text-xs leading-5 text-slate-500">Method: {itemReadiness.method}</p>

@@ -126,7 +126,7 @@ export default function ClientNotifications() {
   };
 
   const getBackgroundColor = (type, status) => {
-    const unreadBg = status === 'unread' ? 'bg-blue-50' : '';
+    const unreadBg = status === 'unread' ? 'bg-blue-50' : 'bg-white';
     const baseColor = {
       success: 'border-green-200',
       warning: 'border-yellow-200',

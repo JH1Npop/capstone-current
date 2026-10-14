@@ -165,6 +165,22 @@ export const fetchServiceTicketSummary = async (filters = {}) => {
   }
 };
 
+export const terminateServiceTicketForClientWithdrawal = async (ticketId, details) => {
+  const normalizedDetails = String(details || '').trim();
+  if (normalizedDetails.length < 5) {
+    throw new Error('Add a short explanation confirming why the client backed out.');
+  }
+  try {
+    const { data } = await api.post(`/services/service-tickets/${ticketId}/update_status/`, {
+      status: 'Cancelled',
+      reason: `Client backed out: ${normalizedDetails}`,
+    });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to terminate the service ticket.'));
+  }
+};
+
 export const fetchDocumentPrefill = async (ticketId) => {
   try {
     const { data } = await api.get(`/services/service-tickets/${ticketId}/document-prefill/`);

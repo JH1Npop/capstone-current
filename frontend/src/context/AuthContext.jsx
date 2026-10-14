@@ -3,6 +3,7 @@ import axios from 'axios';
 import { API_BASE_URL, api, clearStoredAuth, getApiErrorMessage } from '../api/core';
 
 const AuthContext = createContext(null);
+const TECHNICIAN_HEARTBEAT_MS = 45_000;
 
 const normalizeRegisterErrors = (data) => {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
@@ -94,6 +95,35 @@ export const AuthProvider = ({ children }) => {
       }
     }
   }, [token, user]);
+
+  useEffect(() => {
+    if (!token || user?.role !== 'technician') {
+      return undefined;
+    }
+
+    let active = true;
+    const sendHeartbeat = async () => {
+      if (!active || document.visibilityState === 'hidden') return;
+      try {
+        await api.post('/users/heartbeat/');
+      } catch {
+        // Presence becomes offline naturally after the backend timeout.
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') sendHeartbeat();
+    };
+
+    sendHeartbeat();
+    const intervalId = window.setInterval(sendHeartbeat, TECHNICIAN_HEARTBEAT_MS);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [token, user?.role]);
 
   // Reconcile the stored user against the active token so stale localStorage
   // cannot leave the UI thinking one user is logged in while the backend sees another.

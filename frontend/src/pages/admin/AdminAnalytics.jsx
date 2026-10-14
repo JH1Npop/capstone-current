@@ -17,10 +17,16 @@ import {
   FiUsers,
 } from 'react-icons/fi';
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
+  LabelList,
   Legend,
-  Line,
-  LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -128,22 +134,81 @@ function ChartEmpty({ children = 'No records match these filters.' }) {
 
 function ComparisonRows({ data, labelKey, series, ariaLabel }) {
   if (!data?.length) return <ChartEmpty />;
-  const maximum = Math.max(1, ...data.flatMap((row) => series.map((item) => Number(row[item.key]) || 0)));
+  return <div aria-label={ariaLabel} className="overflow-x-auto">
+    <div style={{ height: 300, minWidth: Math.max(300, data.length * 100) }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 20, right: 16, bottom: 12, left: -16 }}>
+          <CartesianGrid vertical={false} strokeDasharray="3 4" stroke="#e2e8f0" />
+          <XAxis dataKey={labelKey} tick={{ fontSize: 11 }} interval={0} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+          <Tooltip contentStyle={tooltipStyle} />
+          <Legend wrapperStyle={{ fontSize: 12 }} />
+          {series.map((item) => <Bar key={item.key} dataKey={item.key} name={item.name} fill={item.color} radius={[5, 5, 0, 0]} maxBarSize={30} isAnimationActive={false}><LabelList dataKey={item.key} position="top" fontSize={11} /></Bar>)}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  </div>;
+}
+
+function CategoryComparisonBars({ data, categoryKey, currentKey, previousKey, currentName = 'Current', previousName = 'Previous', ariaLabel }) {
+  if (!data?.length) return <ChartEmpty />;
+  const currentTotal = data.reduce((total, row) => total + (Number(row[currentKey]) || 0), 0);
+  const previousTotal = data.reduce((total, row) => total + (Number(row[previousKey]) || 0), 0);
+  const difference = currentTotal - previousTotal;
+  const chartHeight = Math.max(210, data.length * 48);
   return (
-    <div role="img" aria-label={ariaLabel} className="space-y-4">
-      <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-slate-600">
-        {series.map((item) => <span key={item.key} className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</span>)}
+    <div role="img" aria-label={ariaLabel}>
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        <div className="rounded-xl border border-blue-100 bg-blue-50/80 px-3 py-2"><p className="text-[9px] font-black uppercase tracking-[0.12em] text-blue-500">{currentName}</p><p className="mt-0.5 text-xl font-black tabular-nums text-blue-900">{currentTotal.toLocaleString('en-PH')}</p></div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">{previousName}</p><p className="mt-0.5 text-xl font-black tabular-nums text-slate-700">{previousTotal.toLocaleString('en-PH')}</p></div>
+        <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2"><p className="text-[9px] font-black uppercase tracking-[0.12em] text-sky-500">Change</p><p className="mt-0.5 text-xl font-black tabular-nums text-sky-800">{difference > 0 ? '+' : ''}{difference.toLocaleString('en-PH')}</p></div>
       </div>
-      <div className="space-y-4">
+      <div style={{ height: chartHeight }}>
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 720, height: chartHeight }}>
+          <BarChart data={data} layout="vertical" margin={{ top: 4, right: 34, bottom: 4, left: 8 }} barCategoryGap="18%">
+            <CartesianGrid strokeDasharray="3 5" stroke="#e2e8f0" horizontal={false} />
+            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+            <YAxis type="category" dataKey={categoryKey} width={118} tick={{ fontSize: 11, fill: '#475569', fontWeight: 600 }} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#eff6ff', opacity: 0.55 }} />
+            <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
+            <Bar dataKey={currentKey} name={currentName} fill="#2563eb" radius={[0, 7, 7, 0]} maxBarSize={17} isAnimationActive animationDuration={700}>
+              <LabelList dataKey={currentKey} position="right" fill="#1e3a8a" fontSize={11} fontWeight={800} />
+            </Bar>
+            <Bar dataKey={previousKey} name={previousName} fill="#cbd5e1" radius={[0, 7, 7, 0]} maxBarSize={17} isAnimationActive animationDuration={700} animationBegin={100} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+const STATUS_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#64748b'];
+
+function TicketStatusDonut({ data }) {
+  if (!data?.length) return <ChartEmpty />;
+  const currentTotal = data.reduce((total, row) => total + (Number(row.count) || 0), 0);
+  return (
+    <div role="img" aria-label="Current ticket status proportions with previous-period counts" className="grid items-center gap-4 sm:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="relative h-[220px]">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 220, height: 220 }}>
+          <PieChart>
+            <Pie data={data} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius={58} outerRadius={88} paddingAngle={3} stroke="#fff" strokeWidth={3} isAnimationActive animationDuration={800}>
+              {data.map((row, index) => <Cell key={`${row.label}-${index}`} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />)}
+            </Pie>
+            <Tooltip contentStyle={tooltipStyle} formatter={(value) => [Number(value).toLocaleString('en-PH'), 'Tickets']} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-3xl font-black tabular-nums text-slate-950">{currentTotal.toLocaleString('en-PH')}</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Current</span>
+        </div>
+      </div>
+      <div className="space-y-2">
         {data.map((row, index) => (
-          <div key={`${String(row[labelKey])}-${index}`} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
-            <p className="break-words text-sm font-bold leading-5 text-slate-800">{row[labelKey] || 'Unspecified'}</p>
-            <div className="mt-2 space-y-2">
-              {series.map((item) => {
-                const value = Number(row[item.key]) || 0;
-                return <div key={item.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3"><div className="h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full" style={{ width: `${(value / maximum) * 100}%`, minWidth: value ? 4 : 0, backgroundColor: item.color }} /></div><span className="min-w-8 text-right text-xs font-black tabular-nums text-slate-700">{value.toLocaleString('en-PH', { maximumFractionDigits: 2 })}</span></div>;
-              })}
-            </div>
+          <div key={`${row.label}-${index}`} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[index % STATUS_COLORS.length] }} aria-hidden="true" />
+            <span className="min-w-0 break-words text-xs font-semibold text-slate-700">{row.label || 'Unspecified'}</span>
+            <span className="text-right text-xs tabular-nums text-slate-500"><strong className="text-sm text-slate-900">{Number(row.count || 0).toLocaleString('en-PH')}</strong><br />prev. {Number(row.previous_count || 0).toLocaleString('en-PH')}</span>
           </div>
         ))}
       </div>
@@ -153,10 +218,11 @@ function ComparisonRows({ data, labelKey, series, ariaLabel }) {
 
 function ChartCard({ title, note, eyebrow, action, children, className = '' }) {
   return (
-    <section className={`min-w-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.45)] sm:p-6 ${className}`}>
+    <section className={`relative min-w-0 overflow-hidden rounded-3xl border border-slate-200/90 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.08),transparent_34%),linear-gradient(180deg,#ffffff_0%,#ffffff_72%,#f8fbff_100%)] p-5 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.55)] sm:p-6 ${className}`}>
+      <span className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-sky-400 to-transparent" aria-hidden="true" />
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          {eyebrow ? <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-blue-600">{eyebrow}</p> : null}
+          {eyebrow ? <p className="mb-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">{eyebrow}</p> : null}
           <h2 className="text-base font-bold text-slate-950 sm:text-lg">{title}</h2>
           {note ? <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{note}</p> : null}
         </div>
@@ -261,6 +327,7 @@ function AttentionItem({ label, value, tone }) {
   const styles = {
     red: 'border-rose-200 bg-rose-50 text-rose-700',
     amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     blue: 'border-blue-200 bg-blue-50 text-blue-700',
     violet: 'border-violet-200 bg-violet-50 text-violet-700',
     slate: 'border-slate-200 bg-slate-50 text-slate-700',
@@ -270,6 +337,28 @@ function AttentionItem({ label, value, tone }) {
     <div className={`flex items-center justify-between gap-4 rounded-xl border px-3 py-3 ${styles[tone]}`}>
       <span className="text-sm font-semibold">{label}</span>
       <span className="min-w-8 rounded-lg bg-white/80 px-2 py-1 text-center text-sm font-black shadow-sm">{value ?? 0}</span>
+    </div>
+  );
+}
+
+function AnalyticsColorKey() {
+  const meanings = [
+    { label: 'Current / volume', color: 'bg-blue-500' },
+    { label: 'Healthy / completed', color: 'bg-emerald-500' },
+    { label: 'Warning / due', color: 'bg-amber-500' },
+    { label: 'Overdue / shortage', color: 'bg-rose-500' },
+    { label: 'Forecast / model', color: 'bg-violet-500' },
+    { label: 'Previous period', color: 'bg-slate-300' },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600" aria-label="Analytics color meaning">
+      <span className="font-bold text-slate-800">Color key</span>
+      {meanings.map((item) => (
+        <span key={item.label} className="inline-flex items-center gap-1.5">
+          <span className={`h-2.5 w-2.5 rounded-full ${item.color}`} aria-hidden="true" />
+          {item.label}
+        </span>
+      ))}
     </div>
   );
 }
@@ -520,6 +609,8 @@ export default function AdminAnalytics() {
           {!invalidRange && invalidCustomComparison ? <p className="mt-3 text-sm font-semibold text-rose-600">Choose an earlier comparison date or range with the same number of days.</p> : null}
         </section>
 
+        <AnalyticsColorKey />
+
         {error ? (
           <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
             <span>{error}</span>
@@ -554,59 +645,51 @@ export default function AdminAnalytics() {
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <Insight icon={FiBriefcase} label="Top service" value={topService?.service_type || 'No demand yet'} detail={`${topService?.requests || 0} requests`} />
                 <Insight icon={FiCalendar} label="Busiest period" value={busiestPeriod?.label || 'No activity yet'} detail={`${busiestPeriod?.requests || 0} requests`} tone="green" />
-                <Insight icon={FiUsers} label="Highest workload" value={leadTechnician?.technician || 'No assignments yet'} detail={`${leadTechnician?.assigned_jobs || 0} assigned jobs`} tone="violet" />
-                <Insight icon={FiMapPin} label="Top location" value={topLocation?.city || 'No location yet'} detail={`${topLocation?.requests || 0} requests`} tone="amber" />
+                <Insight icon={FiUsers} label="Highest workload" value={leadTechnician?.technician || 'No assignments yet'} detail={`${leadTechnician?.assigned_jobs || 0} assigned jobs`} tone="blue" />
+                <Insight icon={FiMapPin} label="Top location" value={topLocation?.city || 'No location yet'} detail={`${topLocation?.requests || 0} requests`} tone="blue" />
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" aria-label="Cross-domain operational attention">
-                <AttentionItem label="Confirmed sales" value={attention.confirmed_sales} tone="blue" />
+                <AttentionItem label="Confirmed sales" value={attention.confirmed_sales} tone="green" />
                 <AttentionItem label="Unassigned tickets" value={attention.unassigned_tickets} tone="amber" />
-                <AttentionItem label="Open after-sales" value={attention.open_after_sales_cases} tone="slate" />
-                <AttentionItem label="Low-stock items" value={attention.low_stock_items} tone="violet" />
+                <AttentionItem label="Open after-sales" value={attention.open_after_sales_cases} tone="amber" />
+                <AttentionItem label="Low-stock items" value={attention.low_stock_items} tone="amber" />
                 <AttentionItem label="Overdue maintenance" value={attention.overdue_maintenance} tone="red" />
               </div>
             </section>
 
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.75fr)]">
-              <ChartCard title="Requests vs completions" eyebrow="Demand & delivery" note="Request arrivals and finished work across the selected period.">
+            <ChartCard title="Requests vs completions" eyebrow="Demand & delivery" note="Request arrivals and finished work across the selected period.">
                 {(charts.requests_vs_completions || []).some((row) => row.requests || row.completions) ? (
                   <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 900, height: 320 }}>
-                      <LineChart data={charts.requests_vs_completions} margin={{ left: -18, right: 12, top: 8 }}>
+                      <AreaChart data={charts.requests_vs_completions} margin={{ left: -18, right: 12, top: 8 }}>
+                        <defs>
+                          <linearGradient id="requestsArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.32} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0.03} /></linearGradient>
+                          <linearGradient id="completionsArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.28} /><stop offset="100%" stopColor="#10b981" stopOpacity={0.03} /></linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 5" stroke="#e2e8f0" vertical={false} />
                         <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} minTickGap={24} />
                         <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
                         <Tooltip contentStyle={tooltipStyle} />
                         <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-                        <Line type="monotone" dataKey="requests" name="Requests" stroke="#2563eb" strokeWidth={3} dot={false} activeDot={{ r: 5 }} isAnimationActive={false} />
-                        <Line type="monotone" dataKey="completions" name="Completions" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 5 }} isAnimationActive={false} />
-                      </LineChart>
+                        <Area type="monotone" dataKey="requests" name="Requests" stroke="#2563eb" strokeWidth={3} fill="url(#requestsArea)" dot={false} activeDot={{ r: 5 }} isAnimationActive animationDuration={850} />
+                        <Area type="monotone" dataKey="completions" name="Completions" stroke="#10b981" strokeWidth={3} fill="url(#completionsArea)" dot={false} activeDot={{ r: 5 }} isAnimationActive animationDuration={850} animationBegin={120} />
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
                 ) : <ChartEmpty />}
-              </ChartCard>
+            </ChartCard>
 
-              <ChartCard title="Current attention" eyebrow="Action needed" note="Live counts; intentionally independent of the date range.">
-                <div className="space-y-2.5">
-                  <AttentionItem label="Overdue tickets" value={attention.overdue_tickets} tone="red" />
-                  <AttentionItem label="Unassigned tickets" value={attention.unassigned_tickets} tone="amber" />
-                  <AttentionItem label="Low-stock items" value={attention.low_stock_items} tone="violet" />
-                  <AttentionItem label="Jobs in next 7 days" value={attention.upcoming_scheduled_jobs} tone="blue" />
-                  <AttentionItem label="Open after-sales" value={attention.open_after_sales_cases} tone="slate" />
-                </div>
-              </ChartCard>
-            </div>
-
-            <div className="grid gap-5 xl:grid-cols-2">
+            <div className="grid items-start gap-5 xl:grid-cols-2">
               <ChartCard title="Primary service demand" eyebrow="What clients need" note="Current requests compared with the preceding equal period.">
-                <ComparisonRows data={charts.service_demand || []} labelKey="service_type" ariaLabel="Current and previous service demand" series={[{ key: 'requests', name: 'Current', color: '#2563eb' }, { key: 'previous_requests', name: 'Previous', color: '#cbd5e1' }]} />
+                <CategoryComparisonBars data={charts.service_demand || []} categoryKey="service_type" currentKey="requests" previousKey="previous_requests" ariaLabel="Current and previous service demand" />
               </ChartCard>
 
-              <ChartCard title="Ticket statuses" eyebrow="Work distribution" note="Current ticket states versus the preceding equal period.">
-                <ComparisonRows data={nonZeroStatuses} labelKey="label" ariaLabel="Current and previous ticket statuses" series={[{ key: 'count', name: 'Current', color: '#7c3aed' }, { key: 'previous_count', name: 'Previous', color: '#cbd5e1' }]} />
+              <ChartCard title="Ticket statuses" eyebrow="Work distribution" note="The donut shows the current workload share; each label retains its preceding-period count.">
+                <TicketStatusDonut data={nonZeroStatuses} />
               </ChartCard>
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
               <ChartCard title="Technician workload" eyebrow="Capacity" note="Lead assignments only. Job counts and scheduled hours use separate views.">
                 {(charts.technician_workload || []).length ? (
                   <>
@@ -627,7 +710,7 @@ export default function AdminAnalytics() {
               </ChartCard>
 
               <ChartCard title="Demand by location" eyebrow="Service coverage" note="Top cities compared with the preceding equal period.">
-                <ComparisonRows data={charts.locations || []} labelKey="city" ariaLabel="Current and previous demand by location" series={[{ key: 'requests', name: 'Current', color: '#7c3aed' }, { key: 'previous_requests', name: 'Previous', color: '#cbd5e1' }]} />
+                <CategoryComparisonBars data={charts.locations || []} categoryKey="city" currentKey="requests" previousKey="previous_requests" ariaLabel="Current and previous demand by location" />
               </ChartCard>
             </div>
 

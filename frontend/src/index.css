@@ -255,6 +255,21 @@ textarea {
   z-index: 0;
 }
 
+@keyframes tracking-marker-pulse {
+  0%, 100% { transform: scale(0.92); opacity: 0.2; }
+  50% { transform: scale(1.18); opacity: 0.45; }
+}
+
+.tracking-tech-moving-pulse {
+  animation: tracking-marker-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tracking-tech-moving-pulse {
+    animation: none;
+  }
+}
+
 
 /* Loading skeleton shimmer */
 .skeleton {

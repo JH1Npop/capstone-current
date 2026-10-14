@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchCustomerSupportCases } from '../../api/api';
 import { fetchServiceTickets } from '../../api/services';
 import { formatTicketId } from '../../utils/roleIds';
+import DraggableAssistantButton from './DraggableAssistantButton';
 
 const QUICK_QUESTIONS = [
   'What is my latest request status?',
@@ -208,14 +209,13 @@ export default function ClientSupportAssistant() {
 
   if (!isOpen) {
     return (
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-3 z-40 grid h-14 w-14 place-items-center rounded-full bg-brand-500 text-white shadow-xl shadow-brand-900/20 transition hover:bg-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-200 sm:bottom-20 sm:right-5 lg:bottom-8 lg:right-8"
-        aria-label="Open client support assistant"
+      <DraggableAssistantButton
+        ariaLabel="Open client support assistant"
+        storageKey="afn:client-assistant-position"
+        onOpen={() => setIsOpen(true)}
       >
         <FiMessageCircle size={24} />
-      </button>
+      </DraggableAssistantButton>
     );
   }
 

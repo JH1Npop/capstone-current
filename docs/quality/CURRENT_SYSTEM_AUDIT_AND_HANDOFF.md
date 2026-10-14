@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-14 11:31 Asia/Singapore**
+Last updated: **2026-10-14 20:05 Asia/Singapore**
 Current focused objective: **Keep client request-location selection reliable and understandable on phones by detecting insecure local HTTP access, handling mobile geolocation permission/device failures, retrying weak high-accuracy fixes safely, and retaining address-search/manual-map fallbacks.**
 Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
@@ -1764,6 +1764,8 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-14 20:05: Prepared the verified frontend improvement bundle for its own commit after the backend deployment commit. The bundle includes Analytics and Reports visualizations, catalog-colored stacked/grouped report bars, Dispatch and Tracking presence clarity, route/movement presentation, delegated skill-management UI, SLA watchlist filtering, reasoned client-backout termination, notification styling and polling, draggable assistants, mobile request results, and hardened phone geolocation guidance. Paths: affected files under `frontend/src/` and this handoff. The latest production frontend build passed with 2,528 modules; ERD and system-knowledge documentation remain outside this frontend commit.
 
 2026-10-14 11:31: Hardened the client request **Use My Location** action for another-phone use. The page now explains that phone browsers block GPS on local HTTP LAN URLs, directs users to deployed HTTPS or an HTTPS development link, distinguishes permission denial, unavailable positioning, timeout, and unsupported browsers, retries weak non-permission fixes at lower accuracy, shows progress/accuracy, and keeps address search plus manual pin selection usable. Paths: `frontend/src/pages/client/ClientServiceRequests.jsx` and this handoff. Production frontend build passed with 2,528 modules; physical-phone validation remains pending.
 

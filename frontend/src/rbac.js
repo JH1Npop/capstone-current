@@ -20,6 +20,7 @@ export const CAPABILITIES = {
   manageStaffCapabilities: 'users.capabilities.manage_staff',
   userDirectoryView: 'users.directory.view',
   manageUsers: 'users.directory.manage',
+  manageTechnicianSkills: 'technicians.skills.manage',
   adminJobHistoryView: 'admin.job_history.view',
   communicationsStaffView: 'communications.staff.view',
   communicationsSupportView: 'communications.support.view',
@@ -120,6 +121,10 @@ export const USER_DIRECTORY_CAPABILITIES = [
 
 export const USER_MANAGEMENT_CAPABILITIES = [
   CAPABILITIES.manageUsers
+];
+
+export const TECHNICIAN_SKILLS_MANAGE_CAPABILITIES = [
+  CAPABILITIES.manageTechnicianSkills
 ];
 
 export const ADMIN_JOB_HISTORY_CAPABILITIES = [

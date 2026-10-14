@@ -190,6 +190,15 @@ export const updateAdminTechnician = async (id, updates) => {
   }
 };
 
+export const updateAdminTechnicianSkills = async (id, skills) => {
+  try {
+    const { data } = await api.put(`/admin/technicians/${id}/`, { skills });
+    return normalizeTechnicianRecord(data);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to update technician skills.'));
+  }
+};
+
 export const deleteAdminTechnician = async (id) => {
   try {
     const { data } = await api.delete(`/admin/technicians/${id}/`);

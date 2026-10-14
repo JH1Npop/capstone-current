@@ -28,7 +28,7 @@ const getTechInitials = (name = '') =>
     .map((part) => part[0]?.toUpperCase() || '')
     .join('') || 'T';
 
-const createTechIcon = (name = '', status = 'offline') => {
+const createTechIcon = (name = '', status = 'offline', movementState = 'unknown') => {
   const color = TECH_PIN_COLORS[getNameHash(name) % TECH_PIN_COLORS.length];
   const statusColor = TECH_STATUS_RING[status] || TECH_STATUS_RING.offline;
   const initials = getTechInitials(name);
@@ -37,7 +37,7 @@ const createTechIcon = (name = '', status = 'offline') => {
     className: '',
     html: `
       <div style="position:relative;width:42px;height:42px;">
-        <div style="position:absolute;inset:0;border-radius:9999px;background:${color};opacity:.18;box-shadow:0 0 0 8px ${color}22;"></div>
+        <div class="${movementState === 'moving' ? 'tracking-tech-moving-pulse' : ''}" style="position:absolute;inset:0;border-radius:9999px;background:${color};opacity:.18;box-shadow:0 0 0 8px ${color}22;"></div>
         <div style="position:absolute;inset:5px;display:flex;align-items:center;justify-content:center;border-radius:9999px;background:linear-gradient(135deg,${color},#0f172a);color:#fff;border:3px solid ${statusColor};box-shadow:0 10px 22px rgba(15,23,42,0.28);font-size:12px;font-weight:800;">
           ${initials}
         </div>
@@ -75,6 +75,17 @@ const routeTone = {
   on_hold: '#d97706'
 };
 
+const ticketStatusPresentation = {
+  not_started: { label: 'Not started', className: 'border-slate-200 bg-slate-100 text-slate-700' },
+  in_progress: { label: 'In progress', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+  on_hold: { label: 'On hold', className: 'border-amber-200 bg-amber-50 text-amber-700' },
+};
+
+const getTicketStatusPresentation = (status) => ticketStatusPresentation[status] || {
+  label: String(status || 'Active').replaceAll('_', ' '),
+  className: 'border-blue-200 bg-blue-50 text-blue-700',
+};
+
 const formatDuration = (seconds) => {
   const value = Number(seconds);
   if (!Number.isFinite(value) || value <= 0) return 'ETA unavailable';
@@ -87,6 +98,27 @@ const formatDistance = (meters) => {
   if (!Number.isFinite(value) || value <= 0) return 'Distance unavailable';
   if (value >= 1000) return `${(value / 1000).toFixed(1)} km`;
   return `${Math.round(value)} m`;
+};
+
+const getDirectDistanceMeters = (origin, destination) => {
+  if (![origin?.lat, origin?.lng, destination?.lat, destination?.lng].every(Number.isFinite)) return null;
+  const toRadians = (degrees) => degrees * Math.PI / 180;
+  const latitudeDelta = toRadians(destination.lat - origin.lat);
+  const longitudeDelta = toRadians(destination.lng - origin.lng);
+  const originLatitude = toRadians(origin.lat);
+  const destinationLatitude = toRadians(destination.lat);
+  const haversine = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(originLatitude) * Math.cos(destinationLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+};
+
+const formatMovement = (technician) => {
+  if (technician?.movementState === 'moving') {
+    const speed = Number(technician.movementSpeedKph);
+    return Number.isFinite(speed) && speed > 0 ? `Moving · ${speed.toFixed(1)} km/h` : 'Moving';
+  }
+  if (technician?.movementState === 'stationary') return 'Stationary';
+  return 'Movement unknown';
 };
 
 const formatLastSeen = (value) => {
@@ -166,6 +198,7 @@ export default function AdminTechnicianTracking() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [focusedTarget, setFocusedTarget] = useState(null);
+  const [selectedRouteId, setSelectedRouteId] = useState(null);
   const [selectedTechId, setSelectedTechId] = useState(null);
   const [locationTrail, setLocationTrail] = useState([]);
   const [trailLoading, setTrailLoading] = useState(false);
@@ -362,6 +395,7 @@ export default function AdminTechnicianTracking() {
 
   const clearFocus = () => {
     setFocusedTarget(null);
+    setSelectedRouteId(null);
     if (!mapInstance) return;
 
     if (mapPoints.length > 1) {
@@ -529,69 +563,124 @@ export default function AdminTechnicianTracking() {
             <TrackingMapController onReady={handleMapReady} />
             <MapTileLayer />
 
-            {routeLines.map((route) => (
-              <Polyline
-                key={`route-${route.id}`}
-                positions={route.coords}
-                color={route.color}
-                weight={5}
-                opacity={0.75}
-                dashArray={route.isFallback ? '10 10' : undefined}
-              />
-            ))}
+            {routeLines.map((route) => {
+              const isHighlighted = selectedRouteId === route.id;
+              const directDistance = getDirectDistanceMeters(route.tech, route.ticket);
+              return (
+                <Polyline
+                  key={`route-${route.id}`}
+                  positions={route.coords}
+                  color={route.color}
+                  weight={isHighlighted ? 8 : 5}
+                  opacity={selectedRouteId ? (isHighlighted ? 0.95 : 0.22) : 0.75}
+                  dashArray={route.isFallback ? '10 10' : undefined}
+                  eventHandlers={{
+                    click: () => {
+                      setSelectedRouteId(route.id);
+                      setSelectedTechId(route.tech.id);
+                    },
+                  }}
+                >
+                  <Popup minWidth={220} maxWidth={250}>
+                    <div className="w-[220px] text-xs text-slate-700">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600">Selected route</p>
+                      <p className="mt-1 font-bold text-slate-950">{route.tech.name}</p>
+                      <p className="mt-0.5 truncate" title={`${route.ticket.client} · ${route.ticket.service}`}>
+                        To {route.ticket.client} · {route.ticket.service}
+                      </p>
+                      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-200 pt-2">
+                        <div>
+                          <p className="text-[10px] uppercase text-slate-400">Live direct</p>
+                          <p className="font-semibold text-slate-900">{formatDistance(directDistance)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-slate-400">Road route</p>
+                          <p className="font-semibold text-slate-900">{route.isFallback ? 'Unavailable' : formatDistance(route.ticket.routeDistance)}</p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-slate-500">
+                        {route.isFallback ? 'Dashed line is a direct connection.' : formatDuration(route.ticket.routeDuration)}
+                      </p>
+                    </div>
+                  </Popup>
+                </Polyline>
+              );
+            })}
 
             {trailCoords.length > 1 ? (
               <Polyline positions={trailCoords} color="#7c3aed" weight={4} opacity={0.75} dashArray="4 8" />
             ) : null}
 
-            {techsWithCoords.map((tech) => (
-              <Marker
-                key={`tech-${tech.id}`}
-                position={[tech.lat, tech.lng]}
-                icon={createTechIcon(tech.name, tech.status)}
-                eventHandlers={{ click: () => setSelectedTechId(tech.id) }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <strong>{tech.name}</strong>
-                    <br />
-                    Status: {tech.status}
-                    <br />
-                    Coordinates: {tech.lat.toFixed(6)}, {tech.lng.toFixed(6)}
-                    <br />
-                    {formatLastSeen(tech.lastLocationUpdate)}
-                    <br />
-                    GPS accuracy: {Number(tech.gpsAccuracy) > 0 ? `+/-${Math.round(Number(tech.gpsAccuracy))} m` : 'Unavailable'}
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+            {techsWithCoords.map((tech) => {
+              const activeJobDistances = (tech.activeJobs || [])
+                .map((job) => getDirectDistanceMeters(tech, job))
+                .filter(Number.isFinite);
+              const nearestJobDistance = activeJobDistances.length ? Math.min(...activeJobDistances) : null;
+              return (
+                <Marker
+                  key={`tech-${tech.id}`}
+                  position={[tech.lat, tech.lng]}
+                  icon={createTechIcon(tech.name, tech.status, tech.movementState)}
+                  eventHandlers={{ click: () => setSelectedTechId(tech.id) }}
+                >
+                  <Popup minWidth={210} maxWidth={240}>
+                    <div className="w-[210px] text-xs text-slate-700">
+                      <div className="flex items-center justify-between gap-2">
+                        <strong className="truncate text-sm text-slate-950">{tech.name}</strong>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${tech.movementState === 'moving' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {formatMovement(tech)}
+                        </span>
+                      </div>
+                      <div className="mt-2 space-y-1 border-t border-slate-200 pt-2">
+                        <p>{formatLastSeen(tech.lastLocationUpdate)}</p>
+                        <p>{nearestJobDistance == null ? 'No active job distance' : `${formatDistance(nearestJobDistance)} direct to nearest job`}</p>
+                        <p>GPS accuracy: {Number(tech.gpsAccuracy) > 0 ? `±${Math.round(Number(tech.gpsAccuracy))} m` : 'Unavailable'}</p>
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
 
-            {ticketsWithCoords.map((ticket) => (
-              <Marker key={`ticket-${ticket.id}`} position={[ticket.lat, ticket.lng]} icon={createTicketIcon(ticket.crewCount)}>
-                <Popup>
-                  <div className="text-sm">
-                    <strong>{formatTicketId(ticket.id)}</strong>
-                    <br />
-                    {ticket.client} / {ticket.service}
-                    <br />
-                    {ticket.locationDesc || 'No landmark provided'}
-                  {ticket.technicianName && (
-                    <>
-                      <br />
-                      Lead: {ticket.leadTechnician || ticket.technicianName}
-                    </>
-                  )}
-                  {Array.isArray(ticket.crewMembers) && ticket.crewMembers.length > 1 && (
-                    <>
-                      <br />
-                      Crew: {ticket.crewMembers.map((member) => member.name).join(', ')}
-                    </>
-                  )}
-                </div>
-              </Popup>
-            </Marker>
-            ))}
+            {ticketsWithCoords.map((ticket) => {
+              const statusPresentation = getTicketStatusPresentation(ticket.status);
+
+              return (
+                <Marker key={`ticket-${ticket.id}`} position={[ticket.lat, ticket.lng]} icon={createTicketIcon(ticket.crewCount)}>
+                  <Popup minWidth={225} maxWidth={240}>
+                    <article className="w-[225px] max-w-full overflow-hidden text-xs text-slate-700">
+                      <header className="pb-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-bold text-slate-950">{formatTicketId(ticket.id)}</h3>
+                          <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${statusPresentation.className}`}>
+                            {statusPresentation.label}
+                          </span>
+                        </div>
+                      </header>
+
+                      <dl className="space-y-1.5 border-t border-slate-200 pt-1.5 text-[11px]">
+                        <div className="flex min-w-0 gap-2">
+                          <dt className="w-10 shrink-0 text-slate-400">Client</dt>
+                          <dd className="truncate font-semibold text-slate-900" title={ticket.client}>{ticket.client}</dd>
+                        </div>
+                        <div className="flex min-w-0 gap-2">
+                          <dt className="w-10 shrink-0 text-slate-400">Work</dt>
+                          <dd className="truncate font-medium text-slate-800" title={ticket.service}>{ticket.service}</dd>
+                        </div>
+                        <div className="flex min-w-0 gap-2">
+                          <dt className="w-10 shrink-0 text-slate-400">Site</dt>
+                          <dd className="truncate" title={ticket.locationDesc || ''}>{ticket.locationDesc || 'No address provided'}</dd>
+                        </div>
+                        <div className="flex min-w-0 gap-2">
+                          <dt className="w-10 shrink-0 text-slate-400">When</dt>
+                          <dd className="truncate">{formatJobSchedule(ticket)}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  </Popup>
+                </Marker>
+              );
+            })}
           </MapContainer>
           <div className="absolute left-4 top-4 rounded-lg border bg-white/90 px-3 py-2 text-sm shadow-lg backdrop-blur">
             <div className="font-medium text-slate-900">Live tracking</div>
@@ -638,6 +727,7 @@ export default function AdminTechnicianTracking() {
               <TrackingFact label="GPS health" value={selectedTech.gpsState === 'fresh' ? 'Fresh' : selectedTech.gpsState === 'stale' ? 'Stale' : 'Missing'} />
               <TrackingFact label="Last GPS update" value={formatTimestamp(selectedTech.lastLocationUpdate)} />
               <TrackingFact label="GPS accuracy" value={Number(selectedTech.gpsAccuracy) > 0 ? `+/-${Math.round(Number(selectedTech.gpsAccuracy))} m` : 'Not captured'} />
+              <TrackingFact label="Movement" value={formatMovement(selectedTech)} />
               <TrackingFact label="Active workload" value={`${selectedTech.activeJobs?.length || 0} job${selectedTech.activeJobs?.length === 1 ? '' : 's'}`} />
               <TrackingFact label="Recent trail" value={trailLoading ? 'Loading...' : trailError || `${locationTrail.length} point${locationTrail.length === 1 ? '' : 's'} in ${trailMinutes} min`} />
               <TrackingFact label="Coordinates" value={hasCoords(selectedTech) ? `${selectedTech.lat.toFixed(6)}, ${selectedTech.lng.toFixed(6)}` : 'No usable coordinates'} />
@@ -655,7 +745,14 @@ export default function AdminTechnicianTracking() {
                         </div>
                         <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{String(job.status || '').replaceAll('_', ' ')}</span>
                       </div>
-                      <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-600"><FiClock />{formatJobSchedule(job)} · {job.priority || 'Normal'} priority</p>
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
+                        <p className="inline-flex items-center gap-1.5"><FiClock />{formatJobSchedule(job)} · {job.priority || 'Normal'} priority</p>
+                        <p className="font-semibold text-blue-700">
+                          {getDirectDistanceMeters(selectedTech, job) == null
+                            ? 'Distance unavailable'
+                            : `${formatDistance(getDirectDistanceMeters(selectedTech, job))} direct distance`}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -746,7 +843,7 @@ export default function AdminTechnicianTracking() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate font-medium text-slate-900">{tech.name}</div>
-                        <div className="text-xs text-slate-500">{tech.status.replaceAll('_', ' ')} · {formatLastSeen(tech.lastLocationUpdate)} · {tech.activeJobs?.length || 0} active job{tech.activeJobs?.length === 1 ? '' : 's'}</div>
+                        <div className="text-xs text-slate-500">{tech.status.replaceAll('_', ' ')} · {formatMovement(tech)} · {formatLastSeen(tech.lastLocationUpdate)} · {tech.activeJobs?.length || 0} active job{tech.activeJobs?.length === 1 ? '' : 's'}</div>
                       </div>
                       <div className="flex shrink-0 gap-2">
                         <button

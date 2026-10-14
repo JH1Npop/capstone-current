@@ -19,6 +19,7 @@ import {
   fetchUserCapabilities,
   updateAdminClient,
   updateAdminTechnician,
+  updateAdminTechnicianSkills,
   updateAdminUser,
   updateUserCapabilities
 } from '../../api/api';
@@ -26,6 +27,7 @@ import {
   CAPABILITIES,
   USER_DIRECTORY_CAPABILITIES,
   USER_MANAGEMENT_CAPABILITIES,
+  TECHNICIAN_SKILLS_MANAGE_CAPABILITIES,
   canManageStaffAccess,
   canManageStaffTargetRole,
   hasAnyCapability
@@ -187,6 +189,7 @@ export default function AdminUserManagement() {
   const isSuperadmin = user?.role === 'superadmin';
   const canViewAllUsers = isSuperadmin || (user?.role === 'admin' && hasAnyCapability(user, USER_DIRECTORY_CAPABILITIES));
   const canManageUsers = isSuperadmin || (user?.role === 'admin' && hasAnyCapability(user, USER_MANAGEMENT_CAPABILITIES));
+  const canManageTechnicianSkills = isSuperadmin || (user?.role === 'admin' && hasAnyCapability(user, TECHNICIAN_SKILLS_MANAGE_CAPABILITIES));
   const allowCapabilityManagement = canManageStaffAccess(user);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -370,7 +373,7 @@ export default function AdminUserManagement() {
   };
 
   const saveProfile = async () => {
-    if (!editingProfileUser || !canManageUsers) return;
+    if (!editingProfileUser || (!canManageUsers && !canManageTechnicianSkills)) return;
     const technicianSkills = editingProfileUser.role === 'technician'
       ? (Array.isArray(editForm.skills) ? editForm.skills : [])
       : [];
@@ -396,16 +399,21 @@ export default function AdminUserManagement() {
     setError('');
     try {
       if (editingProfileUser.role === 'technician') {
-        await updateAdminTechnician(editingProfileUser.id, {
-          ...updates,
-          status: editForm.status,
-          lat: editForm.lat,
-          lng: editForm.lng,
-          skills: technicianSkills.map((skill) => ({
-            service_type: Number(skill.service_type),
-            skill_level: skill.skill_level || 'intermediate'
-          }))
-        });
+        const skills = technicianSkills.map((skill) => ({
+          service_type: Number(skill.service_type),
+          skill_level: skill.skill_level || 'intermediate'
+        }));
+        if (canManageUsers) {
+          await updateAdminTechnician(editingProfileUser.id, {
+            ...updates,
+            status: editForm.status,
+            lat: editForm.lat,
+            lng: editForm.lng,
+            ...(canManageTechnicianSkills ? { skills } : {})
+          });
+        } else {
+          await updateAdminTechnicianSkills(editingProfileUser.id, skills);
+        }
       }
       else if (editingProfileUser.role === 'client') await updateAdminClient(editingProfileUser.id, { ...updates, address: editForm.address });
       else await updateAdminUser(editingProfileUser.id, updates);
@@ -668,7 +676,7 @@ export default function AdminUserManagement() {
                   <th className={`${canManageUsers ? 'w-[20%]' : 'w-[24%]'} border-b border-slate-200 px-3 py-3`}>Contact</th>
                   <th className={`${canManageUsers ? 'w-[13%]' : 'w-[12%]'} border-b border-slate-200 px-3 py-3`}>Access</th>
                   <th className="w-[8%] border-b border-slate-200 px-3 py-3">Status</th>
-                  {canManageUsers ? <th className="w-[12%] min-w-[128px] border-b border-slate-200 px-3 py-3 text-right">Actions</th> : null}
+                  {(canManageUsers || canManageTechnicianSkills) ? <th className="w-[12%] min-w-[128px] border-b border-slate-200 px-3 py-3 text-right">Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -726,9 +734,9 @@ export default function AdminUserManagement() {
                           {verificationPending ? 'Pending verification' : record.active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      {canManageUsers ? (
+                      {(canManageUsers || canManageTechnicianSkills) ? (
                         <td className="min-w-[128px] border-b border-slate-100 px-3 py-2 align-middle text-right">
-                          <div className="flex flex-col items-end gap-1.5">
+                          {(canManageUsers || (canManageTechnicianSkills && record.role === 'technician')) ? <div className="flex flex-col items-end gap-1.5">
                             <button
                               type="button"
                               disabled={loadingProfileUserId === record.id}
@@ -742,7 +750,7 @@ export default function AdminUserManagement() {
                             ) : record.role === 'superadmin' ? (
                               <span className="text-sm text-slate-400">Owner account</span>
                             ) : <span className="text-sm text-slate-400">Inactive</span>}
-                          </div>
+                          </div> : <span className="text-sm text-slate-400">—</span>}
                         </td>
                       ) : null}
                     </tr>
@@ -806,45 +814,73 @@ export default function AdminUserManagement() {
       ) : null}
       {editingProfileUser ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm" onClick={() => { if (!isSavingProfile) { setEditingProfileUser(null); setEditForm(emptyEdit); } }}>
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+          <div className={`max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl ${editingProfileUser.role === 'technician' ? 'max-w-4xl' : 'max-w-2xl'}`} onClick={(event) => event.stopPropagation()}>
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
               <div>
                 <h3 className="text-lg font-semibold">Edit {getEntityLabel(editingProfileUser.role)}</h3>
-                <p className="text-sm text-slate-500">{editingProfileUser.username} stays on the same role and route.</p>
+                <p className="mt-1 text-sm text-slate-500">Update this account's profile information.</p>
               </div>
               <button type="button" onClick={() => { setEditingProfileUser(null); setEditForm(emptyEdit); }} disabled={isSavingProfile} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">Close</button>
             </div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <input className={`${inputClass} bg-slate-50 text-slate-500`} value={editingProfileUser.username} disabled />
-              <input className={`${inputClass} bg-slate-50 text-slate-500`} value={getRoleLabel(editingProfileUser.role)} disabled />
-              <input className={inputClass} placeholder="Full name" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} />
-              <input className={inputClass} placeholder="Email" value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} />
-              <input className={inputClass} placeholder="Phone" value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} />
+            <div className="px-6 py-5">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Username</span>
+                  <input className={`${inputClass} bg-slate-50 text-slate-500`} value={editingProfileUser.username} disabled />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Role</span>
+                  <input className={`${inputClass} bg-slate-50 text-slate-500`} value={getEntityLabel(editingProfileUser.role)} disabled />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Full name</span>
+                  <input className={inputClass} value={editForm.name} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email address</span>
+                  <input type="email" className={inputClass} value={editForm.email} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Phone number</span>
+                  <input type="tel" className={inputClass} value={editForm.phone} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} />
+                </label>
               {editingProfileUser.role === 'technician' ? (
-                <select className={inputClass} value={editForm.status} onChange={(event) => setEditForm({ ...editForm, status: event.target.value })}>
-                  <option value="available">Available</option>
-                  <option value="on_job">On job</option>
-                  <option value="offline">Offline</option>
-                </select>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Dispatch status</span>
+                  <select className={inputClass} value={editForm.status} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, status: event.target.value })}>
+                    <option value="available">Available</option>
+                    <option value="on_job">On job</option>
+                    <option value="offline">Offline</option>
+                  </select>
+                </label>
               ) : null}
               {editingProfileUser.role === 'client' ? (
-                <input className={`${inputClass} md:col-span-2`} placeholder="Address" value={editForm.address} onChange={(event) => setEditForm({ ...editForm, address: event.target.value })} />
+                <label className="block md:col-span-2">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Address</span>
+                  <input className={inputClass} value={editForm.address} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, address: event.target.value })} />
+                </label>
               ) : null}
               {editingProfileUser.role === 'technician' ? (
                 <>
-                  <input type="number" className={inputClass} placeholder="Latitude" value={editForm.lat} onChange={(event) => setEditForm({ ...editForm, lat: event.target.value })} />
-                  <input type="number" className={inputClass} placeholder="Longitude" value={editForm.lng} onChange={(event) => setEditForm({ ...editForm, lng: event.target.value })} />
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Latitude</span>
+                    <input type="number" className={inputClass} value={editForm.lat} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, lat: event.target.value })} />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Longitude</span>
+                    <input type="number" className={inputClass} value={editForm.lng} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, lng: event.target.value })} />
+                  </label>
                 </>
               ) : null}
-            </div>
+              </div>
             {editingProfileUser.role === 'technician' ? (
               <div className="mt-6 rounded-2xl border border-slate-200 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-semibold text-slate-900">Technician skills</h4>
-                    <p className="text-sm text-slate-500">Only the superadmin can change these skills here. Old tickets stay untouched because this updates the technician&apos;s current skill records only.</p>
+                    <p className="text-sm text-slate-500">Superadmins and admins granted Manage technician skills can update current qualifications. Existing ticket history stays unchanged.</p>
                   </div>
-                  <button type="button" onClick={addSkillRow} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                  <button type="button" onClick={addSkillRow} disabled={!canManageTechnicianSkills} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
                     Add skill
                   </button>
                 </div>
@@ -854,18 +890,18 @@ export default function AdminUserManagement() {
                   <div className="mt-4 space-y-3">
                     {editForm.skills.map((skill, index) => (
                       <div key={`${skill.service_type || 'new'}-${index}`} className="grid gap-3 md:grid-cols-[1.6fr_1fr_auto]">
-                        <select className={inputClass} value={skill.service_type} onChange={(event) => updateSkillRow(index, 'service_type', event.target.value)}>
+                        <select className={inputClass} value={skill.service_type} disabled={!canManageTechnicianSkills} onChange={(event) => updateSkillRow(index, 'service_type', event.target.value)}>
                           <option value="">Select service type</option>
                           {availableServiceTypes.map((serviceType) => (
                             <option key={serviceType.id} value={serviceType.id}>{serviceType.name}</option>
                           ))}
                         </select>
-                        <select className={inputClass} value={skill.skill_level} onChange={(event) => updateSkillRow(index, 'skill_level', event.target.value)}>
+                        <select className={inputClass} value={skill.skill_level} disabled={!canManageTechnicianSkills} onChange={(event) => updateSkillRow(index, 'skill_level', event.target.value)}>
                           {SKILL_LEVEL_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
                           ))}
                         </select>
-                        <button type="button" onClick={() => removeSkillRow(index)} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50">
+                        <button type="button" onClick={() => removeSkillRow(index)} disabled={!canManageTechnicianSkills} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">
                           Remove
                         </button>
                       </div>
@@ -874,7 +910,8 @@ export default function AdminUserManagement() {
                 )}
               </div>
             ) : null}
-            <div className="sticky bottom-0 mt-5 flex justify-end border-t border-slate-200 bg-white pt-4">
+            </div>
+            <div className="sticky bottom-0 flex justify-end border-t border-slate-200 bg-white px-6 py-4">
               <button type="button" onClick={saveProfile} disabled={isSavingProfile} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
                 {isSavingProfile ? 'Saving...' : 'Save changes'}
               </button>

@@ -228,6 +228,8 @@ export const normalizeUser = (user) => ({
   name: getDisplayName(user),
   active: user?.status === 'active' && user?.is_active !== false,
   isAvailable: Boolean(user?.is_available),
+  isOnline: Boolean(user?.is_online),
+  lastSeenAt: user?.last_seen_at || null,
   lat: user?.current_latitude == null ? 0 : Number(user.current_latitude),
   lng: user?.current_longitude == null ? 0 : Number(user.current_longitude),
   technicianStatus: normalizeTechnicianStatus(user)

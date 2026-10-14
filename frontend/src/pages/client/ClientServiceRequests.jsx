@@ -53,6 +53,23 @@ const CITY_PROVINCE_OVERRIDES = {
 const inputClass = 'w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
 const labelClass = 'mb-1 block text-sm font-medium text-slate-700';
 
+const requestBrowserPosition = (options) => new Promise((resolve, reject) => {
+  navigator.geolocation.getCurrentPosition(resolve, reject, options);
+});
+
+const getLocationErrorMessage = (error) => {
+  if (error?.code === 1) {
+    return 'Location permission is blocked. Open this site in your phone browser settings, set Location to Allow, then try again.';
+  }
+  if (error?.code === 2) {
+    return 'Your phone could not determine its location. Turn on Location/GPS and Precise Location, then move near a window or outdoors and try again.';
+  }
+  if (error?.code === 3) {
+    return 'Location took too long to respond. Check that Location/GPS is on, then try again.';
+  }
+  return 'Could not get your current location. You can still search for the address or tap the map to place the pin.';
+};
+
 const extractProvinceName = (address = {}, displayName = '', cityName = '') => {
   const rawDirectValue =
     address.province ||
@@ -117,6 +134,8 @@ export default function ClientServiceRequests() {
   const [submitError, setSubmitError] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [mapCenter, setMapCenter] = useState(() => {
@@ -213,6 +232,7 @@ const selectSearchResult = async (result) => {
 
   setSearchQuery('');
   setSearchResults([]);
+  setLocationError('');
 
   await reverseGeocode(clat, clng);
 };
@@ -222,7 +242,7 @@ const selectSearchResult = async (result) => {
   try {
     const result = await reverseGeocodeLocation({ lat, lng });
 
-    if (!result) return;
+    if (!result) return false;
 
     const addr = result.address || {};
 
@@ -259,11 +279,13 @@ const selectSearchResult = async (result) => {
 
     setCity(cityName);
     setProvince(provinceName);
+    return true;
   } catch (err) {
     setSubmitError(
       err.message ||
       'Could not read address from selected location.'
     );
+    return false;
   }
 };
 
@@ -271,7 +293,71 @@ const selectSearchResult = async (result) => {
   const handleLocationChange = (lat, lng) => {
     const [clat, clng] = clampToCalabarzon(lat, lng);
     setMapCenter([clat, clng]);
+    setLocationError('');
     reverseGeocode(clat, clng);
+  };
+
+  const insecurePhoneLocation =
+    typeof window !== 'undefined' &&
+    !window.isSecureContext &&
+    !['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+  const handleUseMyLocation = async () => {
+    setLocationError('');
+    setMessage('');
+
+    if (insecurePhoneLocation) {
+      setLocationError(
+        'Phone browsers block GPS on local HTTP links. Open the deployed HTTPS website, or use an HTTPS development link, then try again.'
+      );
+      return;
+    }
+    if (!navigator.geolocation) {
+      setLocationError('This browser does not support location access. Search for the address or tap the map instead.');
+      return;
+    }
+
+    setIsLocating(true);
+    try {
+      let position;
+      try {
+        position = await requestBrowserPosition({
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 30000,
+        });
+      } catch (error) {
+        if (error?.code === 1) throw error;
+        position = await requestBrowserPosition({
+          enableHighAccuracy: false,
+          timeout: 15000,
+          maximumAge: 120000,
+        });
+      }
+
+      const rawLat = position.coords.latitude;
+      const rawLng = position.coords.longitude;
+      const [clat, clng] = clampToCalabarzon(rawLat, rawLng);
+
+      setLatitude(clat);
+      setLongitude(clng);
+      setMapCenter([clat, clng]);
+      setSubmitError('');
+      const addressResolved = await reverseGeocode(clat, clng);
+
+      const moved = Math.abs(clat - rawLat) > 0.0005 || Math.abs(clng - rawLng) > 0.0005;
+      setMessage(
+        moved
+          ? 'Your position was outside Calabarzon; the pin was moved to the nearest point inside the service area.'
+          : addressResolved
+            ? `Current location selected${Number.isFinite(position.coords.accuracy) ? ` (accuracy about ${Math.round(position.coords.accuracy)} m)` : ''}.`
+            : 'Current location pin selected. Please confirm the address fields before submitting.'
+      );
+    } catch (error) {
+      setLocationError(getLocationErrorMessage(error));
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   const validateRequest = () => {
@@ -631,43 +717,24 @@ const selectSearchResult = async (result) => {
           <div className="mt-3 text-xs font-medium text-slate-500">
             Selected: {latitude != null ? latitude.toFixed(6) : 'unset'} , {longitude != null ? longitude.toFixed(6) : 'unset'}
           </div>
-          <button type="button" onClick={() => {
-  navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      const rawLat = pos.coords.latitude;
-      const rawLng = pos.coords.longitude;
-
-      const [clat, clng] = clampToCalabarzon(
-        rawLat,
-        rawLng
-      );
-
-      setLatitude(clat);
-      setLongitude(clng);
-      setMapCenter([clat, clng]);
-
-      await reverseGeocode(clat, clng);
-
-      setSubmitError('');
-
-      const moved =
-        Math.abs(clat - rawLat) > 0.0005 ||
-        Math.abs(clng - rawLng) > 0.0005;
-
-      setMessage(
-        moved
-          ? 'Your position was outside Calabarzon; the pin was moved to the nearest point inside the service area.'
-          : 'Using your current location.'
-      );
-    },
-    () => {
-      setMessage('')
-      setSubmitError(
-        'Could not get current location.'
-      );
-    }
-  );
-}} className="mt-2 rounded-xl bg-brand-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-600">Use My Location</button>
+          <button
+            type="button"
+            onClick={handleUseMyLocation}
+            disabled={isLocating}
+            className="mt-2 rounded-xl bg-brand-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-wait disabled:opacity-60"
+          >
+            {isLocating ? 'Finding location...' : 'Use My Location'}
+          </button>
+          {insecurePhoneLocation ? (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+              GPS cannot open from a phone using this local HTTP address. Use the deployed HTTPS site or an HTTPS development link. Address search and manual map selection still work.
+            </p>
+          ) : null}
+          {locationError ? (
+            <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-800" role="alert">
+              {locationError}
+            </p>
+          ) : null}
         </div>
       </div>
     </Layout>
