@@ -792,6 +792,8 @@ deployment authorization.
 
 ## 8. Validation ledger
 
+2026-10-15 10:31: The Technician Job History phone-format correction passed the production Vite build with 2,529 modules. At widths below the desktop breakpoint, Completed Jobs now render as readable cards with ticket/status, client/service/address, completion and priority, lead/crew, checklist/proof totals, warranty/maintenance, and accessible detail/action controls; the existing desktop table is preserved. Pagination now stacks without horizontal clipping on narrow screens. No backend, migration, or database changed.
+
 2026-10-14 20:13: The public-header company-name correction passed the production frontend build with 2,528 modules. The configured name no longer uses an ellipsis, the brand block cannot be compressed by sibling navigation, and the full desktop navigation now yields to the menu below the extra-large breakpoint. Browser screenshot review remains pending.
 
 2026-10-14 11:31: The hardened client **Use My Location** flow passed the production frontend build with 2,528 modules. It now detects phone GPS blocking on non-localhost HTTP, reports permission/unavailable/timeout failures beside the control, retries non-permission high-accuracy failures with a lower-accuracy fix, exposes progress and accuracy, and preserves manual address/map alternatives. Physical-phone browser review remains pending.
@@ -1770,6 +1772,8 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-15 10:31: Replaced Technician Job History's clipped desktop table on phones with compact completed-job cards that keep all operational details and existing actions visible without horizontal scrolling. The desktop table remains unchanged, and mobile pagination now wraps cleanly. Runtime path: `frontend/src/pages/technician/TechnicianJobHistory.jsx` and this handoff. Production build passed; no backend, migration, or database mutation occurred.
 
 2026-10-14 20:13: Removed the public navbar's fixed-width ellipsis from the configured company name, kept the brand identity from shrinking, and moved full navigation to the extra-large breakpoint so tablet/narrow-desktop layouts use the menu before controls can squeeze the name. Paths: `frontend/src/components/LandingNavbar.jsx` and this handoff. Production frontend build passed with 2,528 modules; browser screenshot review remains pending.
 

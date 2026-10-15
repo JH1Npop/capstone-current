@@ -288,7 +288,88 @@ export default function TechnicianJobHistory() {
               <p className="text-xs text-slate-500">Showing {history.length} of {total} completed job{total === 1 ? '' : 's'}.</p>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="divide-y divide-slate-100 md:hidden">
+            {history.map((job) => {
+              const proofCount = getProofMedia(job).length;
+              const checklistCount = getChecklistItems(job).length;
+              return (
+                <article key={job.id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedJob(job)}
+                        className="font-semibold text-brand-600 hover:text-brand-700"
+                      >
+                        {formatTicketId(job.ticketId)}
+                      </button>
+                      <div className="mt-1"><StatusBadge status="completed" size="sm" /></div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActionJob(job)}
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+                      title="Open actions"
+                      aria-label={`Open actions for ${formatTicketId(job.ticketId)}`}
+                    >
+                      <FiMoreHorizontal size={17} />
+                    </button>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="break-words font-semibold text-slate-900">{job.client?.full_name || job.client}</p>
+                    <p className="mt-0.5 break-words text-sm text-slate-600">{job.service}</p>
+                    <p className="mt-1 break-words text-xs text-slate-400">{job.address || 'No address recorded'}</p>
+                  </div>
+
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg bg-slate-50 p-3 text-xs">
+                    <div className="min-w-0">
+                      <dt className="font-semibold uppercase tracking-wide text-slate-400">Completed</dt>
+                      <dd className="mt-1 text-slate-700">{formatDate(job.completedDate || job.scheduledDate)}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="font-semibold uppercase tracking-wide text-slate-400">Priority</dt>
+                      <dd className="mt-1"><StatusBadge status={job.priority || 'normal'} size="sm" /></dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="font-semibold uppercase tracking-wide text-slate-400">Lead</dt>
+                      <dd className="mt-1 break-words text-slate-700">{job.leadTechnician || 'Unassigned'}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="font-semibold uppercase tracking-wide text-slate-400">Crew</dt>
+                      <dd className="mt-1 break-words text-slate-700">
+                        {job.crewMembers?.length ? job.crewMembers.map((member) => member.name).join(', ') : 'None'}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                      {checklistCount || 0} checklist step{checklistCount === 1 ? '' : 's'}
+                    </span>
+                    <span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
+                      {proofCount} proof file{proofCount === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-1 text-xs text-slate-600">
+                    <p><span className="font-semibold text-slate-800">Warranty:</span> {formatStatusLabel(job.warrantyStatus || job.warranty_status || 'not_applicable')}</p>
+                    <p><span className="font-semibold text-slate-800">Maintenance:</span> {job.maintenanceSchedule?.next_due_date ? formatDate(job.maintenanceSchedule.next_due_date) : 'Not scheduled'}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedJob(job)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100"
+                  >
+                    <FiEye size={16} />
+                    View job details
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
@@ -379,14 +460,14 @@ export default function TechnicianJobHistory() {
               </tbody>
             </table>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm">
+          <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
             <label className="flex items-center gap-2 text-slate-500">
               Rows
               <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-slate-700">
                 {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
               </select>
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-slate-500">Page {page} of {totalPages}</span>
               <button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40">Previous</button>
               <button type="button" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40">Next</button>
