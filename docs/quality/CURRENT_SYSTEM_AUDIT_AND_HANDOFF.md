@@ -792,6 +792,8 @@ deployment authorization.
 
 ## 8. Validation ledger
 
+2026-10-15 10:43: Activity Logs PostgreSQL compatibility passed all 11 focused audit-log tests, including the new coordinate-suppression regression, and the Analytics chart sizing correction passed the 2,529-module production build. The audit queryset now treats `ActivityLog.metadata` according to its actual TEXT storage instead of emitting PostgreSQL JSON operators, while retaining location-update suppression. The legacy Analytics comparison chart now supplies a nonzero initial size and shrink-safe wrappers. No migration or database mutation is required.
+
 2026-10-15 10:31: The Technician Job History phone-format correction passed the production Vite build with 2,529 modules. At widths below the desktop breakpoint, Completed Jobs now render as readable cards with ticket/status, client/service/address, completion and priority, lead/crew, checklist/proof totals, warranty/maintenance, and accessible detail/action controls; the existing desktop table is preserved. Pagination now stacks without horizontal clipping on narrow screens. No backend, migration, or database changed.
 
 2026-10-14 20:13: The public-header company-name correction passed the production frontend build with 2,528 modules. The configured name no longer uses an ellipsis, the brand block cannot be compressed by sibling navigation, and the full desktop navigation now yields to the menu below the extra-large breakpoint. Browser screenshot review remains pending.
@@ -1772,6 +1774,8 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-15 10:43: Corrected deployed Activity Logs list/summary HTTP 503 failures caused by applying JSON key transforms to a TEXT-backed metadata field; the portable text filter still hides technician coordinate audit noise. Added regression coverage and stabilized the remaining legacy comparison chart against transient negative dimensions. Paths: `backend/users/{views/admin_activity.py,tests.py}`, `frontend/src/pages/admin/AdminAnalytics.jsx`, and this handoff. Focused backend passed 11/11 and the production frontend build passed; no migration or database mutation occurred.
 
 2026-10-15 10:31: Replaced Technician Job History's clipped desktop table on phones with compact completed-job cards that keep all operational details and existing actions visible without horizontal scrolling. The desktop table remains unchanged, and mobile pagination now wraps cleanly. Runtime path: `frontend/src/pages/technician/TechnicianJobHistory.jsx` and this handoff. Production build passed; no backend, migration, or database mutation occurred.
 

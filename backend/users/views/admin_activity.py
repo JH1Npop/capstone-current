@@ -96,9 +96,15 @@ class AdminActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         queryset = ActivityLog.objects.select_related('actor').order_by('-created_at', '-id')
+        # ActivityLog.metadata is a StructuredTextField backed by TEXT, not a
+        # native JSON column. Key transforms happen to work on SQLite but emit
+        # PostgreSQL's JSON operator against text and fail the whole endpoint.
+        location_metadata = Q()
+        for field_name in ('current_latitude', 'current_longitude', 'last_location_update'):
+            location_metadata |= Q(metadata__contains=f'"field_name": "{field_name}"')
+            location_metadata |= Q(metadata__contains=f'"field_name":"{field_name}"')
         queryset = queryset.exclude(
-            Q(target_model__in=['technicianprofile', 'technician_profile']) &
-            Q(metadata__field_name__in=['current_latitude', 'current_longitude', 'last_location_update'])
+            Q(target_model__in=['technicianprofile', 'technician_profile']) & location_metadata
         )
         query_params = self.request.query_params
 

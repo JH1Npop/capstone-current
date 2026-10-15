@@ -134,9 +134,9 @@ function ChartEmpty({ children = 'No records match these filters.' }) {
 
 function ComparisonRows({ data, labelKey, series, ariaLabel }) {
   if (!data?.length) return <ChartEmpty />;
-  return <div aria-label={ariaLabel} className="overflow-x-auto">
-    <div style={{ height: 300, minWidth: Math.max(300, data.length * 100) }}>
-      <ResponsiveContainer width="100%" height="100%">
+  return <div aria-label={ariaLabel} className="min-w-0 overflow-x-auto">
+    <div className="min-w-0" style={{ height: 300, minWidth: Math.max(300, data.length * 100) }}>
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: Math.max(300, data.length * 100), height: 300 }}>
         <BarChart data={data} margin={{ top: 20, right: 16, bottom: 12, left: -16 }}>
           <CartesianGrid vertical={false} strokeDasharray="3 4" stroke="#e2e8f0" />
           <XAxis dataKey={labelKey} tick={{ fontSize: 11 }} interval={0} />

@@ -1885,6 +1885,36 @@ class AdminActivityLogTests(APITestCase):
         self.assertEqual(response.data['count'], 11)
         self.assertEqual(len(response.data['results']), 10)
 
+    def test_activity_logs_exclude_location_updates_without_json_operators(self):
+        ActivityLog.objects.all().delete()
+        ActivityLog.objects.create(
+            actor=self.superadmin_user,
+            actor_role='superadmin',
+            category='users',
+            action='update',
+            target_model='technicianprofile',
+            target_id=1,
+            message='Technician location changed.',
+            metadata={'field_name': 'current_latitude', 'new_value': '14.123'},
+        )
+        visible = ActivityLog.objects.create(
+            actor=self.superadmin_user,
+            actor_role='superadmin',
+            category='users',
+            action='update',
+            target_model='technicianprofile',
+            target_id=1,
+            message='Technician skill changed.',
+            metadata={'field_name': 'skill', 'new_value': 'Solar'},
+        )
+        self.authenticate(self.superadmin_user)
+
+        response = self.client.get('/api/admin/activity-logs/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = self.results(response)
+        self.assertEqual([row['id'] for row in rows], [visible.id])
+
     def test_cancelled_service_request_is_recorded_as_cancel_activity(self):
         self.authenticate(self.superadmin_user)
         service_request = ServiceRequest.objects.create(
