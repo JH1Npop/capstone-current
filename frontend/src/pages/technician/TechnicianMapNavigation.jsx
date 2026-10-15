@@ -507,7 +507,7 @@ export default function TechnicianMapNavigation() {
       </div>
 
       <div className="mb-5 grid gap-3 sm:gap-5 xl:mb-8 xl:grid-cols-[1.35fr_0.65fr]">
-        <div className="map-wrapper h-[46dvh] min-h-[20rem] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:h-[55vh] sm:min-h-[24rem] xl:h-[60vh]">
+        <div className="map-wrapper h-[46dvh] min-h-[20rem] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:h-[55vh] sm:min-h-[24rem] xl:h-auto xl:min-h-[60vh] xl:self-stretch">
           {loading ? (
             <div className="h-full w-full p-4">
               <PanelSkeleton rows={8} />
