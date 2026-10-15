@@ -826,12 +826,12 @@ export default function TechnicianJobs() {
       />
 
       {completionJob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
-            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 sm:items-center sm:p-4">
+          <div className="flex h-[100dvh] max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6 sm:py-4">
               <div className="min-w-0">
-                <h3 className="text-xl font-bold text-slate-900 sm:text-2xl">Finish Job</h3>
-                <p className="text-slate-600">
+                <h3 className="text-lg font-bold text-slate-900 sm:text-2xl">Finish Job</h3>
+                <p className="truncate text-sm text-slate-600 sm:text-base">
                   {formatTicketId(completionJob.ticketId)} for {completionJob.client?.full_name || completionJob.client}
                 </p>
               </div>
@@ -842,29 +842,42 @@ export default function TechnicianJobs() {
                   setProofImages([]);
                   setCompletionNotes('');
                 }}
-                className="rounded-lg bg-slate-100 px-3 py-2 text-slate-600 hover:bg-slate-200"
+                aria-label="Close Finish Job"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
               >
-                Close
+                <FiX size={20} />
               </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:space-y-6 sm:px-6 sm:py-6">
               {/* Proof Images Upload */}
               {completionJob.ticketType !== 'inspection' && (
-                <div className="rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 p-6">
+                <div className="rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 p-4 sm:p-6">
                 <label className="mb-2 block text-sm font-semibold text-slate-900">
                   <FiUpload className="mr-2 inline" /> Completion Photo (Required)
                 </label>
-                <p className="mb-4 text-sm text-slate-600">
+                <p className="mb-3 text-sm leading-5 text-slate-600 sm:mb-4">
                   Add at least one clear photo showing the finished work. You can select more than one.
                 </p>
                 <input
+                  id={`completion-photos-${completionJob.ticketId}`}
                   type="file"
                   multiple
                   accept="image/*"
                   onChange={handleImageUpload}
-                  className="mb-4 block w-full text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-500 file:px-4 file:py-2 file:text-white hover:file:bg-blue-600"
+                  className="sr-only"
                 />
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                  <label
+                    htmlFor={`completion-photos-${completionJob.ticketId}`}
+                    className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                  >
+                    <FiUpload /> Choose Photos
+                  </label>
+                  <span className="text-sm text-slate-600">
+                    {proofImages.length ? `${proofImages.length} selected` : 'No photos selected'}
+                  </span>
+                </div>
 
                 {proofImages.length > 0 && (
                   <div className="space-y-3">
@@ -976,8 +989,14 @@ export default function TechnicianJobs() {
                 </div>
               )}
 
+              {completionJob.ticketType !== 'inspection' && proofImages.length === 0 && (
+                <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 sm:p-4">
+                  At least one proof image is required to complete the job.
+                </div>
+              )}
+
               {/* Action Buttons */}
-              <div className="grid gap-3 sm:flex">
+              <div className="sticky bottom-0 z-10 -mx-4 -mb-4 grid gap-2 border-t border-slate-200 bg-white p-4 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] sm:static sm:mx-0 sm:mb-0 sm:flex sm:border-0 sm:p-0 sm:shadow-none">
                 <button
                   type="button"
                   onClick={handleCompleteJob}
@@ -1014,11 +1033,6 @@ export default function TechnicianJobs() {
                 </button>
               </div>
 
-              {completionJob.ticketType !== 'inspection' && proofImages.length === 0 && (
-                <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800">
-                  At least one proof image is required to complete the job.
-                </div>
-              )}
             </div>
           </div>
         </div>
