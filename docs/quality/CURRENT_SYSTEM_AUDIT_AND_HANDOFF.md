@@ -792,6 +792,12 @@ deployment authorization.
 
 ## 8. Validation ledger
 
+2026-10-15 11:18: The deployment-safe service/checklist and inventory catalog seed passed its idempotency/non-overwrite regression, Django system check, and migration drift check. It enriches only empty deployed service templates, preserves administrator-authored procedures/equipment, creates only missing SKUs with zero reservations and auditable opening balances, and adds non-destructive service material requirements. No client, account, ticket, reservation, or historical transaction is copied from local development.
+
+2026-10-15 10:54: The redundant in-page Analytics introduction removal passed the 2,529-module production frontend build. The authenticated shell remains the single page-title source, while Last updated and Refresh controls remain available above the filters.
+
+2026-10-15 10:51: Notification ticket-identity normalization passed all 7 focused notification API tests. The notification API now presents legacy and current phrases such as `Ticket #11`, `ticket 11`, and `Service Ticket #11` as the canonical `TKT-0011` in both titles and messages, without changing numeric IDs, relationships, routing, or stored historical notification text.
+
 2026-10-15 10:43: Activity Logs PostgreSQL compatibility passed all 11 focused audit-log tests, including the new coordinate-suppression regression, and the Analytics chart sizing correction passed the 2,529-module production build. The audit queryset now treats `ActivityLog.metadata` according to its actual TEXT storage instead of emitting PostgreSQL JSON operators, while retaining location-update suppression. The legacy Analytics comparison chart now supplies a nonzero initial size and shrink-safe wrappers. No migration or database mutation is required.
 
 2026-10-15 10:31: The Technician Job History phone-format correction passed the production Vite build with 2,529 modules. At widths below the desktop breakpoint, Completed Jobs now render as readable cards with ticket/status, client/service/address, completion and priority, lead/crew, checklist/proof totals, warranty/maintenance, and accessible detail/action controls; the existing desktop table is preserved. Pagination now stacks without horizontal clipping on narrow screens. No backend, migration, or database changed.
@@ -1774,6 +1780,12 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-15 11:18: Added an idempotent operational catalog data migration based on the verified local SQLite catalog: checklist/equipment templates for deployed Solar Panel Installation, Solar Preventive Maintenance, and Field Service Diagnostic services; nine categorized inventory items; opening-stock ledger entries; and standard Solar Panel Installation material requirements. Existing service templates, SKUs, quantities, and custom **Iman** data are preserved. Paths: `backend/inventory/{migrations/0008_seed_operational_catalog.py,test_operational_catalog_migration.py}` and this handoff. Focused regression, Django check, and migration drift passed.
+
+2026-10-15 10:54: Removed the duplicate **Operations intelligence / Analytics & Forecasting** hero copy from Admin Analytics while retaining its update timestamp, refresh action, filters, charts, and assistant. Paths: `frontend/src/pages/admin/AdminAnalytics.jsx` and this handoff. Production build passed.
+
+2026-10-15 10:51: Standardized user-facing notification ticket references through the notification serializer so all notification surfaces receive `TKT-####`, including already-stored alerts with older `Ticket #<id>` wording. Paths: `backend/notifications/{serializers.py,tests.py}` and this handoff. Focused notification API tests passed 7/7. Database IDs and API route parameters remain numeric; no migration or data rewrite is required.
 
 2026-10-15 10:43: Corrected deployed Activity Logs list/summary HTTP 503 failures caused by applying JSON key transforms to a TEXT-backed metadata field; the portable text filter still hides technician coordinate audit noise. Added regression coverage and stabilized the remaining legacy comparison chart against transient negative dimensions. Paths: `backend/users/{views/admin_activity.py,tests.py}`, `frontend/src/pages/admin/AdminAnalytics.jsx`, and this handoff. Focused backend passed 11/11 and the production frontend build passed; no migration or database mutation occurred.
 

@@ -89,8 +89,8 @@ class NotificationViewSetTests(APITestCase):
     def test_user_can_list_own_notifications(self):
         own_notification = Notification.objects.create(
             user=self.user,
-            title='Own notification',
-            message='Visible',
+            title='Ticket #11 assigned',
+            message='Please open ticket 11 to review the work.',
             type='info'
         )
         Notification.objects.create(
@@ -106,6 +106,8 @@ class NotificationViewSetTests(APITestCase):
         results = response.data.get('results', response.data)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]['id'], own_notification.id)
+        self.assertEqual(results[0]['title'], 'TKT-0011 assigned')
+        self.assertEqual(results[0]['message'], 'Please open TKT-0011 to review the work.')
         self.assertEqual(results[0]['related_ticket'], None)
         self.assertEqual(results[0]['related_request'], None)
 

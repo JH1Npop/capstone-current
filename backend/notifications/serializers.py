@@ -1,5 +1,20 @@
+import re
+
 from rest_framework import serializers
 from .models import Notification
+
+
+TICKET_REFERENCE_PATTERN = re.compile(r'\b(?:service\s+)?ticket\s*#?\s*(\d+)\b', re.IGNORECASE)
+
+
+def format_ticket_references(value):
+    """Present legacy ticket references using the canonical TKT-#### identity."""
+    if not isinstance(value, str) or not value:
+        return value
+    return TICKET_REFERENCE_PATTERN.sub(
+        lambda match: f'TKT-{int(match.group(1)):04d}',
+        value,
+    )
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -18,6 +33,12 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     def get_push_sent(self, obj):
         return False
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['title'] = format_ticket_references(representation.get('title'))
+        representation['message'] = format_ticket_references(representation.get('message'))
+        return representation
 
     class Meta:
         model = Notification
