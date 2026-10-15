@@ -7,8 +7,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 export const useGPSTracking = (options = {}) => {
   const {
     enableHighAccuracy = true,
-    timeout = 10000,
-    maximumAge = 30000,
+    timeout = 30000,
+    maximumAge = 10000,
     updateInterval = 10000, // Update every 10 seconds
     onLocationUpdate = null,
     autoStart = false
@@ -36,14 +36,11 @@ export const useGPSTracking = (options = {}) => {
 
   // Get current position once
   const getCurrentPosition = useCallback(() => {
-    return new Promise((resolve, reject) => {
+    const readPosition = (positionOptions) => new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
         reject(new Error('Geolocation is not supported by this browser'));
         return;
       }
-
-      setLoading(true);
-      setError(null);
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -59,37 +56,60 @@ export const useGPSTracking = (options = {}) => {
           };
 
           setLocation(loc);
-          setLoading(false);
           resolve(loc);
         },
-        (err) => {
-          let errorMessage = 'Unknown GPS error';
-          switch (err.code) {
-            case err.PERMISSION_DENIED:
-              errorMessage = 'GPS access denied by user';
-              setPermission('denied');
-              break;
-            case err.POSITION_UNAVAILABLE:
-              errorMessage = 'GPS position unavailable';
-              break;
-            case err.TIMEOUT:
-              errorMessage = 'GPS request timeout';
-              break;
-          }
-
-          const gpsError = new Error(errorMessage);
-          gpsError.code = err.code;
-          setError(gpsError);
-          setLoading(false);
-          reject(gpsError);
-        },
-        {
-          enableHighAccuracy,
-          timeout,
-          maximumAge
-        }
+        reject,
+        positionOptions
       );
     });
+
+    return (async () => {
+      if (typeof window !== 'undefined'
+        && !window.isSecureContext
+        && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+        const secureError = new Error('Phone GPS requires the deployed HTTPS site.');
+        secureError.code = 'INSECURE_CONTEXT';
+        setError(secureError);
+        throw secureError;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const location = await readPosition({ enableHighAccuracy, timeout, maximumAge: 0 });
+        setPermission('granted');
+        return location;
+      } catch (firstError) {
+        if (firstError.code === 1) {
+          setPermission('denied');
+          const deniedError = new Error('GPS access is blocked. Enable Location for this browser in phone settings, then try again.');
+          deniedError.code = firstError.code;
+          setError(deniedError);
+          throw deniedError;
+        }
+
+        try {
+          const location = await readPosition({
+            enableHighAccuracy: false,
+            timeout: Math.max(timeout, 30000),
+            maximumAge: 60000
+          });
+          setPermission('granted');
+          return location;
+        } catch (fallbackError) {
+          const errorMessage = fallbackError.code === 3
+            ? 'GPS is taking too long. Move near a window, turn on Precise Location, and try again.'
+            : 'GPS position is unavailable. Turn on phone Location and allow this browser to use it.';
+          const gpsError = new Error(errorMessage);
+          gpsError.code = fallbackError.code;
+          setError(gpsError);
+          throw gpsError;
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [enableHighAccuracy, timeout, maximumAge]);
 
   // Start watching position
@@ -99,7 +119,7 @@ export const useGPSTracking = (options = {}) => {
       return;
     }
 
-    if (watching) return; // Already watching
+    if (watchIdRef.current !== null) return; // Already watching
 
     setWatching(true);
     setError(null);
@@ -148,13 +168,13 @@ export const useGPSTracking = (options = {}) => {
       },
       {
         enableHighAccuracy,
-        timeout,
-        maximumAge
+        timeout: Math.max(timeout, 30000),
+        maximumAge: Math.min(maximumAge, 10000)
       }
     );
 
     watchIdRef.current = watchId;
-  }, [watching, enableHighAccuracy, timeout, maximumAge, onLocationUpdate]);
+  }, [enableHighAccuracy, timeout, maximumAge, onLocationUpdate]);
 
   // Stop watching
   const stopWatching = useCallback(() => {

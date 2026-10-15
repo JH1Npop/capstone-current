@@ -458,6 +458,7 @@ export default function TechnicianMapNavigation() {
           status={gpsPermission}
           error={gpsError}
           location={gpsLocation}
+          onRequestAccess={startLocationSharing}
           className="mt-3"
         />
         {gpsError && (
