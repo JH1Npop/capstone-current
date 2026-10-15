@@ -104,7 +104,6 @@ export default function TechnicianDashboard() {
     error: gpsError,
     permission: gpsPermission,
     watching: gpsWatching,
-    requestPermission,
     startWatching,
   } = useGPSTracking({
     updateInterval: 20000,
@@ -135,18 +134,12 @@ export default function TechnicianDashboard() {
 
   const [isDeletingNotifications, setIsDeletingNotifications] = useState(false);
 
-  const startLocationSharing = async () => {
+  const startLocationSharing = () => {
     setIsStartingGps(true);
     setActionMessage('');
-    try {
-      await requestPermission();
-      startWatching();
-      setActionMessage('Location sharing is on for this dashboard session.');
-    } catch {
-      // The GPS panel renders the browser-specific error and recovery guidance.
-    } finally {
-      setIsStartingGps(false);
-    }
+    startWatching();
+    setActionMessage('Waiting for the phone location. Keep this page open.');
+    setIsStartingGps(false);
   };
 
   const handleDeleteAllNotifications = async () => {

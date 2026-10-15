@@ -89,6 +89,35 @@ function ServiceRegionController({ region }) {
   return null;
 }
 
+function MapResizeController() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    let animationFrame = window.requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+    const refreshMapSize = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+    };
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(refreshMapSize)
+      : null;
+
+    resizeObserver?.observe(container);
+    window.addEventListener('resize', refreshMapSize);
+    window.addEventListener('orientationchange', refreshMapSize);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', refreshMapSize);
+      window.removeEventListener('orientationchange', refreshMapSize);
+    };
+  }, [map]);
+
+  return null;
+}
+
 export default function TechnicianMapNavigation() {
   const [searchParams] = useSearchParams();
   const ticketId = searchParams.get('ticketId') || searchParams.get('jobId');
@@ -116,7 +145,6 @@ export default function TechnicianMapNavigation() {
     location: gpsLocation,
     error: gpsError,
     permission: gpsPermission,
-    requestPermission,
     startWatching,
     stopWatching,
     watching
@@ -244,15 +272,8 @@ export default function TechnicianMapNavigation() {
     };
   }, [stopWatching]);
 
-  const startLocationSharing = async () => {
-    try {
-      if (gpsPermission !== 'granted') {
-        await requestPermission();
-      }
-      startWatching();
-    } catch {
-      // GPSNotice presents the browser/device action required from the technician.
-    }
+  const startLocationSharing = () => {
+    startWatching();
   };
 
   const stopLocationSharing = () => {
@@ -481,9 +502,9 @@ export default function TechnicianMapNavigation() {
       </div>
 
       <div className="mb-5 grid gap-3 sm:gap-5 xl:mb-8 xl:grid-cols-[1.35fr_0.65fr]">
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="map-wrapper h-[46dvh] min-h-[20rem] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:h-[55vh] sm:min-h-[24rem] xl:h-[60vh]">
           {loading ? (
-            <div className="h-[46vh] min-h-[18rem] p-4 sm:h-[55vh] sm:min-h-[24rem] xl:h-[60vh]">
+            <div className="h-full w-full p-4">
               <PanelSkeleton rows={8} />
             </div>
           ) : (
@@ -494,9 +515,11 @@ export default function TechnicianMapNavigation() {
               maxZoom={18}
               maxBounds={trackingRegion.bounds}
               maxBoundsViscosity={1.0}
-              className="h-[46vh] min-h-[18rem] sm:h-[55vh] sm:min-h-[24rem] xl:h-[60vh]"
+              className="h-full w-full"
+              style={{ height: '100%', minHeight: 0, width: '100%' }}
             >
               <ServiceRegionController region={trackingRegion} />
+              <MapResizeController />
               <MapBoundsUpdater routeCoords={route.routeCoords} jobLoc={jobLoc} techLoc={techLoc} />
               <MapTileLayer />
 

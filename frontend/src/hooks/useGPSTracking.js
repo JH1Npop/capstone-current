@@ -122,6 +122,7 @@ export const useGPSTracking = (options = {}) => {
     if (watchIdRef.current !== null) return; // Already watching
 
     setWatching(true);
+    setLoading(true);
     setError(null);
 
     const watchId = navigator.geolocation.watchPosition(
@@ -138,6 +139,7 @@ export const useGPSTracking = (options = {}) => {
         };
 
         setLocation(loc);
+        setPermission('granted');
         setLoading(false);
 
         // Call callback if provided
@@ -146,6 +148,11 @@ export const useGPSTracking = (options = {}) => {
         }
       },
       (err) => {
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
+
         let errorMessage = 'GPS tracking error';
         switch (err.code) {
           case err.PERMISSION_DENIED:
@@ -153,10 +160,10 @@ export const useGPSTracking = (options = {}) => {
             setPermission('denied');
             break;
           case err.POSITION_UNAVAILABLE:
-            errorMessage = 'GPS position unavailable';
+            errorMessage = 'GPS position is unavailable. Keep Location on, then tap Allow GPS to retry.';
             break;
           case err.TIMEOUT:
-            errorMessage = 'GPS request timeout';
+            errorMessage = 'The phone did not return a location yet. Keep this page open and tap Allow GPS to retry.';
             break;
         }
 
@@ -168,8 +175,8 @@ export const useGPSTracking = (options = {}) => {
       },
       {
         enableHighAccuracy,
-        timeout: Math.max(timeout, 30000),
-        maximumAge: Math.min(maximumAge, 10000)
+        timeout: Math.max(timeout, 60000),
+        maximumAge: Math.min(maximumAge, 60000)
       }
     );
 
