@@ -659,9 +659,13 @@ export default function TechnicianMapNavigation() {
                         : 'Mark Arrived'}
                 </button>
               ) : (
-                <div className="w-full rounded-xl border-2 border-emerald-400 bg-emerald-100 p-4 text-center font-medium text-emerald-800">
-                  Arrived at site
-                </div>
+                <Link
+                  to={`/technician/my-jobs?ticketId=${ticketId}`}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-emerald-500 bg-emerald-500 px-4 py-3 font-semibold text-white shadow-lg transition hover:bg-emerald-600"
+                >
+                  Proceed to Job
+                  <FiChevronRight size={20} />
+                </Link>
               )}
               {arrivalMessage && (
                 <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
