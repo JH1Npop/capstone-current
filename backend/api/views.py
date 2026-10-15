@@ -27,6 +27,7 @@ from services.views.helpers import (
     normalize_proof_media_payload,
     save_uploaded_proof_media,
     sync_ticket_maintenance_schedule,
+    ticket_has_technician_access,
 )
 from services.maintenance import MAINTENANCE_RULES, resolve_interval_days
 from users.models import User, Management, Technician, Client, AdminSettings
@@ -445,11 +446,11 @@ def checklist_view(request):
         return Response({'error': 'jobId is required'}, status=400)
 
     try:
-        ticket = get_visible_service_tickets_queryset(
-            request.user,
-            base_queryset=ServiceTicket.objects.all(),
-        ).select_for_update().get(id=ticket_id)
+        ticket = ServiceTicket.objects.select_for_update().get(id=ticket_id)
     except ServiceTicket.DoesNotExist:
+        return Response({'error': 'Ticket not found'}, status=404)
+
+    if not ticket_has_technician_access(ticket, request.user):
         return Response({'error': 'Ticket not found'}, status=404)
 
     if ticket.status in {'Completed', 'Turned Over / Accepted', 'Cancelled'}:

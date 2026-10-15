@@ -138,6 +138,43 @@ class DataPersistenceSmokeTests(APITestCase):
         self.assertTrue(checklist.warranty_provided)
         self.assertEqual(checklist.warranty_period_days, 30)
 
+    def test_technician_checklist_rejects_unassigned_ticket_without_distinct_lock_query(self):
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Checklist access boundary request.',
+            status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=service_request,
+            technician=self.technician,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            status='In Progress',
+        )
+        other_technician = User.objects.create_user(
+            username='other-checklist-tech',
+            password='Password123!',
+            role='technician',
+            status='active',
+        )
+        UserCapabilityGrant.objects.create(
+            user=other_technician,
+            capability_code=TECHNICIAN_CHECKLIST_VIEW,
+        )
+        self.client.force_authenticate(user=other_technician)
+
+        response = self.client.post(
+            '/api/checklist/',
+            {
+                'jobId': ticket.id,
+                'completed': {'0': True},
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 404, response.data)
+        self.assertFalse(InspectionChecklist.objects.filter(ticket=ticket).exists())
+
     def test_site_inspection_requires_explicit_answers_and_recommendation(self):
         service_request = ServiceRequest.objects.create(
             client=self.client_user,
