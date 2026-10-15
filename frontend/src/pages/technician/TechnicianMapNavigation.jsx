@@ -61,18 +61,23 @@ const calculateDistanceKm = (lat1, lng1, lat2, lng2) => {
   return earthRadiusKm * c;
 };
 
-function MapBoundsUpdater({ routeCoords, jobLoc, techLoc }) {
+function MapBoundsUpdater({ routeCoords, jobLoc, techLoc, routeKey }) {
   const map = useMap();
+  const fittedRouteKeyRef = useRef(null);
+
   useEffect(() => {
     if (!routeCoords || routeCoords.length < 2 || !jobLoc) return;
+    if (fittedRouteKeyRef.current === routeKey) return;
+
     try {
       const allCoords = [techLoc, ...routeCoords, jobLoc];
       const bounds = L.latLngBounds(allCoords);
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+      fittedRouteKeyRef.current = routeKey;
     } catch (fitError) {
       console.error('Error fitting bounds:', fitError);
     }
-  }, [map, routeCoords, jobLoc, techLoc]);
+  }, [map, routeCoords, jobLoc, techLoc, routeKey]);
   return null;
 }
 
@@ -520,7 +525,7 @@ export default function TechnicianMapNavigation() {
             >
               <ServiceRegionController region={trackingRegion} />
               <MapResizeController />
-              <MapBoundsUpdater routeCoords={route.routeCoords} jobLoc={jobLoc} techLoc={techLoc} />
+              <MapBoundsUpdater routeCoords={route.routeCoords} jobLoc={jobLoc} techLoc={techLoc} routeKey={ticketId} />
               <MapTileLayer />
 
               {gpsLocation ? (
