@@ -379,7 +379,8 @@ export default function TechnicianDashboard() {
                     Navigate to Job
                   </Link>
                 )}
-                {canOpenChecklist && !currentJobChecklistDone && (
+                {/* Same order as My Jobs: arrive, start the job, then fill in the checklist. */}
+                {canOpenChecklist && !currentJobChecklistDone && currentJobStatus === 'in_progress' && (
                   <Link 
                     to={currentJob.ticket_type === 'inspection' || currentJob.ticketType === 'inspection' 
                       ? `/technician/inspection-checklist?ticketId=${currentJob.id}` 
