@@ -86,7 +86,7 @@ def service_model_readiness(service_type_id: int):
     active_months = (
         _genuine_requests(service_type_id)
         .annotate(month=TruncMonth('request_date', tzinfo=timezone.get_current_timezone()))
-        .values('month').distinct().count()
+        .order_by().values('month').distinct().count()
         if earliest and latest else 0
     )
     expected_months = max(0, round(history_days / 30.4375))

@@ -20,7 +20,7 @@ from services.models import (
     ServiceType,
 )
 from users.models import User, UserCapabilityGrant
-from users.rbac import ANALYTICS_VIEW
+from users.rbac import ANALYTICS_VIEW, SUPERVISOR_DASHBOARD_VIEW
 
 
 @override_settings(BUSINESS_DISPLAY_TIMEZONE='Asia/Manila')
@@ -33,8 +33,8 @@ class AnalyticsWorkspaceTests(APITestCase):
         self.client_user = User.objects.create_user(username='analytics-client-new', password='pass', role='client')
         self.tech = User.objects.create_user(username='analytics-tech-new', password='pass', role='technician')
         self.other_tech = User.objects.create_user(username='analytics-tech-other', password='pass', role='technician')
-        self.solar = ServiceType.objects.create(name='Solar analytics', estimated_duration=120)
-        self.aircon = ServiceType.objects.create(name='Aircon analytics', estimated_duration=60)
+        self.solar = ServiceType.objects.create(name='Solar analytics', estimated_duration=120, color='#ef4444')
+        self.aircon = ServiceType.objects.create(name='Aircon analytics', estimated_duration=60, color='#f59e0b')
         self.client.force_authenticate(self.admin)
 
     def create_ticket(self, *, moment, service=None, technician=None, ticket_status='Not Started', priority='Normal', city='Lucena', province='Quezon', duration_hours=None):
@@ -205,6 +205,7 @@ class AnalyticsWorkspaceTests(APITestCase):
     def test_all_specialized_workspaces_have_deterministic_scoped_contracts(self):
         required_keys = {
             'technicians': {'summary', 'leaderboard', 'rankings', 'daily_capacity', 'filter_options'},
+            'demand': {'kpis', 'charts', 'attention', 'filter_options'},
             'sales': {'kpis', 'charts', 'data_quality', 'filter_options'},
             'inventory': {'summary', 'charts', 'shortage_risk', 'data_quality', 'filter_options'},
             'after_sales': {'case_kpis', 'case_charts', 'maintenance_summary', 'filter_options'},
@@ -217,6 +218,47 @@ class AnalyticsWorkspaceTests(APITestCase):
                 self.assertEqual(response.data['workspace'], workspace)
                 self.assertTrue(keys.issubset(response.data.keys()))
         self.assertEqual(self.client.get(self.url, {'workspace': 'unknown'}).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_demand_workspace_exposes_real_visualization_dimensions(self):
+        moment = datetime(2026, 9, 10, 9, tzinfo=ZoneInfo('Asia/Manila'))
+        self.create_ticket(
+            moment=moment, service=self.solar, technician=self.tech,
+            ticket_status='Completed', city='Lucena', province='Quezon', duration_hours=2,
+        )
+        self.create_ticket(
+            moment=moment, service=self.aircon, technician=None,
+            ticket_status='Not Started', city='Sariaya', province='Quezon',
+        )
+
+        response = self.client.get(self.url, {
+            'workspace': 'demand', 'start_date': '2026-09-10', 'end_date': '2026-09-10',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        charts = response.data['charts']
+        self.assertTrue({'service_outcomes', 'service_location_matrix', 'service_demand_series'}.issubset(charts))
+        outcomes = {row['service_type']: row for row in charts['service_outcomes']}
+        self.assertEqual(outcomes['Solar analytics']['completed'], 1)
+        self.assertEqual(outcomes['Solar analytics']['color'], '#ef4444')
+        self.assertEqual(outcomes['Aircon analytics']['completed'], 0)
+        self.assertEqual({row['location'] for row in charts['service_location_matrix']}, {'Lucena, Quezon', 'Sariaya, Quezon'})
+        self.assertEqual(sum(row['requests'] for row in charts['service_demand_series']), 2)
+
+    def test_dashboard_and_analytics_share_active_technician_account_definition(self):
+        UserCapabilityGrant.objects.create(user=self.admin, capability_code=SUPERVISOR_DASHBOARD_VIEW)
+        User.objects.create_user(
+            username='disabled-tech', password='pass', role='technician', status='active', is_active=False,
+        )
+
+        dashboard = self.client.get('/api/dashboard/stats/', {'role': 'admin'})
+        analytics = self.client.get(self.url, {'workspace': 'technicians', 'days': 30})
+
+        self.assertEqual(dashboard.status_code, status.HTTP_200_OK)
+        self.assertEqual(analytics.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            dashboard.data['overview']['active_technicians'],
+            analytics.data['summary']['active_technicians'],
+        )
 
     def test_unknown_relational_filter_ids_return_controlled_errors(self):
         cases = [
@@ -290,7 +332,7 @@ class AnalyticsWorkspaceTests(APITestCase):
     def test_workspace_query_counts_are_bounded(self):
         moment = timezone.now()
         self.create_ticket(moment=moment, technician=self.tech)
-        ceilings = {'technicians': 20, 'sales': 25, 'inventory': 32, 'after_sales': 40, 'forecasting': 12}
+        ceilings = {'technicians': 20, 'demand': 28, 'sales': 25, 'inventory': 32, 'after_sales': 40, 'forecasting': 12}
         for workspace, ceiling in ceilings.items():
             with self.subTest(workspace=workspace):
                 with CaptureQueriesContext(connection) as queries:

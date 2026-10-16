@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FiMessageCircle, FiRefreshCw, FiSend, FiX } from 'react-icons/fi';
 import { fetchAdminAnalytics, fetchAdminAnalyticsAiSummary, fetchDashboardStats } from '../../api/api';
 import { api } from '../../api/core';
@@ -7,6 +7,7 @@ import DraggableAssistantButton from './DraggableAssistantButton';
 import {
   getAnalyticsAssistantFilters,
   subscribeToAnalyticsAssistantFilters,
+  subscribeToAnalyticsAssistantQuestions,
 } from '../../utils/analyticsAssistantContext';
 
 const QUICK_QUESTIONS = [
@@ -31,6 +32,33 @@ const QUICK_QUESTIONS = [
   'Operational issue counts',
   'What can you analyze?'
 ];
+
+// The questions most useful for each analytics tab; the full list stays one tap away.
+const WORKSPACE_QUESTIONS = {
+  overview: ['Analytics summary', 'Requests created vs completed', 'Ticket count by workflow status', 'SLA risks'],
+  technicians: ['Technician performance', 'Most active technician', 'SLA risks'],
+  demand: ['Request count by service type', 'Historical demand by location', 'Busiest months', 'Request count by source'],
+  sales: ['Analytics summary', 'Requests created vs completed', 'Request count by service type'],
+  inventory: ['Inventory demand', 'Historical item consumption', 'How will item demand be forecast?'],
+  after_sales: ['Scheduling and warranty counts', 'Operational issue counts', 'SLA risks'],
+  forecasting: ['Is forecasting ready?', 'How will item demand be forecast?', 'Peak historical month', 'Historical demand by location'],
+};
+
+const WORKSPACE_LABELS = {
+  overview: 'Overview',
+  technicians: 'Technicians',
+  demand: 'Demand',
+  sales: 'Sales',
+  inventory: 'Inventory',
+  after_sales: 'After-Sales & Maintenance',
+  forecasting: 'Forecasting',
+};
+
+function formatContextDate(value) {
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 const OUT_OF_SCOPE_RESPONSE =
   'I only answer from loaded analytics and dashboard data. Ask about request counts, created versus completed trends, service or status counts, historical service-location density, forecast readiness, ticket-linked item consumption, technician performance, SLA risks, inventory, scheduling, maintenance, or coverage insights.';
@@ -1028,6 +1056,9 @@ export default function SystemAssistant() {
   const [assistantFilters, setAssistantFilters] = useState(getAnalyticsAssistantFilters);
   const [loading, setLoading] = useState(false);
   const [input, setInput] = useState('');
+  const [pendingQuestion, setPendingQuestion] = useState(null);
+  const [showAllQuestions, setShowAllQuestions] = useState(false);
+  const loadRequestRef = useRef(0);
   const [messages, setMessages] = useState([
     {
       sender: 'assistant',
@@ -1036,37 +1067,61 @@ export default function SystemAssistant() {
   ]);
 
   const loadAnalytics = async (selectedFilters = assistantFilters) => {
+    // Only the newest request may update state, so a slow earlier response
+    // cannot overwrite data for filters the user has since changed.
+    const loadId = ++loadRequestRef.current;
     setLoading(true);
     try {
       const overviewFilters = { ...selectedFilters, workspace: 'overview' };
-      const [data, forecastingData, dashboardData, performanceResponse, allTimePerformanceResponse] = await Promise.all([
-        fetchAdminAnalytics(overviewFilters),
-        fetchAdminAnalytics({ ...selectedFilters, workspace: 'forecasting' }),
+      const selectedWorkspace = selectedFilters.workspace || 'overview';
+      const overviewRequest = fetchAdminAnalytics(overviewFilters);
+      const forecastingRequest = fetchAdminAnalytics({ ...selectedFilters, workspace: 'forecasting' });
+      const activeWorkspaceRequest = selectedWorkspace === 'overview'
+        ? overviewRequest
+        : selectedWorkspace === 'forecasting'
+          ? forecastingRequest
+          : fetchAdminAnalytics({ ...selectedFilters, workspace: selectedWorkspace });
+      const [data, activeWorkspaceData, forecastingData, dashboardData, performanceResponse, allTimePerformanceResponse] = await Promise.all([
+        overviewRequest,
+        activeWorkspaceRequest,
+        forecastingRequest,
         fetchDashboardStats('admin'),
         api.get('/services/technician-performance/performance_breakdown/', { params: { days: Math.max(1, Math.round((new Date(`${selectedFilters.endDate}T00:00:00Z`) - new Date(`${selectedFilters.startDate}T00:00:00Z`)) / 86400000) + 1) } }),
         api.get('/services/technician-performance/performance_breakdown/', { params: { period: 'all' } })
       ]);
-      setAnalytics({ ...(data || {}), forecasting: forecastingData || {} });
+      if (loadId !== loadRequestRef.current) return;
+      setAnalytics({
+        ...(data || {}),
+        activeWorkspace: activeWorkspaceData || {},
+        activeWorkspaceName: selectedWorkspace,
+        forecasting: forecastingData || {},
+      });
       setDashboardStats(dashboardData || {});
       setTechnicianPerformance(Array.isArray(performanceResponse?.data) ? performanceResponse.data : []);
       setTechnicianPerformanceAllTime(Array.isArray(allTimePerformanceResponse?.data) ? allTimePerformanceResponse.data : []);
     } catch (error) {
+      if (loadId !== loadRequestRef.current) return;
       setMessages((current) => [
         ...current,
         { sender: 'assistant', text: error.message || 'Unable to load analytics right now.' }
       ].slice(-8));
     } finally {
-      setLoading(false);
+      if (loadId === loadRequestRef.current) setLoading(false);
     }
   };
 
   useEffect(() => subscribeToAnalyticsAssistantFilters(setAssistantFilters), []);
 
   useEffect(() => {
-    if (isOpen && !loading) {
+    if (isOpen) {
       loadAnalytics(assistantFilters);
     }
   }, [isOpen, assistantFilters]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => subscribeToAnalyticsAssistantQuestions((question) => {
+    setIsOpen(true);
+    setPendingQuestion(question);
+  }), []);
 
   const askQuestion = async (question) => {
     const text = String(question || '').trim();
@@ -1149,6 +1204,20 @@ export default function SystemAssistant() {
     }
   };
 
+  useEffect(() => {
+    if (!pendingQuestion || !isOpen || loading || !analytics) return;
+    const question = pendingQuestion;
+    setPendingQuestion(null);
+    askQuestion(question);
+  }, [pendingQuestion, isOpen, loading, analytics]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeWorkspace = assistantFilters.workspace || 'overview';
+  const suggestedQuestions = WORKSPACE_QUESTIONS[activeWorkspace] || WORKSPACE_QUESTIONS.overview;
+  const visibleQuestions = showAllQuestions
+    ? [...suggestedQuestions, ...QUICK_QUESTIONS.filter((question) => !suggestedQuestions.includes(question))]
+    : suggestedQuestions;
+  const contextLabel = `${WORKSPACE_LABELS[activeWorkspace] || 'Overview'} view · ${formatContextDate(assistantFilters.startDate)} – ${formatContextDate(assistantFilters.endDate)}`;
+
   if (!isOpen) {
     return (
       <DraggableAssistantButton
@@ -1169,11 +1238,12 @@ export default function SystemAssistant() {
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="text-base font-semibold text-slate-900">Analytics Assistant</h3>
-          <p className="mt-1 text-xs text-slate-500">Trends, comparisons, forecast readiness, item usage, technician performance, and SLA risk.</p>
+          <p className="mt-1 text-xs text-slate-500">Answers use the same data as your analytics page.</p>
+          <p className="mt-1 inline-block max-w-full rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">Reading: {contextLabel}</p>
         </div>
         <button
           type="button"
-          onClick={loadAnalytics}
+          onClick={() => loadAnalytics(assistantFilters)}
           disabled={loading}
           className="grid h-9 w-9 flex-none place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 disabled:opacity-60"
           aria-label="Refresh assistant data"
@@ -1191,8 +1261,8 @@ export default function SystemAssistant() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col p-4">
-        <div className="max-h-20 overflow-y-auto pr-1 flex flex-wrap gap-2">
-          {QUICK_QUESTIONS.map((question) => (
+        <div className={`${showAllQuestions ? 'max-h-28 overflow-y-auto' : ''} flex flex-wrap gap-2 pr-1`}>
+          {visibleQuestions.map((question) => (
             <button
               key={question}
               type="button"
@@ -1203,6 +1273,14 @@ export default function SystemAssistant() {
               {question}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setShowAllQuestions((value) => !value)}
+            className="rounded-full px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+            aria-expanded={showAllQuestions}
+          >
+            {showAllQuestions ? 'Fewer questions' : 'More questions'}
+          </button>
         </div>
 
         <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto rounded-xl bg-slate-50 p-3">

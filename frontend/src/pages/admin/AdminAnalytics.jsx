@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  FiMessageCircle,
   FiAlertCircle,
   FiArrowDownRight,
   FiArrowUpRight,
@@ -13,20 +14,17 @@ import {
   FiMapPin,
   FiMinus,
   FiRefreshCw,
+  FiStar,
+  FiUserCheck,
+  FiUserPlus,
+  FiXCircle,
   FiTrendingUp,
   FiUsers,
 } from 'react-icons/fi';
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
-  Cell,
-  LabelList,
-  Legend,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -34,7 +32,7 @@ import {
 } from 'recharts';
 import Layout from '../../components/layout/Layout';
 import { fetchAdminAnalytics } from '../../api/api';
-import { setAnalyticsAssistantFilters } from '../../utils/analyticsAssistantContext';
+import { askAnalyticsAssistant, setAnalyticsAssistantFilters } from '../../utils/analyticsAssistantContext';
 import {
   AfterSalesWorkspace,
   ForecastingWorkspace,
@@ -43,10 +41,15 @@ import {
   TechnicianWorkspace,
   WorkspaceLoading,
 } from './analytics/AnalyticsWorkspacePanels';
+import { AnalyticsScopeGuide, DemandWorkspace, NeedsAttentionPanel } from './analytics/AnalyticsDecisionLayer';
+import { placeLabel, plural } from './analytics/analyticsFormat';
+import { BarList } from './analytics/AnalyticsVisuals';
+import { LocationTreemap, ProgressRing, StatusPipeline, TrendTotals, WorkloadList } from './analytics/OverviewVisuals';
 
 const WORKSPACES = [
   { id: 'overview', label: 'Overview' },
   { id: 'technicians', label: 'Technicians' },
+  { id: 'demand', label: 'Demand' },
   { id: 'sales', label: 'Sales' },
   { id: 'inventory', label: 'Inventory' },
   { id: 'after_sales', label: 'After-Sales & Maintenance' },
@@ -132,110 +135,37 @@ function ChartEmpty({ children = 'No records match these filters.' }) {
   );
 }
 
-function ComparisonRows({ data, labelKey, series, ariaLabel }) {
-  if (!data?.length) return <ChartEmpty />;
-  return <div aria-label={ariaLabel} className="min-w-0 overflow-x-auto">
-    <div className="min-w-0" style={{ height: 300, minWidth: Math.max(300, data.length * 100) }}>
-      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: Math.max(300, data.length * 100), height: 300 }}>
-        <BarChart data={data} margin={{ top: 20, right: 16, bottom: 12, left: -16 }}>
-          <CartesianGrid vertical={false} strokeDasharray="3 4" stroke="#e2e8f0" />
-          <XAxis dataKey={labelKey} tick={{ fontSize: 11 }} interval={0} />
-          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-          <Tooltip contentStyle={tooltipStyle} />
-          <Legend wrapperStyle={{ fontSize: 12 }} />
-          {series.map((item) => <Bar key={item.key} dataKey={item.key} name={item.name} fill={item.color} radius={[5, 5, 0, 0]} maxBarSize={30} isAnimationActive={false}><LabelList dataKey={item.key} position="top" fontSize={11} /></Bar>)}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  </div>;
-}
-
-function CategoryComparisonBars({ data, categoryKey, currentKey, previousKey, currentName = 'Current', previousName = 'Previous', ariaLabel }) {
-  if (!data?.length) return <ChartEmpty />;
-  const currentTotal = data.reduce((total, row) => total + (Number(row[currentKey]) || 0), 0);
-  const previousTotal = data.reduce((total, row) => total + (Number(row[previousKey]) || 0), 0);
-  const difference = currentTotal - previousTotal;
-  const chartHeight = Math.max(210, data.length * 48);
+function ChartCard({ title, note, eyebrow, action, askQuestion, children, className = '' }) {
   return (
-    <div role="img" aria-label={ariaLabel}>
-      <div className="mb-3 grid grid-cols-3 gap-2">
-        <div className="rounded-xl border border-blue-100 bg-blue-50/80 px-3 py-2"><p className="text-[9px] font-black uppercase tracking-[0.12em] text-blue-500">{currentName}</p><p className="mt-0.5 text-xl font-black tabular-nums text-blue-900">{currentTotal.toLocaleString('en-PH')}</p></div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">{previousName}</p><p className="mt-0.5 text-xl font-black tabular-nums text-slate-700">{previousTotal.toLocaleString('en-PH')}</p></div>
-        <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2"><p className="text-[9px] font-black uppercase tracking-[0.12em] text-sky-500">Change</p><p className="mt-0.5 text-xl font-black tabular-nums text-sky-800">{difference > 0 ? '+' : ''}{difference.toLocaleString('en-PH')}</p></div>
-      </div>
-      <div style={{ height: chartHeight }}>
-        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 720, height: chartHeight }}>
-          <BarChart data={data} layout="vertical" margin={{ top: 4, right: 34, bottom: 4, left: 8 }} barCategoryGap="18%">
-            <CartesianGrid strokeDasharray="3 5" stroke="#e2e8f0" horizontal={false} />
-            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
-            <YAxis type="category" dataKey={categoryKey} width={118} tick={{ fontSize: 11, fill: '#475569', fontWeight: 600 }} tickLine={false} axisLine={false} />
-            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#eff6ff', opacity: 0.55 }} />
-            <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-            <Bar dataKey={currentKey} name={currentName} fill="#2563eb" radius={[0, 7, 7, 0]} maxBarSize={17} isAnimationActive animationDuration={700}>
-              <LabelList dataKey={currentKey} position="right" fill="#1e3a8a" fontSize={11} fontWeight={800} />
-            </Bar>
-            <Bar dataKey={previousKey} name={previousName} fill="#cbd5e1" radius={[0, 7, 7, 0]} maxBarSize={17} isAnimationActive animationDuration={700} animationBegin={100} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-const STATUS_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#64748b'];
-
-function TicketStatusDonut({ data }) {
-  if (!data?.length) return <ChartEmpty />;
-  const currentTotal = data.reduce((total, row) => total + (Number(row.count) || 0), 0);
-  return (
-    <div role="img" aria-label="Current ticket status proportions with previous-period counts" className="grid items-center gap-4 sm:grid-cols-[220px_minmax(0,1fr)]">
-      <div className="relative h-[220px]">
-        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 220, height: 220 }}>
-          <PieChart>
-            <Pie data={data} dataKey="count" nameKey="label" cx="50%" cy="50%" innerRadius={58} outerRadius={88} paddingAngle={3} stroke="#fff" strokeWidth={3} isAnimationActive animationDuration={800}>
-              {data.map((row, index) => <Cell key={`${row.label}-${index}`} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />)}
-            </Pie>
-            <Tooltip contentStyle={tooltipStyle} formatter={(value) => [Number(value).toLocaleString('en-PH'), 'Tickets']} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-black tabular-nums text-slate-950">{currentTotal.toLocaleString('en-PH')}</span>
-          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Current</span>
-        </div>
-      </div>
-      <div className="space-y-2">
-        {data.map((row, index) => (
-          <div key={`${row.label}-${index}`} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[index % STATUS_COLORS.length] }} aria-hidden="true" />
-            <span className="min-w-0 break-words text-xs font-semibold text-slate-700">{row.label || 'Unspecified'}</span>
-            <span className="text-right text-xs tabular-nums text-slate-500"><strong className="text-sm text-slate-900">{Number(row.count || 0).toLocaleString('en-PH')}</strong><br />prev. {Number(row.previous_count || 0).toLocaleString('en-PH')}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ChartCard({ title, note, eyebrow, action, children, className = '' }) {
-  return (
-    <section className={`relative min-w-0 overflow-hidden rounded-3xl border border-slate-200/90 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.08),transparent_34%),linear-gradient(180deg,#ffffff_0%,#ffffff_72%,#f8fbff_100%)] p-5 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.55)] sm:p-6 ${className}`}>
-      <span className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-sky-400 to-transparent" aria-hidden="true" />
-      <div className="mb-5 flex items-start justify-between gap-4">
+    <section className={`flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 ${className}`}>
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          {eyebrow ? <p className="mb-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">{eyebrow}</p> : null}
-          <h2 className="text-base font-bold text-slate-950 sm:text-lg">{title}</h2>
+          {eyebrow ? <p className="mb-0.5 text-xs font-semibold text-brand-600">{eyebrow}</p> : null}
+          <h2 className="text-base font-bold text-slate-900">{title}</h2>
           {note ? <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{note}</p> : null}
         </div>
-        {action}
+        <div className="flex shrink-0 items-center gap-2">
+          {action}
+          {askQuestion ? (
+            <button
+              type="button"
+              onClick={() => askAnalyticsAssistant(askQuestion)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-600 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+              aria-label={`Ask the analytics assistant about ${title}`}
+            >
+              <FiMessageCircle aria-hidden="true" /> Ask
+            </button>
+          ) : null}
+        </div>
       </div>
-      {children}
+      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
     </section>
   );
 }
 
 function SelectFilter({ label, value, onChange, children }) {
   return (
-    <label className="min-w-0 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+    <label className="min-w-0 text-xs font-semibold text-slate-600">
       <span className="mb-1.5 block">{label}</span>
       <select
         value={value}
@@ -256,24 +186,24 @@ function CompactSelect({ label, value, onChange, children }) {
   );
 }
 
-function KpiCard({ label, value, helper, icon: Icon, tone = 'blue', meter, comparison }) {
+function KpiCard({ label, value, helper, icon: Icon, tone = 'blue', meter, comparison, alert = false }) {
   const tones = {
-    blue: { icon: 'bg-blue-50 text-blue-700', line: 'bg-blue-500' },
-    green: { icon: 'bg-emerald-50 text-emerald-700', line: 'bg-emerald-500' },
-    amber: { icon: 'bg-amber-50 text-amber-700', line: 'bg-amber-500' },
-    red: { icon: 'bg-rose-50 text-rose-700', line: 'bg-rose-500' },
+    blue: { icon: 'bg-blue-50 text-blue-700', line: 'bg-blue-500', alert: 'border-blue-200 bg-blue-50/60' },
+    green: { icon: 'bg-emerald-50 text-emerald-700', line: 'bg-emerald-500', alert: 'border-emerald-200 bg-emerald-50/60' },
+    amber: { icon: 'bg-amber-50 text-amber-700', line: 'bg-amber-500', alert: 'border-amber-200 bg-amber-50/60' },
+    red: { icon: 'bg-rose-100 text-rose-700', line: 'bg-rose-500', alert: 'border-rose-200 bg-rose-50/60' },
   };
   const palette = tones[tone];
 
   return (
-    <article className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.55)]">
-      <span className={`absolute inset-x-0 top-0 h-1 ${palette.line}`} />
+    <article className={`flex h-full min-w-0 flex-col rounded-2xl border p-4 shadow-sm ${alert ? palette.alert : 'border-slate-200 bg-white'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</p>
-          <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{value}</p>
+          <p className="text-sm font-medium leading-5 text-slate-500">{label}</p>
+          <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-3xl">{value}</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">{helper}</p>
         </div>
-        <span className={`rounded-xl p-2.5 ${palette.icon}`}><Icon className="h-5 w-5" /></span>
+        <span className={`hidden shrink-0 rounded-xl p-2.5 sm:inline-flex ${palette.icon}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
       </div>
       {meter != null ? (
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -281,15 +211,13 @@ function KpiCard({ label, value, helper, icon: Icon, tone = 'blue', meter, compa
         </div>
       ) : null}
       {comparison ? <ComparisonBadge {...comparison} /> : null}
-      <p className="mt-2 text-xs leading-5 text-slate-500">{helper}</p>
+
     </article>
   );
 }
 
 function ComparisonBadge({ delta, unit = '%', unavailable = false, favorable = 'neutral' }) {
-  if (unavailable || delta == null) {
-    return <p className="mt-3 text-[11px] font-semibold text-slate-400">No prior baseline</p>;
-  }
+  if (unavailable || delta == null) return null;
   const number = Number(delta);
   const Icon = number > 0 ? FiArrowUpRight : number < 0 ? FiArrowDownRight : FiMinus;
   const isGood = favorable === 'up' ? number > 0 : favorable === 'down' ? number < 0 : false;
@@ -297,8 +225,8 @@ function ComparisonBadge({ delta, unit = '%', unavailable = false, favorable = '
   const color = isGood ? 'text-emerald-700' : isBad ? 'text-rose-700' : 'text-blue-700';
   const prefix = number > 0 ? '+' : '';
   return (
-    <p className={`mt-3 flex items-center gap-1 text-[11px] font-bold ${color}`}>
-      <Icon className="h-3.5 w-3.5" /> {prefix}{number}{unit} vs comparison period
+    <p className={`mt-2 inline-flex w-fit items-center gap-1 whitespace-nowrap rounded-full bg-slate-50 px-2 py-0.5 text-xs font-semibold ${color}`} title="Change against the comparison period">
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" /> {prefix}{number}{unit} <span className="font-medium text-slate-500">vs prev.</span>
     </p>
   );
 }
@@ -312,12 +240,12 @@ function Insight({ icon: Icon, label, value, detail, tone = 'blue' }) {
   };
 
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-[0_10px_25px_-22px_rgba(15,23,42,0.65)]">
-      <span className={`shrink-0 rounded-xl p-2.5 ${tones[tone]}`}><Icon className="h-4 w-4" /></span>
+    <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <span className={`shrink-0 rounded-xl p-2.5 ${tones[tone]}`}><Icon className="h-4 w-4" aria-hidden="true" /></span>
       <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{label}</p>
-        <p className="break-words text-sm font-bold leading-5 text-slate-900">{value}</p>
-        <p className="break-words text-[11px] leading-4 text-slate-500">{detail}</p>
+        <p className="text-xs font-medium text-slate-500">{label}</p>
+        <p className="break-words text-sm font-semibold leading-5 text-slate-900">{value}</p>
+        <p className="break-words text-xs leading-4 text-slate-500">{detail}</p>
       </div>
     </div>
   );
@@ -336,8 +264,20 @@ function AttentionItem({ label, value, tone }) {
   return (
     <div className={`flex items-center justify-between gap-4 rounded-xl border px-3 py-3 ${styles[tone]}`}>
       <span className="text-sm font-semibold">{label}</span>
-      <span className="min-w-8 rounded-lg bg-white/80 px-2 py-1 text-center text-sm font-black shadow-sm">{value ?? 0}</span>
+      <span className="min-w-8 rounded-lg bg-white/80 px-2 py-1 text-center text-sm font-bold shadow-sm">{value ?? 0}</span>
     </div>
+  );
+}
+
+function ReadingGuide({ includeScope }) {
+  return (
+    <details className="group rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+      <summary className="cursor-pointer select-none font-bold text-slate-800 marker:text-slate-400">How to read this page</summary>
+      <div className="mt-2 space-y-2">
+        <AnalyticsColorKey />
+        {includeScope ? <AnalyticsScopeGuide /> : null}
+      </div>
+    </details>
   );
 }
 
@@ -351,7 +291,7 @@ function AnalyticsColorKey() {
     { label: 'Previous period', color: 'bg-slate-300' },
   ];
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600" aria-label="Analytics color meaning">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600" aria-label="Analytics color meaning">
       <span className="font-bold text-slate-800">Color key</span>
       {meanings.map((item) => (
         <span key={item.label} className="inline-flex items-center gap-1.5">
@@ -364,6 +304,9 @@ function AnalyticsColorKey() {
 }
 
 export default function AdminAnalytics() {
+  const query = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search);
+  const decisionWorkspaceEnabled = import.meta.env.VITE_ANALYTICS_DECISION_WORKSPACE !== 'false'
+    && query?.get('analyticsMode') !== 'legacy';
   const initialRange = useMemo(() => presetRange(30), []);
   const [filters, setFilters] = useState({
     ...EMPTY_FILTERS,
@@ -378,6 +321,7 @@ export default function AdminAnalytics() {
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [attentionSnapshot, setAttentionSnapshot] = useState({});
   const requestId = useRef(0);
   const invalidRange = Boolean(filters.startDate && filters.endDate && filters.startDate > filters.endDate);
   const customComparisonSelected = filters.comparison === 'custom';
@@ -399,7 +343,12 @@ export default function AdminAnalytics() {
     if (data) setRefreshing(true); else setLoading(true);
 
     fetchAdminAnalytics(filters, { signal: controller.signal })
-      .then((response) => { if (id === requestId.current) setData(response); })
+      .then((response) => {
+        if (id === requestId.current) {
+          setData(response);
+          if (response?.attention) setAttentionSnapshot(response.attention);
+        }
+      })
       .catch((requestError) => {
         const cancelled = requestError?.name === 'CanceledError' || requestError?.name === 'AbortError';
         if (!cancelled && id === requestId.current) setError(requestError.message || 'Unable to load analytics.');
@@ -455,6 +404,12 @@ export default function AdminAnalytics() {
   const activePreset = filters.startDate === thirtyDayRange.startDate && filters.endDate === thirtyDayRange.endDate
     ? 30
     : filters.startDate === ninetyDayRange.startDate && filters.endDate === ninetyDayRange.endDate ? 90 : null;
+  const hasComparisonBaseline = [
+    comparisonKpis.total_tickets?.delta_percent,
+    comparisonKpis.completed_tickets?.delta_percent,
+    comparisonKpis.completion_rate?.delta_points,
+    comparisonKpis.average_completion_hours?.delta_hours,
+  ].some((value) => value != null);
   const comparisonPeriod = comparison.enabled && comparison.period?.start_date && comparison.period?.end_date
     ? `${compactDate(comparison.period.start_date)} — ${compactDate(comparison.period.end_date)}`
     : 'no comparison period';
@@ -462,16 +417,30 @@ export default function AdminAnalytics() {
     setShowMoreFilters(false);
     setFilters((current) => ({ ...current, ...EMPTY_FILTERS, workspace }));
   };
+  const switchAnalyticsMode = () => {
+    const next = new URL(window.location.href);
+    if (decisionWorkspaceEnabled) next.searchParams.set('analyticsMode', 'legacy');
+    else next.searchParams.delete('analyticsMode');
+    window.location.assign(next.toString());
+  };
 
   return (
     <Layout>
-      <div className="mx-auto w-full max-w-[1600px] space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="flex justify-end border-b border-slate-200 pb-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="text-left sm:text-right">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Last updated</p>
-              <p className="text-xs font-semibold text-slate-600">{formatUpdated(data?.generated_at)}</p>
-            </div>
+      <div className="mx-auto w-full max-w-[1600px] space-y-4 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-slate-500">
+            <span className="font-medium text-slate-400">Updated</span>{' '}
+            <span className="font-semibold text-slate-600">{formatUpdated(data?.generated_at)}</span>
+            {refreshing ? <span className="ml-2 font-semibold text-blue-600">Updating…</span> : null}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => askAnalyticsAssistant('Analytics summary')}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-bold text-brand-700 shadow-sm transition hover:bg-brand-100"
+            >
+              <FiMessageCircle /> Ask assistant
+            </button>
             <button
               type="button"
               onClick={() => setReloadKey((value) => value + 1)}
@@ -480,19 +449,24 @@ export default function AdminAnalytics() {
             >
               <FiRefreshCw className={refreshing ? 'animate-spin' : ''} /> Refresh
             </button>
+            {!decisionWorkspaceEnabled ? (
+              <button type="button" onClick={switchAnalyticsMode} className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                Use decision view
+              </button>
+            ) : null}
           </div>
         </header>
 
         <nav aria-label="Analytics workspaces" className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
-          <div role="tablist" aria-label="Analytics workspaces" className="flex flex-wrap gap-1">
-            {WORKSPACES.map((workspace) => (
+          <div role="tablist" aria-label="Analytics workspaces" className="flex gap-1 overflow-x-auto sm:flex-wrap sm:overflow-visible">
+            {WORKSPACES.filter((workspace) => decisionWorkspaceEnabled || workspace.id !== 'demand').map((workspace) => (
               <button
                 key={workspace.id}
                 type="button"
                 role="tab"
                 aria-selected={filters.workspace === workspace.id}
                 onClick={() => changeWorkspace(workspace.id)}
-                className={`min-w-0 flex-auto rounded-xl px-3 py-2.5 text-sm font-bold leading-5 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:flex-none sm:px-4 ${filters.workspace === workspace.id ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'}`}
+                className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-bold leading-5 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:flex-none sm:px-4 ${filters.workspace === workspace.id ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'}`}
               >
                 {workspace.label}
               </button>
@@ -505,8 +479,8 @@ export default function AdminAnalytics() {
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               <span className="mr-1 inline-flex h-9 items-center gap-2 text-sm font-bold text-slate-800"><FiFilter className="text-blue-600" /> View</span>
               {filters.workspace === 'forecasting' ? <span className="inline-flex h-9 items-center rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600">All genuine historical requests</span> : <>
-                <button type="button" onClick={() => applyPreset(30)} className={`h-9 rounded-lg px-3 text-xs font-bold ${activePreset === 30 ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>30 days</button>
-                <button type="button" onClick={() => applyPreset(90)} className={`h-9 rounded-lg px-3 text-xs font-bold ${activePreset === 90 ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>90 days</button>
+                <button type="button" onClick={() => applyPreset(30)} className={`h-9 rounded-lg px-3 text-xs font-bold ${activePreset === 30 ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>30 days</button>
+                <button type="button" onClick={() => applyPreset(90)} className={`h-9 rounded-lg px-3 text-xs font-bold ${activePreset === 90 ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>90 days</button>
                 <span className="inline-flex h-9 items-center rounded-lg bg-slate-50 px-3 text-xs font-medium text-slate-600"><FiCalendar className="mr-2 text-blue-600" /> {compactDate(filters.startDate)} — {compactDate(filters.endDate)}</span>
               </>}
             </div>
@@ -518,6 +492,10 @@ export default function AdminAnalytics() {
               {filters.workspace === 'technicians' ? <>
                 <CompactSelect label="Service" value={filters.serviceTypeId} onChange={(value) => updateFilter('serviceTypeId', value)}><option value="">All services</option>{(options.service_types || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</CompactSelect>
                 <CompactSelect label="Technician" value={filters.technicianId} onChange={(value) => updateFilter('technicianId', value)}><option value="">All technicians</option>{(options.technicians || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</CompactSelect>
+              </> : null}
+              {filters.workspace === 'demand' ? <>
+                <CompactSelect label="Service" value={filters.serviceTypeId} onChange={(value) => updateFilter('serviceTypeId', value)}><option value="">All services</option>{(options.service_types || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</CompactSelect>
+                <CompactSelect label="Status" value={filters.status} onChange={(value) => updateFilter('status', value)}><option value="">All statuses</option>{(options.statuses || []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</CompactSelect>
               </> : null}
               {filters.workspace === 'sales' ? <>
                 <CompactSelect label="Currency" value={filters.currency} onChange={(value) => updateFilter('currency', value)}><option value="">All currencies</option>{(options.currencies || []).map((item) => <option key={item} value={item}>{item}</option>)}</CompactSelect>
@@ -545,11 +523,11 @@ export default function AdminAnalytics() {
           {showMoreFilters ? (
             <div className="mt-4 border-t border-slate-100 pt-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-                <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                <label className="text-xs font-semibold text-slate-600">
                   <span className="mb-1.5 block">Start date</span>
                   <input type="date" value={filters.startDate} onChange={(event) => updateFilter('startDate', event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-medium normal-case tracking-normal text-slate-800 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" />
                 </label>
-                <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                <label className="text-xs font-semibold text-slate-600">
                   <span className="mb-1.5 block">End date</span>
                   <input type="date" value={filters.endDate} onChange={(event) => updateFilter('endDate', event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-medium normal-case tracking-normal text-slate-800 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" />
                 </label>
@@ -565,16 +543,16 @@ export default function AdminAnalytics() {
                   <option value="none">No comparison</option>
                 </SelectFilter>
                 {customComparisonSelected ? <>
-                  <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  <label className="text-xs font-semibold text-slate-600">
                     <span className="mb-1.5 block">Comparison start</span>
                     <input type="date" value={filters.customComparisonStart} onChange={(event) => updateFilter('customComparisonStart', event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-medium normal-case tracking-normal text-slate-800 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" />
                   </label>
-                  <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  <label className="text-xs font-semibold text-slate-600">
                     <span className="mb-1.5 block">Comparison end</span>
                     <input type="date" value={filters.customComparisonEnd} onChange={(event) => updateFilter('customComparisonEnd', event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-medium normal-case tracking-normal text-slate-800 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" />
                   </label>
                 </> : null}
-                {filters.workspace === 'overview' || filters.workspace === 'technicians' ? <>
+                {filters.workspace === 'overview' || filters.workspace === 'technicians' || filters.workspace === 'demand' ? <>
                   <SelectFilter label="Technician" value={filters.technicianId} onChange={(value) => updateFilter('technicianId', value)}><option value="">All technicians</option>{(options.technicians || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectFilter>
                   <SelectFilter label="Priority" value={filters.priority} onChange={(value) => updateFilter('priority', value)}><option value="">All priorities</option>{(options.priorities || []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</SelectFilter>
                   <SelectFilter label="City" value={filters.city} onChange={(value) => updateFilter('city', value)}><option value="">All cities</option>{(options.cities || []).map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
@@ -594,8 +572,11 @@ export default function AdminAnalytics() {
                   <SelectFilter label="Risk level" value={filters.riskLevel} onChange={(value) => updateFilter('riskLevel', value)}><option value="">All risk levels</option>{(options.risk_levels || []).map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
                   <SelectFilter label="Maintenance service" value={filters.maintenanceServiceTypeId} onChange={(value) => updateFilter('maintenanceServiceTypeId', value)}><option value="">All services</option>{(options.service_types || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectFilter>
                 </> : null}
-                <div className="flex items-end sm:col-span-2">
+                <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
                   <button type="button" onClick={() => setFilters((current) => ({ ...current, ...EMPTY_FILTERS, groupBy: 'day', comparison: 'previous_period' }))} className="h-10 rounded-xl px-3 text-xs font-bold text-blue-700 hover:bg-blue-50">Reset filters</button>
+                  {decisionWorkspaceEnabled ? (
+                    <button type="button" onClick={switchAnalyticsMode} className="h-10 rounded-xl px-3 text-xs font-bold text-slate-500 hover:bg-slate-50 hover:text-slate-700">Use classic view</button>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -604,7 +585,9 @@ export default function AdminAnalytics() {
           {!invalidRange && invalidCustomComparison ? <p className="mt-3 text-sm font-semibold text-rose-600">Choose an earlier comparison date or range with the same number of days.</p> : null}
         </section>
 
-        <AnalyticsColorKey />
+        <ReadingGuide includeScope={decisionWorkspaceEnabled} />
+
+        {decisionWorkspaceEnabled ? <NeedsAttentionPanel attention={data?.attention || attentionSnapshot} /> : null}
 
         {error ? (
           <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
@@ -615,7 +598,7 @@ export default function AdminAnalytics() {
 
         {loading && !data ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-36 animate-pulse rounded-2xl bg-slate-200" />)}
+            {Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-32 animate-pulse rounded-2xl bg-slate-100" />)}
           </div>
         ) : null}
 
@@ -624,125 +607,110 @@ export default function AdminAnalytics() {
             <section>
               <div className="mb-3 flex items-end justify-between gap-4">
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-blue-600">Performance pulse</p>
-                  <h2 className="text-lg font-black text-slate-950">The numbers that matter now</h2>
-                  <p className="mt-1 text-xs text-slate-500">Compared with {comparisonPeriod}</p>
+                  <p className="text-xs font-semibold text-brand-600">Performance pulse</p>
+                  <h2 className="text-lg font-bold text-slate-900">The numbers that matter now</h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Compared with {comparisonPeriod}
+                    {comparison.enabled && !hasComparisonBaseline ? ' · no earlier records to compare yet' : ''}
+                  </p>
                 </div>
-                {refreshing ? <span className="text-xs font-semibold text-blue-600">Updating…</span> : null}
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1">
                 <KpiCard label="Total tickets" value={kpis.total_tickets ?? 0} helper="Created in selected range" icon={FiBriefcase} comparison={{ delta: comparisonKpis.total_tickets?.delta_percent }} />
                 <KpiCard label="Completed" value={kpis.completed_tickets ?? 0} helper="Finished cohort tickets" icon={FiCheckCircle} tone="green" comparison={{ delta: comparisonKpis.completed_tickets?.delta_percent, favorable: 'up' }} />
                 <KpiCard label="Completion rate" value={`${completionRate.toFixed(1)}%`} helper="Completed ÷ all cohort tickets" icon={FiTrendingUp} tone="green" meter={completionRate} comparison={{ delta: comparisonKpis.completion_rate?.delta_points, unit: ' pts', favorable: 'up' }} />
-                <KpiCard label="Avg. completion" value={kpis.average_completion_hours == null ? '—' : `${kpis.average_completion_hours}h`} helper={`${kpis.average_completion_observations || 0} valid observations`} icon={FiClock} tone="amber" comparison={{ delta: comparisonKpis.average_completion_hours?.delta_hours, unit: 'h', favorable: 'down' }} />
-                <KpiCard label="Current overdue" value={kpis.current_overdue ?? 0} helper="Live SLA; not date-filtered" icon={FiAlertCircle} tone="red" />
+                <KpiCard label="Avg. completion" value={kpis.average_completion_hours == null ? '—' : `${kpis.average_completion_hours}h`} helper={plural(kpis.average_completion_observations, 'valid observation')} icon={FiClock} tone="amber" comparison={{ delta: comparisonKpis.average_completion_hours?.delta_hours, unit: 'h', favorable: 'down' }} />
+                <KpiCard label="Current overdue" value={kpis.current_overdue ?? 0} helper="Live SLA; not date-filtered" icon={FiAlertCircle} tone="red" alert={Number(kpis.current_overdue) > 0} />
+              </div>
+              <h3 className="mb-2 mt-5 text-sm font-semibold text-slate-700">Service quality</h3>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1">
+                <KpiCard label="Time to assign" value={kpis.average_response_hours == null ? '—' : `${kpis.average_response_hours}h`} helper={`Request to technician · ${plural(kpis.response_observations, 'ticket')}`} icon={FiUserCheck} comparison={{ delta: comparisonKpis.average_response_hours?.absolute_change, unit: 'h', favorable: 'down' }} />
+                <KpiCard label="On-schedule rate" value={kpis.on_schedule_rate == null ? '—' : `${kpis.on_schedule_rate}%`} helper={`Done by the scheduled day · ${plural(kpis.on_schedule_observations, 'job')}`} icon={FiCalendar} tone="green" meter={kpis.on_schedule_rate} comparison={{ delta: comparisonKpis.on_schedule_rate?.delta_points, unit: ' pts', favorable: 'up' }} />
+                <KpiCard label="Client rating" value={kpis.average_client_rating == null ? '—' : `${Number(kpis.average_client_rating).toFixed(1)} / 5`} helper={plural(kpis.rating_count, 'rating')} icon={FiStar} tone="amber" comparison={{ delta: comparisonKpis.average_client_rating?.absolute_change, unit: '', favorable: 'up' }} />
+                <KpiCard label="Cancellation rate" value={kpis.cancellation_rate == null ? '—' : `${kpis.cancellation_rate}%`} helper={plural(kpis.cancelled_tickets, 'cancelled ticket')} icon={FiXCircle} tone="red" alert={Number(kpis.cancellation_rate) >= 20} comparison={{ delta: comparisonKpis.cancellation_rate?.delta_points, unit: ' pts', favorable: 'down' }} />
+                <KpiCard label="New clients" value={kpis.new_clients ?? 0} helper="Client accounts created" icon={FiUserPlus} comparison={{ delta: comparisonKpis.new_clients?.delta_percent, favorable: 'up' }} />
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <Insight icon={FiBriefcase} label="Top service" value={topService?.service_type || 'No demand yet'} detail={`${topService?.requests || 0} requests`} />
-                <Insight icon={FiCalendar} label="Busiest period" value={busiestPeriod?.label || 'No activity yet'} detail={`${busiestPeriod?.requests || 0} requests`} tone="green" />
-                <Insight icon={FiUsers} label="Highest workload" value={leadTechnician?.technician || 'No assignments yet'} detail={`${leadTechnician?.assigned_jobs || 0} assigned jobs`} tone="blue" />
-                <Insight icon={FiMapPin} label="Top location" value={topLocation?.city || 'No location yet'} detail={`${topLocation?.requests || 0} requests`} tone="blue" />
+                <Insight icon={FiBriefcase} label="Top service" value={topService?.service_type || 'No demand yet'} detail={plural(topService?.requests, 'request')} />
+                <Insight icon={FiCalendar} label="Busiest period" value={busiestPeriod?.label || 'No activity yet'} detail={plural(busiestPeriod?.requests, 'request')} tone="green" />
+                <Insight icon={FiUsers} label="Highest workload" value={leadTechnician?.technician || 'No assignments yet'} detail={plural(leadTechnician?.assigned_jobs, 'assigned job')} tone="blue" />
+                <Insight icon={FiMapPin} label="Top location" value={topLocation ? placeLabel(topLocation.city, topLocation.province) : 'No location yet'} detail={plural(topLocation?.requests, 'request')} tone="violet" />
               </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" aria-label="Cross-domain operational attention">
+              {!decisionWorkspaceEnabled ? <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" aria-label="Cross-domain operational attention">
                 <AttentionItem label="Confirmed sales" value={attention.confirmed_sales} tone="green" />
                 <AttentionItem label="Unassigned tickets" value={attention.unassigned_tickets} tone="amber" />
                 <AttentionItem label="Open after-sales" value={attention.open_after_sales_cases} tone="amber" />
                 <AttentionItem label="Low-stock items" value={attention.low_stock_items} tone="amber" />
                 <AttentionItem label="Overdue maintenance" value={attention.overdue_maintenance} tone="red" />
-              </div>
+              </div> : null}
             </section>
 
-            <ChartCard title="Requests vs completions" eyebrow="Demand & delivery" note="Request arrivals and finished work across the selected period.">
+            <div className="grid gap-4 xl:grid-cols-12">
+              <ChartCard className="xl:col-span-8" title="Requests vs completions" askQuestion="Requests created vs completed" eyebrow="Demand & delivery" note="Request arrivals and finished work across the selected period.">
                 {(charts.requests_vs_completions || []).some((row) => row.requests || row.completions) ? (
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 900, height: 320 }}>
-                      <AreaChart data={charts.requests_vs_completions} margin={{ left: -18, right: 12, top: 8 }}>
-                        <defs>
-                          <linearGradient id="requestsArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.32} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0.03} /></linearGradient>
-                          <linearGradient id="completionsArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.28} /><stop offset="100%" stopColor="#10b981" stopOpacity={0.03} /></linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 5" stroke="#e2e8f0" vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} minTickGap={24} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                        <Tooltip contentStyle={tooltipStyle} />
-                        <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-                        <Area type="monotone" dataKey="requests" name="Requests" stroke="#2563eb" strokeWidth={3} fill="url(#requestsArea)" dot={false} activeDot={{ r: 5 }} isAnimationActive animationDuration={850} />
-                        <Area type="monotone" dataKey="completions" name="Completions" stroke="#10b981" strokeWidth={3} fill="url(#completionsArea)" dot={false} activeDot={{ r: 5 }} isAnimationActive animationDuration={850} animationBegin={120} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : <ChartEmpty />}
-            </ChartCard>
-
-            <div className="grid items-start gap-5 xl:grid-cols-2">
-              <ChartCard title="Primary service demand" eyebrow="What clients need" note="Current requests compared with the preceding equal period.">
-                <CategoryComparisonBars data={charts.service_demand || []} categoryKey="service_type" currentKey="requests" previousKey="previous_requests" ariaLabel="Current and previous service demand" />
-              </ChartCard>
-
-              <ChartCard title="Ticket statuses" eyebrow="Work distribution" note="The donut shows the current workload share; each label retains its preceding-period count.">
-                <TicketStatusDonut data={nonZeroStatuses} />
-              </ChartCard>
-            </div>
-
-            <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-              <ChartCard title="Technician workload" eyebrow="Capacity" note="Lead assignments only. Job counts and scheduled hours use separate views.">
-                {(charts.technician_workload || []).length ? (
                   <>
-                    <ComparisonRows data={charts.technician_workload} labelKey="technician" ariaLabel="Technician workload comparison" series={[{ key: 'assigned_jobs', name: 'Assigned jobs', color: '#2563eb' }, { key: 'completed_jobs', name: 'Completed jobs', color: '#10b981' }, { key: 'previous_assigned_jobs', name: 'Previous assigned', color: '#cbd5e1' }]} />
-                    <div className="mt-4 border-t border-slate-100 pt-4">
-                      <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Scheduled capacity</p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {(charts.technician_workload || []).slice(0, 6).map((item) => (
-                          <div key={item.technician} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                            <span className="min-w-0 break-words text-xs font-semibold leading-4 text-slate-600">{item.technician}</span>
-                            <span className="ml-3 whitespace-nowrap text-sm font-black text-amber-600">{item.scheduled_hours}h</span>
-                          </div>
-                        ))}
-                      </div>
+                    <TrendTotals rows={charts.requests_vs_completions} />
+                    <div className="mt-3 h-64 sm:h-72">
+                      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 900, height: 288 }}>
+                        <AreaChart data={charts.requests_vs_completions} margin={{ left: -18, right: 12, top: 8 }}>
+                          <defs>
+                            <linearGradient id="requestsArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.28} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0.02} /></linearGradient>
+                            <linearGradient id="completionsArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.24} /><stop offset="100%" stopColor="#10b981" stopOpacity={0.02} /></linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 5" stroke="#e2e8f0" vertical={false} />
+                          <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} minTickGap={28} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                          <Tooltip contentStyle={tooltipStyle} />
+                          <Area type="monotone" dataKey="requests" name="Requests" stroke="#2563eb" strokeWidth={2.5} fill="url(#requestsArea)" dot={false} activeDot={{ r: 5 }} isAnimationActive animationDuration={850} />
+                          <Area type="monotone" dataKey="completions" name="Completions" stroke="#10b981" strokeWidth={2.5} fill="url(#completionsArea)" dot={false} activeDot={{ r: 5 }} isAnimationActive animationDuration={850} animationBegin={120} />
+                        </AreaChart>
+                      </ResponsiveContainer>
                     </div>
                   </>
                 ) : <ChartEmpty />}
               </ChartCard>
 
-              <ChartCard title="Demand by location" eyebrow="Service coverage" note="Top cities compared with the preceding equal period.">
-                <CategoryComparisonBars data={charts.locations || []} categoryKey="city" currentKey="requests" previousKey="previous_requests" ariaLabel="Current and previous demand by location" />
+              <ChartCard className="xl:col-span-4" title="Ticket statuses" askQuestion="Ticket count by workflow status" eyebrow="Work distribution" note="Current share of tickets in each workflow stage, with the preceding-period count.">
+                <StatusPipeline data={nonZeroStatuses} />
+              </ChartCard>
+
+              <ChartCard className="xl:col-span-6" title="Primary service demand" askQuestion="Request count by service type" eyebrow="What clients need" note="Requests per service; the thin grey bar is the preceding equal period.">
+                <BarList rows={charts.service_demand || []} labelKey="service_type" valueKey="requests" previousKey="previous_requests" ariaLabel="Current and previous service demand" showTotals />
+              </ChartCard>
+
+              <ChartCard className="xl:col-span-6" title="Demand by location" askQuestion="Historical demand by location" eyebrow="Service coverage" note="Tile size shows each city's share of current requests.">
+                <LocationTreemap rows={charts.locations || []} />
+              </ChartCard>
+
+              <ChartCard className="xl:col-span-6" title="Technician workload" askQuestion="Technician performance" eyebrow="Capacity" note="Lead assignments only; crew work and job hours are reported in the Technicians tab.">
+                <WorkloadList rows={charts.technician_workload || []} />
+              </ChartCard>
+
+              <ChartCard
+                className="xl:col-span-6"
+                title="Forecast readiness"
+                askQuestion="Is forecasting ready?"
+                eyebrow="Data confidence"
+                note="History evidence only. A forecast also needs a fresh model that passes holdout validation."
+                action={<span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${forecast.available ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{forecast.available ? 'History ready' : 'Collecting history'}</span>}
+              >
+                <div className="grid flex-1 items-center gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className={`rounded-xl border p-4 ${forecast.available ? 'border-emerald-100 bg-emerald-50/70' : 'border-amber-100 bg-amber-50/70'}`}>
+                    <p className="font-semibold text-slate-900">{forecast.available ? 'History threshold met' : 'History threshold not met'}</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">{forecast.reason}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-5 sm:flex-col">
+                    <ProgressRing percent={forecastRequestProgress} label="Request volume" detail={`${forecast.request_count || 0} / ${forecast.required_request_count || 0}`} color="#2563eb" />
+                    <ProgressRing percent={forecastHistoryProgress} label="History span" detail={`${forecast.history_months || 0} / ${plural(forecast.required_history_months, 'month')}`} color="#7c3aed" />
+                  </div>
+                </div>
               </ChartCard>
             </div>
-
-            <ChartCard
-              title="Forecast readiness"
-              eyebrow="Data confidence"
-              note="This card checks history only. Forecasting also requires a fresh model that passes holdout validation."
-              className="border-slate-300 bg-gradient-to-br from-white to-slate-50"
-              action={<span className={`rounded-full px-3 py-1 text-xs font-bold ${forecast.available ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{forecast.available ? 'History ready' : 'Collecting history'}</span>}
-            >
-              <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr] lg:items-center">
-                <div className={`rounded-2xl p-4 ${forecast.available ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-                  <p className="font-bold text-slate-900">{forecast.available ? 'History threshold met' : 'History threshold not met'}</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">{forecast.reason}</p>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <div className="mb-2 flex items-end justify-between gap-3">
-                      <span className="text-xs font-bold text-slate-600">Request volume</span>
-                      <span className="text-sm font-black text-slate-950">{forecast.request_count || 0} / {forecast.required_request_count || 0}</span>
-                    </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-blue-600" style={{ width: `${forecastRequestProgress}%` }} /></div>
-                  </div>
-                  <div>
-                    <div className="mb-2 flex items-end justify-between gap-3">
-                      <span className="text-xs font-bold text-slate-600">History span</span>
-                      <span className="text-sm font-black text-slate-950">{forecast.history_months || 0} / {forecast.required_history_months || 0} months</span>
-                    </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-violet-600" style={{ width: `${forecastHistoryProgress}%` }} /></div>
-                  </div>
-                </div>
-              </div>
-            </ChartCard>
           </>
         ) : null}
 
         {data?.workspace === filters.workspace && filters.workspace === 'technicians' ? <TechnicianWorkspace data={data} /> : null}
+        {data?.workspace === filters.workspace && filters.workspace === 'demand' ? <DemandWorkspace data={data} /> : null}
         {data?.workspace === filters.workspace && filters.workspace === 'sales' ? <SalesWorkspace data={data} /> : null}
         {data?.workspace === filters.workspace && filters.workspace === 'inventory' ? <InventoryWorkspace data={data} /> : null}
         {data?.workspace === filters.workspace && filters.workspace === 'after_sales' ? <AfterSalesWorkspace data={data} /> : null}

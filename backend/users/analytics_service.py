@@ -4,8 +4,8 @@ from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from django.db.models import CharField, Count, F, FloatField, Q, Sum, Value
-from django.db.models.functions import Cast, Coalesce, TruncDay, TruncMonth, TruncQuarter, TruncWeek, TruncYear
+from django.db.models import Avg, CharField, Count, DurationField, ExpressionWrapper, F, FloatField, Q, Sum, Value
+from django.db.models.functions import Cast, Coalesce, TruncDate, TruncDay, TruncMonth, TruncQuarter, TruncWeek, TruncYear
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework.exceptions import ValidationError
@@ -31,7 +31,10 @@ GROUPINGS = {
     'year': TruncYear,
 }
 COMPARISON_MODES = {'previous_period', 'previous_month', 'previous_quarter', 'previous_year', 'custom', 'none'}
-WORKSPACES = {'overview', 'technicians', 'sales', 'inventory', 'after_sales', 'forecasting'}
+WORKSPACES = {'overview', 'technicians', 'demand', 'sales', 'inventory', 'after_sales', 'forecasting'}
+# A finished ticket moves Completed -> Turned Over / Accepted after handover, so
+# every "completed work" measure must count both statuses.
+COMPLETED_TICKET_STATUSES = ['Completed', 'Turned Over / Accepted']
 ACTIVE_TICKET_STATUSES = [
     value for value, _label in ServiceTicket.STATUS_CHOICES
     if value not in {'Completed', 'Cancelled', 'Turned Over / Accepted'}
@@ -290,7 +293,7 @@ def comparison_metric(current, previous, *, enabled=True, rate=False, precision=
 
 def _series_map(queryset, field, filters):
     trunc = GROUPINGS[filters['group_by']](field, tzinfo=filters['timezone'])
-    rows = queryset.annotate(period=trunc).values('period').annotate(count=Count('id')).order_by('period')
+    rows = queryset.annotate(period=trunc).values('period').annotate(count=Count('id', distinct=True)).order_by('period')
     return {_bucket_start(row['period'], filters['group_by']): row['count'] for row in rows}
 
 
@@ -409,6 +412,61 @@ def _forecast_readiness(service_type_id=None):
     }
 
 
+def _rate(part, whole):
+    return round((part / whole) * 100, 1) if whole else None
+
+
+def _hours(value):
+    return round(value.total_seconds() / 3600, 2) if value is not None else None
+
+
+def _service_quality(tickets_all, completions, filters):
+    """Basic service-quality measures for the overview in one ticket aggregate plus one client count."""
+    def window(field, previous=False):
+        start = filters['previous_start_at'] if previous else filters['start_at']
+        end = filters['previous_end_at'] if previous else filters['end_at']
+        return Q(**{f'{field}__gte': start, f'{field}__lt': end})
+
+    response_expression = ExpressionWrapper(F('assigned_at') - F('request__request_date'), output_field=DurationField())
+    valid_response = Q(technician__isnull=False, assigned_at__isnull=False, assigned_at__gte=F('request__request_date'))
+    finished = Q(status__in=COMPLETED_TICKET_STATUSES)
+    scheduled = finished & Q(scheduled_date__isnull=False)
+    on_time = scheduled & Q(completed_day__lte=F('scheduled_date'))
+    rated = finished & Q(client_rating__isnull=False)
+    summary = tickets_all.annotate(
+        completed_day=TruncDate('completed_date', tzinfo=filters['timezone']),
+    ).aggregate(
+        response=Avg(response_expression, filter=valid_response & window('assigned_at')),
+        response_count=Count('id', filter=valid_response & window('assigned_at')),
+        previous_response=Avg(response_expression, filter=valid_response & window('assigned_at', True)),
+        scheduled=Count('id', filter=scheduled & window('completed_date')),
+        on_time=Count('id', filter=on_time & window('completed_date')),
+        previous_scheduled=Count('id', filter=scheduled & window('completed_date', True)),
+        previous_on_time=Count('id', filter=on_time & window('completed_date', True)),
+        rating=Avg('client_rating', filter=rated & window('completed_date')),
+        rating_count=Count('id', filter=rated & window('completed_date')),
+        previous_rating=Avg('client_rating', filter=rated & window('completed_date', True)),
+    )
+    clients = User.objects.filter(role='client').aggregate(
+        current=Count('id', filter=window('date_joined')),
+        previous=Count('id', filter=window('date_joined', True)),
+    )
+    enabled = filters['comparison_enabled']
+    return {
+        'cancellation_rate': _rate,
+        'response_hours': _hours(summary['response']),
+        'response_count': summary['response_count'] or 0,
+        'previous_response_hours': _hours(summary['previous_response']) if enabled else None,
+        'on_schedule_rate': _rate(summary['on_time'], summary['scheduled']),
+        'on_schedule_count': summary['scheduled'] or 0,
+        'previous_on_schedule_rate': _rate(summary['previous_on_time'], summary['previous_scheduled']) if enabled else None,
+        'rating': round(summary['rating'], 2) if summary['rating'] is not None else None,
+        'rating_count': summary['rating_count'] or 0,
+        'previous_rating': round(summary['previous_rating'], 2) if enabled and summary['previous_rating'] is not None else None,
+        'new_clients': clients['current'] or 0,
+        'previous_new_clients': (clients['previous'] or 0) if enabled else None,
+    }
+
 def build_admin_analytics(params):
     workspace = _parse_choice(params, 'workspace', WORKSPACES) or 'overview'
     filters = _normalise_filters(params)
@@ -420,23 +478,29 @@ def build_admin_analytics(params):
     requests_all = _apply_request_dimensions(ServiceRequest.objects.all(), filters)
     request_cohort = requests_all.filter(request_date__gte=filters['start_at'], request_date__lt=filters['end_at'])
     completions = tickets_all.filter(
-        status='Completed', completed_date__gte=filters['start_at'], completed_date__lt=filters['end_at']
+        status__in=COMPLETED_TICKET_STATUSES, completed_date__gte=filters['start_at'], completed_date__lt=filters['end_at']
     )
 
     ticket_summary = tickets_all.aggregate(
         total=Count('id', filter=Q(created_at__gte=filters['start_at'], created_at__lt=filters['end_at'])),
         completed=Count('id', filter=Q(
-            created_at__gte=filters['start_at'], created_at__lt=filters['end_at'], status='Completed',
+            created_at__gte=filters['start_at'], created_at__lt=filters['end_at'], status__in=COMPLETED_TICKET_STATUSES,
         )),
         previous_total=Count('id', filter=Q(
             created_at__gte=filters['previous_start_at'], created_at__lt=filters['previous_end_at'],
         )),
         previous_completed=Count('id', filter=Q(
-            created_at__gte=filters['previous_start_at'], created_at__lt=filters['previous_end_at'], status='Completed',
+            created_at__gte=filters['previous_start_at'], created_at__lt=filters['previous_end_at'], status__in=COMPLETED_TICKET_STATUSES,
+        )),
+        cancelled=Count('id', filter=Q(
+            created_at__gte=filters['start_at'], created_at__lt=filters['end_at'], status='Cancelled',
+        )),
+        previous_cancelled=Count('id', filter=Q(
+            created_at__gte=filters['previous_start_at'], created_at__lt=filters['previous_end_at'], status='Cancelled',
         )),
     )
     duration_rows = tickets_all.filter(
-        status='Completed', start_time__isnull=False, completed_date__isnull=False,
+        status__in=COMPLETED_TICKET_STATUSES, start_time__isnull=False, completed_date__isnull=False,
         completed_date__gte=F('start_time'),
     ).filter(
         Q(created_at__gte=filters['start_at'], created_at__lt=filters['end_at']) |
@@ -457,21 +521,23 @@ def build_admin_analytics(params):
     completion_rate = round((completed_tickets / total_tickets) * 100, 1) if total_tickets else 0
     previous_completion_rate = (
         round((previous_completed_tickets / previous_total_tickets) * 100, 1)
-        if previous_total_tickets not in (None, 0) else (0 if previous_total_tickets == 0 else None)
+        if previous_total_tickets else None
     )
     average_completion_hours = round(sum(durations) / len(durations), 2) if durations else None
     previous_average_completion_hours = (
         round(sum(previous_durations) / len(previous_durations), 2) if previous_durations else None
     ) if filters['comparison_enabled'] else None
 
+    quality = _service_quality(tickets_all, completions, filters)
+
     service_demand = list(
-        requests_all.values('service_type_id', 'service_type__name').annotate(
+        requests_all.values('service_type_id', 'service_type__name', 'service_type__color').annotate(
             requests=Count('id', filter=Q(
                 request_date__gte=filters['start_at'], request_date__lt=filters['end_at'],
-            )),
+            ), distinct=True),
             previous_requests=Count('id', filter=Q(
                 request_date__gte=filters['previous_start_at'], request_date__lt=filters['previous_end_at'],
-            )),
+            ), distinct=True),
         ).filter(Q(requests__gt=0) | Q(previous_requests__gt=0)).order_by('-requests', '-previous_requests', 'service_type__name')
     )
     if not filters['comparison_enabled']:
@@ -515,10 +581,10 @@ def build_admin_analytics(params):
         .values('technician_id', 'technician__first_name', 'technician__last_name', 'technician__username')
         .annotate(
             assigned_jobs=Count('id', filter=assignment_window),
-            completed_jobs=Count('id', filter=Q(status='Completed', completed_date__gte=filters['start_at'], completed_date__lt=filters['end_at'])),
+            completed_jobs=Count('id', filter=Q(status__in=COMPLETED_TICKET_STATUSES, completed_date__gte=filters['start_at'], completed_date__lt=filters['end_at'])),
             previous_assigned_jobs=Count('id', filter=previous_assignment_window),
             previous_completed_jobs=Count('id', filter=Q(
-                status='Completed',
+                status__in=COMPLETED_TICKET_STATUSES,
                 completed_date__gte=filters['previous_start_at'],
                 completed_date__lt=filters['previous_end_at'],
             )),
@@ -538,10 +604,10 @@ def build_admin_analytics(params):
             row['previous_completed_jobs'] = None
 
     location_rows = requests_all.values('location__city', 'location__province').annotate(
-        count=Count('id', filter=Q(request_date__gte=filters['start_at'], request_date__lt=filters['end_at'])),
+        count=Count('id', filter=Q(request_date__gte=filters['start_at'], request_date__lt=filters['end_at']), distinct=True),
         previous_count=Count('id', filter=Q(
             request_date__gte=filters['previous_start_at'], request_date__lt=filters['previous_end_at'],
-        )),
+        ), distinct=True),
     ).filter(Q(count__gt=0) | Q(previous_count__gt=0))
     location_demand = _merge_locations(location_rows)
     if not filters['comparison_enabled']:
@@ -557,7 +623,7 @@ def build_admin_analytics(params):
     today = now.astimezone(filters['timezone']).date()
     current_ticket_counts = _apply_ticket_dimensions(ServiceTicket.objects.all(), filters).aggregate(
         unassigned=Count('id', filter=Q(status__in=ACTIVE_TICKET_STATUSES, technician__isnull=True)),
-        upcoming=Count('id', filter=Q(status__in=ACTIVE_TICKET_STATUSES, scheduled_date__gte=today, scheduled_date__lte=today + timedelta(days=7))),
+        upcoming=Count('id', filter=Q(status__in=ACTIVE_TICKET_STATUSES, scheduled_date__gte=today, scheduled_date__lte=today + timedelta(days=6))),
     )
     cross_domain_counts = _cross_domain_attention_counts(today)
     attention = {
@@ -570,11 +636,11 @@ def build_admin_analytics(params):
         'overdue_maintenance': cross_domain_counts['maintenance'],
     }
 
-    services = list(ServiceType.objects.filter(is_active=True).values('id', 'name').order_by('display_order', 'name'))
+    services = list(ServiceType.objects.filter(is_active=True).values('id', 'name', 'color').order_by('display_order', 'name'))
     technicians = []
     for user in User.objects.filter(role='technician', status='active', is_active=True).only('id', 'first_name', 'last_name', 'username').order_by('first_name', 'last_name', 'username'):
         technicians.append({'id': user.id, 'name': user.get_full_name().strip() or user.username})
-    locations = list(ServiceRequest.objects.values_list('location__city', 'location__province').distinct())
+    locations = list(ServiceRequest.objects.order_by().values_list('location__city', 'location__province').distinct())
 
     trend = _filled_trend(request_cohort, completions, filters)
     forecast = _forecast_readiness()
@@ -591,10 +657,15 @@ def build_admin_analytics(params):
         'workspace': 'overview',
         'metric_definitions': {
             'total_tickets': 'Tickets created during the selected date range after all filters.',
-            'completed_tickets': 'Selected ticket cohort whose current canonical status is Completed.',
+            'completed_tickets': 'Selected ticket cohort whose current status is Completed or Turned Over / Accepted.',
             'completion_rate': 'Completed tickets divided by total tickets in the selected cohort; cancelled tickets remain in the denominator.',
             'average_completion_hours': 'Mean completed_date minus start_time for completed cohort tickets with valid, non-negative timestamps.',
             'current_overdue': 'Current unresolved tickets whose live SLA evaluation is overdue; this ignores the selected historical date range.',
+            'cancellation_rate': 'Cancelled tickets divided by all tickets created in the selected range.',
+            'average_response_hours': 'Mean hours from the service request date to the current lead assignment, for tickets assigned in the range.',
+            'on_schedule_rate': 'Tickets completed in the range on or before their scheduled day (business timezone), out of completed tickets that had a scheduled day.',
+            'average_client_rating': 'Mean 1-5 client rating of tickets completed in the range that received a rating.',
+            'new_clients': 'Client accounts created in the range; service, technician and location filters do not apply.',
             'comparison': 'The selected non-overlapping comparison range uses the same inclusive duration and dimension filters.',
         },
         'kpis': {
@@ -604,6 +675,15 @@ def build_admin_analytics(params):
             'average_completion_hours': average_completion_hours,
             'average_completion_observations': len(durations),
             'current_overdue': overdue_count,
+            'cancellation_rate': quality['cancellation_rate'](ticket_summary['cancelled'] or 0, total_tickets),
+            'cancelled_tickets': ticket_summary['cancelled'] or 0,
+            'average_response_hours': quality['response_hours'],
+            'response_observations': quality['response_count'],
+            'on_schedule_rate': quality['on_schedule_rate'],
+            'on_schedule_observations': quality['on_schedule_count'],
+            'average_client_rating': quality['rating'],
+            'rating_count': quality['rating_count'],
+            'new_clients': quality['new_clients'],
         },
         'comparison': {
             'mode': filters['comparison_mode'],
@@ -636,6 +716,27 @@ def build_admin_analytics(params):
                     ),
                     'observations': len(previous_durations) if filters['comparison_enabled'] else 0,
                 },
+                'cancellation_rate': comparison_metric(
+                    quality['cancellation_rate'](ticket_summary['cancelled'] or 0, total_tickets),
+                    quality['cancellation_rate'](ticket_summary['previous_cancelled'] or 0, previous_total_tickets),
+                    enabled=filters['comparison_enabled'], rate=True,
+                ),
+                'average_response_hours': comparison_metric(
+                    quality['response_hours'], quality['previous_response_hours'],
+                    enabled=filters['comparison_enabled'], precision=2,
+                ),
+                'on_schedule_rate': comparison_metric(
+                    quality['on_schedule_rate'], quality['previous_on_schedule_rate'],
+                    enabled=filters['comparison_enabled'], rate=True,
+                ),
+                'average_client_rating': comparison_metric(
+                    quality['rating'], quality['previous_rating'],
+                    enabled=filters['comparison_enabled'], precision=2,
+                ),
+                'new_clients': comparison_metric(
+                    quality['new_clients'], quality['previous_new_clients'],
+                    enabled=filters['comparison_enabled'],
+                ),
             },
         },
         'charts': {
@@ -644,6 +745,7 @@ def build_admin_analytics(params):
                 {
                     'service_type_id': row['service_type_id'],
                     'service_type': row['service_type__name'],
+                    'color': row['service_type__color'] or '#2563eb',
                     'requests': row['requests'],
                     'previous_requests': row['previous_requests'] if filters['comparison_enabled'] else None,
                 }

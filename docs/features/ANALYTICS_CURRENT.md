@@ -1,6 +1,6 @@
 # AFN Analytics — Current Implementation
 
-Last verified: **2026-09-20**
+Last verified: **2026-10-14**
 Status: **Implemented and connected to live database data**
 
 ## 1. Purpose
@@ -38,6 +38,7 @@ dashboard requests, or use mock, random, or fabricated values.
 | --- | --- |
 | Overview | Five cohort KPIs, comparisons, cross-domain attention, demand, status, workload, location, and readiness |
 | Technicians | Lead workload, qualified category rankings, daily estimated capacity, skill/checklist/arrival coverage, and separate crew participation |
+| Demand | Filtered request/completion flow, service-colored stacked demand, service outcome scatter, geographic treemap, and service-location heatmap using real stored dimensions |
 | Sales | Confirmed Sales Records, currency-separated totals, quotation conversion, line composition, breakdowns, and data-quality warnings |
 | Inventory | Stock/value snapshot, movement comparisons, reservations, ticket-link coverage, returns, and deterministic shortage risk |
 | After-Sales & Maintenance | Case comparisons plus current maintenance due and risk summaries; revisits are not labeled rework |
@@ -52,6 +53,31 @@ name remains visible without horizontal scrolling. Overview and specialized
 categorical comparisons use HTML-labeled proportional bars: service, status,
 technician, location, item, category, source, and risk labels wrap naturally
 and are never shortened with ellipses or constrained to fixed-width chart axes.
+
+The decision-workspace layer adds a ranked, linked **Needs attention today**
+queue. The separate in-page **Ask Analytics** prompt card was removed to keep
+the page focused and compact. The existing floating Analytics Assistant remains
+the single question interface. When opened, it loads Overview, Forecasting, and
+the currently selected workspace with the page's active dates and filters. The
+original presentation remains available with `?analyticsMode=legacy`; a built
+deployment can disable the layer with `VITE_ANALYTICS_DECISION_WORKSPACE=false`.
+
+Overview's unequal-height charts use two independently flowing desktop columns.
+Short cards no longer reserve blank row height beneath themselves, and Forecast
+Readiness follows the shorter right-hand column. Mobile retains a single-column
+reading order without horizontal overflow.
+
+The Demand workspace follows the visual grammar of the approved Operations
+Analytics prototype without copying its sample values. It renders an area-flow
+chart, service-colored stacked bars, a requests-versus-completion-output scatter
+plot, a location treemap, and a service-location heatmap. Service colors come
+from the managed Service catalog. The page explicitly states that request and
+completion values are period flows rather than a cohort conversion rate.
+
+A scope guide distinguishes Dashboard's live operational totals from Analytics'
+selected-period evidence. The shared **Active Technician Accounts** definition
+now requires both `status='active'` and `is_active=True` in both APIs; historical
+cohort metrics are not expected to equal current Dashboard queues.
 
 ## 4. Page Structure
 
@@ -142,7 +168,7 @@ duration exists, the page shows an em dash instead of inventing a value.
 | City | `city=<text>` | Case-insensitive exact match |
 | Province | `province=<text>` | Case-insensitive exact match |
 | Assignment | `assignment_state=assigned\|unassigned` | Tests whether the lead technician is present |
-| Workspace | `workspace=overview\|technicians\|sales\|inventory\|after_sales\|forecasting` | Returns only the selected workspace contract |
+| Workspace | `workspace=overview\|technicians\|demand\|sales\|inventory\|after_sales\|forecasting` | Returns only the selected workspace contract |
 | Comparison | `comparison=previous_period\|previous_month\|previous_quarter\|previous_year\|custom\|none` | Selects a non-overlapping prior range or disables prior values |
 | Custom comparison | `comparison_start_date`, `comparison_end_date` | Requires an earlier range with the same inclusive duration as the current period |
 | Sales | `sales_status`, `client_type`, `currency` | Validates SalesRecord status, client type, and currency |
@@ -480,6 +506,8 @@ The current implementation has the following recorded checks:
 - migration drift check: **no changes detected**
 - production frontend build: **passed, 2,519 modules transformed**
 - focused authenticated Chromium Analytics journey: **1 passed**
+- the journey verifies the Demand area flow, service-colored stacked chart,
+  outcome scatter, location treemap, and service-location heatmap regions
 - the focused browser journey opens the Analytics Assistant, waits for its
   Forecasting data, and verifies that forecast accuracy/confidence are reported
   unavailable rather than as zero or an invented percentage
@@ -490,7 +518,7 @@ The current implementation has the following recorded checks:
 - Analytics contains no deliberate `truncate` utility; long categorical labels
   and all six workspace tabs are asserted visible in the focused browser journey
 - Analytics query budget test: **at most 20 database queries**
-- specialized ceilings: **Technicians 20, Sales 25, Inventory 32, After-Sales 40, Forecasting 12**
+- specialized ceilings: **Technicians 20, Demand 28, Sales 25, Inventory 32, After-Sales 40, Forecasting 12**
 - read-only development-data forecast dry run: **0 of 9 active services
   published**, correctly withheld because only 20 genuine requests over about
   4.4 months are currently available

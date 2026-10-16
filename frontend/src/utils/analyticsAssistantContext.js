@@ -42,3 +42,20 @@ export function subscribeToAnalyticsAssistantFilters(listener) {
   window.addEventListener(EVENT_NAME, handleChange);
   return () => window.removeEventListener(EVENT_NAME, handleChange);
 }
+
+const QUESTION_EVENT = 'afn:analytics-assistant-question';
+
+// Open the analytics assistant and ask a question about the current view.
+export function askAnalyticsAssistant(question) {
+  if (typeof window === 'undefined') return;
+  const text = String(question || '').trim();
+  if (!text) return;
+  window.dispatchEvent(new CustomEvent(QUESTION_EVENT, { detail: text }));
+}
+
+export function subscribeToAnalyticsAssistantQuestions(listener) {
+  if (typeof window === 'undefined') return () => {};
+  const handleQuestion = (event) => listener(event.detail);
+  window.addEventListener(QUESTION_EVENT, handleQuestion);
+  return () => window.removeEventListener(QUESTION_EVENT, handleQuestion);
+}

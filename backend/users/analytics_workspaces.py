@@ -5,7 +5,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Max, Min, Q, Sum
-from django.db.models.functions import Coalesce, TruncMonth
+from django.db.models.functions import Coalesce, TruncDay, TruncMonth, TruncQuarter, TruncWeek, TruncYear
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -32,12 +32,17 @@ from services.models import (
     TicketCrewAssignment,
 )
 from users.analytics_service import (
+    _apply_request_dimensions,
     _apply_ticket_dimensions,
     _forecast_readiness,
     _parse_choice,
     _parse_id,
     comparison_metric,
     low_stock_queryset,
+    COMPLETED_TICKET_STATUSES,
+    _bucket_start,
+    _next_bucket,
+    _period_label,
 )
 from users.forecasting_service import (
     build_item_demand_predictions,
@@ -99,6 +104,87 @@ def _bool_choice(params, key):
     return raw == 'true'
 
 
+DEMAND_GROUPINGS = {
+    'day': TruncDay,
+    'week': TruncWeek,
+    'month': TruncMonth,
+    'quarter': TruncQuarter,
+    'year': TruncYear,
+}
+
+
+def _demand_workspace(params, filters):
+    """Extend the canonical overview cohort with purpose-built demand visuals."""
+    from users.analytics_service import build_admin_analytics
+
+    overview_params = {key: value for key, value in params.items()}
+    overview_params['workspace'] = 'overview'
+    payload = build_admin_analytics(overview_params)
+    payload['workspace'] = 'demand'
+
+    requests = _apply_request_dimensions(ServiceRequest.objects.all(), filters).filter(
+        request_date__gte=filters['start_at'], request_date__lt=filters['end_at'],
+    )
+    completed = _apply_ticket_dimensions(ServiceTicket.objects.all(), filters).filter(
+        status__in=COMPLETED_TICKET_STATUSES, completed_date__gte=filters['start_at'], completed_date__lt=filters['end_at'],
+    )
+
+    completed_rows = completed.values('request__service_type_id').annotate(completed=Count('id'))
+    completed_by_service = {row['request__service_type_id']: row['completed'] for row in completed_rows}
+    service_outcomes = [{
+        **row,
+        'color': row.get('color') or '#2563eb',
+        'completed': completed_by_service.get(row['service_type_id'], 0),
+    } for row in payload['charts']['service_demand']]
+
+    raw_matrix = requests.exclude(location__city='').values(
+        'service_type_id', 'service_type__name', 'service_type__color',
+        'location__city', 'location__province',
+    ).annotate(requests=Count('id', distinct=True)).order_by('-requests')
+    matrix = [{
+        'service_type_id': row['service_type_id'],
+        'service_type': row['service_type__name'] or 'Unspecified',
+        'color': row['service_type__color'] or '#2563eb',
+        'location': ', '.join(part for part in [
+            (row['location__city'] or '').strip().title(),
+            (row['location__province'] or '').strip().title(),
+        ] if part) or 'Unknown',
+        'requests': row['requests'],
+    } for row in raw_matrix]
+
+    trunc = DEMAND_GROUPINGS[filters['group_by']]
+    daily_rows = requests.annotate(
+        bucket=trunc('request_date', tzinfo=filters['timezone']),
+    ).values(
+        'bucket', 'service_type_id', 'service_type__name', 'service_type__color',
+    ).annotate(requests=Count('id', distinct=True)).order_by('bucket', 'service_type__name')
+    demand_series = [{
+        'period': row['bucket'].date().isoformat(),
+        'service_type_id': row['service_type_id'],
+        'service_type': row['service_type__name'] or 'Unspecified',
+        'color': row['service_type__color'] or '#2563eb',
+        'requests': row['requests'],
+    } for row in daily_rows if row['bucket']]
+
+    payload['charts'].update({
+        'service_outcomes': service_outcomes,
+        'service_location_matrix': matrix,
+        'service_demand_series': demand_series,
+    })
+    payload['semantics'].update({
+        'demand_workspace': (
+            'Demand uses primary service requests, their saved city/province, and completion output '
+            'recorded inside the selected period after the same dimension filters.'
+        ),
+        'service_outcomes': (
+            'Requests and completed tickets are period flows grouped by service. They are not a '
+            'request-cohort conversion rate and may refer to different records.'
+        ),
+        'service_location_matrix': 'Counts primary service requests by saved city/province; exact addresses are excluded.',
+    })
+    return payload
+
+
 def _display_name(row, prefix='technician__'):
     full_name = f"{row.get(prefix + 'first_name') or ''} {row.get(prefix + 'last_name') or ''}".strip()
     return full_name or row.get(prefix + 'username') or 'Unknown technician'
@@ -118,7 +204,7 @@ def _technician_workspace(params, filters):
     tickets = _apply_ticket_dimensions(ServiceTicket.objects.all(), filters)
     current_q = _range_q('created_at', filters)
     previous_q = _range_q('created_at', filters, previous=True)
-    valid_duration = Q(status='Completed', start_time__isnull=False, completed_date__isnull=False) & Q(
+    valid_duration = Q(status__in=COMPLETED_TICKET_STATUSES, start_time__isnull=False, completed_date__isnull=False) & Q(
         completed_date__gte=F('start_time')
     )
     duration_expression = ExpressionWrapper(F('completed_date') - F('start_time'), output_field=DurationField())
@@ -131,8 +217,8 @@ def _technician_workspace(params, filters):
         .annotate(
             assigned=Count('id', filter=current_q),
             previous_assigned=Count('id', filter=previous_q),
-            completed=Count('id', filter=current_q & Q(status='Completed')),
-            previous_completed=Count('id', filter=previous_q & Q(status='Completed')),
+            completed=Count('id', filter=current_q & Q(status__in=COMPLETED_TICKET_STATUSES)),
+            previous_completed=Count('id', filter=previous_q & Q(status__in=COMPLETED_TICKET_STATUSES)),
             pending=Count('id', filter=current_q & ~Q(status__in=['Completed', 'Cancelled', 'Turned Over / Accepted'])),
             duration=Avg(duration_expression, filter=current_q & valid_duration),
             previous_duration=Avg(duration_expression, filter=previous_q & valid_duration),
@@ -189,7 +275,7 @@ def _technician_workspace(params, filters):
             'completion_rate': round((completed / assigned) * 100, 1) if assigned else 0,
             'previous_completion_rate': (
                 round((row['previous_completed'] / row['previous_assigned']) * 100, 1)
-                if filters['comparison_enabled'] and row['previous_assigned'] else (0 if filters['comparison_enabled'] else None)
+                if filters['comparison_enabled'] and row['previous_assigned'] else None
             ),
             'average_completion_hours': duration_hours,
             'previous_average_completion_hours': previous_duration_hours if filters['comparison_enabled'] else None,
@@ -282,11 +368,11 @@ def _technician_workspace(params, filters):
             'priorities': [{'value': value, 'label': label} for value, label in ServiceTicket.PRIORITY_CHOICES],
             'cities': list(
                 ServiceTicket.objects.exclude(request__location__city='')
-                .values_list('request__location__city', flat=True).distinct().order_by('request__location__city')
+                .order_by().values_list('request__location__city', flat=True).distinct().order_by('request__location__city')
             ),
             'provinces': list(
                 ServiceTicket.objects.exclude(request__location__province='')
-                .values_list('request__location__province', flat=True).distinct().order_by('request__location__province')
+                .order_by().values_list('request__location__province', flat=True).distinct().order_by('request__location__province')
             ),
         },
         'semantics': {
@@ -316,8 +402,8 @@ def _sales_workspace(params, filters):
     previous = records.filter(_date_range_q('sale_date', filters, previous=True))
     official = current.filter(status='confirmed', agreed_total__isnull=False)
     previous_official = previous.filter(status='confirmed', agreed_total__isnull=False)
-    currencies = list(official.values_list('currency_code', flat=True).distinct())
-    previous_currencies = list(previous_official.values_list('currency_code', flat=True).distinct())
+    currencies = list(official.order_by().values_list('currency_code', flat=True).distinct())
+    previous_currencies = list(previous_official.order_by().values_list('currency_code', flat=True).distinct())
 
     current_summary = official.aggregate(count=Count('id'), total=Sum('agreed_total'), average=Avg('agreed_total'))
     previous_summary = previous_official.aggregate(count=Count('id'), total=Sum('agreed_total'), average=Avg('agreed_total'))
@@ -340,12 +426,12 @@ def _sales_workspace(params, filters):
         eligible=Count('id', filter=Q(status__in=['Accepted', 'Rejected'])),
         accepted=Count('id', filter=Q(status='Accepted')),
     )
-    conversion = round((quotation_counts['accepted'] / quotation_counts['eligible']) * 100, 1) if quotation_counts['eligible'] else 0
-    previous_conversion = round((previous_quotation_counts['accepted'] / previous_quotation_counts['eligible']) * 100, 1) if previous_quotation_counts['eligible'] else 0
+    conversion = round((quotation_counts['accepted'] / quotation_counts['eligible']) * 100, 1) if quotation_counts['eligible'] else None
+    previous_conversion = round((previous_quotation_counts['accepted'] / previous_quotation_counts['eligible']) * 100, 1) if previous_quotation_counts['eligible'] else None
 
     voided = records.filter(status='voided', voided_at__isnull=False).filter(_range_q('voided_at', filters))
     voided_summary = voided.aggregate(count=Count('id'), total=Sum('agreed_total'))
-    voided_currencies = list(voided.values_list('currency_code', flat=True).distinct())
+    voided_currencies = list(voided.order_by().values_list('currency_code', flat=True).distinct())
     voided_total = voided_summary['total'] if len(voided_currencies) <= 1 else None
     by_currency = list(official.values('currency_code').annotate(amount=Sum('agreed_total'), count=Count('id')).order_by('currency_code'))
     previous_by_currency = {
@@ -365,6 +451,25 @@ def _sales_workspace(params, filters):
     by_location = list(official.values('ticket__request__location__city', 'ticket__request__location__province').annotate(
         amount=Sum('agreed_total'), count=Count('id'),
     ).order_by('-amount')[:10])
+    trend_rows = official.annotate(bucket=DEMAND_GROUPINGS[filters['group_by']]('sale_date')).values('bucket').annotate(
+        amount=Sum('agreed_total'), count=Count('id'),
+    )
+    trend_by_bucket = {
+        _bucket_start(row['bucket'], filters['group_by']): row for row in trend_rows if row['bucket'] is not None
+    }
+    sales_trend = []
+    cursor = _bucket_start(filters['start_date'], filters['group_by'])
+    last_bucket = _bucket_start(filters['end_date'], filters['group_by'])
+    while cursor <= last_bucket:
+        row = trend_by_bucket.get(cursor, {})
+        sales_trend.append({
+            'period': cursor.isoformat(),
+            'label': _period_label(cursor, filters['group_by']),
+            # Amounts are only summed when every record shares one currency.
+            'amount': (row.get('amount') or Decimal('0')) if single_currency else None,
+            'count': row.get('count', 0),
+        })
+        cursor = _next_bucket(cursor, filters['group_by'])
     composition = list(
         SalesRecordLine.objects.filter(sales_record__in=official, line_total__isnull=False)
         .values('line_type').annotate(amount=Sum('line_total')).order_by('-amount')
@@ -384,6 +489,7 @@ def _sales_workspace(params, filters):
             },
         },
         'charts': {
+            'sales_trend': sales_trend,
             'sales_by_currency': by_currency,
             'sales_by_service': by_service,
             'sales_by_client_type': by_client_type,
@@ -444,10 +550,12 @@ def _inventory_workspace(params, filters):
         transactions = transactions.filter(transaction_type=transaction_type)
     current_transactions = transactions.filter(_range_q('transaction_date', filters))
     previous_transactions = transactions.filter(_range_q('transaction_date', filters, previous=True))
+    current_by_type = dict(current_transactions.values('transaction_type').annotate(total=Sum('quantity')).values_list('transaction_type', 'total'))
+    previous_by_type = dict(previous_transactions.values('transaction_type').annotate(total=Sum('quantity')).values_list('transaction_type', 'total'))
     movement = []
     for value, label in InventoryTransaction.TRANSACTION_TYPES:
-        current_quantity = current_transactions.filter(transaction_type=value).aggregate(total=Sum('quantity'))['total'] or 0
-        previous_quantity = previous_transactions.filter(transaction_type=value).aggregate(total=Sum('quantity'))['total'] or 0
+        current_quantity = current_by_type.get(value) or 0
+        previous_quantity = previous_by_type.get(value) or 0
         if current_quantity or previous_quantity:
             movement.append({
                 'transaction_type': value, 'label': label, 'quantity': current_quantity,
@@ -477,6 +585,9 @@ def _inventory_workspace(params, filters):
         .annotate(quantity=Sum('quantity'), transactions=Count('id')).order_by('-quantity')
     )
 
+    affected_ticket_q = Q(
+        service_type__servicerequest__serviceticket__scheduled_date__range=(filters['start_date'], filters['end_date']),
+    ) & ~Q(service_type__servicerequest__serviceticket__status__in=['Completed', 'Cancelled', 'Turned Over / Accepted'])
     requirement_rows = list(
         ServiceTypeInventoryRequirement.objects.filter(item__in=items)
         .values(
@@ -485,11 +596,9 @@ def _inventory_workspace(params, filters):
         )
         .annotate(affected_tickets=Count(
             'service_type__servicerequest__serviceticket',
-            filter=Q(
-                service_type__servicerequest__serviceticket__scheduled_date__range=(filters['start_date'], filters['end_date']),
-            ) & ~Q(service_type__servicerequest__serviceticket__status__in=['Completed', 'Cancelled', 'Turned Over / Accepted']),
+            filter=affected_ticket_q,
             distinct=True,
-        ), earliest_required=Min('service_type__servicerequest__serviceticket__scheduled_date'))
+        ), earliest_required=Min('service_type__servicerequest__serviceticket__scheduled_date', filter=affected_ticket_q))
     )
     shortages = []
     for row in requirement_rows:
@@ -558,7 +667,7 @@ def _after_sales_workspace(params, filters):
     requires_revisit = _bool_choice(params, 'requires_revisit')
     maintenance_status = _choice(params, 'maintenance_status', MaintenanceSchedule.STATUS_CHOICES)
     risk_level = str(params.get('risk_level') or '').strip() or None
-    if risk_level and risk_level not in set(MaintenanceSchedule.objects.values_list('risk_level', flat=True).distinct()) | {'low', 'normal', 'high'}:
+    if risk_level and risk_level not in set(MaintenanceSchedule.objects.order_by().values_list('risk_level', flat=True).distinct()) | {'low', 'normal', 'high'}:
         raise ValidationError({'risk_level': f'Unsupported value: {risk_level}'})
     maintenance_service_id = _parse_id(params, 'maintenance_service_type_id')
     if maintenance_service_id and not ServiceType.objects.filter(id=maintenance_service_id, is_active=True).exists():
@@ -716,7 +825,7 @@ def _forecasting_workspace(params, filters):
     linked_issues = issues.filter(service_ticket__isnull=False)
     linked_issue_months = linked_issues.annotate(
         month=TruncMonth('transaction_date', tzinfo=filters['timezone']),
-    ).values('month').distinct().count()
+    ).order_by().values('month').distinct().count()
     historical_item_usage = list(
         linked_issues.values('item_id', 'item__name', 'item__sku')
         .annotate(quantity=Sum('quantity'), transactions=Count('id'))
@@ -839,6 +948,8 @@ def _forecasting_workspace(params, filters):
 def build_specialized_workspace(workspace, params, filters):
     if workspace == 'technicians':
         return _technician_workspace(params, filters)
+    if workspace == 'demand':
+        return _demand_workspace(params, filters)
     if workspace == 'sales':
         return _sales_workspace(params, filters)
     if workspace == 'inventory':

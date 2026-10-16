@@ -8,8 +8,14 @@ from urllib.error import HTTPError, URLError
 from django.utils.dateparse import parse_date
 
 from inventory.models import ServiceTypeInventoryRequirement
-from users.analytics_service import _forecast_readiness, build_admin_analytics
+from users.analytics_service import (
+    ACTIVE_TICKET_STATUSES,
+    COMPLETED_TICKET_STATUSES,
+    _forecast_readiness,
+    build_admin_analytics,
+)
 from users.views.helpers import *  # noqa: F401,F403
+from services.views.service_types import with_catalog_counts
 from users.permissions import CanManageServiceCatalog, CanViewAnalytics, CanViewServiceCatalog
 
 class AdminServicesViewSet(viewsets.ViewSet):
@@ -35,7 +41,7 @@ class AdminServicesViewSet(viewsets.ViewSet):
         if active in ['true', 'false']:
             services = services.filter(is_active=(active == 'true'))
 
-        serializer = ServiceTypeSerializer(services, many=True)
+        serializer = ServiceTypeSerializer(with_catalog_counts(services), many=True)
         return Response(serializer.data)
 
     def create(self, request):
@@ -73,12 +79,13 @@ class AdminServicesViewSet(viewsets.ViewSet):
             service = ServiceType.objects.get(id=pk)
             request_count = ServiceRequest.objects.filter(service_type=service).count()
             ticket_count = ServiceTicket.objects.filter(request__service_type=service).count()
-            if request_count or ticket_count:
+            linked_count = service.request_items.count() + service.maintenance_schedules.count()
+            if request_count or ticket_count or linked_count:
                 return Response({
                     'error': 'This service is already used by requests or tickets. Deactivate it instead of deleting it.',
                     'request_count': request_count,
                     'ticket_count': ticket_count,
-                    'usage_count': request_count + ticket_count,
+                    'usage_count': request_count + ticket_count + linked_count,
                 }, status=status.HTTP_400_BAD_REQUEST)
             service.delete()
             return Response({'message': 'Service deleted'}, status=status.HTTP_204_NO_CONTENT)
@@ -113,6 +120,7 @@ class AdminServicesViewSet(viewsets.ViewSet):
             procedures=service.procedures,
             required_equipment=service.required_equipment,
             is_active=service.is_active,
+            requires_site_inspection=service.requires_site_inspection,
         )
 
         requirements = [
@@ -505,14 +513,14 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
 
         # Tickets in period
         completed_requests_count = ServiceTicket.objects.filter(
-            status='Completed',
+            status__in=COMPLETED_TICKET_STATUSES,
             completed_date__date__gte=period_start,
             completed_date__date__lte=today,
             request__isnull=False
         ).values('request_id').distinct().count()
 
         active_tickets_count = ServiceTicket.objects.filter(
-            status__in=['Not Started', 'In Progress', 'On Hold']
+            status__in=ACTIVE_TICKET_STATUSES
         ).count()
         
         available_technicians = User.objects.filter(
@@ -543,7 +551,7 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
 
         # Average Completion Time
         avg_completion = ServiceTicket.objects.filter(
-            status='Completed',
+            status__in=COMPLETED_TICKET_STATUSES,
             completed_date__isnull=False,
             start_time__isnull=False,
             completed_date__date__gte=period_start,
@@ -616,7 +624,7 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
 
         # Count completions
         completed_counts = ServiceTicket.objects.filter(
-            status='Completed',
+            status__in=COMPLETED_TICKET_STATUSES,
             completed_date__date__gte=period_start,
             completed_date__date__lte=today,
             request__isnull=False
@@ -651,7 +659,7 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         recent_start = today - timezone.timedelta(days=days - 1)
         leaderboard = (
             ServiceTicket.objects.filter(
-                status='Completed',
+                status__in=COMPLETED_TICKET_STATUSES,
                 technician__isnull=False,
                 completed_date__date__gte=recent_start,
                 completed_date__date__lte=today,
@@ -681,7 +689,7 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         
         # Get counts from DB
         completed_counts_qs = ServiceTicket.objects.filter(
-            status='Completed',
+            status__in=COMPLETED_TICKET_STATUSES,
             completed_date__date__gte=start_date,
             completed_date__date__lte=today
         ).values('completed_date__date').annotate(count=Count('id'))
@@ -739,7 +747,7 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
 
         # Count completed tickets per month
         completed_dates = ServiceTicket.objects.filter(
-            status='Completed',
+            status__in=COMPLETED_TICKET_STATUSES,
             completed_date__date__gte=first_month_start,
             completed_date__date__lte=today
         ).values_list('completed_date__date', flat=True)
@@ -772,7 +780,7 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
 
         period_start = today - timezone.timedelta(days=max(1, days) - 1)
         completed_tickets = ServiceTicket.objects.filter(
-            status='Completed',
+            status__in=COMPLETED_TICKET_STATUSES,
             completed_date__date__gte=period_start,
             completed_date__date__lte=today,
             request__service_type__isnull=False,
@@ -1202,7 +1210,7 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
                 bucket[field_name] = label
                 bucket['totalTickets'] += 1
 
-                if ticket['status'] != 'Completed' or not ticket['completed_date']:
+                if ticket['status'] not in COMPLETED_TICKET_STATUSES or not ticket['completed_date']:
                     continue
 
                 bucket['completedCount'] += 1
@@ -1308,7 +1316,7 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         completed_request_ids = set(
             ServiceTicket.objects
             .filter(
-                status='Completed',
+                status__in=COMPLETED_TICKET_STATUSES,
                 completed_date__date__gte=history_start,
                 completed_date__date__lte=today,
                 request__location__isnull=False,

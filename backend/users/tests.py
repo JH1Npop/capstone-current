@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 from django.contrib.auth.tokens import default_token_generator
+from users.views.helpers import email_verification_token_generator
 from django.core.cache import cache
 from django.core import mail
 from django.core.files.storage import FileSystemStorage
@@ -584,7 +585,7 @@ class EmailVerificationTests(APITestCase):
             is_active=False,
         )
         uid = urlsafe_base64_encode(force_bytes(user.pk))
-        token = default_token_generator.make_token(user)
+        token = email_verification_token_generator.make_token(user)
 
         response = self.client.post(self.verify_url, {'uid': uid, 'token': token}, format='json')
 
@@ -1378,6 +1379,8 @@ class AdminAnalyticsTests(APITestCase):
         self.assertEqual(set(response.data['kpis']), {
             'total_tickets', 'completed_tickets', 'completion_rate',
             'average_completion_hours', 'average_completion_observations', 'current_overdue',
+            'cancellation_rate', 'cancelled_tickets', 'average_response_hours', 'response_observations',
+            'on_schedule_rate', 'on_schedule_observations', 'average_client_rating', 'rating_count', 'new_clients',
         })
         self.assertEqual(set(response.data['charts']), {
             'requests_vs_completions', 'service_demand', 'ticket_statuses',

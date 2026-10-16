@@ -2,6 +2,7 @@
 from zoneinfo import ZoneInfo
 
 from services.views.helpers import *  # noqa: F401,F403
+from users.analytics_service import ACTIVE_TICKET_STATUSES, COMPLETED_TICKET_STATUSES
 
 
 def _bounded_days(request, default=30, minimum=1, maximum=365):
@@ -495,10 +496,10 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
             tickets = ServiceTicket.objects.filter(technician=tech)
             if use_all_time:
                 period_total = tickets.count()
-                period_completed = tickets.filter(status='Completed').count()
-                period_active = tickets.filter(status__in=['Not Started', 'In Progress', 'On Hold']).count()
+                period_completed = tickets.filter(status__in=COMPLETED_TICKET_STATUSES).count()
+                period_active = tickets.filter(status__in=ACTIVE_TICKET_STATUSES).count()
                 completed_tickets = tickets.filter(
-                    status='Completed', start_time__isnull=False, end_time__isnull=False,
+                    status__in=COMPLETED_TICKET_STATUSES, start_time__isnull=False, end_time__isnull=False,
                     end_time__gte=F('start_time'),
                 )
                 assigned_tickets = tickets.filter(assigned_at__isnull=False)
@@ -512,12 +513,12 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
                     Q(completed_date__isnull=True, end_time__date__gte=start_date, end_time__date__lte=end_date)
                 )
                 period_total = tickets.filter(assignment_period).count()
-                period_completed = tickets.filter(status='Completed').filter(completion_period).count()
+                period_completed = tickets.filter(status__in=COMPLETED_TICKET_STATUSES).filter(completion_period).count()
                 period_active = tickets.filter(
-                    assignment_period, status__in=['Not Started', 'In Progress', 'On Hold']
+                    assignment_period, status__in=ACTIVE_TICKET_STATUSES
                 ).count()
                 completed_tickets = tickets.filter(
-                    completion_period, status='Completed', start_time__isnull=False,
+                    completion_period, status__in=COMPLETED_TICKET_STATUSES, start_time__isnull=False,
                     end_time__isnull=False, end_time__gte=F('start_time'),
                 )
                 assigned_tickets = tickets.filter(
@@ -570,11 +571,11 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
                     month_key = assigned_day.replace(day=1).isoformat()
                     if month_key in monthly_activity_map:
                         monthly_activity_map[month_key]['total_jobs'] += 1
-                        if t.status in ['Not Started', 'In Progress', 'On Hold']:
+                        if t.status in ACTIVE_TICKET_STATUSES:
                             monthly_activity_map[month_key]['active_jobs'] += 1
                 
                 # Count completed jobs
-                if t.status == 'Completed':
+                if t.status in COMPLETED_TICKET_STATUSES:
                     completed_dt = t.completed_date or t.end_time
                     if completed_dt:
                         completed_day = timezone.localtime(completed_dt).date() if timezone.is_aware(completed_dt) else completed_dt.date()
