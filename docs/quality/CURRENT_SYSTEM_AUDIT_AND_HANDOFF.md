@@ -1,9 +1,9 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-17 01:28 Asia/Singapore**
-Current focused objective: **Maintain the now-staging-deployed configurable per-service pre-service deposit flow without letting quotation acceptance, manual assignment, auto-dispatch, or later sales collection bypass or double-count the requirement; retain the remaining production-grade backup/restore and staging UAT limits explicitly.**
-Current objective: **Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the existing inspection-first path and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
+Last updated: **2026-10-17 03:08 Asia/Singapore**
+Current focused objective: **Keep Admin Inventory permission-correct, make its active/low/out-of-stock summaries agree with available stock after reservations, and require accountable reasons for every manual stock movement while preserving the append-only ticket inventory flow.**
+Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the existing inspection-first path and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
 entrypoint aligned with application roles and delegated capabilities, keep the
@@ -83,15 +83,15 @@ frontend build-only transitive packages to `browserslist==4.28.9` and
 `postcss-selector-parser==6.1.4`; `pip-audit` and both npm audit scopes now
 report no known vulnerabilities, and the complete release and browser gates
 pass. The exhaustive Chen ERD is now generated directly from the physical DBML;
-all 102 diamonds connect to the actual entity boxes through structured gutters
+all 107 diamonds connect to the actual entity boxes through structured gutters
 and dedicated relationship rails on the same editable page, using the supplied
 classic green-entity/yellow-attribute/orange-diamond Chen reference style.
-Stable `R001`-`R102` identifiers now appear on both legs and their matching
+Stable `R001`-`R107` identifiers now appear on both legs and their matching
 diamonds, which also state both endpoint entities, fields, and cardinalities so
 long routes can be read without guesswork. Hub
 degree and module affinity now drive placement instead of database table order.
 The generated `ERD_CURRENT.md` is the complete end-to-end text edition with all
-51 entities, 682 typed and constrained attributes, and 102 relationships.
+52 entities, 707 typed and constrained attributes, and 107 relationships.
 `ERD_CURRENT_CONNECTIONS.md` remains the shorter connection-only companion;
 both write relationships as source-cardinality-verb-cardinality-target lines
 with exact field mappings.
@@ -121,7 +121,12 @@ action column. Its admin workspace now prioritizes physical, reserved, and
 available stock; provides attention and condition filters, compact desktop and
 mobile layouts, explicit receive/correction actions, item-level ticket
 reservation context, and a reachable guarded stock-movement dialog without
-duplicating movement controls inside item editing. The existing scheduled
+duplicating movement controls inside item editing. View-only administrators no
+longer see management controls in item details. Operational totals and attention
+filters exclude retired items, and out-of-stock means no available stock after
+reservations. Every manually posted movement now requires a reason; an optional
+business reference is captured and displayed, and the generic return action is
+explicitly separated from the ticket equipment-verification flow. The existing scheduled
 landing-page promotion flow was verified. The real public landing page now uses
 defined, accessible hero/footer actions rather than absent theme classes, gives
 every service a truthful next step, supports usable mobile navigation, and
@@ -171,14 +176,14 @@ the bounded staff-only fields required to explain those decisions.
 A professor-format final diagram pack now provides exactly one manually laid
 out draw.io Context Diagram, one unified draw.io DFD, and one generated
 single-page exhaustive Chen draw.io ERD matching the approved pre-oral notation
-and presentation. At the user's direction, the Chen figure includes the same 51
-entities, all 682 local attributes, and all 102 in-scope relationships as the
+and presentation. At the user's direction, the Chen figure includes the same 52
+entities, all 707 local attributes, and all 107 in-scope relationships as the
 physical contract. It is generated directly from the DBML: wide domain lanes
 contain every canonical entity and attribute, and all relationship legs connect
 those actual entities to diamonds through clear exits, shared domain gutters,
 dedicated rails, and visible bridge arcs. The physical
-database-schema DBML is generated from and matches all 51 active application
-model tables, every local column, and all 102 in-scope model relationships;
+database-schema DBML is generated from and matches all 52 active application
+model tables, every local column, and all 107 in-scope model relationships;
 it also removes retired Firebase/SMS/template-era concepts. The sources retain the
 paper's actor/process/store and entity/diamond/attribute visual conventions;
 the unified figures follow the professors' one-diagram-per-type requirement.
@@ -807,6 +812,10 @@ deployment authorization.
 
 ## 8. Validation ledger
 
+2026-10-17 03:08: Inventory permission/metric/audit hardening passed its final focused gates. `manage.py test inventory.tests inventory.test_operational_catalog_migration --verbosity 1` passed 38/38 after the first run exposed and was superseded by a test-fixture-only price-type error (`unit_price` was supplied as a string before model multiplication; corrected to `Decimal`). `npm run build` transformed 2,536 modules successfully. Focused Chromium `03-admin-workspace` inventory coverage passed 3/3: page/filter loading, custom item plus opening balance and referenced receipt, and a genuine `inventory.view`-only administrator with no management controls. The first browser attempt passed 2/3 but correctly invalidated its synthetic view-only setup when `/users/me/` restored the real superadmin token; it was superseded by a real isolated view-only account and the final 3/3 run. Expected Vite WebSocket `ECONNABORTED` warnings occurred because the E2E runner uses the non-ASGI server; polling fallback remained operational. Django system check and migration drift passed, `git diff --check` passed with line-ending warnings only, and the isolated E2E database was flushed and verified at zero users. No development/staging/production database, migration, push, or deployment changed; the user subsequently authorized a local commit of the validated worktree.
+
+2026-10-17 01:48: Regenerated the maintained schema/documentation set from the current Django models after `services.0061`: `AFN_ERD.dbml`, both exhaustive Chen draw.io copies, the complete text ERD, and the relationship-only map now contain 52 entities, 707 attributes, and 107 in-scope relationships. Confirmed the new Service Type deposit policy/value, Quotation Record deposit snapshot/required amount, nullable Sales Payment quotation foreign key, and direct Sales Payment-to-Quotation relationship in DBML, Markdown, and draw.io. Updated the supporting Mermaid ERD, core data dictionary, system workflow, professor-format Context Diagram and DFD, academic pack guide, and accuracy note. Generator metadata/counts are now dynamic, and `ERD_CURRENT.md` once again receives the complete catalog rather than the compact map. Generator byte-compilation, deterministic regeneration, Django system check, draw.io XML/ID/edge validation, exact 52/707/107/214 shape counts, identical maintained Chen hashes, the 107-row Markdown relationship check, and `git diff --check` passed. The DBML and Mermaid CLIs are not installed locally, so rendered Mermaid/diagrams.net and official DBML compiler inspection remain pending. No database, deployment, or application runtime was changed.
+
 2026-10-17 01:28: The optional-deposit release was pushed as the fast-forward `e993385..4cd8311` to `origin/staging-deploy` and verified live. Direct staging migration inspection marks `services.0060`, `services.0061`, and `users.0041` applied. Backend liveness returned HTTP 200; readiness returned HTTP 200 with database, cache, realtime, and storage all ready; the frontend root returned HTTP 200. The public service API returned HTTP 200 and includes both `deposit_policy` and `deposit_value`; the deployed frontend entry asset `index-DY7DfT4I.js` references `QuotationDepositPanel-6KmEkdTr.js`. A read-only authenticated request using an existing staging Admin/Superadmin token without printing it returned HTTP 200 from `/api/dashboard/stats/?role=admin` with `role=admin` and no error, proving the prior missing-column failure is gone on the deployed backend. The guarded repository perimeter check passed HTTPS, dependency readiness, security headers, CORS, anonymous-access denial, and TRACE controls. No synthetic service/deposit/payment records were inserted into staging during verification. Production was not accessed or changed. Provider-console deployment metadata remains unavailable because the local Render CLI token is expired; activation is established from the migrated database and live backend/frontend contracts instead.
 
 2026-10-17 01:19: The pre-staging optional-deposit release gate passed through `npm.cmd run quality`: Django system check, Python dependency integrity, migration drift, all 555 backend tests with 3 expected PostgreSQL-only skips, the 2,536-module production build, and 16/16 isolated Chromium smoke scenarios. The first equivalent `npm run quality` invocation was blocked before project execution by the workstation's PowerShell `npm.ps1` policy; rerunning through the installed `npm.cmd` completed the intended gate. Browser WebSocket proxy `ECONNABORTED` messages were the expected polling-fallback behavior because the smoke runner deliberately uses `--noasgi`; the scenarios passed. A fresh Git fetch showed the candidate fast-forward safe at 10 commits ahead and 0 behind `origin/staging-deploy`. A read-only Aiven staging check showed `inventory.0008`, `services.0058`/`0059`, and `users.0040` already applied, with only `services.0060`, `services.0061`, and `users.0041` pending. Because `pg_dump` is not installed, a full Django logical backup was created from the exact deployed `e993385` model/schema before any push: ignored `backend/local_backups/staging-predeposit-20261016T171607Z.json`, 1,348 objects, 754,389 bytes, SHA-256 `927c5aae72ccddc079d89ee1145f6c217f3542bd6b7b39c237626d4c534a22ee`. The JSON parsed successfully and is ignored by Git. This is a pre-migration data snapshot, not a PostgreSQL-native or restore-tested backup. No staging data or schema was changed during these checks.
@@ -1244,9 +1253,10 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Medium before production | The technical location policy, explicit collection control, capability boundary, and automated retention are implemented, but the organization has not yet named its responsible contact or approved jurisdiction-specific staff notice/consent wording | Have the responsible business/legal owner approve `TECHNICIAN_LOCATION_PRIVACY_POLICY.md`, provide it to technicians, record the contact/escalation process, and verify deployment values before activating production tracking |
 | Low product limitation | Inventory now provides reliable service-stock operations and ticket reservation visibility, but it is not a procurement suite: supplier purchase orders, barcode scanning, lot/serial tracking, and demand-based reorder recommendations are not implemented | Add these only when actual operating volume requires them; preserve the append-only ledger and ticket-issue boundary when extending inventory |
 | Low product boundary | Ticket equipment reconciliation is quantity-based and assumes interchangeable stock units; it does not identify which serialized physical unit came back | Keep the bounded ticket ledger for current consumables/equipment; add serial/asset-level issue and return records before using the workflow for uniquely tracked equipment |
+| Low before scale | Admin Inventory still fetches the complete item/category catalog and performs search/filter/pagination in the browser | This is acceptable for the current small-to-medium catalog; move list filtering and pagination server-side only when measured SKU volume or page latency justifies it |
 | Low scheduling limitation | Exact-time overlap protection applies only when both appointments have concrete times and compares work beginning on the same scheduled date; `Time TBD` records cannot honestly be interval-checked and long jobs spanning midnight remain governed by the duration-based daily-capacity allocation rather than a cross-midnight interval lock | Require concrete times before dispatch where strict collision prevention is operationally necessary; extend the schedule model with explicit start/end timestamps before supporting overnight work |
 | Medium dispatch data quality | Smart-assignment proximity is an explicitly labeled straight-line/travel-time estimate based on the technician profile's latest stored coordinates; candidate eligibility does not yet reject an old location timestamp or poor GPS accuracy, and routed road distance is still calculated only after assignment | Define an operational freshness/accuracy threshold and an offline fallback before enforcing it; persist or join the latest accuracy reading during ranking, then add stale/inaccurate-location regressions before using proximity as a contractual dispatch guarantee |
-| Low academic-deliverable step | Final Context/DFD/Chen draw.io XML is structurally valid and the exhaustive Chen source has no overlapping semantic shapes. Its required direct 204 relationship legs use shared gutters, dedicated rails, and bridge arcs to organize unavoidable edge intersections, but the files were not rendered because diagrams.net is not installed in this workspace | Open each `.drawio` file in diagrams.net and the DBML in dbdiagram.io; verify the complete one-page export, bridge visibility, and text legibility at the intended Google Docs insertion or defense-print size |
+| Low academic-deliverable step | The regenerated Context/DFD/Chen draw.io XML still requires rendered inspection. The exhaustive Chen source now has 52 entities, 707 attributes, 107 diamonds, and 214 direct relationship legs using shared gutters, dedicated rails, and bridge arcs, but diagrams.net is not installed in this workspace. | Open each `.drawio` file in diagrams.net and the DBML in dbdiagram.io; verify the complete one-page export, bridge visibility, and text legibility at the intended Google Docs insertion or defense-print size. |
 | Low before scale | Activity Log service context still resolves related service records per visible log, so a service-heavy page can issue additional read queries | Batch-load service targets when audit volume or measured page latency justifies the optimization; CSV export already streams raw audit rows without those lookups |
 | Low before scale | Completed-job detail serialization intentionally performs bounded per-page relation reads for crew/inventory correctness; the default is now 10 and an attempted generic prefetch-cache reuse proved unsafe for same-request assignment mutations and was removed | Keep the 10-record default and page-size cap; if measured latency warrants optimization, use endpoint-local immutable snapshots or explicitly clear relation caches after mutations and retain the full assignment/inventory regression suite |
 | Low product boundary | Technicians can view official-document references but cannot generate office-controlled forms because generation remains behind the document-management capability | Keep the technician download labeled Work Summary; add a separate read-only finalized-document delivery contract only if the business approves technician access to official files |
@@ -1260,7 +1270,9 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
-- Optional per-service deposits touch `backend/services/{deposits.py,auto_dispatch.py,models/{core.py,documents.py,sales.py},serializers/{requests.py,commercial_records.py},views/{helpers.py,sales_records.py,tickets.py},tests/test_business_flow_controls.py,migrations/0061_service_deposit_policy.py}`, `frontend/src/{api/services.js,components/{client/ClientJobDecisions.jsx,shared/InspectionReviewModal.jsx,sales/QuotationDepositPanel.jsx},pages/admin/{AdminDocuments.jsx,AdminServices.jsx}}`, and this handoff. The implementation is committed in `1159b9a`, recorded for release in `4cd8311`, and verified on staging. Local and staging schemas are current; production remains untouched.
+- Inventory permission/metric/audit hardening touches `backend/inventory/{serializers.py,tests.py,views.py}`, `frontend/src/pages/admin/AdminInventory.jsx`, `e2e/{03-admin-workspace.spec.js,seed-test-data-exec.py}`, `docs/security/INVENTORY_LEDGER_CONTRACT.md`, and this handoff. It adds no model or migration and leaves the pre-existing ERD/documentation work intact.
+
+- Optional per-service deposits touch `backend/services/{deposits.py,auto_dispatch.py,models/{core.py,documents.py,sales.py},serializers/{requests.py,commercial_records.py},views/{helpers.py,sales_records.py,tickets.py},tests/test_business_flow_controls.py,migrations/0061_service_deposit_policy.py}`, `frontend/src/{api/services.js,components/{client/ClientJobDecisions.jsx,shared/InspectionReviewModal.jsx,sales/QuotationDepositPanel.jsx},pages/admin/{AdminDocuments.jsx,AdminServices.jsx}}`, `backend/scripts/{generate_afn_dbml.py,generate_afn_chen_drawio.py,generate_afn_relationship_map.py}`, `docs/models/{AFN_ERD.dbml,AFN_ERD_CHEN_PRESENTATION.drawio,ERD_CURRENT.drawio,ERD_CURRENT.md,ERD_CURRENT_CONNECTIONS.md,README.md,ERD_ACCURACY_RECHECK.md,ENTITY_RELATIONSHIP_DIAGRAM.md,AFN_CORE_DATA_DICTIONARY.md,SYSTEM_WORKFLOW_MODEL.md,AFN_DETAILED_DFD_STRUCTURED.drawio}`, `docs/academic/final_diagrams/{README.md,01_CONTEXT_DIAGRAM.drawio}`, and this handoff. The runtime implementation is committed in `1159b9a`, recorded for release in `4cd8311`, and verified on staging. The refreshed schema/academic documentation is included in the current user-authorized local commit. Local and staging schemas are current; production remains untouched.
 
 - The reversible Analytics decision-workspace and visual-demand phase touches `backend/users/{analytics_service.py,analytics_workspaces.py}`, `backend/services/{views_dashboard.py,tests/test_analytics_workspace.py}`, `frontend/src/{utils/analyticsAssistantContext.js,components/shared/SystemAssistant.jsx,pages/admin/AdminAnalytics.jsx,pages/admin/analytics/AnalyticsDecisionLayer.jsx}`, `e2e/03-admin-workspace.spec.js`, Analytics documentation, and this handoff. It adds no migration and leaves the pre-existing ERD/system-knowledge work untouched.
 
@@ -1311,8 +1323,9 @@ All paths below are preserved work, not cleanup candidates.
 - `README.md`, `docs/README.md`: repository and documentation entrypoints.
 - `docs/models/{AFN_ERD.dbml,AFN_ERD_CHEN_PRESENTATION.drawio,ERD_CURRENT.drawio,README.md}`
   and `docs/academic/final_diagrams/README.md`: regenerated physical schema and
-  editable Chen references including technician `last_seen_at` and the already
-  implemented maintenance/MFA fields, now totaling 682 attributes.
+  editable Chen references including technician `last_seen_at`, the already
+  implemented maintenance/MFA fields, and the deployed deposit contract, now
+  totaling 707 attributes.
 - `package.json`, `frontend/{package.json,package-lock.json}`, `playwright.config.js`:
   build/test scripts, unified release/staging commands, dedicated isolated E2E
   ports, and the dependency-local React/Feather icon stack.
@@ -1373,8 +1386,9 @@ All paths below are preserved work, not cleanup candidates.
   integrity, customizable catalog/category behavior, capability-scoped technician
   catalog access and own ledger/reservation visibility, transaction history,
   item-filtered ticket reservation context, `ITX`/`RSV` display identities,
-  lifecycle validation, bounded ticket-return regression coverage, realtime
-  behavior, and regression coverage.
+  lifecycle validation, active available-stock statistics, required reasons and
+  optional references for manual movements, bounded ticket-return regression
+  coverage, realtime behavior, and regression coverage.
 - `backend/inventory/migrations/{0005_inventory_integrity_constraints.py,0006_inventorycategory_inventory_category_name_ci_unique.py,0007_equipmentreturnrequest_equipmentreturnrequestitem.py}`:
   inventory integrity, case-insensitive catalog identity, and two-party return
   requests; `0007` is applied locally and to staging Aiven.
@@ -1812,6 +1826,9 @@ All paths below are preserved work, not cleanup candidates.
   journeys including ticket-linked equipment returns and visual detail-dialog
   screenshots, and direct Windows server startup/teardown without
   process-tree hangs.
+  Inventory coverage includes a real isolated view-only administrator plus the
+  referenced manual-receipt journey; the extra account is removed when the E2E
+  database is flushed.
 - `e2e/E2E_TEST_REPORT_DETAILED.md`: retained historical 71-test snapshot with
   an explicit superseded notice pointing readers to this living validation ledger.
 - `docs/SYSTEM_END_TO_END_IMPLEMENTATION_PLAN.md`: whole-system plan.
@@ -1836,8 +1853,8 @@ All paths below are preserved work, not cleanup candidates.
   pack rather than the older compact examples.
 - `docs/models/{AFN_ERD.dbml,AFN_ERD_CHEN_PRESENTATION.drawio,ERD_CURRENT.drawio,ERD_CURRENT.md,ERD_CURRENT_CONNECTIONS.md}`
   and `backend/scripts/{generate_afn_dbml.py,generate_afn_chen_drawio.py,generate_afn_relationship_map.py}`:
-  reproducible physical DBML covering all 51 active application models with
-  exact local columns and 102 in-scope relationships, plus the exhaustive
+  reproducible physical DBML covering all 52 active application models with
+  exact local columns and 107 in-scope relationships, plus the exhaustive
   DBML-derived single-page Chen presentation containing the same entities and
   attributes, with every relationship attached directly to canonical entities
   through structured gutters and rails.
@@ -1877,6 +1894,10 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-17 03:08: Hardened Admin Inventory without changing its schema or ticket automation. View-only administrators no longer see Manage in item details; active summary quantities and attention filters exclude retired items; out-of-stock uses available stock after reservations; low-stock/statistics calculations now run as database expressions; every manually posted stock movement requires a reason; the optional business reference is captured, normalized, submitted, and shown in history; and the manual return option is clearly labeled as non-ticket work with guidance to use the verified completed-job return flow. Added backend regressions plus a real isolated `inventory.view`-only E2E identity/journey. Final evidence: 38/38 focused backend, 2,536-module build, 3/3 focused Chromium, Django/migration/diff checks clean, and E2E cleanup at zero users. The two superseded validation attempts are preserved in section 8. At the user's explicit request, this validated work and the pending ERD/documentation refresh are included in one local commit; nothing was pushed, deployed, or applied to a persistent database.
+
+2026-10-17 01:48: Updated the complete maintained ERD and its supporting academic/workflow documentation for the deployed optional-deposit contract. Regenerated the DBML, both Chen draw.io copies, complete text ERD, and relationship-only map from live model metadata; added the `services.0061` deposit fields and Sales Payment-to-Quotation relationship; corrected the relationship-map generator so the complete and compact outputs are distinct; made generated schema dates/counts and Chen relationship ranges dynamic; updated the core dictionary, simplified Mermaid ERD, system workflow, professor-format Context Diagram and DFD, diagram-pack guide, and accuracy note. The current scope is 52 entities, 707 attributes, and 107 relationships. No database or deployment changed; validation evidence is recorded in section 8.
 
 2026-10-17 01:28: Pushed the user-authorized fast-forward release `e993385..4cd8311` to `origin/staging-deploy` and verified activation without touching production. Render's startup migration applied `services.0060`, `services.0061`, and `users.0041`; direct migration inspection confirms all three. Live backend liveness/readiness, frontend root, deposit-aware public service fields, the new frontend deposit chunk, authenticated Admin Dashboard HTTP 200, and the guarded staging perimeter all passed. Verification was read-only and created no synthetic staging business/payment records. The pre-migration logical snapshot and its stated limitations remain recorded above; Render CLI deployment metadata could not be queried until its expired token is renewed.
 

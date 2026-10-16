@@ -38,6 +38,10 @@ erDiagram
     SERVICE_TICKET ||--o{ AFTER_SALES_CASE : creates
     SERVICE_TICKET ||--o| MAINTENANCE_SCHEDULE : schedules
     SERVICE_TICKET ||--o{ MESSAGE : links_to
+    SERVICE_TICKET ||--o| QUOTATION_RECORD : quoted_by
+    QUOTATION_RECORD ||--o{ SALES_RECORD : becomes
+    QUOTATION_RECORD ||--o{ SALES_PAYMENT : receives_deposit
+    SALES_RECORD ||--o{ SALES_PAYMENT : credits
 
     INVENTORY_ITEM ||--o{ INVENTORY_RESERVATION : reserved_as
     INVENTORY_ITEM ||--o{ INVENTORY_TRANSACTION : records
@@ -55,6 +59,8 @@ erDiagram
         string name
         int estimated_duration
         int sla_hours
+        string deposit_policy
+        decimal deposit_value
     }
 
     SERVICE_REQUEST {
@@ -175,6 +181,34 @@ erDiagram
         int technician_id FK
         int service_type_id FK
         string skill_level
+    }
+
+    QUOTATION_RECORD {
+        int quotation_id PK
+        int ticket_id FK
+        int client_id FK
+        string deposit_policy
+        decimal deposit_value
+        decimal required_deposit_amount
+        string status
+    }
+
+    SALES_RECORD {
+        int sales_record_id PK
+        int ticket_id FK
+        int quotation_id FK
+        decimal agreed_total
+        string status
+    }
+
+    SALES_PAYMENT {
+        int sales_payment_id PK
+        int sales_record_id FK
+        int quotation_id FK
+        decimal amount
+        date paid_on
+        string method
+        boolean is_voided
     }
 ```
 

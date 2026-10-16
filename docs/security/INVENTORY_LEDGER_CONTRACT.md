@@ -28,8 +28,11 @@ The API, models, database constraints, and tests must continue to agree with it.
 | `adjustment` | Sets the absolute physical count |
 
 All movement quantities must be greater than zero. An `adjustment` may be zero
-because an observed physical count can be empty. Manual adjustments require a
-reason in `notes` and the inventory-management capability.
+because an observed physical count can be empty. Every manually posted movement
+requires a reason in `notes` and the inventory-management capability. Operators
+may also store a delivery receipt, invoice, ticket, or return identifier in the
+optional `reference_number`; completed-ticket equipment returns continue to use
+the separate technician-submission and receiving-verification workflow.
 
 Inventory movement APIs expose `ITX-######` display identities and reservations
 expose `RSV-######`. These computed identities are distinct from the optional
@@ -54,6 +57,9 @@ transaction `reference_number`, which preserves external or business context.
   threshold. The stored `available`/`out_of_stock` status is synchronized on
   stock changes while maintenance, in-use, reserved, and retired states remain
   explicit lifecycle choices.
+- Operational summary and low-stock metrics exclude retired catalog items and
+  determine out-of-stock state from available stock after reservations, not only
+  from physical quantity.
 
 ## Technician visibility
 

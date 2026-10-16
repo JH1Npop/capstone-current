@@ -327,7 +327,7 @@ def generate() -> str:
     ))
     nodes.append(cell(
         "relationship_note",
-        "Every direct connection has one stable identifier (R001-R102) printed on both legs and its diamond. Each diamond also names both endpoint entities, fields, and cardinalities, so a relationship remains readable without visually tracing a long rail. Bridge arcs distinguish intersections.",
+        f"Every direct connection has one stable identifier (R001-R{len(relationships):03d}) printed on both legs and its diamond. Each diamond also names both endpoint entities, fields, and cardinalities, so a relationship remains readable without visually tracing a long rail. Bridge arcs distinguish intersections.",
         styles["note"], page_margin, relationship_top + 70,
         page_width - page_margin * 2, 58,
     ))

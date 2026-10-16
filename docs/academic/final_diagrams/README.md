@@ -8,7 +8,7 @@ These sources follow the four formats shown in the approved pre-oral paper:
 4. Database Schema
 
 They describe the implemented AFN Service Management System as audited on
-2026-09-04. They intentionally replace obsolete notification-template,
+2026-10-17. They intentionally replace obsolete notification-template,
 Firebase-token, SMS, and retired service-history elements with the active
 notification, ticket-status/progress, sales, equipment-return, and after-sales
 records.
@@ -44,20 +44,20 @@ records.
 - Underlined attributes in the Chen ERD are primary identifiers. `1`, `0..1`,
   and `N` labels state cardinality.
 - The ERD is one exhaustive editable canvas generated directly from the DBML
-  physical-schema contract. It contains all 51 entities, all 682 local
-  attributes, and all 102 in-scope relationships. Every relationship line
+  physical-schema contract. It contains all 52 entities, all 707 local
+  attributes, and all 107 in-scope relationships. Every relationship line
   connects an actual canonical entity box to a Chen diamond. Clear entity exits,
   shared domain gutters, dedicated relationship rails, and bridge arcs organize
   the unavoidable intersections without duplicate entity references. Stable
-  `R001`-`R102` identifiers label both connection legs and their matching
+  `R001`-`R107` identifiers label both connection legs and their matching
   diamonds; each diamond also names its source and target entity, field, and
   cardinality so long routes remain unambiguous. Entity
   degree determines placement: the User and Service Ticket hubs occupy the
   center, related modules surround them, and low-connectivity modules use the
   outer landscape edges. Export the complete canvas as one high-resolution
   image; do not split it into separate figures.
-- `docs/models/ERD_CURRENT.md` is the complete readable connection map. It and
-  the identical `ERD_CURRENT_CONNECTIONS.md` alias list all 102 relationships
+- `docs/models/ERD_CURRENT.md` is the complete readable schema reference. It
+  and the `ERD_CURRENT_CONNECTIONS.md` companion list all 107 relationships
   using source-cardinality-verb-cardinality-target lines with exact field
   mappings and do not require tracing lines across the ERD.
 
@@ -66,9 +66,11 @@ records.
 - Schedule overlap is explicitly shown as a Yes/No branch in the request and
   dispatch DFD. A detected conflict leads to client coordination for an
   alternative schedule; it is not silently accepted.
-- Sales/Purchase Records preserve delivered service and product evidence. The
-  system does not process payments or refunds, so no payment gateway or refund
-  process appears in these diagrams.
+- Quotation Records snapshot the selected service deposit rule and required
+  amount. Sales Payment records document money received outside the portal,
+  including deposit payments later credited to the Sales Record balance. The
+  system still has no online payment gateway, receipt issuer, reconciliation
+  import, or refund processor.
 - After-sales and maintenance records can trigger notices and follow-up work,
   but a new visit still enters through the controlled request/ticket workflow.
 - `Time TBD` appointments are covered by daily capacity rules but cannot be

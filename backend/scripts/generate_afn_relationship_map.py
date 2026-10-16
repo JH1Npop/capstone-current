@@ -70,6 +70,7 @@ ENTITY_NAMES = {
     "inventory_equipmentreturnrequestitem": "EQUIPMENT RETURN REQUEST ITEM",
     "services_salesrecord": "SALES RECORD",
     "services_salesrecordline": "SALES RECORD LINE",
+    "services_salespayment": "SALES PAYMENT",
 }
 
 
@@ -226,9 +227,10 @@ def generate_connections_only() -> str:
 
 
 if __name__ == "__main__":
+    complete = generate_complete_erd()
     connections = generate_connections_only()
     outputs = {
-        OUTPUT_PATH: connections,
+        OUTPUT_PATH: complete,
         CONNECTIONS_OUTPUT_PATH: connections,
     }
     for output_path, content in outputs.items():

@@ -46,10 +46,10 @@
         <mxCell id="a3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#7c3aed;fontSize=12;fontStyle=1" value="Admin / Superadmin" vertex="1">
           <mxGeometry height="50" width="160" x="30" y="444" as="geometry" />
         </mxCell>
-        <mxCell id="p3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="3.0&lt;br&gt;&lt;b&gt;Manage Ticket Dispatch&lt;/b&gt;&lt;br&gt;approve, check overlap, schedule, assign crew" vertex="1">
+        <mxCell id="p3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="3.0&lt;br&gt;&lt;b&gt;Manage Ticket Dispatch&lt;/b&gt;&lt;br&gt;approve, inspect, verify quotation/deposit, schedule, assign crew" vertex="1">
           <mxGeometry height="88" width="250" x="330" y="425" as="geometry" />
         </mxCell>
-        <mxCell id="d4" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D4  Service Ticket, Crew, Status, Progress, and History Records" vertex="1">
+        <mxCell id="d4" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D4  Service Ticket, Crew, Quotation, Status, Progress, and History Records" vertex="1">
           <mxGeometry height="40" width="510" x="770" y="440" as="geometry" />
         </mxCell>
         <mxCell id="out_tech_job" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#7c3aed;fontSize=12;fontStyle=1" value="Technician" vertex="1">
@@ -73,13 +73,13 @@
         <mxCell id="ZBTKRSe5-VzeuEa-7p8T-6" edge="1" parent="1" source="p5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="p6" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="p5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="5.0&lt;br&gt;&lt;b&gt;Manage Inventory, Returns and Sales&lt;/b&gt;&lt;br&gt;reserve, issue, two-party return, purchase record" vertex="1">
+        <mxCell id="p5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="5.0&lt;br&gt;&lt;b&gt;Manage Inventory, Returns, Sales and Payments&lt;/b&gt;&lt;br&gt;reserve, issue, return, sale, record external payment" vertex="1">
           <mxGeometry height="96" width="250" x="330" y="735" as="geometry" />
         </mxCell>
         <mxCell id="d6" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D6  Inventory Item, Category, and Requirement Records" vertex="1">
           <mxGeometry height="40" width="440" x="770" y="740" as="geometry" />
         </mxCell>
-        <mxCell id="d7" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D7  Reservation, Transaction, Return, Installed Equipment, and Sales Records" vertex="1">
+        <mxCell id="d7" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D7  Reservation, Transaction, Return, Equipment, Sales, and Payment Records" vertex="1">
           <mxGeometry height="40" width="425" x="770" y="790" as="geometry" />
         </mxCell>
         <mxCell id="a6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#7c3aed;fontSize=12;fontStyle=1" value="Client / Admin" vertex="1">
@@ -133,13 +133,13 @@
         <mxCell id="ea2" edge="1" parent="1" source="a2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p2" value="service request data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="ea3" edge="1" parent="1" source="a3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p3" value="approval / dispatch decision">
+        <mxCell id="ea3" edge="1" parent="1" source="a3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p3" value="approval / quotation / payment / dispatch data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="ea4" edge="1" parent="1" source="a4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p4" value="job completion data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="ea5" edge="1" parent="1" source="a5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p5" value="inventory usage data">
+        <mxCell id="ea5" edge="1" parent="1" source="a5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p5" value="inventory, sale and external payment data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="ea6" edge="1" parent="1" source="a6" style="edgeStyle=entityRelationEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;fontSize=10;strokeWidth=1.2" target="p6" value="follow-up or maintenance details">
@@ -187,7 +187,7 @@
         <mxCell id="ps5a" edge="1" parent="1" source="d6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p5" value="stock and requirement data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="ps5b" edge="1" parent="1" source="p5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="d7" value="reservation/transaction records">
+        <mxCell id="ps5b" edge="1" parent="1" source="p5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="d7" value="reservation / transaction / sale / payment records">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="ps6a" edge="1" parent="1" source="p6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="d8" value="case records">
@@ -230,7 +230,7 @@
         <mxCell id="mf2" edge="1" parent="1" source="p2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.4" target="p3" value="request ready for review">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="mf3" edge="1" parent="1" source="p3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.4" target="p4" value="assigned ticket">
+        <mxCell id="mf3" edge="1" parent="1" source="p3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.4" target="p4" value="dispatch-eligible assigned ticket">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="mf4" edge="1" parent="1" source="p4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.4" target="p5" value="inventory needed">

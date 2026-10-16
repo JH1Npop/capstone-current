@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import date
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -211,7 +212,11 @@ def generate() -> str:
     lines = [
         "Project AFN_Service_Management_Database_Schema {",
         "  database_type: 'PostgreSQL'",
-        "  Note: 'Generated from all 51 active AFN Django application models on 2026-09-04. Primary keys, columns, relationships, uniqueness, and nullability reflect the current model contract.'",
+        (
+            f"  Note: 'Generated from all {len(selected)} active AFN Django application "
+            f"models on {date.today().isoformat()}. Primary keys, columns, relationships, "
+            "uniqueness, and nullability reflect the current model contract.'"
+        ),
         "}",
         "",
     ]

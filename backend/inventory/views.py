@@ -1,6 +1,6 @@
 
 from django.db import transaction
-from django.db.models import Sum, Count
+from django.db.models import Count, ExpressionWrapper, F, IntegerField, Sum
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
@@ -115,31 +115,60 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
         """Get items with low stock"""
-        items = [item for item in InventoryItem.objects.all() if item.is_low_stock]
+        items = InventoryItem.objects.exclude(status='retired').annotate(
+            available_percentage=ExpressionWrapper(
+                (F('quantity') - F('reserved_quantity')) * 100,
+                output_field=IntegerField(),
+            ),
+            low_stock_limit=ExpressionWrapper(
+                F('minimum_stock') * F('low_stock_threshold'),
+                output_field=IntegerField(),
+            ),
+        ).filter(
+            minimum_stock__gt=0,
+            available_percentage__lte=F('low_stock_limit'),
+        )
         serializer = self.get_serializer(items, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def statistics(self, request):
         """Get inventory statistics"""
-        from django.db.models import ExpressionWrapper, DecimalField
+        active_items = InventoryItem.objects.exclude(status='retired')
+        stock_metrics = active_items.annotate(
+            available_units=ExpressionWrapper(
+                F('quantity') - F('reserved_quantity'),
+                output_field=IntegerField(),
+            ),
+            available_percentage=ExpressionWrapper(
+                (F('quantity') - F('reserved_quantity')) * 100,
+                output_field=IntegerField(),
+            ),
+            low_stock_limit=ExpressionWrapper(
+                F('minimum_stock') * F('low_stock_threshold'),
+                output_field=IntegerField(),
+            ),
+        )
 
-        total_items = InventoryItem.objects.count()
-        total_value = InventoryItem.objects.aggregate(
+        total_items = active_items.count()
+        total_value = active_items.aggregate(
             total=Sum('total_value')
         )['total'] or 0
 
-        low_stock_count = sum(1 for item in InventoryItem.objects.all() if item.is_low_stock)
+        low_stock_count = stock_metrics.filter(
+            minimum_stock__gt=0,
+            available_percentage__lte=F('low_stock_limit'),
+        ).count()
 
-        out_of_stock = InventoryItem.objects.filter(quantity=0).count()
+        out_of_stock = stock_metrics.filter(available_units__lte=0).count()
 
         # By status — single query using values/annotate
         status_counts = {}
-        for row in InventoryItem.objects.values('status').annotate(count=Count('id')):
+        for row in active_items.values('status').annotate(count=Count('id')):
             status_counts[row['status']] = row['count']
 
         # By category
-        category_counts = InventoryItem.objects.values(
+        category_counts = active_items.values(
             'category__name'
         ).annotate(count=Count('id'))
 

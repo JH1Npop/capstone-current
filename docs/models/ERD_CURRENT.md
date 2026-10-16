@@ -1,460 +1,10 @@
-Act as a senior full-stack software architect, QA engineer, security reviewer, and codebase auditor. Your first objective is to completely understand this system end to end—every module, route, model, API, page, role, workflow, dependency, and configuration—before making any changes.
-
-This is an AFN Solar Power Engineering Services management system. Its main roles are:
-
-* Superadmin
-* Admin
-* Technician
-* Client
-
-The system may include:
-
-* Django and Django REST Framework backend
-* React + Vite frontend
-* Mobile/PWA-related functionality
-* SQLite during development and PostgreSQL for production
-* Authentication and role-based access control
-* Service requests and ticketing
-* Technician assignment and dispatching
-* Calendar and scheduling
-* Technician location history and maps
-* OpenRouteService or another routing provider
-* Inventory management
-* Inspection and completion checklists
-* SLA monitoring
-* After-sales cases
-* Maintenance schedules
-* Messaging
-* Notifications
-* Analytics and forecasting
-* Reports
-* User and client management
-* Activity logs
-
-Do not assume that these descriptions perfectly match the code. Treat the actual repository as the source of truth and report any differences.
-
-## Important operating rules
-
-1. Do not edit, delete, rename, format, migrate, install, or generate anything during the discovery and audit stages.
-2. Do not immediately fix the first problem you find.
-3. Inspect the entire repository before reaching conclusions.
-4. Read all relevant source and configuration files, but ignore generated or dependency folders such as:
-
-   * node_modules
-   * .git
-   * dist
-   * build
-   * coverage
-   * **pycache**
-   * .venv or venv
-   * compiled assets
-5. Never reveal secret values from `.env`, credentials, tokens, private keys, database passwords, or API keys. Only report whether expected variables exist, are missing, duplicated, incorrectly named, or insecurely exposed.
-6. Preserve all existing user changes and inspect the Git worktree before proposing edits.
-7. Do not use destructive Git commands.
-8. Clearly distinguish:
-
-   * Confirmed issue
-   * Likely issue
-   * Improvement
-   * Intentional behavior
-   * Unable to verify
-9. Cite exact file paths and relevant symbols, functions, classes, routes, or components for every finding.
-10. Do not claim that something works unless you have traced or tested it.
-11. If a command fails, investigate the cause instead of ignoring it.
-12. Avoid changing database records or calling real external services during testing.
-
-## Phase 1 — Repository discovery
-
-Start by examining the project structure and Git state.
-
-Identify:
-
-* Root-level applications and services
-* Frontend, backend, mobile, scraper, worker, or supporting projects
-* Programming languages and frameworks
-* Package managers
-* Entry points
-* Environment templates
-* Build and development scripts
-* Docker configuration
-* CI/CD workflows
-* Test frameworks
-* Database and migration structure
-* Documentation
-* Generated files that should not be audited directly
-* Untracked, modified, staged, or ignored files
-* Suspicious temporary files, logs, duplicate projects, or abandoned code
-
-Create a concise repository map showing each major directory, its purpose, and how it connects to the rest of the system.
-
-## Phase 2 — Build a complete system inventory
-
-Create an inventory of the following:
-
-### Backend
-
-* Django apps or backend modules
-* Models and relationships
-* Serializers or schemas
-* Views, viewsets, controllers, and services
-* URL patterns and API endpoints
-* Authentication and authorization classes
-* Permissions
-* Middleware
-* Signals
-* Background jobs and scheduled tasks
-* Notification services
-* Analytics or forecasting code
-* External API integrations
-* Management commands
-* Tests
-* Database migrations
-
-For every endpoint, record:
-
-* HTTP method
-* URL
-* Backend handler
-* Required authentication
-* Allowed roles
-* Request fields
-* Response structure
-* Main frontend consumer
-* Whether it appears active, unused, duplicated, or broken
-
-### Frontend
-
-* Application entry points
-* Route definitions
-* Layouts and navigation
-* Pages
-* Components
-* Context providers and state management
-* API clients and service modules
-* Authentication flow
-* Role redirects and route guards
-* Forms and validation
-* Tables, filters, pagination, and search
-* Maps and location features
-* Charts and analytics
-* Notifications and messaging
-* Error, loading, and empty states
-* Tests
-
-For every page, record:
-
-* Route
-* Intended role
-* Main components
-* APIs used
-* Important user actions
-* Loading and error handling
-* Current implementation status
-
-### Database
-
-Create a database relationship map containing:
-
-* Every table or model
-* Primary keys
-* Foreign keys
-* One-to-one, one-to-many, and many-to-many relationships
-* Nullable fields
-* Unique constraints
-* Status and role values
-* Cascade behavior
-* Indexes
-* Derived or calculated values
-* Possible orphaned records
-* Model/migration/schema mismatches
-
-Do not generate a new migration during this stage.
-
-## Phase 3 — Trace all end-to-end workflows
-
-Trace each important workflow from the user interface through the API and database, then back to the displayed result.
-
-At minimum, verify:
-
-1. Registration, login, logout, token/session refresh, and current-user loading
-2. Role-based redirection for all four roles
-3. Client creation of a service request
-4. Automatic generation of the related ticket
-5. Admin viewing unassigned tickets
-6. Technician assignment
-7. Skill, location, schedule, and daily-hour validation
-8. Technician accepting or rejecting a job
-9. Ticket status changes and status-history creation
-10. Calendar display of assigned and unassigned jobs
-11. Technician availability while on a job
-12. Location recording and location-history retrieval
-13. Map markers, route preview, and heatmap filters
-14. Checklist availability only after assignment
-15. Inventory reservation, usage, stock deduction, and low-stock alerts
-16. Ticket completion
-17. After-sales case creation and job-history access
-18. Maintenance schedule creation
-19. Messaging between the correct participants
-20. Email, SMS, and in-app notifications
-21. Analytics period filters and chart data
-22. Predictive service and inventory demand
-23. Report generation and filtering
-24. Activity-log creation and visibility
-25. User-management operations
-26. Client, technician, and service CRUD operations
-
-For each workflow, document:
-
-* Starting role and page
-* UI action
-* Frontend function
-* API request
-* Backend route and handler
-* Permission check
-* Database reads and writes
-* Side effects
-* Returned response
-* UI update
-* Failure cases
-* Final status: Working, Partially working, Broken, Unused, or Unable to verify
-
-## Phase 4 — Frontend/backend contract audit
-
-Compare the frontend and backend directly.
-
-Check for:
-
-* Frontend URLs that do not exist in the backend
-* Backend endpoints unused by the frontend
-* Duplicate endpoint families
-* Incorrect HTTP methods
-* Request-field mismatches
-* Response-field mismatches
-* Naming mismatches such as `text` versus `message_text`
-* Incorrect identifier types
-* Missing pagination handling
-* Incorrect query parameters
-* Broken filters
-* Incorrect enum or status values
-* Date and timezone inconsistencies
-* Null and undefined handling
-* File-upload mismatches
-* Authentication headers not being attached
-* Token refresh loops
-* Redirect loops
-* Race conditions while loading the current user
-* React dependency-array problems
-* Infinite render or maximum-update-depth risks
-* Invalid hook usage
-* Hardcoded mock data where database data is expected
-
-Create a contract mismatch table with frontend location, backend location, expected behavior, actual behavior, severity, and recommended fix.
-
-## Phase 5 — Authorization and security audit
-
-Build a permissions matrix for every role and major resource.
-
-Verify both frontend restrictions and backend enforcement. Hiding a button is not sufficient authorization.
-
-Check for:
-
-* Broken object-level authorization
-* Clients accessing another client’s records
-* Technicians accessing jobs not assigned to them
-* Admin and superadmin permission inconsistencies
-* After-sales job history incorrectly denied to admin or superadmin
-* Unauthorized status updates
-* Privilege escalation through request payloads
-* Insecure direct-object references
-* Missing input validation
-* Unsafe file uploads
-* Exposed secrets
-* Debug configuration used in production
-* Unsafe CORS or allowed-host settings
-* Missing CSRF protection where applicable
-* SQL injection risks
-* Cross-site scripting risks
-* Rate-limiting gaps
-* Sensitive information in logs
-* Weak password or authentication behavior
-* Missing audit records for important actions
-
-Do not perform destructive, intrusive, or exploitative security testing.
-
-## Phase 6 — Data and business-rule validation
-
-Verify that the code consistently enforces the intended business rules, including:
-
-* Maximum eight scheduled work hours per technician per day
-* No overlapping assignments
-* A technician marked “On Job” is unavailable
-* Only qualified technicians can be assigned
-* Assigned and unassigned tickets are correctly separated
-* Assignment logs identify the technician and assigning admin
-* SLA deadlines and breaches are calculated correctly
-* Ticket statuses follow a valid transition sequence
-* Checklists are visible only when the job is assigned
-* Inventory cannot silently become negative
-* Completed jobs correctly trigger related processes
-* After-sales records remain linked to job history
-* Analytics respond to the selected date period
-* Services displayed in the frontend come from the database
-* Time handling consistently uses Asia/Manila when that is the configured business timezone
-
-Report where each rule is enforced. Flag rules enforced only by the frontend.
-
-## Phase 7 — Code-quality and maintainability audit
-
-Check for:
-
-* Dead and unreachable code
-* Duplicate models, routes, serializers, components, or utilities
-* Circular imports
-* Oversized modules
-* Business logic placed in UI components
-* Repeated API logic
-* Inconsistent naming
-* Missing type definitions
-* Excessive use of `any`
-* Unhandled promises
-* Silent exception handling
-* Debug statements
-* Hardcoded URLs, IDs, roles, or credentials
-* N+1 database queries
-* Missing database indexes
-* Inefficient repeated requests
-* Memory leaks
-* Stale dependencies
-* Missing cleanup for timers, subscriptions, or map objects
-* Accessibility issues
-* Poor mobile responsiveness
-* Incomplete loading, error, and empty states
-
-Do not propose large rewrites when a focused correction is sufficient.
-
-## Phase 8 — Safe verification
-
-After understanding the system, run the safest applicable checks using the project’s existing commands:
-
-* Backend framework validation
-* Migration consistency check without creating migrations
-* Backend tests
-* Frontend linting
-* Type checking
-* Frontend tests
-* Production builds
-* Dependency validation
-* Existing end-to-end tests
-
-Before running servers, inspect scripts and confirm ports and required services. Do not connect to or modify a production database.
-
-If the repository lacks tests, state this clearly. Do not treat successful compilation as proof that workflows work.
-
-## Phase 9 — Final deliverables
-
-Do not edit the code yet. First present a complete audit containing:
-
-### 1. Executive summary
-
-Explain what the system does, its architecture, overall condition, and the most serious risks.
-
-### 2. System map
-
-Show how the frontend, backend, database, external services, and user roles interact.
-
-### 3. Module inventory
-
-List every major module and classify it as:
-
-* Complete
-* Partial
-* Broken
-* Unused
-* Duplicate
-* Unable to verify
-
-### 4. Route and endpoint inventory
-
-List frontend routes and backend APIs, including roles and consumers.
-
-### 5. Role-permission matrix
-
-Show what each role can view, create, update, delete, assign, approve, or manage.
-
-### 6. Workflow results
-
-Provide the status and trace for every end-to-end workflow.
-
-### 7. Findings table
-
-For every finding, include:
-
-* ID
-* Severity: Critical, High, Medium, Low, or Informational
-* Confidence
-* Category
-* Description
-* User impact
-* Evidence
-* Exact files or symbols involved
-* Recommended fix
-* Estimated effort
-* Dependencies on other fixes
-
-### 8. Test and command results
-
-List every command run, whether it passed, and the important output. Do not dump irrelevant logs.
-
-### 9. Prioritized remediation plan
-
-Group work into:
-
-* Immediate blockers
-* Security and data-integrity fixes
-* Broken workflows
-* Contract and integration fixes
-* User-interface fixes
-* Performance improvements
-* Cleanup and maintainability
-* Missing tests
-
-Order fixes based on dependencies and risk, not merely file order.
-
-### 10. Open questions
-
-Ask only questions that cannot be answered by inspecting the repository.
-
-### 11. Proposed implementation batches
-
-Divide the fixes into small, reviewable batches. For each batch, state:
-
-* Scope
-* Files likely affected
-* Expected behavior
-* Tests required
-* Risk
-* Rollback approach
-
-Stop after presenting the audit and plan. Wait for my approval before modifying any files.
-
-## Standard of evidence
-
-Your audit must be based on actual code inspection and command results. Avoid generic recommendations. A useful finding should look like:
-
-“Confirmed: the frontend sends `text` from `[frontend file and function]`, but the backend expects `message_text` in `[serializer/view file and symbol]`. This causes message creation to return a validation error.”
-
-An unacceptable finding would be:
-
-“The messaging feature might have frontend/backend problems.”
-
-Be thorough, systematic, and skeptical. The goal is to understand every reachable part of the system, expose hidden inconsistencies, and produce a reliable map that another developer could use to maintain the entire application.
 # AFN Current ERD — Complete Text Edition
 
 This is the complete readable ERD derived from `AFN_ERD.dbml`.
 
-- Entities: **51**
-- Attributes: **676**
-- Relationships: **102**
+- Entities: **52**
+- Attributes: **707**
+- Relationships: **107**
 
 ## Entity and Attribute Catalog
 
@@ -609,6 +159,7 @@ Database table: `services_maintenanceschedule`
 | `due_notified_at` | `timestamp` | `nullable` |
 | `client_notified_at` | `timestamp` | `nullable` |
 | `client_three_day_notified_at` | `timestamp` | `nullable` |
+| `client_due_notified_at` | `timestamp` | `nullable` |
 | `risk_level` | `varchar(20)` | `not null` |
 | `risk_score` | `double` | `not null` |
 | `prediction_notes` | `text` | `nullable` |
@@ -702,6 +253,10 @@ Database table: `users_user`
 | `email_verification_sent_at` | `timestamp` | `nullable` |
 | `pending_email` | `varchar(254)` | `nullable` |
 | `pending_email_verification_sent_at` | `timestamp` | `nullable` |
+| `mfa_enabled` | `boolean` | `not null` |
+| `mfa_secret_encrypted` | `text` | `not null` |
+| `mfa_recovery_code_hashes` | `jsonb` | `not null` |
+| `mfa_confirmed_at` | `timestamp` | `nullable` |
 | `created_at` | `timestamp` | `nullable` |
 | `updated_at` | `timestamp` | `nullable` |
 
@@ -733,6 +288,7 @@ Database table: `users_technicianprofile`
 | `current_latitude` | `decimal(9,6)` | `nullable` |
 | `current_longitude` | `decimal(9,6)` | `nullable` |
 | `last_location_update` | `timestamp` | `nullable` |
+| `last_seen_at` | `timestamp` | `nullable` |
 | `is_available` | `boolean` | `not null` |
 | `skill_level` | `varchar(20)` | `not null` |
 | `preferred_work_areas` | `text` | `not null` |
@@ -789,6 +345,7 @@ Database table: `users_adminsettings`
 | `document_footer` | `text` | `not null` |
 | `currency_code` | `varchar(3)` | `not null` |
 | `quotation_validity_days` | `smallint` | `not null` |
+| `require_quotation_acceptance` | `boolean` | `not null` |
 | `default_warranty_days` | `integer` | `not null` |
 | `external_payment_notice` | `varchar(255)` | `not null` |
 | `landing_page_content` | `jsonb` | `not null` |
@@ -877,6 +434,8 @@ Database table: `services_servicetype`
 | `required_equipment` | `text` | `not null` |
 | `is_active` | `boolean` | `not null` |
 | `requires_site_inspection` | `boolean` | `not null` |
+| `deposit_policy` | `varchar(20)` | `not null` |
+| `deposit_value` | `decimal(12,2)` | `not null` |
 
 #### 21. SLA RULE
 
@@ -1228,6 +787,9 @@ Database table: `services_turnoveracceptance`
 | `status` | `varchar(20)` | `not null` |
 | `finalized_by_id` | `bigint` | `ref: > users_user.user_id` |
 | `finalized_at` | `timestamp` | `nullable` |
+| `client_confirmed_at` | `timestamp` | `nullable` |
+| `client_confirmed_by_id` | `bigint` | `ref: > users_user.user_id` |
+| `client_confirmation_note` | `text` | `not null` |
 | `created_at` | `timestamp` | `not null` |
 | `updated_at` | `timestamp` | `not null` |
 
@@ -1244,11 +806,16 @@ Database table: `services_quotationrecord`
 | `total_amount` | `varchar(255)` | `nullable` |
 | `downpayment_amount` | `varchar(255)` | `nullable` |
 | `balance_amount` | `varchar(255)` | `nullable` |
+| `deposit_policy` | `varchar(20)` | `not null` |
+| `deposit_value` | `decimal(12,2)` | `not null` |
+| `required_deposit_amount` | `decimal(14,2)` | `not null` |
 | `payment_terms` | `text` | `nullable` |
 | `warranty_terms` | `text` | `nullable` |
 | `validity_days` | `integer` | `not null` |
 | `status` | `varchar(20)` | `not null` |
 | `bill_of_materials` | `text` | `not null` |
+| `client_responded_at` | `timestamp` | `nullable` |
+| `client_response_note` | `text` | `not null` |
 | `created_at` | `timestamp` | `not null` |
 | `updated_at` | `timestamp` | `not null` |
 
@@ -1505,6 +1072,27 @@ Database table: `services_salesrecordline`
 | `source_snapshot` | `jsonb` | `not null` |
 | `sort_order` | `integer` | `not null` |
 
+#### 52. SALES PAYMENT
+
+Database table: `services_salespayment`
+
+| Attribute | Data type | Database constraints |
+| --- | --- | --- |
+| `sales_payment_id` | `bigint` | `pk, increment` |
+| `sales_record_id` | `bigint` | `ref: > services_salesrecord.sales_record_id` |
+| `quotation_id` | `bigint` | `ref: > services_quotationrecord.quotation_id` |
+| `amount` | `decimal(14,2)` | `not null` |
+| `paid_on` | `date` | `not null` |
+| `method` | `varchar(20)` | `not null` |
+| `reference` | `varchar(120)` | `not null` |
+| `notes` | `text` | `not null` |
+| `recorded_by_id` | `bigint` | `ref: > users_user.user_id` |
+| `recorded_at` | `timestamp` | `not null` |
+| `is_voided` | `boolean` | `not null` |
+| `voided_at` | `timestamp` | `nullable` |
+| `voided_by_id` | `bigint` | `ref: > users_user.user_id` |
+| `void_reason` | `text` | `not null` |
+
 ## Relationship Map
 
 Each relationship follows this format:
@@ -1513,7 +1101,7 @@ Each relationship follows this format:
 
 `N` means many, `1` means exactly one, and `0..1` means optional one. The field mapping identifies the exact foreign-key and referenced fields.
 
-Total relationships: **102**
+Total relationships: **107**
 
 ### Analytics
 
@@ -1600,37 +1188,42 @@ Total relationships: **102**
 69. (TECHNICAL DATA SHEET) ---- N ---- PREPARED BY ---- 1 ---- (USER)  [`prepared_by_id` -> `user_id`]
 70. (TECHNICAL DATA SHEET) ---- N ---- REVIEWED BY ---- 1 ---- (USER)  [`reviewed_by_id` -> `user_id`]
 71. (TECHNICAL DATA SHEET) ---- 1 ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`ticket_id` -> `service_ticket_id`]
-72. (TURNOVER ACCEPTANCE) ---- N ---- FINALIZED BY ---- 1 ---- (USER)  [`finalized_by_id` -> `user_id`]
-73. (TURNOVER ACCEPTANCE) ---- N ---- USES DOCUMENT ---- 1 ---- (GENERATED DOCUMENT)  [`generated_document_id` -> `generated_document_id`]
-74. (TURNOVER ACCEPTANCE) ---- 1 ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`ticket_id` -> `service_ticket_id`]
+72. (TURNOVER ACCEPTANCE) ---- N ---- HAS CLIENT CONFIRMED BY ---- 1 ---- (USER)  [`client_confirmed_by_id` -> `user_id`]
+73. (TURNOVER ACCEPTANCE) ---- N ---- FINALIZED BY ---- 1 ---- (USER)  [`finalized_by_id` -> `user_id`]
+74. (TURNOVER ACCEPTANCE) ---- N ---- USES DOCUMENT ---- 1 ---- (GENERATED DOCUMENT)  [`generated_document_id` -> `generated_document_id`]
+75. (TURNOVER ACCEPTANCE) ---- 1 ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`ticket_id` -> `service_ticket_id`]
 
 ### Inventory, Returns and Sales
 
-75. (EQUIPMENT RETURN REQUEST) ---- N ---- REVIEWED BY ---- 1 ---- (USER)  [`reviewed_by_id` -> `user_id`]
-76. (EQUIPMENT RETURN REQUEST) ---- N ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`service_ticket_id` -> `service_ticket_id`]
-77. (EQUIPMENT RETURN REQUEST) ---- N ---- SUBMITTED BY ---- 1 ---- (USER)  [`submitted_by_id` -> `user_id`]
-78. (EQUIPMENT RETURN REQUEST) ---- N ---- ASSIGNED TO ---- 1 ---- (USER)  [`technician_id` -> `user_id`]
-79. (EQUIPMENT RETURN REQUEST ITEM) ---- N ---- USES ITEM ---- 1 ---- (INVENTORY ITEM)  [`item_id` -> `inventory_item_id`]
-80. (EQUIPMENT RETURN REQUEST ITEM) ---- N ---- CONTAINS ---- 1 ---- (EQUIPMENT RETURN REQUEST)  [`return_request_id` -> `equipment_return_request_id`]
-81. (INVENTORY CATEGORY) ---- N ---- HAS PARENT ---- 1 ---- (INVENTORY CATEGORY)  [`parent_id` -> `inventory_category_id`]
-82. (INVENTORY ITEM) ---- N ---- IN CATEGORY ---- 1 ---- (INVENTORY CATEGORY)  [`category_id` -> `inventory_category_id`]
-83. (INVENTORY RESERVATION) ---- N ---- USES ITEM ---- 1 ---- (INVENTORY ITEM)  [`item_id` -> `inventory_item_id`]
-84. (INVENTORY RESERVATION) ---- N ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`service_ticket_id` -> `service_ticket_id`]
-85. (INVENTORY RESERVATION) ---- N ---- ASSIGNED TO ---- 1 ---- (USER)  [`technician_id` -> `user_id`]
-86. (INVENTORY TRANSACTION) ---- N ---- USES ITEM ---- 1 ---- (INVENTORY ITEM)  [`item_id` -> `inventory_item_id`]
-87. (INVENTORY TRANSACTION) ---- N ---- PERFORMED BY ---- 1 ---- (USER)  [`performed_by_id` -> `user_id`]
-88. (INVENTORY TRANSACTION) ---- N ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`service_ticket_id` -> `service_ticket_id`]
-89. (INVENTORY TRANSACTION) ---- N ---- ASSIGNED TO ---- 1 ---- (USER)  [`technician_id` -> `user_id`]
-90. (SALES RECORD) ---- N ---- OWNED BY ---- 1 ---- (USER)  [`client_id` -> `user_id`]
-91. (SALES RECORD) ---- N ---- CONFIRMED BY ---- 1 ---- (USER)  [`confirmed_by_id` -> `user_id`]
-92. (SALES RECORD) ---- N ---- CREATED BY ---- 1 ---- (USER)  [`created_by_id` -> `user_id`]
-93. (SALES RECORD) ---- N ---- BASED ON ---- 1 ---- (QUOTATION RECORD)  [`quotation_id` -> `quotation_id`]
-94. (SALES RECORD) ---- 0..1 ---- REPLACES ---- 1 ---- (SALES RECORD)  [`replaces_id` -> `sales_record_id`]
-95. (SALES RECORD) ---- N ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`ticket_id` -> `service_ticket_id`]
-96. (SALES RECORD) ---- N ---- VOIDED BY ---- 1 ---- (USER)  [`voided_by_id` -> `user_id`]
-97. (SALES RECORD LINE) ---- N ---- USES EQUIPMENT ---- 1 ---- (INSTALLED EQUIPMENT)  [`installed_equipment_id` -> `installed_equipment_id`]
-98. (SALES RECORD LINE) ---- N ---- USES ITEM ---- 1 ---- (INVENTORY ITEM)  [`inventory_item_id` -> `inventory_item_id`]
-99. (SALES RECORD LINE) ---- N ---- CONTAINS ---- 1 ---- (SALES RECORD)  [`sales_record_id` -> `sales_record_id`]
-100. (SALES RECORD LINE) ---- N ---- USES SERVICE ---- 1 ---- (SERVICE TYPE)  [`service_type_id` -> `service_type_id`]
-101. (SERVICE TYPE INVENTORY REQUIREMENT) ---- N ---- USES ITEM ---- 1 ---- (INVENTORY ITEM)  [`item_id` -> `inventory_item_id`]
-102. (SERVICE TYPE INVENTORY REQUIREMENT) ---- N ---- USES SERVICE ---- 1 ---- (SERVICE TYPE)  [`service_type_id` -> `service_type_id`]
+76. (EQUIPMENT RETURN REQUEST) ---- N ---- REVIEWED BY ---- 1 ---- (USER)  [`reviewed_by_id` -> `user_id`]
+77. (EQUIPMENT RETURN REQUEST) ---- N ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`service_ticket_id` -> `service_ticket_id`]
+78. (EQUIPMENT RETURN REQUEST) ---- N ---- SUBMITTED BY ---- 1 ---- (USER)  [`submitted_by_id` -> `user_id`]
+79. (EQUIPMENT RETURN REQUEST) ---- N ---- ASSIGNED TO ---- 1 ---- (USER)  [`technician_id` -> `user_id`]
+80. (EQUIPMENT RETURN REQUEST ITEM) ---- N ---- USES ITEM ---- 1 ---- (INVENTORY ITEM)  [`item_id` -> `inventory_item_id`]
+81. (EQUIPMENT RETURN REQUEST ITEM) ---- N ---- CONTAINS ---- 1 ---- (EQUIPMENT RETURN REQUEST)  [`return_request_id` -> `equipment_return_request_id`]
+82. (INVENTORY CATEGORY) ---- N ---- HAS PARENT ---- 1 ---- (INVENTORY CATEGORY)  [`parent_id` -> `inventory_category_id`]
+83. (INVENTORY ITEM) ---- N ---- IN CATEGORY ---- 1 ---- (INVENTORY CATEGORY)  [`category_id` -> `inventory_category_id`]
+84. (INVENTORY RESERVATION) ---- N ---- USES ITEM ---- 1 ---- (INVENTORY ITEM)  [`item_id` -> `inventory_item_id`]
+85. (INVENTORY RESERVATION) ---- N ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`service_ticket_id` -> `service_ticket_id`]
+86. (INVENTORY RESERVATION) ---- N ---- ASSIGNED TO ---- 1 ---- (USER)  [`technician_id` -> `user_id`]
+87. (INVENTORY TRANSACTION) ---- N ---- USES ITEM ---- 1 ---- (INVENTORY ITEM)  [`item_id` -> `inventory_item_id`]
+88. (INVENTORY TRANSACTION) ---- N ---- PERFORMED BY ---- 1 ---- (USER)  [`performed_by_id` -> `user_id`]
+89. (INVENTORY TRANSACTION) ---- N ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`service_ticket_id` -> `service_ticket_id`]
+90. (INVENTORY TRANSACTION) ---- N ---- ASSIGNED TO ---- 1 ---- (USER)  [`technician_id` -> `user_id`]
+91. (SALES PAYMENT) ---- N ---- BASED ON ---- 1 ---- (QUOTATION RECORD)  [`quotation_id` -> `quotation_id`]
+92. (SALES PAYMENT) ---- N ---- HAS RECORDED BY ---- 1 ---- (USER)  [`recorded_by_id` -> `user_id`]
+93. (SALES PAYMENT) ---- N ---- CONTAINS ---- 1 ---- (SALES RECORD)  [`sales_record_id` -> `sales_record_id`]
+94. (SALES PAYMENT) ---- N ---- VOIDED BY ---- 1 ---- (USER)  [`voided_by_id` -> `user_id`]
+95. (SALES RECORD) ---- N ---- OWNED BY ---- 1 ---- (USER)  [`client_id` -> `user_id`]
+96. (SALES RECORD) ---- N ---- CONFIRMED BY ---- 1 ---- (USER)  [`confirmed_by_id` -> `user_id`]
+97. (SALES RECORD) ---- N ---- CREATED BY ---- 1 ---- (USER)  [`created_by_id` -> `user_id`]
+98. (SALES RECORD) ---- N ---- BASED ON ---- 1 ---- (QUOTATION RECORD)  [`quotation_id` -> `quotation_id`]
+99. (SALES RECORD) ---- 0..1 ---- REPLACES ---- 1 ---- (SALES RECORD)  [`replaces_id` -> `sales_record_id`]
+100. (SALES RECORD) ---- N ---- FOR TICKET ---- 1 ---- (SERVICE TICKET)  [`ticket_id` -> `service_ticket_id`]
+101. (SALES RECORD) ---- N ---- VOIDED BY ---- 1 ---- (USER)  [`voided_by_id` -> `user_id`]
+102. (SALES RECORD LINE) ---- N ---- USES EQUIPMENT ---- 1 ---- (INSTALLED EQUIPMENT)  [`installed_equipment_id` -> `installed_equipment_id`]
+103. (SALES RECORD LINE) ---- N ---- USES ITEM ---- 1 ---- (INVENTORY ITEM)  [`inventory_item_id` -> `inventory_item_id`]
+104. (SALES RECORD LINE) ---- N ---- CONTAINS ---- 1 ---- (SALES RECORD)  [`sales_record_id` -> `sales_record_id`]
+105. (SALES RECORD LINE) ---- N ---- USES SERVICE ---- 1 ---- (SERVICE TYPE)  [`service_type_id` -> `service_type_id`]
+106. (SERVICE TYPE INVENTORY REQUIREMENT) ---- N ---- USES ITEM ---- 1 ---- (INVENTORY ITEM)  [`item_id` -> `inventory_item_id`]
+107. (SERVICE TYPE INVENTORY REQUIREMENT) ---- N ---- USES SERVICE ---- 1 ---- (SERVICE TYPE)  [`service_type_id` -> `service_type_id`]

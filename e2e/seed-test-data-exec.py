@@ -48,6 +48,14 @@ def ensure_user(username, role, email, first_name, last_name, capabilities):
 print('\n=== Seeding E2E Test Accounts ===\n')
 superadmin = ensure_user('superadmin_test', 'superadmin', 'superadmin_test@afntest.com', 'Super', 'Admin', ALL_CAPABILITIES)
 ensure_user('admin_test', 'admin', 'admin_test@afntest.com', 'Test', 'Admin', ADMIN_CAPABILITIES)
+ensure_user(
+    'inventory_viewer_test',
+    'admin',
+    'inventory_viewer_test@afntest.com',
+    'Inventory',
+    'Viewer',
+    ['inventory.view'],
+)
 tech = ensure_user('tech_test', 'technician', 'tech_test@afntest.com', 'Test', 'Technician', TECH_CAPABILITIES)
 client = ensure_user('client_test', 'client', 'client_test@afntest.com', 'Test', 'Client', [])
 

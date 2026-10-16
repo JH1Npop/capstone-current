@@ -25,7 +25,7 @@ The `users_user` table records all active system users, including admin/superadm
 
 ## Table 2. services_servicetype
 
-The `services_servicetype` table stores the available services offered by the system. It contains service descriptions, estimated duration, estimated cost, procedure data, and required equipment data.
+The `services_servicetype` table stores the available services offered by the system. It contains service descriptions, estimated duration, estimated cost, procedure data, required equipment data, and the default pre-service deposit rule copied into new quotations.
 
 | FieldName | DataType | PK | FK | Null | Description |
 |---|---|---:|---:|---:|---|
@@ -37,6 +37,8 @@ The `services_servicetype` table stores the available services offered by the sy
 | max_daily_assignments | INTEGER | 0 | 0 | 0 | Maximum daily assignments for this service type |
 | procedures | TEXT | 0 | 0 | 0 | Serialized service procedure checklist template |
 | required_equipment | TEXT | 0 | 0 | 0 | Serialized required equipment template |
+| deposit_policy | ENUM('none','percentage','fixed') | 0 | 0 | 0 | Default deposit rule: no deposit, percentage of quotation, or fixed PHP amount |
+| deposit_value | DECIMAL(12,2) | 0 | 0 | 0 | Percentage or fixed PHP amount interpreted according to deposit_policy |
 
 ## Table 3. services_servicerequest
 

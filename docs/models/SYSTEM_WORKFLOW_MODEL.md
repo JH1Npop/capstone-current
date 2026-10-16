@@ -23,14 +23,26 @@ flowchart TD
     C --> D{"Approved?"}
     D -- "No" --> E["Request remains pending,<br/>cancelled, or returned for review"]
     D -- "Yes" --> F["ServiceTicket<br/>Ticket is created or connected<br/>to the approved request"]
-    F --> G["Admin / Superadmin<br/>Assigns technician, schedule,<br/>crew, and inventory needs"]
+    F --> Q{"Site inspection required?"}
+    Q -- "Yes" --> R["Inspection Visit<br/>May be assigned and completed<br/>before any deposit"]
+    Q -- "No" --> S["QuotationRecord<br/>Admin / Superadmin prepares<br/>and sends the quotation"]
+    R --> S
+    S --> T["Client<br/>Accepts or declines quotation"]
+    T --> U{"Accepted and deposit required?"}
+    U -- "Declined" --> E
+    U -- "No deposit" --> G["Admin / Superadmin<br/>Assigns lead technician, schedule,<br/>crew, and inventory needs"]
+    U -- "Deposit required" --> V["SalesPayment<br/>Admin / Superadmin records money<br/>received outside the portal"]
+    V --> W{"Required deposit fully paid?"}
+    W -- "No" --> V
+    W -- "Yes" --> G
     G --> H["Technician<br/>Views assigned job and schedule"]
     H --> I["Technician<br/>Starts work and updates job status"]
     I --> J["InspectionChecklist<br/>Technician completes checklist<br/>and uploads proof"]
     J --> K{"Checklist Complete?"}
     K -- "No" --> J
     K -- "Yes" --> L["ServiceTicket<br/>Ticket is marked completed"]
-    L --> M["Client<br/>Views completed service<br/>and submits feedback/rating"]
+    L --> X["SalesRecord<br/>Draft sale inherits the quotation;<br/>deposit reduces remaining balance"]
+    X --> M["Client<br/>Views completed service,<br/>balance, and submits feedback/rating"]
     L --> N["AfterSalesCase / MaintenanceSchedule<br/>Follow-up, warranty, revisit,<br/>or maintenance record is created when needed"]
     N --> O["Messages and Notifications<br/>Client, technician, and admin<br/>receive updates"]
     O --> P["Reports, Analytics, and Activity Logs<br/>Admin monitors operations,<br/>performance, and audit trail"]
@@ -42,11 +54,11 @@ flowchart TD
     classDef decision fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#0f172a
     classDef support fill:#fee2e2,stroke:#dc2626,stroke-width:2px,color:#0f172a
 
-    class A,M client
-    class C,G admin
+    class A,M,T client
+    class C,G,S,V admin
     class H,I,J tech
-    class B,F,L data
-    class D,K decision
+    class B,F,L,R,X data
+    class D,K,Q,U,W decision
     class N,O,P support
 ```
 

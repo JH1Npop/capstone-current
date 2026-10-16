@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from rest_framework import status
@@ -217,6 +219,42 @@ class InventoryCapabilityTests(APITestCase):
         self.assertEqual(
             self.client.get(f'{self.items_url}statistics/').status_code,
             status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_statistics_use_active_available_stock_semantics(self):
+        InventoryItem.objects.all().delete()
+        InventoryItem.objects.create(
+            name='Available Cable', sku='ACTIVE-CABLE', category=self.category,
+            item_type='consumable', quantity=5, reserved_quantity=0,
+            minimum_stock=2, low_stock_threshold=40, status='available',
+            unit_price=Decimal('10.00'),
+        )
+        InventoryItem.objects.create(
+            name='Fully Reserved Cable', sku='RESERVED-CABLE', category=self.category,
+            item_type='consumable', quantity=4, reserved_quantity=4,
+            minimum_stock=2, low_stock_threshold=40, status='available',
+            unit_price=Decimal('20.00'),
+        )
+        InventoryItem.objects.create(
+            name='Retired Cable', sku='RETIRED-CABLE', category=self.category,
+            item_type='consumable', quantity=0, reserved_quantity=0,
+            minimum_stock=5, low_stock_threshold=40, status='retired',
+            unit_price=Decimal('30.00'),
+        )
+        user = self.create_user('inventory-statistics-viewer', 'admin', INVENTORY_VIEW)
+        self.client.force_authenticate(user)
+
+        statistics_response = self.client.get(f'{self.items_url}statistics/')
+        low_stock_response = self.client.get(f'{self.items_url}low_stock/')
+
+        self.assertEqual(statistics_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(statistics_response.data['total_items'], 2)
+        self.assertEqual(statistics_response.data['total_value'], 130.0)
+        self.assertEqual(statistics_response.data['low_stock_count'], 1)
+        self.assertEqual(statistics_response.data['out_of_stock'], 1)
+        self.assertEqual(
+            [item['sku'] for item in low_stock_response.data],
+            ['RESERVED-CABLE'],
         )
 
 
@@ -820,6 +858,26 @@ class AutoInventoryWorkflowTests(APITestCase):
             },
             format='json',
         )
+        unexplained_receipt_response = self.client.post(
+            transactions_url,
+            {
+                'item': self.inventory_item.id,
+                'transaction_type': 'purchase',
+                'quantity': 2,
+            },
+            format='json',
+        )
+        documented_receipt_response = self.client.post(
+            transactions_url,
+            {
+                'item': self.inventory_item.id,
+                'transaction_type': 'purchase',
+                'quantity': 2,
+                'reference_number': '  DR-2026-001  ',
+                'notes': '  Supplier delivery received  ',
+            },
+            format='json',
+        )
         zero_adjustment_response = self.client.post(
             transactions_url,
             {
@@ -834,6 +892,10 @@ class AutoInventoryWorkflowTests(APITestCase):
         self.assertEqual(negative_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(zero_issue_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(unexplained_adjustment_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(unexplained_receipt_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(documented_receipt_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(documented_receipt_response.data['reference_number'], 'DR-2026-001')
+        self.assertEqual(documented_receipt_response.data['notes'], 'Supplier delivery received')
         self.assertEqual(zero_adjustment_response.status_code, status.HTTP_201_CREATED)
         self.inventory_item.refresh_from_db()
         self.assertEqual(self.inventory_item.quantity, 0)

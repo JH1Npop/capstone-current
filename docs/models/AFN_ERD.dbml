@@ -1,6 +1,6 @@
 Project AFN_Service_Management_Database_Schema {
   database_type: 'PostgreSQL'
-  Note: 'Generated from all 51 active AFN Django application models on 2026-09-04. Primary keys, columns, relationships, uniqueness, and nullability reflect the current model contract.'
+  Note: 'Generated from all 52 active AFN Django application models on 2026-10-17. Primary keys, columns, relationships, uniqueness, and nullability reflect the current model contract.'
 }
 
 Table inventory_equipmentreturnrequest {
@@ -404,6 +404,9 @@ Table services_quotationrecord {
   total_amount varchar(255)
   downpayment_amount varchar(255)
   balance_amount varchar(255)
+  deposit_policy varchar(20) [not null]
+  deposit_value decimal(12,2) [not null]
+  required_deposit_amount decimal(14,2) [not null]
   payment_terms text
   warranty_terms text
   validity_days integer [not null]
@@ -417,7 +420,8 @@ Table services_quotationrecord {
 
 Table services_salespayment {
   sales_payment_id bigint [pk, increment]
-  sales_record_id bigint [not null, ref: > services_salesrecord.sales_record_id]
+  sales_record_id bigint [ref: > services_salesrecord.sales_record_id]
+  quotation_id bigint [ref: > services_quotationrecord.quotation_id]
   amount decimal(14,2) [not null]
   paid_on date [not null]
   method varchar(20) [not null]
@@ -651,6 +655,8 @@ Table services_servicetype {
   required_equipment text [not null]
   is_active boolean [not null]
   requires_site_inspection boolean [not null]
+  deposit_policy varchar(20) [not null]
+  deposit_value decimal(12,2) [not null]
 }
 
 Table services_slarule {

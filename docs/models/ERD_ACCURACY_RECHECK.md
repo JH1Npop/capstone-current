@@ -1,13 +1,13 @@
 # ERD Accuracy Recheck
 
-Rechecked against the Django model files on 2026-08-31.
+Rechecked against the Django model files on 2026-10-17.
 
 ## Verification
 
 Command used:
 
 ```powershell
-D:\Caps\venv\Scripts\python.exe backend\manage.py check
+.\venv\Scripts\python.exe backend\manage.py check
 ```
 
 Result:
@@ -20,10 +20,10 @@ Firebase push delivery has since been removed from the active implementation; ol
 
 ## Best ERD Files To Use
 
-Use this for draw.io presentation:
+Use this for the maintained draw.io presentation:
 
 ```text
-docs/models/AFN_ERD_SNOWFLAKE_DRAWIO.drawio
+docs/models/AFN_ERD_CHEN_PRESENTATION.drawio
 ```
 
 Use this as the most complete database source:
@@ -32,9 +32,17 @@ Use this as the most complete database source:
 docs/models/AFN_ERD.dbml
 ```
 
+The maintained physical and presentation sources now contain 52 entities, 707
+local attributes, and 107 in-scope relationships. Migration
+`services.0061_service_deposit_policy` is represented by the Service Type
+deposit defaults, Quotation Record snapshot fields, nullable Sales Payment to
+Quotation Record foreign key, and its relationship diamond.
+
 ## Accuracy Notes
 
-The snowflake draw.io ERD is accurate for the main operational system flow:
+Older snowflake and manually maintained draw.io exports are supporting legacy
+views. The generated Chen ERD and DBML are authoritative. Their operational
+scope includes:
 
 - `Users`
 - `TechnicianProfile`
@@ -107,6 +115,6 @@ and `notifications.NotificationLog` models were retired. The main flow uses:
 
 ## Final Recommendation
 
-For Chapter III, regenerate the visual draw.io ERD from the current DBML before
-submission. The DBML is the maintained physical-schema source; older draw.io
-exports can still contain retired legacy nodes.
+For Chapter III, use the regenerated Chen draw.io ERD and current DBML. The DBML
+is the maintained physical-schema source; older draw.io exports can still omit
+new fields or contain retired legacy nodes.

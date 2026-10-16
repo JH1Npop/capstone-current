@@ -37,7 +37,7 @@ Regenerate the physical DBML after any Django model change:
 .\venv\Scripts\python.exe backend\scripts\generate_afn_dbml.py
 ```
 
-The generator includes the 51 AFN application tables and annotates framework
+The generator includes the 52 AFN application tables and annotates framework
 relationships that intentionally terminate outside the paper's application
 schema boundary.
 
@@ -48,12 +48,12 @@ Regenerate the exhaustive single-page Chen ERD from the same models:
 ```
 
 The resulting `.drawio` file is generated directly from `AFN_ERD.dbml` and
-contains all 52 application entities, all 701 local attributes, and a Chen
-relationship diamond for all 106 in-scope relationships. Every relationship
+contains all 52 application entities, all 707 local attributes, and a Chen
+relationship diamond for all 107 in-scope relationships. Every relationship
 edge connects the actual canonical entity box to its diamond. Connections leave
 through clear space below each entity, share an orderly domain gutter, and then
 branch onto dedicated horizontal rails; visible bridge arcs keep the exhaustive
-cross-domain wiring readable. Stable `R001`-`R102` identifiers appear on both
+cross-domain wiring readable. Stable `R001`-`R107` identifiers appear on both
 legs and the matching diamond, while every diamond prints its complete source
 and target entity, field, and cardinality. This allows a reader to identify a
 connection without following a long rail across the canvas. The notation
@@ -68,10 +68,12 @@ Regeneration writes identical maintained copies to
 `AFN_ERD_CHEN_PRESENTATION.drawio` and the convenient `ERD_CURRENT.drawio`
 alias.
 
-For the complete connection map, open `ERD_CURRENT.md`. It contains all 102
-relationships as `(SOURCE) ---- N ---- VERB ---- 1 ---- (TARGET)` with exact
-field mappings and no diagram lines to trace. `ERD_CURRENT_CONNECTIONS.md` is
-an identical descriptive alias. Regenerate both Markdown files with:
+For the complete entity, attribute, and connection reference, open
+`ERD_CURRENT.md`. It contains all 52 entities, 707 attributes, and 107
+relationships. `ERD_CURRENT_CONNECTIONS.md` is the compact relationship-only
+companion. Both use `(SOURCE) ---- N ---- VERB ---- 1 ---- (TARGET)` with exact
+field mappings and no diagram lines to trace. Regenerate both Markdown files
+with:
 
 ```powershell
 .\venv\Scripts\python.exe backend\scripts\generate_afn_relationship_map.py

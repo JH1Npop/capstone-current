@@ -31,7 +31,7 @@ const UNIT_SUGGESTIONS = ['piece', 'unit', 'set', 'box', 'pack', 'roll', 'meter'
 
 const STOCK_ACTION_OPTIONS = [
   { value: 'purchase', label: 'Receive stock' },
-  { value: 'return', label: 'Return unused stock' },
+  { value: 'return', label: 'Record non-ticket return' },
   { value: 'adjustment', label: 'Correct physical count' },
   { value: 'issue', label: 'Manual deduction' }
 ];
@@ -133,6 +133,7 @@ const formatDateTime = (value) => {
 const buildDefaultStockAdjustment = () => ({
   transaction_type: 'purchase',
   quantity: 1,
+  reference_number: '',
   notes: ''
 });
 
@@ -476,8 +477,8 @@ export default function AdminInventory() {
       setError(`Only ${stockTarget.available_quantity} unit(s) are available to deduct.`);
       return;
     }
-    if (['issue', 'adjustment'].includes(adjustForm.transaction_type) && !adjustForm.notes.trim()) {
-      setError('A reason is required for manual deductions and physical-count corrections.');
+    if (!adjustForm.notes.trim()) {
+      setError('A reason is required for every manual stock movement.');
       return;
     }
 
@@ -486,6 +487,7 @@ export default function AdminInventory() {
         item: stockTarget.id,
         transaction_type: adjustForm.transaction_type,
         quantity,
+        reference_number: adjustForm.reference_number.trim() || null,
         notes: adjustForm.notes || ''
       });
       setAdjustForm(buildDefaultStockAdjustment());
@@ -511,8 +513,8 @@ export default function AdminInventory() {
     if (statusFilter !== 'all' && item.status !== statusFilter) {
       return false;
     }
-    if (stockConditionFilter === 'low' && !item.is_low_stock) return false;
-    if (stockConditionFilter === 'out' && Number(item.available_quantity || 0) > 0) return false;
+    if (stockConditionFilter === 'low' && (item.status === 'retired' || !item.is_low_stock)) return false;
+    if (stockConditionFilter === 'out' && (item.status === 'retired' || Number(item.available_quantity || 0) > 0)) return false;
     if (stockConditionFilter === 'reserved' && Number(item.reserved_quantity || 0) <= 0) return false;
     if (!normalizedSearchTerm) {
       return true;
@@ -535,12 +537,14 @@ export default function AdminInventory() {
   const pageStartIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
   const paginatedInventory = filteredInventory.slice(pageStartIndex, pageStartIndex + ITEMS_PER_PAGE);
   const categoryMissing = categories.length === 0;
-  const totalInventoryCount = inventorySummary?.totalItems ?? inventory.length;
+  const activeInventory = inventory.filter((item) => item.status !== 'retired');
+  const totalInventoryCount = inventorySummary?.totalItems ?? activeInventory.length;
+  const totalCatalogCount = inventory.length;
   const lowStockCount = inventorySummary?.lowStockCount ?? lowStockItems.length;
-  const totalPhysicalStock = inventory.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-  const totalReservedStock = inventory.reduce((sum, item) => sum + Number(item.reserved_quantity || 0), 0);
-  const totalAvailableStock = inventory.reduce((sum, item) => sum + Number(item.available_quantity || 0), 0);
-  const outOfStockCount = inventorySummary?.outOfStock ?? inventory.filter((item) => Number(item.available_quantity || 0) <= 0).length;
+  const totalPhysicalStock = activeInventory.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const totalReservedStock = activeInventory.reduce((sum, item) => sum + Number(item.reserved_quantity || 0), 0);
+  const totalAvailableStock = activeInventory.reduce((sum, item) => sum + Number(item.available_quantity || 0), 0);
+  const outOfStockCount = inventorySummary?.outOfStock ?? activeInventory.filter((item) => Number(item.available_quantity || 0) <= 0).length;
   const itemModalOpen = adding || Boolean(editingId);
   const activeItem = adding ? newItem : editingItem;
   const updateActiveItem = (updates) => {
@@ -668,7 +672,7 @@ export default function AdminInventory() {
         <div className="border-b border-slate-200 p-5">
           <h3 className="text-lg font-semibold text-slate-900">
             Stock Overview ({filteredInventory.length}
-            {filteredInventory.length !== totalInventoryCount ? ` of ${totalInventoryCount}` : ''} items)
+            {filteredInventory.length !== totalCatalogCount ? ` of ${totalCatalogCount}` : ''} items)
           </h3>
           <p className="mt-2 text-sm text-slate-500">
             {normalizedSearchTerm
@@ -894,7 +898,7 @@ export default function AdminInventory() {
                 >
                   Receive Stock
                 </button> : null}
-                <button
+                {canManageInventory ? <button
                   type="button"
                   onClick={() => {
                     setSelectedItem(null);
@@ -903,7 +907,7 @@ export default function AdminInventory() {
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
                 >
                   Manage
-                </button>
+                </button> : null}
                 <button
                   type="button"
                   onClick={() => setSelectedItem(null)}
@@ -1069,7 +1073,12 @@ export default function AdminInventory() {
                             <div className="text-xs text-slate-500">{formatDateTime(transaction.transaction_date)}</div>
                           </div>
                           <div className="font-semibold text-slate-900">Qty {transaction.quantity}</div>
-                          <div className="text-slate-600">{transaction.notes || '-'}</div>
+                          <div className="text-slate-600">
+                            <div>{transaction.notes || '-'}</div>
+                            {transaction.reference_number ? (
+                              <div className="mt-1 text-xs text-slate-500">Reference: {transaction.reference_number}</div>
+                            ) : null}
+                          </div>
                           <div className="text-xs text-slate-500 sm:text-right">
                             {transaction.performed_by_name ? `By ${transaction.performed_by_name}` : 'System'}
                           </div>
@@ -1132,8 +1141,24 @@ export default function AdminInventory() {
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-slate-700">Notes</label>
+                <label htmlFor="stock-movement-reference" className="mb-1 block text-sm font-medium text-slate-700">
+                  Reference number <span className="font-normal text-slate-400">(optional)</span>
+                </label>
+                <input
+                  id="stock-movement-reference"
+                  type="text"
+                  maxLength="50"
+                  value={adjustForm.reference_number}
+                  onChange={(event) => setAdjustForm({ ...adjustForm, reference_number: event.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Delivery receipt, invoice, ticket, or return reference"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="stock-movement-notes" className="mb-1 block text-sm font-medium text-slate-700">Reason / notes <span className="text-red-600">*</span></label>
                 <textarea
+                  id="stock-movement-notes"
+                  required
                   value={adjustForm.notes}
                   onChange={(event) => setAdjustForm({ ...adjustForm, notes: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
@@ -1144,6 +1169,11 @@ export default function AdminInventory() {
               {adjustForm.transaction_type === 'issue' ? (
                 <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                   Normal job usage is deducted through ticket completion. Use manual deduction only for exceptional loss, damage, or an authorized correction.
+                </div>
+              ) : null}
+              {adjustForm.transaction_type === 'return' ? (
+                <div className="sm:col-span-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                  Completed-job equipment must use the technician submission and receiving verification flow. Use this action only for returns outside a service ticket.
                 </div>
               ) : null}
             </div>

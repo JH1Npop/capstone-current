@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import { loadAuthStateFromBackend, seedAuthState, visitWorkspacePage } from './helpers';
 
 let adminAuthState;
+let inventoryViewerAuthState;
 
 test.describe('Admin Workspace - All Pages', () => {
   test.describe.configure({ timeout: 180000 });
@@ -10,6 +11,7 @@ test.describe('Admin Workspace - All Pages', () => {
   test.beforeAll(async () => {
     test.setTimeout(180000);
     adminAuthState = loadAuthStateFromBackend('superadmin_test');
+    inventoryViewerAuthState = loadAuthStateFromBackend('inventory_viewer_test');
   });
 
   test.beforeEach(async ({ page }) => {
@@ -454,7 +456,8 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(movementDialog).toBeVisible();
     await expect(movementDialog.getByRole('combobox')).toHaveValue('purchase');
     await movementDialog.getByRole('spinbutton').fill('5');
-    await movementDialog.getByRole('textbox').fill('E2E supplier delivery');
+    await movementDialog.getByLabel(/Reference number/).fill(`DR-${uniqueId}`);
+    await movementDialog.getByLabel(/Reason \/ notes/).fill('E2E supplier delivery');
     const movementResponse = page.waitForResponse((response) => (
       response.url().includes('/api/inventory/transactions/')
       && response.request().method() === 'POST'
@@ -464,7 +467,20 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(movementDialog).toBeHidden();
     await itemRow.getByTitle('Details').click();
     await expect(page.getByText('E2E supplier delivery')).toBeVisible();
+    await expect(page.getByText(`Reference: DR-${uniqueId}`)).toBeVisible();
     await expect(page.getByText('Qty 5')).toBeVisible();
+  });
+
+  test('3.8c - View-only inventory access does not expose management controls', async ({ page }) => {
+    await seedAuthState(page, inventoryViewerAuthState);
+    await visitWorkspacePage(page, '/admin/inventory');
+
+    await expect(page.getByRole('button', { name: 'Manage Categories' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add Item', exact: true })).toHaveCount(0);
+    await page.getByTitle('Details').first().click();
+    await expect(page.getByRole('button', { name: 'Receive Stock', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Manage', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
   });
 
   test('3.9 - Document draft saves and reloads end to end', async ({ page }) => {

@@ -170,10 +170,15 @@ class InventoryTransactionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'quantity': 'Quantity must be greater than zero, except a zero stock adjustment is allowed.'
             })
-        if transaction_type == 'adjustment' and not (attrs.get('notes') or '').strip():
+        notes = (attrs.get('notes') or '').strip()
+        if not self.instance and not notes:
             raise serializers.ValidationError({
-                'notes': 'A reason is required for manual stock adjustments.'
+                'notes': 'A reason is required for every manual stock movement.'
             })
+        if 'notes' in attrs:
+            attrs['notes'] = notes
+        if 'reference_number' in attrs:
+            attrs['reference_number'] = (attrs.get('reference_number') or '').strip() or None
 
         if not self.instance:
             return attrs
