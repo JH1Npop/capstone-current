@@ -6,6 +6,11 @@ const formatDate = (value) => (value
   ? new Date(value).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
   : '');
 
+const formatMoney = (value) => Number(value || 0).toLocaleString('en-PH', {
+  style: 'currency',
+  currency: 'PHP',
+});
+
 function Field({ label, value }) {
   if (!value) return null;
   return (
@@ -52,7 +57,14 @@ export default function ClientJobDecisions({ ticketId, onChanged }) {
       setQuotation(updated);
       setDeclining(false);
       setNote('');
-      setMessage({ tone: 'success', text: decision === 'accept' ? 'Thank you. We will schedule your installation.' : 'Your response was sent to our office.' });
+      setMessage({
+        tone: 'success',
+        text: decision === 'accept'
+          ? (Number(updated.deposit_remaining_amount || 0) > 0
+            ? 'Quotation accepted. Please arrange the required deposit with our office before service is scheduled.'
+            : 'Thank you. We can now schedule your service.')
+          : 'Your response was sent to our office.',
+      });
       onChanged?.();
     } catch (error) {
       setMessage({ tone: 'error', text: error.message });
@@ -106,9 +118,34 @@ export default function ClientJobDecisions({ ticketId, onChanged }) {
 
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <Field label="Total" value={visibleQuotation.total_amount} />
-            <Field label="Down payment" value={visibleQuotation.downpayment_amount} />
+            <Field label="Required deposit" value={visibleQuotation.deposit_policy !== 'none' ? formatMoney(visibleQuotation.required_deposit_amount) : 'None'} />
             <Field label="Balance" value={visibleQuotation.balance_amount} />
           </div>
+          {visibleQuotation.deposit_policy !== 'none' ? (
+            <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-900">Deposit progress</p>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${visibleQuotation.deposit_status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {visibleQuotation.deposit_status === 'paid' ? 'Paid' : visibleQuotation.deposit_status === 'partial' ? 'Partially paid' : 'Payment needed'}
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                <div><p className="text-slate-500">Required</p><p className="font-semibold text-slate-900">{formatMoney(visibleQuotation.required_deposit_amount)}</p></div>
+                <div><p className="text-slate-500">Received</p><p className="font-semibold text-slate-900">{formatMoney(visibleQuotation.deposit_paid_amount)}</p></div>
+                <div><p className="text-slate-500">Remaining</p><p className="font-semibold text-slate-900">{formatMoney(visibleQuotation.deposit_remaining_amount)}</p></div>
+              </div>
+              <p className="mt-3 text-xs text-slate-600">
+                Payments are arranged outside this portal and recorded by the office. Service begins after the full required deposit is recorded.
+              </p>
+              {Array.isArray(visibleQuotation.deposit_payments) && visibleQuotation.deposit_payments.some((payment) => !payment.is_voided) ? (
+                <ul className="mt-3 space-y-1 border-t border-blue-200 pt-3 text-xs text-slate-600">
+                  {visibleQuotation.deposit_payments.filter((payment) => !payment.is_voided).map((payment) => (
+                    <li key={payment.id}>{formatDate(payment.paid_on)} · {payment.method_label} · {formatMoney(payment.amount)}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
           {visibleQuotation.payment_terms ? <p className="mt-3 text-sm text-slate-600"><span className="font-medium text-slate-800">Payment terms:</span> {visibleQuotation.payment_terms}</p> : null}
           {visibleQuotation.warranty_terms ? <p className="mt-1 text-sm text-slate-600"><span className="font-medium text-slate-800">Warranty:</span> {visibleQuotation.warranty_terms}</p> : null}
 
@@ -144,7 +181,11 @@ export default function ClientJobDecisions({ ticketId, onChanged }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <button type="button" onClick={() => respond('accept')} disabled={Boolean(busy)} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"><FiCheckCircle aria-hidden="true" /> {busy === 'accept' ? 'Accepting...' : 'Accept quotation'}</button>
                   <button type="button" onClick={() => setDeclining(true)} disabled={Boolean(busy)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Decline</button>
-                  <p className="w-full text-xs text-slate-500 sm:w-auto">Accepting lets our office schedule your installation.</p>
+                  <p className="w-full text-xs text-slate-500 sm:w-auto">
+                    {visibleQuotation.deposit_policy !== 'none'
+                      ? 'Accepting confirms the quotation. Service is scheduled after the required deposit is recorded.'
+                      : 'Accepting lets our office schedule your service.'}
+                  </p>
                 </div>
               )}
             </div>

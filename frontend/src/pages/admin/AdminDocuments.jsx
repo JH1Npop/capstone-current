@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { FiFileText, FiPlus, FiPrinter, FiRefreshCw, FiSave, FiTrash2, FiSearch, FiChevronDown, FiX } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
+import QuotationDepositPanel from '../../components/sales/QuotationDepositPanel';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENTS_MANAGE_CAPABILITIES, hasAnyCapability } from '../../rbac';
 import { formatTicketId } from '../../utils/roleIds';
@@ -3252,7 +3253,8 @@ export default function AdminDocuments() {
         status: 'Sent'
       };
 
-      await saveQuotationRecord(payload);
+      const saved = await saveQuotationRecord(payload);
+      setQuotationRecords([saved]);
       setDocumentDraftMessage('Quotation saved and sent to the client to accept or decline in their portal.');
     } catch (error) {
       setDocumentDraftMessage(error.message || 'Unable to save quotation data.');
@@ -3788,16 +3790,24 @@ export default function AdminDocuments() {
                       </button>
                     )}
                     {activeTemplate === 'quotation_proposal' && (
-                      <button
-                        type="button"
-                        onClick={handleSaveQuotation}
-                        disabled={quotationSaving || prefillLoading}
-                        className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
-                        title="Save the pricing and terms to a Quotation Record so they auto-fill the Installation Contract later."
-                      >
-                        <FiSave size={15} />
-                        {quotationSaving ? 'Saving Quotation...' : 'Save Quotation Data'}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleSaveQuotation}
+                          disabled={quotationSaving || prefillLoading}
+                          className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                          title="Save the pricing and terms to a Quotation Record so they auto-fill the Installation Contract later."
+                        >
+                          <FiSave size={15} />
+                          {quotationSaving ? 'Saving Quotation...' : 'Save Quotation Data'}
+                        </button>
+                        <div className="mt-3">
+                          <QuotationDepositPanel
+                            quotation={quotationRecords[0] || null}
+                            onUpdated={(updated) => setQuotationRecords([updated])}
+                          />
+                        </div>
+                      </>
                     )}
                     {activeTemplate === 'installation_contract' && (
                       <button

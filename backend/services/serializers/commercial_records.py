@@ -21,6 +21,12 @@ from ..sla import (
     serialize_sla_evaluation,
 )
 from ..user_display import client_technician_label
+from ..deposits import (
+    calculate_required_deposit,
+    decimal_from_money,
+    effective_request_deposit_rule,
+    quotation_deposit_summary,
+)
 
 class TechnicalDataSheetSerializer(serializers.ModelSerializer):
     purpose_of_going_solar = serializers.JSONField(required=False)
@@ -65,6 +71,61 @@ class TechnicalDataSheetSerializer(serializers.ModelSerializer):
 
 class QuotationRecordSerializer(serializers.ModelSerializer):
     bill_of_materials = serializers.JSONField(required=False)
+    deposit_paid_amount = serializers.SerializerMethodField()
+    deposit_remaining_amount = serializers.SerializerMethodField()
+    deposit_status = serializers.SerializerMethodField()
+    deposit_payments = serializers.SerializerMethodField()
+
+    def _deposit_summary(self, obj):
+        return quotation_deposit_summary(obj)
+
+    def get_deposit_paid_amount(self, obj):
+        return str(self._deposit_summary(obj)['deposit_paid_amount'])
+
+    def get_deposit_remaining_amount(self, obj):
+        return str(self._deposit_summary(obj)['deposit_remaining_amount'])
+
+    def get_deposit_status(self, obj):
+        return self._deposit_summary(obj)['deposit_status']
+
+    def get_deposit_payments(self, obj):
+        payments = obj.deposit_payments.select_related('recorded_by').all()
+        return SalesPaymentSerializer(payments, many=True).data
+
+    @staticmethod
+    def _apply_deposit_snapshot(validated_data, instance=None):
+        ticket = validated_data.get('ticket') or instance.ticket
+        if instance is None:
+            policy = None
+            value = None
+        else:
+            policy = instance.deposit_policy
+            value = instance.deposit_value
+        total_text = validated_data.get('total_amount', getattr(instance, 'total_amount', None))
+        total = decimal_from_money(total_text)
+        try:
+            if instance is None:
+                policy, value, required = effective_request_deposit_rule(ticket.request, total)
+            else:
+                required = calculate_required_deposit(policy, value, total)
+        except ValueError as exc:
+            raise serializers.ValidationError({'total_amount': str(exc)}) from exc
+        validated_data['deposit_policy'] = policy
+        validated_data['deposit_value'] = value
+        validated_data['required_deposit_amount'] = required
+        if required > 0:
+            validated_data['downpayment_amount'] = f'PHP {required:,.2f}'
+            validated_data['balance_amount'] = f'PHP {(total - required):,.2f}'
+        else:
+            validated_data['downpayment_amount'] = None
+            validated_data['balance_amount'] = f'PHP {total:,.2f}' if total is not None else None
+        return validated_data
+
+    def create(self, validated_data):
+        return super().create(self._apply_deposit_snapshot(validated_data))
+
+    def update(self, instance, validated_data):
+        return super().update(instance, self._apply_deposit_snapshot(validated_data, instance))
 
     def validate(self, attrs):
         if self.instance and self.instance.status in ['Accepted', 'Rejected']:
@@ -104,7 +165,11 @@ class QuotationRecordSerializer(serializers.ModelSerializer):
         model = QuotationRecord
         fields = '__all__'
         # Client responses are recorded only through the respond action.
-        read_only_fields = ['created_at', 'updated_at', 'client_responded_at', 'client_response_note']
+        read_only_fields = [
+            'created_at', 'updated_at', 'client_responded_at', 'client_response_note',
+            'deposit_policy', 'deposit_value', 'required_deposit_amount',
+            'deposit_paid_amount', 'deposit_remaining_amount', 'deposit_status', 'deposit_payments',
+        ]
 
 
 class SalesRecordLineSerializer(serializers.ModelSerializer):
@@ -139,11 +204,11 @@ class SalesPaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesPayment
         fields = [
-            'id', 'sales_record', 'amount', 'paid_on', 'method', 'method_label', 'reference', 'notes',
+            'id', 'sales_record', 'quotation', 'amount', 'paid_on', 'method', 'method_label', 'reference', 'notes',
             'recorded_by', 'recorded_by_name', 'recorded_at', 'is_voided', 'voided_at', 'void_reason',
         ]
         read_only_fields = [
-            'id', 'sales_record', 'recorded_by', 'recorded_at', 'is_voided', 'voided_at', 'void_reason',
+            'id', 'sales_record', 'quotation', 'recorded_by', 'recorded_at', 'is_voided', 'voided_at', 'void_reason',
         ]
 
 

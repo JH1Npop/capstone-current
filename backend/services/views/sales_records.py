@@ -272,6 +272,11 @@ def ensure_draft_sales_record(ticket, user=None):
         ticket=ticket, status__in=['draft', 'confirmed']
     ).first()
     if existing:
+        if existing.quotation_id:
+            SalesPayment.objects.filter(
+                quotation_id=existing.quotation_id,
+                sales_record__isnull=True,
+            ).update(sales_record=existing)
         return existing, False
     replaced = SalesRecord.objects.filter(ticket=ticket, status='voided').order_by('-voided_at', '-id').first()
     record = SalesRecord.objects.create(
@@ -282,6 +287,11 @@ def ensure_draft_sales_record(ticket, user=None):
     )
     _refresh_record_sources(record, ticket)
     record.save(update_fields=['client', 'quotation', 'agreed_total', 'source_snapshot', 'updated_at'])
+    if record.quotation_id:
+        SalesPayment.objects.filter(
+            quotation_id=record.quotation_id,
+            sales_record__isnull=True,
+        ).update(sales_record=record)
     return record, True
 
 

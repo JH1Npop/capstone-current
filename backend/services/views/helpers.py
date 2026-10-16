@@ -1237,6 +1237,13 @@ def validate_ticket_transition(ticket, new_status, *, allow_same=False):
     if normalized_status not in allowed_statuses:
         raise ValueError(f'Cannot move ticket from {ticket.status} to {normalized_status}.')
 
+    if normalized_status in {'Ready for Service', 'Navigating'} and ticket.ticket_type != 'inspection':
+        from services.deposits import ticket_deposit_gate
+
+        gate = ticket_deposit_gate(ticket)
+        if not gate['ready']:
+            raise ValueError(gate['message'])
+
     return normalized_status
 
 

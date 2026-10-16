@@ -88,10 +88,12 @@ from services.views.helpers import (
 from services.serializers import (
     GeneratedDocumentSerializer,
     InspectionChecklistSerializer,
+    SalesPaymentSerializer,
     ServiceTicketReportSerializer,
     SolarCommissioningChecklistSerializer,
 )
-from services.models import GeneratedDocument, ServiceRequest
+from services.models import GeneratedDocument, SalesPayment, ServiceRequest
+from services.deposits import quotation_deposit_summary, ticket_deposit_gate
 from services.sla import evaluate_service_ticket_sla, get_ticket_dispatch_state
 from inventory.automation import apply_ticket_equipment_plan, create_pending_reservation
 from inventory.models import (
@@ -1036,6 +1038,14 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 {'error': 'This service requires a site inspection before service dispatch.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        if dispatch_stage == 'service':
+            deposit_gate = ticket_deposit_gate(ticket)
+            if not deposit_gate['ready']:
+                return Response(
+                    {'error': deposit_gate['message'], 'code': deposit_gate['code']},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
         if not technician_id:
             return Response({'error': 'technician_id is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -2419,13 +2429,16 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     from services.models import QuotationRecord
     from services.serializers import QuotationRecordSerializer
-    queryset = QuotationRecord.objects.all()
+    queryset = QuotationRecord.objects.select_related(
+        'client',
+        'ticket__request__service_type',
+    ).prefetch_related('deposit_payments__recorded_by')
     serializer_class = QuotationRecordSerializer
 
     def get_permissions(self):
         if self.action == 'respond':
             return [permissions.IsAuthenticated()]
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'payments', 'void_payment']:
             return [CanManageDocuments()]
         return [CanAccessDocuments()]
 
@@ -2474,6 +2487,15 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
         quotation = serializer.save()
         self._notify_client_if_sent(quotation, previous_status)
 
+    def destroy(self, request, *args, **kwargs):
+        quotation = self.get_object()
+        if quotation.deposit_payments.exists():
+            return Response(
+                {'detail': 'This quotation has deposit payment history and cannot be deleted.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return super().destroy(request, *args, **kwargs)
+
     @staticmethod
     def _notify_client_if_sent(quotation, previous_status):
         if quotation.status == 'Sent' and previous_status != 'Sent':
@@ -2516,6 +2538,77 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
             notification_type='success' if decision == 'accept' else 'warning',
             include_user=quotation.ticket.assigned_admin if quotation.ticket.assigned_admin_id else None,
         )
+        return Response(self.get_serializer(quotation).data)
+
+    @action(detail=True, methods=['post'], url_path='deposit-payments')
+    @transaction.atomic
+    def payments(self, request, pk=None):
+        """Record money received toward the required pre-service deposit."""
+        quotation = get_object_or_404(
+            self.get_queryset().select_for_update().select_related('ticket__request'), pk=pk,
+        )
+        if quotation.status != 'Accepted':
+            return Response(
+                {'detail': 'Deposit payments can only be recorded after the quotation is accepted.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        summary = quotation_deposit_summary(quotation)
+        if summary['required_deposit_amount'] <= 0:
+            return Response(
+                {'detail': 'This quotation does not require a deposit.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        serializer = SalesPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if serializer.validated_data['amount'] > summary['deposit_remaining_amount']:
+            return Response(
+                {
+                    'amount': [
+                        f"This is more than the remaining required deposit of PHP "
+                        f"{summary['deposit_remaining_amount']:,.2f}."
+                    ]
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        active_sale = quotation.sales_records.filter(status__in=['draft', 'confirmed']).first()
+        payment = serializer.save(
+            quotation=quotation,
+            sales_record=active_sale,
+            recorded_by=request.user,
+        )
+        quotation._prefetched_objects_cache.pop('deposit_payments', None)
+        updated = quotation_deposit_summary(quotation)
+        create_notification(
+            quotation.client,
+            (
+                f"A deposit payment of PHP {payment.amount:,.2f} was recorded for "
+                f"quotation {quotation.quotation_number}. Remaining required deposit: "
+                f"PHP {updated['deposit_remaining_amount']:,.2f}."
+            ),
+            'success',
+        )
+        return Response(self.get_serializer(quotation).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='void-deposit-payment')
+    @transaction.atomic
+    def void_payment(self, request, pk=None):
+        quotation = get_object_or_404(self.get_queryset().select_for_update(), pk=pk)
+        payment = get_object_or_404(
+            SalesPayment.objects.select_for_update(),
+            pk=request.data.get('payment_id'),
+            quotation=quotation,
+        )
+        if payment.is_voided:
+            return Response({'detail': 'This payment is already voided.'}, status=status.HTTP_409_CONFLICT)
+        reason = str(request.data.get('reason') or '').strip()
+        if not reason:
+            return Response({'reason': ['A reason is required to void a payment.']}, status=status.HTTP_400_BAD_REQUEST)
+        payment.is_voided = True
+        payment.voided_at = timezone.now()
+        payment.voided_by = request.user
+        payment.void_reason = reason
+        payment.save(update_fields=['is_voided', 'voided_at', 'voided_by', 'void_reason'])
+        quotation._prefetched_objects_cache.pop('deposit_payments', None)
         return Response(self.get_serializer(quotation).data)
 
 

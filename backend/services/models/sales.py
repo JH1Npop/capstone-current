@@ -164,7 +164,20 @@ class SalesPayment(models.Model):
     ]
 
     id = models.BigAutoField(primary_key=True, db_column='sales_payment_id')
-    sales_record = models.ForeignKey(SalesRecord, on_delete=models.PROTECT, related_name='payments')
+    sales_record = models.ForeignKey(
+        SalesRecord,
+        on_delete=models.PROTECT,
+        related_name='payments',
+        null=True,
+        blank=True,
+    )
+    quotation = models.ForeignKey(
+        'services.QuotationRecord',
+        on_delete=models.PROTECT,
+        related_name='deposit_payments',
+        null=True,
+        blank=True,
+    )
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     paid_on = models.DateField()
     method = models.CharField(max_length=20, choices=METHOD_CHOICES)
@@ -190,8 +203,13 @@ class SalesPayment(models.Model):
         ]
         constraints = [
             models.CheckConstraint(condition=Q(amount__gt=0), name='services_sales_payment_amount_gt_0'),
+            models.CheckConstraint(
+                condition=Q(sales_record__isnull=False) | Q(quotation__isnull=False),
+                name='services_sales_payment_has_owner',
+            ),
         ]
 
     def __str__(self):
-        return f'{self.sales_record.record_number}: {self.amount} on {self.paid_on}'
+        owner = self.sales_record.record_number if self.sales_record_id else f'Quotation #{self.quotation_id}'
+        return f'{owner}: {self.amount} on {self.paid_on}'
 

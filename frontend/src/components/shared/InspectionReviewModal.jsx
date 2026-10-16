@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FiAlertTriangle, FiCalendar, FiCheckCircle, FiX, FiXCircle } from 'react-icons/fi';
 import StatusBadge from '../ui/StatusBadge';
+import QuotationDepositPanel from '../sales/QuotationDepositPanel';
 import { reviewInspectionDecision } from '../../api/admin';
 import { fetchTicketQuotation, recordQuotationAcceptance } from '../../api/services';
 import { formatTicketId } from '../../utils/roleIds';
@@ -149,7 +150,7 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
               <p className="min-w-0 flex-1">
                 <strong>Quotation: </strong>
                 {!quotation ? 'none sent yet. Create it in Documents > Quotation Proposal; the client accepts it in their portal.'
-                  : quotation.status === 'Accepted' ? `${quotation.quotation_number} accepted${quotation.client_responded_at ? ' by the client' : ''}. Service can be scheduled.`
+                  : quotation.status === 'Accepted' ? `${quotation.quotation_number} accepted${quotation.client_responded_at ? ' by the client' : ''}.${Number(quotation.deposit_remaining_amount || 0) > 0 ? ' The required deposit must still be recorded before service scheduling.' : ' Service can be scheduled.'}`
                     : quotation.status === 'Rejected' ? `${quotation.quotation_number} declined${quotation.client_response_note ? `: "${quotation.client_response_note}"` : ''}.`
                       : `${quotation.quotation_number} is waiting for the client's decision.`}
               </p>
@@ -158,6 +159,11 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
                   {recordingAcceptance ? 'Saving...' : 'Client accepted offline'}
                 </button>
               ) : null}
+            </div>
+          ) : null}
+          {quotation?.deposit_policy && quotation.deposit_policy !== 'none' ? (
+            <div className="mb-5">
+              <QuotationDepositPanel quotation={quotation} onUpdated={setQuotation} />
             </div>
           ) : null}
           {error && (

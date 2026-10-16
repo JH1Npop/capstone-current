@@ -175,11 +175,30 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Required equipment must be a list.')
         return value
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        policy = attrs.get('deposit_policy', getattr(self.instance, 'deposit_policy', 'none'))
+        value = attrs.get('deposit_value', getattr(self.instance, 'deposit_value', Decimal('0')))
+        if policy == 'none':
+            attrs['deposit_value'] = Decimal('0.00')
+        elif policy == 'percentage':
+            if value <= 0 or value > 100:
+                raise serializers.ValidationError({
+                    'deposit_value': 'Deposit percentage must be greater than 0 and no more than 100.'
+                })
+        elif policy == 'fixed':
+            if value <= 0:
+                raise serializers.ValidationError({'deposit_value': 'Fixed deposit amount must be greater than zero.'})
+        else:
+            raise serializers.ValidationError({'deposit_policy': 'Choose a supported deposit policy.'})
+        return attrs
+
     class Meta:
         model = ServiceType
         fields = ['id', 'name', 'description', 'category', 'color', 'icon', 'display_order',
                   'estimated_duration', 'estimated_cost', 'max_daily_assignments',
                   'procedures', 'required_equipment', 'is_active', 'requires_site_inspection',
+                  'deposit_policy', 'deposit_value',
                   'request_count', 'ticket_count', 'usage_count',
                   'inventory_requirements_count', 'inventory_requirements']
 

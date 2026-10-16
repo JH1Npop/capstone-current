@@ -138,6 +138,21 @@ def auto_assign_technician(ticket: ServiceTicket) -> bool:
         logger.debug(f"Ticket {ticket.id} already has a primary technician assigned")
         return False
 
+    # Required inspections are allowed before payment. Direct service work is
+    # not dispatchable until the quotation/deposit gate is satisfied.
+    from services.views.helpers import ticket_requires_inspection_visit
+    if not ticket_requires_inspection_visit(ticket):
+        from services.deposits import ticket_deposit_gate
+
+        deposit_gate = ticket_deposit_gate(ticket)
+        if not deposit_gate['ready']:
+            logger.info(
+                "Skipped auto-dispatch for ticket %s: %s",
+                ticket.id,
+                deposit_gate.get('code', 'deposit_gate_blocked'),
+            )
+            return False
+
     best_match = find_best_technician(ticket)
     if not best_match:
         logger.warning(f"Could not find suitable technician for ticket {ticket.id}")
@@ -354,5 +369,12 @@ def should_attempt_auto_dispatch(ticket: ServiceTicket) -> bool:
     # Don't auto-dispatch if ticket is in terminal state
     if ticket.status in ['Completed', 'Cancelled']:
         return False
+
+    from services.views.helpers import ticket_requires_inspection_visit
+    if not ticket_requires_inspection_visit(ticket):
+        from services.deposits import ticket_deposit_gate
+
+        if not ticket_deposit_gate(ticket)['ready']:
+            return False
 
     return True

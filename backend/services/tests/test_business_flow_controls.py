@@ -11,11 +11,15 @@ from services.models import (
     SalesPayment,
     SalesRecord,
     ServiceRequest,
+    ServiceRequestService,
     ServiceStatusHistory,
     ServiceTicket,
     ServiceType,
+    TechnicianSkill,
     TurnoverAcceptance,
 )
+from services.deposits import ticket_deposit_gate
+from services.views.sales_records import ensure_draft_sales_record
 from services.views.helpers import apply_ticket_status_change
 from users.models import AdminSettings, User
 
@@ -195,3 +199,171 @@ class SalesPromptTests(FlowFixture):
         inspection = self.ticket('Inspection Completed', ticket_type='inspection', technician=self.tech)
         apply_ticket_status_change(inspection, 'Completed', changed_by=self.tech, notes='Inspection only.')
         self.assertFalse(SalesRecord.objects.filter(ticket=inspection).exists())
+
+
+class PreServiceDepositTests(FlowFixture):
+    def setUp(self):
+        super().setUp()
+        self.service.requires_site_inspection = False
+        self.service.deposit_policy = 'percentage'
+        self.service.deposit_value = Decimal('30.00')
+        self.service.save(update_fields=['requires_site_inspection', 'deposit_policy', 'deposit_value'])
+        TechnicianSkill.objects.create(technician=self.tech, service_type=self.service)
+        self.job = self.ticket('Not Started')
+        self.assign_url = f'/api/services/service-tickets/{self.job.id}/assign/'
+
+    def assign(self):
+        return self.as_user(self.admin).post(
+            self.assign_url,
+            {'technician_id': self.tech.id, 'dispatch_stage': 'service'},
+            format='json',
+        )
+
+    def record_deposit(self, quotation, amount):
+        return self.as_user(self.admin).post(
+            f'/api/services/quotations/{quotation.id}/deposit-payments/',
+            {
+                'amount': amount,
+                'paid_on': timezone.localdate().isoformat(),
+                'method': 'bank_transfer',
+                'reference': 'TEST-REF',
+            },
+            format='json',
+        )
+
+    def accepted_quotation(self):
+        created = self.as_user(self.admin).post(
+            '/api/services/quotations/',
+            {
+                'ticket': self.job.id,
+                'client': self.client_user.id,
+                'total_amount': 'PHP 100,000.00',
+                'status': 'Sent',
+            },
+            format='json',
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(Decimal(created.data['required_deposit_amount']), Decimal('30000.00'))
+        self.assertEqual(created.data['downpayment_amount'], 'PHP 30,000.00')
+        quotation = QuotationRecord.objects.get(pk=created.data['id'])
+        accepted = self.as_user(self.client_user).post(
+            f'/api/services/quotations/{quotation.id}/respond/',
+            {'decision': 'accept'},
+            format='json',
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.data)
+        quotation.refresh_from_db()
+        return quotation
+
+    def test_dispatch_waits_for_the_full_required_deposit(self):
+        missing_quote = self.assign()
+        self.assertEqual(missing_quote.status_code, 409)
+        self.assertEqual(missing_quote.data['code'], 'quotation_not_accepted')
+
+        quotation = self.accepted_quotation()
+        unpaid = self.assign()
+        self.assertEqual(unpaid.status_code, 409)
+        self.assertEqual(unpaid.data['code'], 'deposit_required')
+
+        partial = self.record_deposit(quotation, '10000.00')
+        self.assertEqual(partial.status_code, 201, partial.data)
+        self.assertEqual(partial.data['deposit_status'], 'partial')
+        self.assertEqual(partial.data['deposit_remaining_amount'], '20000.00')
+        self.assertEqual(self.assign().status_code, 409)
+
+        overpayment = self.record_deposit(quotation, '20000.01')
+        self.assertEqual(overpayment.status_code, 400)
+
+        paid = self.record_deposit(quotation, '20000.00')
+        self.assertEqual(paid.status_code, 201, paid.data)
+        self.assertEqual(paid.data['deposit_status'], 'paid')
+        assigned = self.assign()
+        self.assertEqual(assigned.status_code, 200, assigned.data)
+
+    def test_only_document_managers_can_record_or_void_deposits(self):
+        quotation = self.accepted_quotation()
+        payment_url = f'/api/services/quotations/{quotation.id}/deposit-payments/'
+        refused = self.as_user(self.client_user).post(
+            payment_url,
+            {'amount': '100.00', 'paid_on': timezone.localdate().isoformat(), 'method': 'cash'},
+            format='json',
+        )
+        self.assertEqual(refused.status_code, 403)
+
+        paid = self.record_deposit(quotation, '30000.00')
+        payment_id = paid.data['deposit_payments'][0]['id']
+        void_url = f'/api/services/quotations/{quotation.id}/void-deposit-payment/'
+        self.assertEqual(
+            self.as_user(self.admin).post(void_url, {'payment_id': payment_id}, format='json').status_code,
+            400,
+        )
+        voided = self.as_user(self.admin).post(
+            void_url,
+            {'payment_id': payment_id, 'reason': 'Bank transfer was reversed.'},
+            format='json',
+        )
+        self.assertEqual(voided.status_code, 200, voided.data)
+        self.assertEqual(voided.data['deposit_status'], 'unpaid')
+        self.assertFalse(ticket_deposit_gate(self.job)['ready'])
+
+    def test_deposit_is_counted_in_the_later_sales_balance(self):
+        quotation = self.accepted_quotation()
+        self.assertEqual(self.record_deposit(quotation, '30000.00').status_code, 201)
+        record, created = ensure_draft_sales_record(self.job, self.admin)
+        self.assertTrue(created)
+        self.assertEqual(record.quotation, quotation)
+        payment = SalesPayment.objects.get(quotation=quotation)
+        self.assertEqual(payment.sales_record, record)
+        self.assertEqual(Decimal(record.payments.get().amount), Decimal('30000.00'))
+
+    def test_secondary_service_cannot_bypass_its_deposit_rule(self):
+        self.service.deposit_policy = 'none'
+        self.service.deposit_value = Decimal('0.00')
+        self.service.save(update_fields=['deposit_policy', 'deposit_value'])
+        add_on = ServiceType.objects.create(
+            name='Deposit-required add-on',
+            estimated_duration=30,
+            deposit_policy='fixed',
+            deposit_value=Decimal('5000.00'),
+        )
+        ServiceRequestService.objects.create(
+            request=self.job.request,
+            service_type=self.service,
+            sort_order=0,
+        )
+        ServiceRequestService.objects.create(
+            request=self.job.request,
+            service_type=add_on,
+            sort_order=1,
+        )
+
+        self.assertEqual(self.assign().data['code'], 'quotation_not_accepted')
+        created = self.as_user(self.admin).post(
+            '/api/services/quotations/',
+            {
+                'ticket': self.job.id,
+                'client': self.client_user.id,
+                'total_amount': '10000.00',
+                'status': 'Sent',
+            },
+            format='json',
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(created.data['deposit_policy'], 'fixed')
+        self.assertEqual(Decimal(created.data['required_deposit_amount']), Decimal('5000.00'))
+
+    def test_service_deposit_configuration_is_validated_and_normalized(self):
+        url = f'/api/services/service-types/{self.service.id}/'
+        invalid = self.as_user(self.admin).patch(
+            url,
+            {'deposit_policy': 'percentage', 'deposit_value': '101.00'},
+            format='json',
+        )
+        self.assertEqual(invalid.status_code, 400)
+        normalized = self.as_user(self.admin).patch(
+            url,
+            {'deposit_policy': 'none', 'deposit_value': '50.00'},
+            format='json',
+        )
+        self.assertEqual(normalized.status_code, 200, normalized.data)
+        self.assertEqual(Decimal(normalized.data['deposit_value']), Decimal('0.00'))

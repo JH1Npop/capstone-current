@@ -32,6 +32,8 @@ const DEFAULT_SERVICE_FORM = {
   max_daily_assignments: 5,
   is_active: true,
   requires_site_inspection: false,
+  deposit_policy: 'none',
+  deposit_value: 0,
   procedures: [],
   required_equipment: [],
 };
@@ -83,6 +85,8 @@ const toServiceFormState = (service) => ({
   max_daily_assignments: Number(service?.max_daily_assignments || 5),
   is_active: service?.is_active !== false,
   requires_site_inspection: Boolean(service?.requires_site_inspection),
+  deposit_policy: service?.deposit_policy || 'none',
+  deposit_value: Number(service?.deposit_value || 0),
   procedures: normalizeProcedures(service?.procedures),
   required_equipment: normalizeEquipment(service?.required_equipment),
 });
@@ -314,6 +318,13 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
                 Site inspection first
               </span>
             ) : null}
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${service.deposit_policy && service.deposit_policy !== 'none' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+              {service.deposit_policy === 'percentage'
+                ? `${Number(service.deposit_value || 0).toLocaleString('en-PH')}% deposit`
+                : service.deposit_policy === 'fixed'
+                  ? `${formatCost(service.deposit_value)} deposit`
+                  : 'No deposit'}
+            </span>
             <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-600">
               {formatDuration(service.estimated_duration)}
             </span>
@@ -565,6 +576,14 @@ export default function AdminServices() {
         setFeedback('Max daily assignments must be at least 1.');
         return;
       }
+      if (serviceFormData.deposit_policy === 'percentage' && (Number(serviceFormData.deposit_value) <= 0 || Number(serviceFormData.deposit_value) > 100)) {
+        setFeedback('Deposit percentage must be greater than 0 and no more than 100.');
+        return;
+      }
+      if (serviceFormData.deposit_policy === 'fixed' && Number(serviceFormData.deposit_value) <= 0) {
+        setFeedback('Fixed deposit amount must be greater than zero.');
+        return;
+      }
 
       const payload = {
         ...serviceFormData,
@@ -573,6 +592,7 @@ export default function AdminServices() {
         category: serviceFormData.category.trim(),
         icon: serviceFormData.icon.trim(),
         display_order: Number(serviceFormData.display_order || 0),
+        deposit_value: serviceFormData.deposit_policy === 'none' ? 0 : Number(serviceFormData.deposit_value || 0),
       };
 
       if (editingService) {
@@ -838,6 +858,43 @@ export default function AdminServices() {
                 onChange={(e) => setServiceFormData({ ...serviceFormData, requires_site_inspection: e.target.checked })}
               />
             </label>
+            <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="service-deposit-policy">Pre-service deposit</label>
+              <select
+                id="service-deposit-policy"
+                value={serviceFormData.deposit_policy}
+                onChange={(event) => setServiceFormData({
+                  ...serviceFormData,
+                  deposit_policy: event.target.value,
+                  deposit_value: event.target.value === 'none' ? 0 : serviceFormData.deposit_value,
+                })}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                <option value="none">No deposit required</option>
+                <option value="percentage">Percentage of accepted quotation</option>
+                <option value="fixed">Fixed PHP amount</option>
+              </select>
+              {serviceFormData.deposit_policy !== 'none' ? (
+                <div className="relative mt-3">
+                  <input
+                    aria-label={serviceFormData.deposit_policy === 'percentage' ? 'Deposit percentage' : 'Fixed deposit amount'}
+                    type="number"
+                    min="0.01"
+                    max={serviceFormData.deposit_policy === 'percentage' ? 100 : undefined}
+                    step="0.01"
+                    value={serviceFormData.deposit_value}
+                    onChange={(event) => setServiceFormData({ ...serviceFormData, deposit_value: Number(event.target.value) || 0 })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 pr-16 text-sm"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500">
+                    {serviceFormData.deposit_policy === 'percentage' ? '%' : 'PHP'}
+                  </span>
+                </div>
+              ) : null}
+              <p className="mt-2 text-xs text-slate-500">
+                This rule is copied into each new quotation. If required, the client must accept the quotation and the office must record the full deposit before service dispatch. Site inspection can still happen first.
+              </p>
+            </div>
             <div className="md:col-span-2">
               <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
               <textarea

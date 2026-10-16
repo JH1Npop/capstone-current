@@ -11,6 +11,12 @@ TIME_SLOT_CHOICES = [
     ('evening', 'Evening (5 PM - 8 PM)'),
 ]
 class ServiceType(models.Model):
+    DEPOSIT_POLICY_CHOICES = [
+        ('none', 'No deposit required'),
+        ('percentage', 'Percentage of quotation'),
+        ('fixed', 'Fixed amount'),
+    ]
+
     id = models.BigAutoField(db_column='service_type_id', primary_key=True)
 
     name = models.CharField(max_length=255)
@@ -60,6 +66,18 @@ class ServiceType(models.Model):
     requires_site_inspection = models.BooleanField(
         default=False,
         help_text="Require an inspection dispatch before service work can begin",
+    )
+    deposit_policy = models.CharField(
+        max_length=20,
+        choices=DEPOSIT_POLICY_CHOICES,
+        default='none',
+        help_text="Default deposit rule copied into new quotations for this service.",
+    )
+    deposit_value = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Percentage or fixed PHP amount, depending on deposit_policy.",
     )
 
     def __str__(self):

@@ -1,9 +1,9 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-15 10:23 Asia/Singapore**
-Current focused objective: **Keep the technician Finish Job workflow readable and action-accessible at phone widths without weakening completion evidence requirements.**
-Current objective: **Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
+Last updated: **2026-10-17 01:19 Asia/Singapore**
+Current focused objective: **Deliver configurable per-service pre-service deposits without letting quotation acceptance, manual assignment, auto-dispatch, or later sales collection bypass or double-count the requirement.**
+Current objective: **Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the existing inspection-first path and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
 entrypoint aligned with application roles and delegated capabilities, keep the
@@ -522,19 +522,29 @@ other repository path must include this living handoff file.
 | Item | Current state |
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
-| Branch | `staging-deploy` tracking `origin/staging-deploy` |
-| HEAD | Runtime release `43be830 Harden hosted database connection lifecycle`; the current tip adds only this post-deployment evidence |
+| Branch | `feature/analytics-decision-workspace`; no same-named remote branch was present at this checkpoint |
+| HEAD | `09f32fc Add quotation approval, payment tracking, handover confirmation and sales prompts` |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | Local and `origin/staging-deploy` are synchronized after publishing the documentation-only deployment-evidence successor |
-| Worktree | Clean after publishing the database connection-stability runtime commit and this documentation-only successor; ignored local environments, databases, media, build output, and test output remain excluded |
+| Remote comparison | After a fresh fetch, HEAD is 10 commits ahead of and 0 behind `origin/staging-deploy`; the update is fast-forward safe before the pending deposit commit |
+| Worktree | Intentionally dirty with 16 modified and 3 untracked paths for the optional-deposit implementation and this handoff; existing work was preserved |
 | Tracked deletions | None |
-| Commit/push status | Runtime commit `43be830` is pushed and live on staging. Post-deployment readiness and a 40-request read-only stability probe passed without errors. |
+| Commit/push status | The optional-deposit work is uncommitted, unpushed, and not deployed. With explicit user approval, the pending local SQLite migrations were applied on 2026-10-17; no commit, push, staging migration, production migration, or deployment was performed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
 The real `.env` exists locally but must not be inspected merely to populate docs.
 
 ## 3. System architecture
+
+The commercial flow now treats a service deposit rule as a catalog default and
+copies the effective rule into a new quotation. A request containing multiple
+services uses the selected rule that produces the highest job-level deposit;
+rules are not added together. An accepted quotation remains blocked from service
+assignment, Ready for Service, navigation, and auto-dispatch until non-voided
+deposit payments cover the snapshotted amount. Required site inspection remains
+dispatchable before the deposit. Deposit payments are externally collected,
+append-only/voidable records and are attached to the later Sales Record so its
+remaining balance credits money already received.
 
 Analytics visuals share `AnalyticsVisuals.jsx`: comparison bars retain full category names and exact values in tables, after-sales donuts show shares and prior counts, and technician scatter/capacity heatmap consume existing scoped data. No API/schema change.
 
@@ -773,14 +783,17 @@ production database:
 | `inventory.0005_inventory_integrity_constraints` | Inventory balance, reservation, and transaction integrity |
 | `inventory.0006_inventorycategory_inventory_category_name_ci_unique` | Normalized, case-insensitive category-name and SKU identity; applied locally and to staging Aiven |
 | `inventory.0007_equipmentreturnrequest_equipmentreturnrequestitem` | Pending technician return declarations and separate warehouse review evidence; applied locally, to fresh test/E2E databases, and to staging Aiven |
+| `inventory.0008_seed_operational_catalog` | Non-destructive empty-catalog operational inventory seed; applied locally and already applied to staging Aiven before the 2026-10-17 deposit deployment review |
 | `services.0053_servicerequest_idempotency_key` | Client-scoped request idempotency key |
 | `services.0054_quotation_reference_and_warranty_terms` | Quotation number and warranty terms |
 | `services.0055_unique_demand_forecast_period` | One forecast per service/period/date |
 | `services.0056_aftersalescaseevent` | Append-only after-sales case activity history; applied locally and to staging Aiven |
 | `services.0057_salesrecord_salesrecordline` | Connected immutable Sales/Purchase Records; applied locally after fresh isolated tests and to staging Aiven |
-| `services.0058_seed_default_service_catalog` | Non-destructive reference-data seed: creates nine active operational service types only when the target catalog is completely empty; pending local/staging application |
-| `services.0060_client_quotation_handover_and_payments` | Client quotation response fields, client handover confirmation fields, and the `SalesPayment` table; applied only to isolated test/E2E databases, **pending local and staging application (needs approval)** |
-| `users.0041_adminsettings_require_quotation_acceptance` | `AdminSettings.require_quotation_acceptance` (default on); applied only to isolated test/E2E databases, **pending local and staging application (needs approval)** |
+| `services.0058_seed_default_service_catalog` | Non-destructive reference-data seed: creates nine active operational service types only when the target catalog is completely empty; applied locally and to staging Aiven |
+| `services.0059_maintenanceschedule_client_due_notified_at` | Idempotent due-date maintenance reminder timestamp; applied locally and to staging Aiven |
+| `services.0060_client_quotation_handover_and_payments` | Client quotation response fields, client handover confirmation fields, and the `SalesPayment` table; applied to local development SQLite on 2026-10-17 with explicit approval; staging remains pending deployment review |
+| `services.0061_service_deposit_policy` | Per-service deposit policy/value, immutable quotation deposit snapshot/required amount, quotation-owned pre-service payments, and payment-owner integrity; applied to local development SQLite on 2026-10-17 with explicit approval; staging remains pending deployment review |
+| `users.0041_adminsettings_require_quotation_acceptance` | `AdminSettings.require_quotation_acceptance` (default on); applied to local development SQLite on 2026-10-17 with explicit approval; staging remains pending deployment review |
 | `history.0005_delete_servicehistory` | Guarded removal of redundant completed-service summary model; applied locally and to staging Aiven |
 | `notifications.0009_remove_notificationlog_notification_and_more` | Guarded removal of unused notification template/delivery-log models; applied locally and to staging Aiven |
 | `users.0038_adminsettings_landing_page_projects` | Admin-managed completed-project portfolio with consent-gated public publication; applied locally, to fresh test/E2E databases, and to staging Aiven |
@@ -793,6 +806,12 @@ production database still requires backup, release review, and explicit
 deployment authorization.
 
 ## 8. Validation ledger
+
+2026-10-17 01:19: The pre-staging optional-deposit release gate passed through `npm.cmd run quality`: Django system check, Python dependency integrity, migration drift, all 555 backend tests with 3 expected PostgreSQL-only skips, the 2,536-module production build, and 16/16 isolated Chromium smoke scenarios. The first equivalent `npm run quality` invocation was blocked before project execution by the workstation's PowerShell `npm.ps1` policy; rerunning through the installed `npm.cmd` completed the intended gate. Browser WebSocket proxy `ECONNABORTED` messages were the expected polling-fallback behavior because the smoke runner deliberately uses `--noasgi`; the scenarios passed. A fresh Git fetch showed the candidate fast-forward safe at 10 commits ahead and 0 behind `origin/staging-deploy`. A read-only Aiven staging check showed `inventory.0008`, `services.0058`/`0059`, and `users.0040` already applied, with only `services.0060`, `services.0061`, and `users.0041` pending. Because `pg_dump` is not installed, a full Django logical backup was created from the exact deployed `e993385` model/schema before any push: ignored `backend/local_backups/staging-predeposit-20261016T171607Z.json`, 1,348 objects, 754,389 bytes, SHA-256 `927c5aae72ccddc079d89ee1145f6c217f3542bd6b7b39c237626d4c534a22ee`. The JSON parsed successfully and is ignored by Git. This is a pre-migration data snapshot, not a PostgreSQL-native or restore-tested backup. No staging data or schema was changed during these checks.
+
+2026-10-17 00:16: With explicit user approval, applied all pending migrations to the local development SQLite database only: `inventory.0008`, `services.0060`, `services.0061`, and `users.0041`. `showmigrations inventory services users` marks every listed migration applied; Django system check passed. An authenticated local request to `/api/dashboard/stats/?role=admin` as an existing superadmin returned HTTP 200 with the admin response contract, resolving the reproduced `no such column: services_servicetype.deposit_policy` dashboard failure. Before applying the local migrations, the same dashboard regression passed 1/1 against an isolated fully migrated in-memory test database. Staging and production were not accessed or changed.
+
+2026-10-16 23:55: Optional per-service pre-service deposits passed the complete isolated backend suite: 555 tests OK with 3 expected PostgreSQL-only skips. The focused business-flow module passed 20/20 after its final changes, including percentage/fixed rules, full/partial/overpayment behavior, void/re-block behavior, Admin/Superadmin capability enforcement, multi-service strictest-rule selection, and crediting the deposit to the later Sales Record. `manage.py check` passed; `makemigrations --check --dry-run` reported no model drift; `git diff --check` passed with only the pre-existing CRLF normalization warning for `models/core.py`; the Vite production build passed with 2,536 modules. Focused Chromium checks for Services Management and Documents draft save/reload passed 2/2 against the isolated E2E database; expected WebSocket-proxy warnings occurred because the E2E server deliberately uses `--noasgi`. The isolated E2E database was flushed afterward and verified at 0 users. No local-development, staging, or production database was migrated.
 
 2026-10-15 11:53: Inventory item-row cleanup passed the production Vite build with 2,529 modules. Generic units such as `piece` no longer appear as a redundant subtitle below item names; actual brand/model metadata remains visible when present. No backend, migration, or database changed.
 
@@ -1232,9 +1251,14 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Low notification-routing limitation | Contextual sidebar badges and their click-to-read acknowledgement derive destinations from normalized notification title/message/type text because notifications do not yet store an explicit destination field | Keep notification copy aligned with the current routing rules; add a validated `target_route` or destination category to the notification contract before adding many new notification types |
 | Low | The client support assistant is deterministic guidance, not a generative support agent, and reads a snapshot when opened/refreshed | Keep answers curated as workflows change; direct account-specific or unresolved concerns to the existing human support case flow |
 | Low availability boundary | The public and authenticated solar calculators intentionally share published public settings and bundled defaults; during a settings-endpoint outage, either calculator can still operate with defaults that may be older than the latest published configuration | Preserve the resilient fallback, but consider displaying a settings freshness warning before estimates become contractual rather than preliminary |
+| Deployment gate | `services.0060`, `services.0061`, and `users.0041` are applied locally and remain pending on staging/production. Staging has a validated pre-migration Django logical snapshot, but this machine lacks `pg_dump`, the snapshot has not been restore-tested, and the Render CLI token is expired. | For disposable staging, deploy the fast-forward candidate and verify migration state, readiness, dashboard, and the commercial gate through direct read-only checks. Before production, require a PostgreSQL-native backup plus restore drill and renewed provider access; do not treat the logical staging snapshot as production-grade evidence. |
+| Medium commercial boundary | Deposit collection is recorded after money is received outside the portal; there is no payment gateway, receipt issuance, reconciliation import, refund processor, or independent payment approval | Keep references/notes and reasoned void history accurate; add gateway/accounting/reconciliation integration only through a separate approved financial contract |
+| Low product decision | A quotation covers the whole multi-service job, so when selected services have different deposit settings the rule producing the highest job-level amount wins and is snapshotted; configured rules are not summed | Confirm this strictest-rule policy with the business before launch; if additive per-line deposits are desired, first add quotation lines tied to service types and migrate the calculation contract |
 | Medium product decision | Sales Records use a read-only accepted-quotation or signed-contract value when available. A reasoned manual reference value remains available for legacy completed work with neither source; it is not independently approved and is not payment evidence | Periodically review manual-value records and decide whether future exports need tax/accounting integration; keep payment collection and accounting state outside this service-management system |
 
 ## 10. Current worktree manifest
+
+- Optional per-service deposits touch `backend/services/{deposits.py,auto_dispatch.py,models/{core.py,documents.py,sales.py},serializers/{requests.py,commercial_records.py},views/{helpers.py,sales_records.py,tickets.py},tests/test_business_flow_controls.py,migrations/0061_service_deposit_policy.py}`, `frontend/src/{api/services.js,components/{client/ClientJobDecisions.jsx,shared/InspectionReviewModal.jsx,sales/QuotationDepositPanel.jsx},pages/admin/{AdminDocuments.jsx,AdminServices.jsx}}`, and this handoff. The implementation remains uncommitted; its migration and the three other pending migrations were applied only to local development SQLite on 2026-10-17 with explicit approval. Staging and production were not changed.
 
 - The reversible Analytics decision-workspace and visual-demand phase touches `backend/users/{analytics_service.py,analytics_workspaces.py}`, `backend/services/{views_dashboard.py,tests/test_analytics_workspace.py}`, `frontend/src/{utils/analyticsAssistantContext.js,components/shared/SystemAssistant.jsx,pages/admin/AdminAnalytics.jsx,pages/admin/analytics/AnalyticsDecisionLayer.jsx}`, `e2e/03-admin-workspace.spec.js`, Analytics documentation, and this handoff. It adds no migration and leaves the pre-existing ERD/system-knowledge work untouched.
 
@@ -1371,6 +1395,14 @@ All paths below are preserved work, not cleanup candidates.
 
 ### Services, lifecycle, analytics, and documents
 
+- `backend/services/deposits.py`, deposit fields in service/quotation/payment
+  models and serializers, `views/{helpers.py,tickets.py,sales_records.py}`,
+  `auto_dispatch.py`, migration `0061_service_deposit_policy.py`, and
+  `tests/test_business_flow_controls.py`: catalog-configured none/percentage/fixed
+  deposit rules, immutable quotation snapshots, multi-service strictest-rule
+  selection, auditable external payment recording/voiding, dispatch and status
+  gates, inspection-first preservation, and later Sales Record balance credit.
+
 - `backend/services/{serializers/tickets.py,views/tickets.py,test_reporting_capabilities.py}`: report rows expose structured service name/color pairs from the canonical catalog, with prefetched multi-service data and regression coverage.
 
 - `backend/services/migrations/0058_seed_default_service_catalog.py` and
@@ -1502,6 +1534,15 @@ All paths below are preserved work, not cleanup candidates.
   in disposable E2E migrations, while production/Aiven remains pending approval.
 
 ### Frontend
+
+- `frontend/src/pages/admin/AdminServices.jsx`,
+  `frontend/src/pages/admin/AdminDocuments.jsx`,
+  `frontend/src/components/shared/InspectionReviewModal.jsx`,
+  `frontend/src/components/client/ClientJobDecisions.jsx`,
+  `frontend/src/components/sales/QuotationDepositPanel.jsx`, and
+  `frontend/src/api/services.js`: Admin/Superadmin deposit configuration,
+  quotation payment recording/void history, inspection-review visibility, and
+  client-visible required/received/remaining deposit status.
 
 - `frontend/src/components/LandingNavbar.jsx`: complete non-truncated company identity with a non-shrinking brand block and an earlier responsive menu breakpoint that prevents header collisions.
 
@@ -1834,6 +1875,12 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-17 01:19: Prepared the optional-deposit release for the user-authorized staging deployment. The canonical release gate passed all 555 backend tests (3 expected PostgreSQL skips), the 2,536-module production build, and 16/16 browser smoke checks. A fresh fetch proved the candidate is a fast-forward from `origin/staging-deploy`. Read-only Aiven inspection confirmed the staging schema is current through `inventory.0008`, `services.0059`, and `users.0040`, while `services.0060`, `services.0061`, and `users.0041` remain pending for the deployment startup migration. Since `pg_dump` is unavailable, created and hash-validated an ignored full Django logical snapshot from deployed revision `e993385`: `backend/local_backups/staging-predeposit-20261016T171607Z.json` (1,348 objects; 754,389 bytes; SHA-256 recorded in the validation ledger). No remote mutation occurred yet. The snapshot is explicitly not a PostgreSQL-native/restore-tested production backup, and the installed Render CLI requires login renewal; post-push verification must use direct service and database checks unless provider access is renewed.
+
+2026-10-17 00:16: Applied the explicitly authorized pending migrations to local development SQLite: `inventory.0008_seed_operational_catalog`, `services.0060_client_quotation_handover_and_payments`, `services.0061_service_deposit_policy`, and `users.0041_adminsettings_require_quotation_acceptance`. This brought the local schema into alignment with the current code and resolved the Admin Dashboard HTTP 500 caused by the missing `services_servicetype.deposit_policy` column. Verification: all inventory/services/users migrations show applied, Django system check passed, and authenticated `/api/dashboard/stats/?role=admin` returned HTTP 200. The earlier isolated dashboard regression passed 1/1 with a fully migrated in-memory database. Only local SQLite and this handoff changed; staging/production were not accessed, and nothing was committed, pushed, or deployed.
+
+2026-10-16 23:55: Implemented optional deposits on each service. Admin/Superadmin catalog editors can choose No deposit, Percentage, or Fixed PHP amount. New quotations snapshot the effective rule and calculated requirement; for multi-service requests the rule producing the highest job-level deposit wins. Accepted quotations expose required/received/remaining values and an auditable payment list. Document-capable Admin/Superadmin users can record external cash/bank/GCash/Maya/check/card/other payments after acceptance and void mistakes only with a reason; clients can see progress and non-voided payment history but cannot record payments. Manual assignment, Ready for Service, technician navigation, and auto-dispatch are blocked until the required deposit is fully recorded, while the required inspection visit remains allowed before payment. Deposit payments attach to the later Sales Record and reduce its balance, preventing double charging. Added `services.0061_service_deposit_policy`; it depends on `0060` and remains unapplied outside disposable tests. Paths are listed in the current worktree manifest. Validation: Django check PASS; migration drift PASS; focused business-flow module 20/20 PASS; full backend 555 OK with 3 expected PostgreSQL skips; Vite production build PASS (2,536 modules); focused Services/Documents browser checks 2/2 PASS; isolated E2E data flushed and verified at 0 users; diff check PASS except a line-ending warning. Nothing was committed, pushed, deployed, or migrated to development/staging/production.
 
 2026-10-16 14:00: Business-flow controls (user asked to implement the five flow gaps). (1) Quotation before installation: clients accept or decline a Sent quotation in the portal (`POST /api/services/quotations/{id}/respond/`, decline needs a reason; office notified); saving a quotation as Sent now notifies the client; `inspection_decision` refuses Ready for Service / Awaiting Materials with 409 `quotation_not_accepted` unless the ticket's quotation is Accepted (client- or staff-recorded), switchable via Settings > Quotation Before Installation (`AdminSettings.require_quotation_acceptance`, default on). The inspection review dialog shows quotation status and a 'Client accepted offline' action; the client request page shows the quotation with Accept/Decline (`components/client/ClientJobDecisions.jsx`). (2) Payments: new `SalesPayment` (amount, paid_on, method, reference, notes, recorded_by; voided with reason, never deleted). `GET/POST /api/services/sales-records/{id}/payments/`, `POST .../void-payment/`; payments only on confirmed records, never above the balance, not future-dated; a sale with live payments cannot be voided. Sales records expose amount_paid / balance_due / payment_status to staff only (clients still see purchase records without collection status, per the existing contract test). Sales Records page has a payments panel (`components/sales/SalesPaymentsPanel.jsx`) and list badges; Analytics Sales tab shows payments collected, outstanding balance and sales with a balance (`kpis.collections`). (3) Clients can no longer cancel once the ticket is Navigating / Arrived on Site / In Progress (409 `cancellation_requires_office`); office roles still can. (4) Client handover confirmation: after staff finalize turnover the client is notified and confirms in the portal (`POST /api/services/turnover-acceptances/{id}/client-confirm/`), setting status 'accepted' with timestamp, user and optional note; office notified. (5) Completing non-inspection work auto-creates a draft sales record (`ensure_draft_sales_record`, run in a savepoint so it can never block completion); Needs attention now lists sales records to confirm, sales with a balance due, and quotations awaiting the client. Migrations `services.0060_client_quotation_handover_and_payments` and `users.0041_adminsettings_require_quotation_acceptance` were created and exercised only on isolated test/E2E databases; they are NOT applied to the local dev or staging databases (approval required). ERD regenerated (52 entities, 701 attributes, 106 relationships; `services_salespayment` added to both generators' table groups). Tests: new `services/tests/test_business_flow_controls.py` (15); journey tests now send and accept a quotation, assert the auto-drafted sales record and record a payment; awaiting-materials test creates an accepted quotation. Validation: backend 550 OK (3 PostgreSQL skips), no migration drift, build PASS.
 

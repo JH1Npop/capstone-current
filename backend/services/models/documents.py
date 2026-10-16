@@ -329,6 +329,14 @@ class QuotationRecord(models.Model):
     total_amount = models.CharField(max_length=255, blank=True, null=True)
     downpayment_amount = models.CharField(max_length=255, blank=True, null=True)
     balance_amount = models.CharField(max_length=255, blank=True, null=True)
+    deposit_policy = models.CharField(
+        max_length=20,
+        choices=ServiceType.DEPOSIT_POLICY_CHOICES,
+        default='none',
+        help_text="Snapshot of the service deposit rule when this quotation was created.",
+    )
+    deposit_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    required_deposit_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     payment_terms = models.TextField(blank=True, null=True)
     warranty_terms = models.TextField(blank=True, null=True)
     validity_days = models.IntegerField(default=30)

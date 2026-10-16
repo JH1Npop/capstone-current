@@ -711,6 +711,27 @@ export const saveQuotationRecord = async (payload) => {
   }
 };
 
+export const recordQuotationDeposit = async (quotationId, payment) => {
+  try {
+    const { data } = await api.post(`/services/quotations/${quotationId}/deposit-payments/`, payment);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to record the deposit payment.'));
+  }
+};
+
+export const voidQuotationDepositPayment = async (quotationId, paymentId, reason) => {
+  try {
+    const { data } = await api.post(`/services/quotations/${quotationId}/void-deposit-payment/`, {
+      payment_id: paymentId,
+      reason,
+    });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to void the deposit payment.'));
+  }
+};
+
 export const fetchSalesRecords = async (filters = {}) => {
   try {
     const params = {};
