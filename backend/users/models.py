@@ -406,6 +406,8 @@ class AdminSettings(models.Model):
     document_footer = models.TextField(blank=True, default='')
     currency_code = models.CharField(max_length=3, default='PHP')
     quotation_validity_days = models.PositiveSmallIntegerField(default=30)
+    # Inspection-first jobs cannot move to service until the client has accepted a quotation.
+    require_quotation_acceptance = models.BooleanField(default=True)
     default_warranty_days = models.PositiveIntegerField(default=365)
     external_payment_notice = models.CharField(
         max_length=255,

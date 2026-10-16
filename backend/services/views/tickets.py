@@ -102,6 +102,7 @@ from inventory.models import (
 )
 from services.user_display import client_technician_label
 from services.ticket_status import CLOSED_TICKET_STATUSES, COMPLETED_TICKET_STATUSES
+from services.views.helpers import _display_name, _notify_admin_superadmin, create_notification, quotation_acceptance_required
 
 
 RESCHEDULE_HISTORY_PREFIX = 'Rescheduled to'
@@ -1321,6 +1322,21 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if target_status in ['Ready for Service', 'Awaiting Materials'] and quotation_acceptance_required():
+            from services.models import QuotationRecord
+
+            if not QuotationRecord.objects.filter(ticket=ticket, status='Accepted').exists():
+                return Response(
+                    {
+                        'error': (
+                            'The client has not accepted a quotation for this job yet. Send the quotation and '
+                            'wait for the client to accept it (or record their acceptance) before moving to service.'
+                        ),
+                        'code': 'quotation_not_accepted',
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
         try:
             if target_status in ['Ready for Service', 'Awaiting Materials']:
                 ticket.technician = None
@@ -2407,6 +2423,8 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
     serializer_class = QuotationRecordSerializer
 
     def get_permissions(self):
+        if self.action == 'respond':
+            return [permissions.IsAuthenticated()]
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [CanManageDocuments()]
         return [CanAccessDocuments()]
@@ -2447,7 +2465,58 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save()
+        previous_status = serializer.instance.status if serializer.instance else None
+        quotation = serializer.save()
+        self._notify_client_if_sent(quotation, previous_status)
+
+    def perform_update(self, serializer):
+        previous_status = serializer.instance.status
+        quotation = serializer.save()
+        self._notify_client_if_sent(quotation, previous_status)
+
+    @staticmethod
+    def _notify_client_if_sent(quotation, previous_status):
+        if quotation.status == 'Sent' and previous_status != 'Sent':
+            create_notification(
+                quotation.client,
+                f"Quotation {quotation.quotation_number} for ticket #{quotation.ticket_id} is ready. "
+                "Please review it and accept or decline in your request details.",
+                'info',
+            )
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def respond(self, request, pk=None):
+        """The client accepts or declines a quotation that was sent to them."""
+        if request.user.role != 'client':
+            return Response({'error': 'Only the client can respond to a quotation.'}, status=status.HTTP_403_FORBIDDEN)
+        quotation = get_object_or_404(self.get_queryset().select_for_update(), pk=pk)
+        if quotation.status != 'Sent':
+            return Response(
+                {'error': 'Only a quotation that has been sent to you can be accepted or declined.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        decision = str(request.data.get('decision') or '').strip().lower()
+        if decision not in {'accept', 'decline'}:
+            return Response({'decision': ['Choose accept or decline.']}, status=status.HTTP_400_BAD_REQUEST)
+        note = str(request.data.get('note') or '').strip()
+        if decision == 'decline' and not note:
+            return Response({'note': ['Please tell us why you are declining.']}, status=status.HTTP_400_BAD_REQUEST)
+        quotation.status = 'Accepted' if decision == 'accept' else 'Rejected'
+        quotation.client_responded_at = timezone.now()
+        quotation.client_response_note = note
+        quotation.save(update_fields=['status', 'client_responded_at', 'client_response_note', 'updated_at'])
+        client_name = _display_name(request.user) or request.user.username
+        _notify_admin_superadmin(
+            message=(
+                f"{client_name} {'accepted' if decision == 'accept' else 'declined'} quotation "
+                f"{quotation.quotation_number} for ticket #{quotation.ticket_id}."
+                + (f" Note: {note}" if note else '')
+            ),
+            notification_type='success' if decision == 'accept' else 'warning',
+            include_user=quotation.ticket.assigned_admin if quotation.ticket.assigned_admin_id else None,
+        )
+        return Response(self.get_serializer(quotation).data)
 
 
 

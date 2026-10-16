@@ -139,8 +139,9 @@ class EndToEndJourneyTests(APITestCase):
         self.assertEqual(ticket.status, 'Turned Over / Accepted')
         self.assertEqual(TurnoverAcceptance.objects.get(ticket=ticket).status, 'finalized')
 
-        # Sales record is prepared from the ticket, valued, and confirmed.
-        prepared = self.ok(admin.post('/api/services/sales-records/prepare/', {'ticket_id': ticket.id}, format='json'), 201)
+        # Completing the job already drafted the sales record; prepare returns that draft.
+        self.assertTrue(SalesRecord.objects.filter(ticket=ticket, status='draft').exists())
+        prepared = self.ok(admin.post('/api/services/sales-records/prepare/', {'ticket_id': ticket.id}, format='json'), 200)
         record_id = prepared.data['id']
         if prepared.data.get('agreed_total') is None:
             self.ok(admin.patch(f'/api/services/sales-records/{record_id}/', {
@@ -148,6 +149,12 @@ class EndToEndJourneyTests(APITestCase):
             }, format='json'))
         self.ok(admin.post(f'/api/services/sales-records/{record_id}/confirm/', {}, format='json'))
         self.assertEqual(SalesRecord.objects.get(pk=record_id).status, 'confirmed')
+
+        # The office records the client's payment; the sale is then fully paid.
+        self.ok(admin.post(f'/api/services/sales-records/{record_id}/payments/', {
+            'amount': '1500.00', 'paid_on': timezone.localdate().isoformat(), 'method': 'gcash', 'reference': 'GC-123',
+        }, format='json'), 201)
+        self.assertEqual(self.ok(admin.get(f'/api/services/sales-records/{record_id}/')).data['payment_status'], 'paid')
 
         # The client was told about each stage, and maintenance follows up the job.
         self.assertTrue(Notification.objects.filter(user=self.client_user).count() >= 3)
@@ -188,9 +195,17 @@ class EndToEndJourneyTests(APITestCase):
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'Inspection Completed')
 
-        self.ok(self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/inspection_decision/', {
-            'decision': 'approve_service', 'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
-        }, format='json'))
+        decision = {'decision': 'approve_service', 'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat()}
+        # Service cannot be scheduled until the client accepts a quotation.
+        blocked = self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/inspection_decision/', decision, format='json')
+        self.assertEqual(blocked.status_code, 409)
+        self.assertEqual(blocked.data['code'], 'quotation_not_accepted')
+        quotation = self.ok(self.as_user(self.admin).post('/api/services/quotations/', {
+            'ticket': ticket.id, 'client': self.client_user.id, 'total_amount': 'PHP 90,000.00', 'status': 'Sent',
+        }, format='json'), 201)
+        self.assertTrue(self.client_notified('quotation'))
+        self.ok(self.as_user(self.client_user).post(f"/api/services/quotations/{quotation.data['id']}/respond/", {'decision': 'accept'}, format='json'))
+        self.ok(self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/inspection_decision/', decision, format='json'))
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'Ready for Service')
 

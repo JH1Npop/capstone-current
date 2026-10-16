@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   FiBell,
+  FiCheckCircle,
   FiMapPin,
   FiClock,
   FiMail,
@@ -32,6 +33,7 @@ const initialSettings = {
   enableInAppNotifications: true,
   enableEmailNotifications: true,
   autoDispatchEnabled: false,
+  requireQuotationAcceptance: true,
   allowOvertimeDispatch: false,
   overtimeDailyCapacityMinutes: 600,
   defaultTimeZone: browserTimeZone,
@@ -356,6 +358,14 @@ export default function AdminSettings() {
                   description="Enable automatic technician assignment where service rules allow it."
                   checked={Boolean(settings.autoDispatchEnabled)}
                   onChange={(checked) => updateSetting('autoDispatchEnabled', checked)}
+                  disabled={loading}
+                />
+                <SwitchCard
+                  icon={FiCheckCircle}
+                  title="Quotation Before Installation"
+                  description="After a site inspection, require the client to accept a quotation before the job can move to service or materials."
+                  checked={settings.requireQuotationAcceptance !== false}
+                  onChange={(checked) => updateSetting('requireQuotationAcceptance', checked)}
                   disabled={loading}
                 />
                 <SwitchCard

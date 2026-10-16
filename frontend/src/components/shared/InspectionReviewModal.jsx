@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FiAlertTriangle, FiCalendar, FiCheckCircle, FiX, FiXCircle } from 'react-icons/fi';
 import StatusBadge from '../ui/StatusBadge';
 import { reviewInspectionDecision } from '../../api/admin';
+import { fetchTicketQuotation, recordQuotationAcceptance } from '../../api/services';
 import { formatTicketId } from '../../utils/roleIds';
 
 const DecisionCard = ({ active, accent, icon: Icon, title, description, onSelect }) => (
@@ -33,8 +34,32 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
   const [scheduledDate, setScheduledDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [quotation, setQuotation] = useState(undefined);
+  const [recordingAcceptance, setRecordingAcceptance] = useState(false);
+
+  useEffect(() => {
+    if (!ticket?.id) return undefined;
+    let active = true;
+    fetchTicketQuotation(ticket.id)
+      .then((row) => { if (active) setQuotation(row); })
+      .catch(() => { if (active) setQuotation(null); });
+    return () => { active = false; };
+  }, [ticket?.id]);
 
   if (!ticket) return null;
+
+  const recordOfflineAcceptance = async () => {
+    if (!quotation) return;
+    setRecordingAcceptance(true);
+    setError('');
+    try {
+      setQuotation(await recordQuotationAcceptance(quotation.id));
+    } catch (acceptError) {
+      setError(acceptError.message);
+    } finally {
+      setRecordingAcceptance(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!decision) {
@@ -115,6 +140,26 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
         </div>
 
         <div className="max-h-[72vh] overflow-y-auto p-6">
+          {quotation !== undefined ? (
+            <div className={`mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 text-sm ${
+              quotation?.status === 'Accepted' ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : quotation?.status === 'Rejected' ? 'border-red-200 bg-red-50 text-red-800'
+                  : 'border-amber-200 bg-amber-50 text-amber-800'
+            }`}>
+              <p className="min-w-0 flex-1">
+                <strong>Quotation: </strong>
+                {!quotation ? 'none sent yet. Create it in Documents > Quotation Proposal; the client accepts it in their portal.'
+                  : quotation.status === 'Accepted' ? `${quotation.quotation_number} accepted${quotation.client_responded_at ? ' by the client' : ''}. Service can be scheduled.`
+                    : quotation.status === 'Rejected' ? `${quotation.quotation_number} declined${quotation.client_response_note ? `: "${quotation.client_response_note}"` : ''}.`
+                      : `${quotation.quotation_number} is waiting for the client's decision.`}
+              </p>
+              {quotation && ['Sent', 'Draft'].includes(quotation.status) ? (
+                <button type="button" onClick={recordOfflineAcceptance} disabled={recordingAcceptance} className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-60">
+                  {recordingAcceptance ? 'Saving...' : 'Client accepted offline'}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {error && (
             <div className="mb-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
               <FiAlertTriangle className="mt-0.5 shrink-0" />

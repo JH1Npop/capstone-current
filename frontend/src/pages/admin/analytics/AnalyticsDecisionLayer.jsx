@@ -84,6 +84,9 @@ const ATTENTION_META = {
   low_stock_items: { label: 'Low-stock items', severity: 4, route: '/admin/inventory', action: 'Review stock' },
   open_after_sales_cases: { label: 'Open after-sales cases', severity: 3, route: '/admin/after-sales-cases', action: 'Review cases' },
   upcoming_scheduled_jobs: { label: 'Jobs in the next 7 days', severity: 2, route: '/admin/calendar', action: 'Open calendar' },
+  sales_records_to_confirm: { label: 'Sales records to confirm', severity: 3, route: '/admin/sales-records', action: 'Confirm completed work' },
+  unpaid_sales_records: { label: 'Sales with a balance due', severity: 3, route: '/admin/sales-records', action: 'Record payments' },
+  quotations_awaiting_client: { label: 'Quotations awaiting the client', severity: 2, route: '/admin/documents', action: 'Follow up with clients' },
 };
 
 export function NeedsAttentionPanel({ attention = {} }) {

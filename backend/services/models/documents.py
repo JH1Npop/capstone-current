@@ -235,7 +235,17 @@ class TurnoverAcceptance(models.Model):
         related_name='finalized_turnover_acceptances',
     )
     finalized_at = models.DateTimeField(null=True, blank=True)
-    
+    # The client's own confirmation in the portal after staff finalize the handover.
+    client_confirmed_at = models.DateTimeField(null=True, blank=True)
+    client_confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    client_confirmation_note = models.TextField(blank=True, default='')
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -333,6 +343,9 @@ class QuotationRecord(models.Model):
         default='Draft'
     )
     bill_of_materials = StructuredTextField(structure='list', default=list, blank=True)
+    # Set when the client accepts or declines in the portal (staff may also record a decision).
+    client_responded_at = models.DateTimeField(null=True, blank=True)
+    client_response_note = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

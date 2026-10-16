@@ -781,6 +781,7 @@ class AdminSettingsSerializer(serializers.ModelSerializer):
     enableInAppNotifications = serializers.BooleanField(source='enable_in_app_notifications')
     enableEmailNotifications = serializers.BooleanField(source='enable_email_notifications')
     autoDispatchEnabled = serializers.BooleanField(source='auto_dispatch_enabled')
+    requireQuotationAcceptance = serializers.BooleanField(source='require_quotation_acceptance', required=False)
     allowOvertimeDispatch = serializers.BooleanField(source='allow_overtime_dispatch')
     overtimeDailyCapacityHours = serializers.SerializerMethodField()
     overtimeDailyCapacityMinutes = serializers.IntegerField(
@@ -985,6 +986,7 @@ class AdminSettingsSerializer(serializers.ModelSerializer):
             'enableInAppNotifications',
             'enableEmailNotifications',
             'autoDispatchEnabled',
+            'requireQuotationAcceptance',
             'allowOvertimeDispatch',
             'overtimeDailyCapacityHours',
             'overtimeDailyCapacityMinutes',

@@ -7,6 +7,7 @@ from users.permissions import CanManageTechnicianSkills
 from services.models import SolarCommissioningChecklist, TurnoverAcceptance, TechnicalDataSheet, InstallationContract
 from services.serializers import SolarCommissioningChecklistSerializer, TurnoverAcceptanceSerializer, TechnicalDataSheetSerializer, InstallationContractSerializer
 from services.views.helpers import *  # noqa: F401,F403
+from django.shortcuts import get_object_or_404
 from services.tracking_config import get_tracking_config
 
 class TechnicianSkillViewSet(viewsets.ModelViewSet):
@@ -309,6 +310,8 @@ class TurnoverAcceptanceViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
+        if self.action == 'client_confirm':
+            return [permissions.IsAuthenticated()]
         if self.request.user.role == 'technician' and self.action in ['list', 'retrieve', 'create', 'update', 'partial_update']:
             return [CanViewTechnicianChecklist()]
         if self.action in ['create', 'update', 'partial_update', 'finalize']:
@@ -394,8 +397,43 @@ class TurnoverAcceptanceViewSet(viewsets.ModelViewSet):
             transaction.set_rollback(True)
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         sync_ticket_maintenance_schedule(ticket)
+        create_notification(
+            ticket.request.client,
+            f"Your job for ticket #{ticket.id} has been handed over. Please confirm the handover in your request details.",
+            'info',
+        )
 
         return Response({'status': 'finalized', 'ticket_status': ticket.status})
+
+    @action(detail=True, methods=['post'], url_path='client-confirm')
+    @transaction.atomic
+    def client_confirm(self, request, pk=None):
+        """The client confirms in the portal that the finished work was handed over to them."""
+        if request.user.role != 'client':
+            return Response({'error': 'Only the client can confirm the handover.'}, status=status.HTTP_403_FORBIDDEN)
+        turnover = get_object_or_404(
+            self.get_queryset().select_for_update().select_related('ticket__request'),
+            pk=pk, ticket__request__client=request.user,
+        )
+        if turnover.status == 'accepted':
+            return Response({'error': 'You already confirmed this handover.'}, status=status.HTTP_409_CONFLICT)
+        if turnover.status != 'finalized':
+            return Response(
+                {'error': 'The office has not finished the handover yet.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        turnover.status = 'accepted'
+        turnover.client_confirmed_at = timezone.now()
+        turnover.client_confirmed_by = request.user
+        turnover.client_confirmation_note = str(request.data.get('note') or '').strip()
+        turnover.save(update_fields=['status', 'client_confirmed_at', 'client_confirmed_by', 'client_confirmation_note', 'updated_at'])
+        client_name = _display_name(request.user) or request.user.username
+        _notify_admin_superadmin(
+            message=f"{client_name} confirmed the handover for ticket #{turnover.ticket_id}.",
+            notification_type='success',
+            include_user=turnover.ticket.assigned_admin if turnover.ticket.assigned_admin_id else None,
+        )
+        return Response(self.get_serializer(turnover).data)
 
 
 class TechnicalDataSheetViewSet(viewsets.ModelViewSet):

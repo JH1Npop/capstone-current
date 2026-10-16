@@ -11,8 +11,8 @@ from rest_framework.response import Response
 
 from inventory.models import InventoryTransaction
 from notifications.models import Notification
-from services.models import SalesRecord, SalesRecordLine, ServiceTicket
-from services.serializers import SalesRecordSerializer
+from services.models import SalesPayment, SalesRecord, SalesRecordLine, ServiceTicket
+from services.serializers import SalesPaymentSerializer, SalesRecordSerializer, sales_payment_summary
 from users.permissions import CanAccessDocuments, CanManageDocuments
 from users.rbac import is_admin_workspace_role
 from services.ticket_status import COMPLETED_TICKET_STATUSES
@@ -262,13 +262,38 @@ def _refresh_record_sources(record, ticket):
     _populate_lines(record, ticket, quotation)
 
 
+def ensure_draft_sales_record(ticket, user=None):
+    """Return the ticket's active sales record, creating a draft from its connected sources if none exists.
+
+    Called when work is completed so staff are prompted to confirm the sale; also backs the prepare action.
+    Returns (record, created).
+    """
+    existing = SalesRecord.objects.select_for_update().filter(
+        ticket=ticket, status__in=['draft', 'confirmed']
+    ).first()
+    if existing:
+        return existing, False
+    replaced = SalesRecord.objects.filter(ticket=ticket, status='voided').order_by('-voided_at', '-id').first()
+    record = SalesRecord.objects.create(
+        ticket=ticket,
+        client=ticket.request.client,
+        created_by=user,
+        replaces=replaced,
+    )
+    _refresh_record_sources(record, ticket)
+    record.save(update_fields=['client', 'quotation', 'agreed_total', 'source_snapshot', 'updated_at'])
+    return record, True
+
+
 class SalesRecordViewSet(viewsets.ModelViewSet):
     serializer_class = SalesRecordSerializer
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
 
     def get_permissions(self):
-        if self.action in {'prepare', 'confirm', 'void', 'partial_update', 'create'}:
+        if self.action in {'prepare', 'confirm', 'void', 'partial_update', 'create', 'void_payment'}:
+            return [CanManageDocuments()]
+        if self.action == 'payments' and self.request.method == 'POST':
             return [CanManageDocuments()]
         return [CanAccessDocuments()]
 
@@ -283,6 +308,7 @@ class SalesRecordViewSet(viewsets.ModelViewSet):
         ).prefetch_related(
             'line_items',
             'ticket__request__service_items__service_type',
+            'payments__recorded_by',
         )
         user = self.request.user
         if user.role == 'client':
@@ -372,22 +398,11 @@ class SalesRecordViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        existing = SalesRecord.objects.select_for_update().filter(
-            ticket=ticket, status__in=['draft', 'confirmed']
-        ).first()
-        if existing:
-            return Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
-
-        replaced = SalesRecord.objects.filter(ticket=ticket, status='voided').order_by('-voided_at', '-id').first()
-        record = SalesRecord.objects.create(
-            ticket=ticket,
-            client=ticket.request.client,
-            created_by=request.user,
-            replaces=replaced,
+        record, created = ensure_draft_sales_record(ticket, request.user)
+        return Response(
+            self.get_serializer(record).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
-        _refresh_record_sources(record, ticket)
-        record.save(update_fields=['client', 'quotation', 'agreed_total', 'source_snapshot', 'updated_at'])
-        return Response(self.get_serializer(record).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
@@ -438,6 +453,11 @@ class SalesRecordViewSet(viewsets.ModelViewSet):
         record = get_object_or_404(SalesRecord.objects.select_for_update(), pk=pk)
         if record.status != 'confirmed':
             return Response({'detail': 'Only a confirmed sales record can be voided.'}, status=status.HTTP_409_CONFLICT)
+        if record.payments.filter(is_voided=False).exists():
+            return Response(
+                {'detail': 'This sale has recorded payments. Void those payments first (for example after a refund).'},
+                status=status.HTTP_409_CONFLICT,
+            )
         reason = str(request.data.get('reason') or '').strip()
         if not reason:
             return Response({'reason': ['A void reason is required.']}, status=status.HTTP_400_BAD_REQUEST)
@@ -447,3 +467,54 @@ class SalesRecordViewSet(viewsets.ModelViewSet):
         record.voided_at = timezone.now()
         record.save(update_fields=['status', 'void_reason', 'voided_by', 'voided_at', 'updated_at'])
         return Response(self.get_serializer(record).data)
+
+    @action(detail=True, methods=['get', 'post'])
+    @transaction.atomic
+    def payments(self, request, pk=None):
+        """List payments, or record a payment received outside the system."""
+        if request.method == 'GET':
+            record = self.get_object()
+            return Response(SalesPaymentSerializer(record.payments.select_related('recorded_by'), many=True).data)
+
+        record = get_object_or_404(SalesRecord.objects.select_for_update(), pk=pk)
+        if record.status != 'confirmed':
+            return Response({'detail': 'Payments can only be recorded on a confirmed sales record.'}, status=status.HTTP_409_CONFLICT)
+        serializer = SalesPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        balance = sales_payment_summary(record)['balance_due']
+        if balance is not None and serializer.validated_data['amount'] > balance:
+            return Response(
+                {'amount': [f'This is more than the remaining balance of {record.currency_code} {balance:,.2f}.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        payment = serializer.save(sales_record=record, recorded_by=request.user)
+        if sales_payment_summary(record)['payment_status'] == 'paid':
+            Notification.objects.create(
+                user=record.client,
+                ticket=record.ticket,
+                request=record.ticket.request,
+                title='Payment complete',
+                message=f'{record.record_number} is fully paid. Thank you!',
+                type='success',
+                send_email=False,
+            )
+        return Response(SalesPaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='void-payment')
+    @transaction.atomic
+    def void_payment(self, request, pk=None):
+        record = get_object_or_404(SalesRecord.objects.select_for_update(), pk=pk)
+        payment = get_object_or_404(
+            SalesPayment.objects.select_for_update(), pk=request.data.get('payment_id'), sales_record=record,
+        )
+        if payment.is_voided:
+            return Response({'detail': 'This payment is already voided.'}, status=status.HTTP_409_CONFLICT)
+        reason = str(request.data.get('reason') or '').strip()
+        if not reason:
+            return Response({'reason': ['A reason is required to void a payment.']}, status=status.HTTP_400_BAD_REQUEST)
+        payment.is_voided = True
+        payment.voided_at = timezone.now()
+        payment.voided_by = request.user
+        payment.void_reason = reason
+        payment.save(update_fields=['is_voided', 'voided_at', 'voided_by', 'void_reason'])
+        return Response(SalesPaymentSerializer(payment).data)

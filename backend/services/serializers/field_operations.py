@@ -291,4 +291,7 @@ class TurnoverAcceptanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = TurnoverAcceptance
         fields = '__all__'
-        read_only_fields = ['finalized_by', 'finalized_at', 'created_at', 'updated_at', 'generated_document']
+        read_only_fields = [
+            'finalized_by', 'finalized_at', 'created_at', 'updated_at', 'generated_document',
+            'client_confirmed_at', 'client_confirmed_by', 'client_confirmation_note',
+        ]

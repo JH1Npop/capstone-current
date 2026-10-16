@@ -148,3 +148,50 @@ class SalesRecordLine(models.Model):
 
     def __str__(self):
         return f'{self.sales_record.record_number}: {self.name}'
+
+
+class SalesPayment(models.Model):
+    """A payment received outside the system, recorded against a confirmed sales record."""
+
+    METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('bank_transfer', 'Bank transfer'),
+        ('gcash', 'GCash'),
+        ('maya', 'Maya'),
+        ('check', 'Check'),
+        ('card', 'Card'),
+        ('other', 'Other'),
+    ]
+
+    id = models.BigAutoField(primary_key=True, db_column='sales_payment_id')
+    sales_record = models.ForeignKey(SalesRecord, on_delete=models.PROTECT, related_name='payments')
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    paid_on = models.DateField()
+    method = models.CharField(max_length=20, choices=METHOD_CHOICES)
+    reference = models.CharField(max_length=120, blank=True, default='')
+    notes = models.TextField(blank=True, default='')
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    # Payments are voided with a reason, never deleted, so the history stays auditable.
+    is_voided = models.BooleanField(default=False)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    void_reason = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-paid_on', '-id']
+        indexes = [
+            models.Index(fields=['sales_record', 'is_voided']),
+            models.Index(fields=['paid_on']),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=Q(amount__gt=0), name='services_sales_payment_amount_gt_0'),
+        ]
+
+    def __str__(self):
+        return f'{self.sales_record.record_number}: {self.amount} on {self.paid_on}'
+

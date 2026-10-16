@@ -722,6 +722,15 @@ export const fetchSalesRecords = async (filters = {}) => {
   }
 };
 
+export const fetchSalesRecord = async (recordId) => {
+  try {
+    const { data } = await api.get(`/services/sales-records/${recordId}/`);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load the sales record.'));
+  }
+};
+
 export const prepareSalesRecord = async (ticketId) => {
   try {
     const { data } = await api.post('/services/sales-records/prepare/', { ticket_id: ticketId });
@@ -746,6 +755,71 @@ export const confirmSalesRecord = async (recordId) => {
     return data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to confirm the sales record.'));
+  }
+};
+
+export const recordSalesPayment = async (recordId, payment) => {
+  try {
+    const { data } = await api.post(`/services/sales-records/${recordId}/payments/`, payment);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to record the payment.'));
+  }
+};
+
+export const voidSalesPayment = async (recordId, paymentId, reason) => {
+  try {
+    const { data } = await api.post(`/services/sales-records/${recordId}/void-payment/`, { payment_id: paymentId, reason });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to void the payment.'));
+  }
+};
+
+const firstRow = (data) => (Array.isArray(data) ? data[0] : data?.results?.[0]) || null;
+
+export const fetchTicketQuotation = async (ticketId) => {
+  try {
+    const { data } = await api.get('/services/quotations/', { params: { ticket_id: ticketId } });
+    return firstRow(data);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load the quotation.'));
+  }
+};
+
+export const recordQuotationAcceptance = async (quotationId) => {
+  try {
+    const { data } = await api.patch(`/services/quotations/${quotationId}/`, { status: 'Accepted' });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to record the acceptance.'));
+  }
+};
+
+export const respondToQuotation = async (quotationId, decision, note = '') => {
+  try {
+    const { data } = await api.post(`/services/quotations/${quotationId}/respond/`, { decision, note });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to send your response.'));
+  }
+};
+
+export const fetchTicketTurnover = async (ticketId) => {
+  try {
+    const { data } = await api.get('/services/turnover-acceptances/', { params: { ticket: ticketId } });
+    return firstRow(data);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load the handover.'));
+  }
+};
+
+export const confirmTurnover = async (turnoverId, note = '') => {
+  try {
+    const { data } = await api.post(`/services/turnover-acceptances/${turnoverId}/client-confirm/`, { note });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to confirm the handover.'));
   }
 };
 

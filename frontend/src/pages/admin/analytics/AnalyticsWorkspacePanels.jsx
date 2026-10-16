@@ -190,6 +190,7 @@ export function SalesWorkspace({ data }) {
   const average = kpis.average_sale_value || {};
   const conversion = kpis.quotation_conversion_rate || {};
   const voided = kpis.voided_sales_amount || {};
+  const collections = kpis.collections || {};
   const hasSales = Number(count.current || 0) > 0;
   const salesTrend = data.charts?.sales_trend || [];
   return (
@@ -200,6 +201,11 @@ export function SalesWorkspace({ data }) {
         <Metric label="Average sale value" value={money(average.current, average.currency)} />
         <Metric label="Quotation conversion" value={conversion.current == null ? '—' : `${number(conversion.current, 1)}%`} note={conversion.current == null ? 'No accepted or rejected quotations yet' : 'Accepted ÷ accepted plus rejected'} />
         <Metric label="Voided sales amount" value={money(voided.current, voided.currency)} tone="red" flag={voided.count} note={plural(voided.count, 'voided record')} />
+      </Metrics>
+      <Metrics columns="xl:grid-cols-3">
+        <Metric label="Payments collected" value={collections.collected_amount == null ? 'Multiple currencies' : money(collections.collected_amount, collections.currency || 'PHP')} tone="green" note={plural(collections.payments_recorded, 'payment') + ' recorded in this period'} />
+        <Metric label="Outstanding balance" value={collections.outstanding_balance == null ? 'Multiple currencies' : money(collections.outstanding_balance, collections.currency || 'PHP')} tone="amber" flag={Number(collections.outstanding_balance) > 0 ? 1 : 0} note="Confirmed sales minus payments received, all time" />
+        <Metric label="Sales with a balance" value={number(collections.unpaid_records)} tone="red" flag={collections.unpaid_records} note="Unpaid or partly paid confirmed sales" />
       </Metrics>
       {!hasSales ? <Empty title="No confirmed Sales Records in this period" detail="The system has no eligible confirmed, non-voided Sales Records with a valid sale date and agreed total. Estimated service costs are intentionally excluded." /> : null}
       {hasSales ? <Panel title="Sales over time" note={salesTrend.some((row) => row.amount != null) ? 'Confirmed, non-voided sales amount per period.' : 'Records use more than one currency, so the number of confirmed sales is shown instead of an amount.'}>

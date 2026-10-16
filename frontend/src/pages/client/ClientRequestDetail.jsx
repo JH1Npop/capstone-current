@@ -9,6 +9,7 @@ import { api, fetchRequestDetail, fetchTicketTimeline, requestTicketReschedule, 
 import { getLocalDateInputValue } from '../../utils/date';
 import { clientTechnicianDisplayString } from '../../utils/clientTechnicianDisplay';
 import { formatRequestId, formatTicketId } from '../../utils/roleIds';
+import ClientJobDecisions from '../../components/client/ClientJobDecisions';
 
 const TIME_SLOT_LABELS = {
   morning: 'Morning (8 AM - 11 AM)',
@@ -293,6 +294,8 @@ export default function ClientRequestDetail() {
             </p>
           </div>
         </div>
+
+        {request.ticket_id ? <ClientJobDecisions ticketId={request.ticket_id} onChanged={loadRequest} /> : null}
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-4 md:grid-cols-3">

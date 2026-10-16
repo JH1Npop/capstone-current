@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Max, Min, Q, Sum
+from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Max, Min, Q, Sum, Value
 from django.db.models.functions import Coalesce, TruncDay, TruncMonth, TruncQuarter, TruncWeek, TruncYear
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -24,6 +24,7 @@ from services.models import (
     MaintenanceSchedule,
     QuotationRecord,
     SalesRecord,
+    SalesPayment,
     SalesRecordLine,
     ServiceRequest,
     ServiceTicket,
@@ -471,6 +472,25 @@ def _sales_workspace(params, filters):
             'count': row.get('count', 0),
         })
         cursor = _next_bucket(cursor, filters['group_by'])
+    # Collections: payments received in the period, and what confirmed sales still owe overall.
+    payments = SalesPayment.objects.filter(sales_record__in=records.filter(status='confirmed'), is_voided=False)
+    collected = payments.filter(_date_range_q('paid_on', filters)).aggregate(total=Sum('amount'), count=Count('id'))
+    owed = records.filter(status='confirmed', agreed_total__isnull=False).annotate(
+        paid=Coalesce(Sum('payments__amount', filter=Q(payments__is_voided=False)), Value(Decimal('0'))),
+    ).aggregate(
+        total=Sum(F('agreed_total') - F('paid')),
+        unpaid_records=Count('id', filter=Q(paid__lt=F('agreed_total'))),
+        currency_count=Count('currency_code', distinct=True),
+        currency=Max('currency_code'),
+    )
+    single_collection_currency = (owed['currency_count'] or 0) <= 1
+    collections = {
+        'collected_amount': (collected['total'] or Decimal('0')) if single_collection_currency else None,
+        'payments_recorded': collected['count'] or 0,
+        'outstanding_balance': (owed['total'] or Decimal('0')) if single_collection_currency else None,
+        'unpaid_records': owed['unpaid_records'] or 0,
+        'currency': owed['currency'] if owed['currency_count'] == 1 else None,
+    }
     composition = list(
         SalesRecordLine.objects.filter(sales_record__in=official, line_total__isnull=False)
         .values('line_type').annotate(amount=Sum('line_total')).order_by('-amount')
@@ -483,6 +503,7 @@ def _sales_workspace(params, filters):
             'confirmed_sales_count': _comparison(current_summary['count'] or 0, previous_summary['count'] or 0, filters),
             'average_sale_value': {**_comparison(average, previous_average, filters, precision=2), 'currency': currencies[0] if len(currencies) == 1 else None},
             'quotation_conversion_rate': _comparison(conversion, previous_conversion, filters, rate=True),
+            'collections': collections,
             'voided_sales_amount': {
                 'current': voided_total,
                 'count': voided_summary['count'] or 0,

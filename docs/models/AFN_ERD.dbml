@@ -409,8 +409,31 @@ Table services_quotationrecord {
   validity_days integer [not null]
   status varchar(20) [not null]
   bill_of_materials text [not null]
+  client_responded_at timestamp
+  client_response_note text [not null]
   created_at timestamp [not null]
   updated_at timestamp [not null]
+}
+
+Table services_salespayment {
+  sales_payment_id bigint [pk, increment]
+  sales_record_id bigint [not null, ref: > services_salesrecord.sales_record_id]
+  amount decimal(14,2) [not null]
+  paid_on date [not null]
+  method varchar(20) [not null]
+  reference varchar(120) [not null]
+  notes text [not null]
+  recorded_by_id bigint [ref: > users_user.user_id]
+  recorded_at timestamp [not null]
+  is_voided boolean [not null]
+  voided_at timestamp
+  voided_by_id bigint [ref: > users_user.user_id]
+  void_reason text [not null]
+
+  Indexes {
+    (sales_record_id, is_voided)
+    (paid_on)
+  }
 }
 
 Table services_salesrecord {
@@ -805,6 +828,9 @@ Table services_turnoveracceptance {
   status varchar(20) [not null]
   finalized_by_id bigint [ref: > users_user.user_id]
   finalized_at timestamp
+  client_confirmed_at timestamp
+  client_confirmed_by_id bigint [ref: > users_user.user_id]
+  client_confirmation_note text [not null]
   created_at timestamp [not null]
   updated_at timestamp [not null]
 
@@ -861,6 +887,7 @@ Table users_adminsettings {
   document_footer text [not null]
   currency_code varchar(3) [not null]
   quotation_validity_days smallint [not null]
+  require_quotation_acceptance boolean [not null]
   default_warranty_days integer [not null]
   external_payment_notice varchar(255) [not null]
   landing_page_content jsonb [not null]
@@ -1045,6 +1072,7 @@ TableGroup "Inventory, Returns and Sales" {
   inventory_inventoryreservation
   inventory_inventorytransaction
   inventory_servicetypeinventoryrequirement
+  services_salespayment
   services_salesrecord
   services_salesrecordline
 }

@@ -51,7 +51,7 @@ TABLE_ORDER = {
         "inventory_inventoryreservation", "inventory_inventorytransaction",
         "inventory_equipmentreturnrequest",
         "inventory_equipmentreturnrequestitem", "services_salesrecord",
-        "services_salesrecordline",
+        "services_salesrecordline", "services_salespayment",
     ],
     "After-Sales and Communication": [
         "services_aftersalescase", "services_aftersalescaseevent",

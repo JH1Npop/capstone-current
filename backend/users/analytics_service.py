@@ -1,6 +1,7 @@
 """Live, read-only analytics for the Admin Analytics workspace."""
 
 from calendar import monthrange
+from decimal import Decimal
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -12,6 +13,7 @@ from rest_framework.exceptions import ValidationError
 
 from inventory.models import InventoryItem
 from services.models import (
+    QuotationRecord,
     AfterSalesCase,
     MaintenanceSchedule,
     SalesRecord,
@@ -347,6 +349,14 @@ def _cross_domain_attention_counts(today):
     rows = counted(low_stock_queryset(), 'low_stock').union(
         counted(AfterSalesCase.objects.filter(status__in=['open', 'in_progress']), 'after_sales'),
         counted(SalesRecord.objects.filter(status='confirmed'), 'sales'),
+        counted(SalesRecord.objects.filter(status='draft'), 'sales_drafts'),
+        counted(QuotationRecord.objects.filter(status='Sent'), 'quotations_sent'),
+        counted(
+            SalesRecord.objects.filter(status='confirmed', agreed_total__gt=0).annotate(
+                paid=Coalesce(Sum('payments__amount', filter=Q(payments__is_voided=False)), Value(Decimal('0'))),
+            ).filter(paid__lt=F('agreed_total')),
+            'unpaid_sales',
+        ),
         counted(
             MaintenanceSchedule.objects.filter(next_due_date__lt=today).exclude(
                 status__in=['completed', 'dismissed'],
@@ -355,7 +365,10 @@ def _cross_domain_attention_counts(today):
         ),
         all=True,
     )
-    values = {'low_stock': 0, 'after_sales': 0, 'sales': 0, 'maintenance': 0}
+    values = {
+        'low_stock': 0, 'after_sales': 0, 'sales': 0, 'maintenance': 0,
+        'sales_drafts': 0, 'quotations_sent': 0, 'unpaid_sales': 0,
+    }
     for row in rows:
         values[row['signal']] = row['total']
     return values
@@ -628,6 +641,9 @@ def build_admin_analytics(params):
         'upcoming_scheduled_jobs': current_ticket_counts['upcoming'] or 0,
         'open_after_sales_cases': cross_domain_counts['after_sales'],
         'overdue_maintenance': cross_domain_counts['maintenance'],
+        'sales_records_to_confirm': cross_domain_counts['sales_drafts'],
+        'quotations_awaiting_client': cross_domain_counts['quotations_sent'],
+        'unpaid_sales_records': cross_domain_counts['unpaid_sales'],
     }
 
     services = list(ServiceType.objects.filter(is_active=True).values('id', 'name', 'color').order_by('display_order', 'name'))

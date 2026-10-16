@@ -876,7 +876,7 @@ test.describe('Admin Workspace - All Pages', () => {
     });
     await visitWorkspacePage(page, '/admin/sales-records', 'test-results/screenshots/03-admin-sales-records.png');
     await expect(page.getByRole('heading', { name: 'Sales Records', exact: true })).toBeVisible();
-    await expect(page.getByText(/not billing or payment processing/i)).toBeVisible();
+    await expect(page.getByText(/Payments are collected outside the system/i)).toBeVisible();
     await expect(page.getByText('Recorded contract value', { exact: true })).toBeVisible();
     await expect(page.getByText('Source: Accepted quotation', { exact: true })).toBeVisible();
     await expect(page.getByText(/Value controlled by accepted quotation/i)).toBeVisible();

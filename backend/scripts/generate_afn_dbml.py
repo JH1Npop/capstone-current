@@ -78,6 +78,7 @@ TABLE_GROUPS = {
         "inventory_equipmentreturnrequestitem",
         "services_salesrecord",
         "services_salesrecordline",
+        "services_salespayment",
     },
     "After-Sales and Communication": {
         "services_aftersalescase",

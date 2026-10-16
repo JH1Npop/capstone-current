@@ -31,6 +31,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.exceptions import ValidationError
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
+from services.ticket_status import COMPLETED_TICKET_STATUSES, FIELD_WORK_TICKET_STATUSES
 from services.user_display import client_technician_label
 from users.rbac import SUPERVISOR_DISPATCH_VIEW, user_has_capability
 
@@ -326,11 +327,21 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if related_ticket and related_ticket.status in ['In Progress', 'Completed']:
-            return Response(
-                {'error': f'Request cannot be cancelled while ticket #{related_ticket.id} is {related_ticket.status.lower()}.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if related_ticket and related_ticket.status in FIELD_WORK_TICKET_STATUSES + COMPLETED_TICKET_STATUSES:
+            is_office = is_admin_workspace_role(getattr(request.user, 'role', None))
+            if related_ticket.status in COMPLETED_TICKET_STATUSES or not is_office:
+                return Response(
+                    {
+                        'error': (
+                            'Your technician is already on the way or working on site, so this request can no longer '
+                            'be cancelled online. Please contact our office.'
+                            if related_ticket.status in FIELD_WORK_TICKET_STATUSES
+                            else f'Request cannot be cancelled while ticket #{related_ticket.id} is {related_ticket.status.lower()}.'
+                        ),
+                        'code': 'cancellation_requires_office',
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
 
         reason = str(request.data.get('reason') or '').strip()
         if not reason:

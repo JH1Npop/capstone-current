@@ -11,7 +11,7 @@ from ..models import (
     DemandForecast, ServiceTrend, MaintenanceSchedule,
     InstalledEquipment, QuotationRecord, TurnoverAcceptance, TechnicalDataSheet,
     InstallationContract, SolarProjectProfile, FieldServiceReport,
-    SalesRecord, SalesRecordLine
+    SalesRecord, SalesRecordLine, SalesPayment
 )
 from ..solar_calculator import CALCULATION_VERSION, SolarCalculationError, calculate_solar_estimate
 from ..sla import (
@@ -103,7 +103,8 @@ class QuotationRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuotationRecord
         fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at']
+        # Client responses are recorded only through the respond action.
+        read_only_fields = ['created_at', 'updated_at', 'client_responded_at', 'client_response_note']
 
 
 class SalesRecordLineSerializer(serializers.ModelSerializer):
@@ -117,8 +118,86 @@ class SalesRecordLineSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class SalesPaymentSerializer(serializers.ModelSerializer):
+    recorded_by_name = serializers.SerializerMethodField()
+    method_label = serializers.CharField(source='get_method_display', read_only=True)
+
+    def get_recorded_by_name(self, obj):
+        user = obj.recorded_by
+        return (user.get_full_name().strip() or user.username) if user else ''
+
+    def validate_amount(self, value):
+        if value is None or value <= 0:
+            raise serializers.ValidationError('Enter an amount greater than zero.')
+        return value
+
+    def validate_paid_on(self, value):
+        if value and value > timezone.localdate():
+            raise serializers.ValidationError('The payment date cannot be in the future.')
+        return value
+
+    class Meta:
+        model = SalesPayment
+        fields = [
+            'id', 'sales_record', 'amount', 'paid_on', 'method', 'method_label', 'reference', 'notes',
+            'recorded_by', 'recorded_by_name', 'recorded_at', 'is_voided', 'voided_at', 'void_reason',
+        ]
+        read_only_fields = [
+            'id', 'sales_record', 'recorded_by', 'recorded_at', 'is_voided', 'voided_at', 'void_reason',
+        ]
+
+
+def sales_payment_summary(record):
+    """Amount paid, balance due and payment status from non-voided payments."""
+    payments = getattr(record, '_prefetched_objects_cache', {}).get('payments')
+    if payments is None:
+        payments = record.payments.all()
+    paid = sum((payment.amount for payment in payments if not payment.is_voided), Decimal('0'))
+    total = record.agreed_total
+    balance = (total - paid) if total is not None else None
+    if record.status != 'confirmed' or total is None:
+        payment_status = 'not_applicable'
+    elif paid <= 0:
+        payment_status = 'unpaid'
+    elif balance > 0:
+        payment_status = 'partial'
+    else:
+        payment_status = 'paid'
+    return {'amount_paid': paid, 'balance_due': balance, 'payment_status': payment_status}
+
+
 class SalesRecordSerializer(serializers.ModelSerializer):
     line_items = SalesRecordLineSerializer(many=True, read_only=True)
+    payments = SalesPaymentSerializer(many=True, read_only=True)
+    amount_paid = serializers.SerializerMethodField()
+    balance_due = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
+
+    def _payment_summary(self, obj):
+        cache = getattr(self, '_payment_summary_cache', {})
+        if obj.pk not in cache:
+            cache[obj.pk] = sales_payment_summary(obj)
+            self._payment_summary_cache = cache
+        return cache[obj.pk]
+
+    def get_amount_paid(self, obj):
+        return str(self._payment_summary(obj)['amount_paid'])
+
+    def get_balance_due(self, obj):
+        balance = self._payment_summary(obj)['balance_due']
+        return str(balance) if balance is not None else None
+
+    def get_payment_status(self, obj):
+        return self._payment_summary(obj)['payment_status']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request is not None and getattr(request.user, 'role', None) == 'client':
+            # Payments are settled outside the system; clients see purchase records, not collection status.
+            for field in ('payments', 'amount_paid', 'balance_due', 'payment_status'):
+                data.pop(field, None)
+        return data
     client_name = serializers.SerializerMethodField()
     ticket_code = serializers.SerializerMethodField()
     service_summary = serializers.SerializerMethodField()
@@ -184,6 +263,7 @@ class SalesRecordSerializer(serializers.ModelSerializer):
             'created_by', 'created_by_name', 'confirmed_by', 'confirmed_by_name',
             'confirmed_at', 'voided_by', 'voided_by_name', 'voided_at', 'void_reason',
             'replaces', 'created_at', 'updated_at',
+            'payments', 'amount_paid', 'balance_due', 'payment_status',
         ]
         read_only_fields = [
             'id', 'record_number', 'ticket', 'client', 'quotation', 'status', 'sale_date',

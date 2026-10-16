@@ -1,6 +1,7 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
+from services.models import QuotationRecord
 from django.db import transaction
 from services.views.technician import TechnicianJobsView
 
@@ -580,6 +581,9 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             scheduled_date=timezone.localdate(),
             ticket_type='inspection',
             status='Inspection Completed',
+        )
+        QuotationRecord.objects.create(
+            ticket=ticket, client=request_obj.client, quotation_number='QUO-MATERIALS-01', status='Accepted',
         )
         self.client.force_authenticate(user=self.admin_user)
 

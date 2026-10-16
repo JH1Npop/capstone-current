@@ -3253,7 +3253,7 @@ export default function AdminDocuments() {
       };
 
       await saveQuotationRecord(payload);
-      setDocumentDraftMessage('Quotation data saved successfully!');
+      setDocumentDraftMessage('Quotation saved and sent to the client to accept or decline in their portal.');
     } catch (error) {
       setDocumentDraftMessage(error.message || 'Unable to save quotation data.');
     } finally {

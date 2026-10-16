@@ -4,8 +4,10 @@ import Layout from '../../components/layout/Layout';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { useAuth } from '../../context/AuthContext';
 import { formatTicketId } from '../../utils/roleIds';
+import SalesPaymentsPanel, { PaymentStatusBadge } from '../../components/sales/SalesPaymentsPanel';
 import {
   confirmSalesRecord,
+  fetchSalesRecord,
   fetchSalesRecords,
   fetchServiceTickets,
   prepareSalesRecord,
@@ -118,6 +120,10 @@ export default function SalesRecords() {
     setSelectedId(updated.id);
   };
 
+  const refreshSelected = async () => {
+    if (selected) replaceRecord(await fetchSalesRecord(selected.id));
+  };
+
   const handlePrepare = async () => {
     if (!selectedTicketId) return;
     setSaving(true);
@@ -194,7 +200,7 @@ export default function SalesRecords() {
           <div>
             <p className="mt-1 text-sm text-slate-500">
               {isAdmin
-                ? 'Connected records of delivered products and services. This is not billing or payment processing.'
+                ? 'Connected records of delivered products and services. Payments are collected outside the system; record them here to track balances.'
                 : 'Products and services confirmed as delivered to your account. Payments are handled outside this portal.'}
             </p>
           </div>
@@ -251,7 +257,7 @@ export default function SalesRecords() {
                     <StatusBadge status={record.status} size="sm" />
                   </div>
                   <p className="mt-1 truncate text-sm text-slate-600">{record.service_summary}</p>
-                  <p className="mt-1 text-xs text-slate-500">{record.ticket_code} / {formatDate(record.sale_date || record.created_at)}</p>
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">{record.ticket_code} / {formatDate(record.sale_date || record.created_at)}{isAdmin ? <PaymentStatusBadge status={record.payment_status} /> : null}</p>
                 </button>
               ))}
             </div>
@@ -315,6 +321,10 @@ export default function SalesRecords() {
                     </table>
                   </div>
                 </div>
+
+                {isAdmin && selected.status === 'confirmed' ? (
+                  <SalesPaymentsPanel record={selected} formatMoney={formatMoney} formatDate={formatDate} onChanged={refreshSelected} />
+                ) : null}
 
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                   <p><strong>Warranty:</strong> {selected.source_snapshot?.ticket?.warranty_status || 'not recorded'} {selected.source_snapshot?.ticket?.warranty_end_date ? `through ${formatDate(selected.source_snapshot.ticket.warranty_end_date)}` : ''}</p>

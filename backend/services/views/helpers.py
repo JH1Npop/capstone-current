@@ -1277,6 +1277,26 @@ def ensure_ticket_completion_proof(ticket, proof_images):
         raise ValueError('Upload at least one completion photo before finishing this job.')
 
 
+def quotation_acceptance_required():
+    from users.models import AdminSettings
+
+    settings_obj = AdminSettings.objects.only('require_quotation_acceptance').first()
+    return True if settings_obj is None else bool(settings_obj.require_quotation_acceptance)
+
+
+def _prompt_sales_record(ticket, user):
+    """Create a draft sales record so finished work shows up for the office to confirm."""
+    from django.db import DatabaseError
+    from services.views.sales_records import ensure_draft_sales_record
+
+    try:
+        with transaction.atomic():
+            ensure_draft_sales_record(ticket, user)
+    except (DatabaseError, ValueError):
+        # A missing draft must never block completing the job; staff can still prepare it manually.
+        logger.exception('Unable to create a draft sales record for ticket %s', ticket.id)
+
+
 def apply_ticket_status_change(ticket, new_status, *, changed_by, notes='', extra_update_fields=None, inventory_usage=None):
     normalized_status = validate_ticket_transition(ticket, new_status)
     transition_notes = str(notes or '').strip()
@@ -1337,6 +1357,8 @@ def apply_ticket_status_change(ticket, new_status, *, changed_by, notes='', extr
                 reason=f'Issued confirmed stock usage when ticket #{ticket.id} was completed.',
             )
         sync_ticket_maintenance_schedule(ticket)
+        if ticket.ticket_type != 'inspection':
+            _prompt_sales_record(ticket, changed_by)
     elif normalized_status == 'Cancelled':
         release_ticket_reservations(
             ticket,

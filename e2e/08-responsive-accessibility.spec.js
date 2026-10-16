@@ -122,9 +122,9 @@ test.describe('Responsive and keyboard smoke coverage', () => {
       if (workspace.role === 'admin') {
         const firstStatCard = page.locator('main .stat-card').first();
         await expect(firstStatCard).toBeVisible();
-        const cardBox = await firstStatCard.boundingBox();
         // Phones show the stat cards two per row; each card must still use about half the screen.
-        expect(cardBox?.width).toBeGreaterThanOrEqual(150);
+        // Poll because the dashboard re-renders its cards when live data arrives.
+        await expect.poll(async () => (await firstStatCard.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(150);
       }
       await expectKeyboardFocus(page);
     });
