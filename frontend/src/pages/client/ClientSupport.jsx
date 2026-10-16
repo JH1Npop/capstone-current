@@ -6,7 +6,7 @@ import { fetchServiceTickets } from '../../api/services';
 import { useAuth } from '../../context/AuthContext';
 import { FiMessageSquare, FiRefreshCw } from 'react-icons/fi';
 import { formatSupportCaseId, formatTicketId } from '../../utils/roleIds';
-import { startVisibleInterval } from '../../utils/visibleInterval';
+import { MESSAGES_CHANGED_EVENT, startLiveRefresh } from '../../utils/liveUpdates';
 
 const statusLabels = {
   pending: 'Pending Review',
@@ -118,9 +118,9 @@ export default function ClientSupport() {
 
   useEffect(() => {
     loadSupportMessages(false);
-    return startVisibleInterval(() => {
+    return startLiveRefresh(() => {
       if (supportGroupKey) loadSupportMessages(true);
-    }, 5000);
+    }, { eventName: MESSAGES_CHANGED_EVENT });
   }, [supportGroupKey]);
 
   const handleSendSupportMessage = async () => {

@@ -12,7 +12,7 @@ import {
 } from '../../api/api';
 import { FiArrowLeft, FiDownload, FiEdit2, FiImage, FiSend, FiTrash2, FiUsers, FiX } from 'react-icons/fi';
 import { formatTicketId } from '../../utils/roleIds';
-import { startVisibleInterval } from '../../utils/visibleInterval';
+import { MESSAGES_CHANGED_EVENT, startLiveRefresh } from '../../utils/liveUpdates';
 
 const STAFF_GROUP_ROOM = {
   key: 'group:staff',
@@ -178,7 +178,7 @@ export default function TechnicianMessages() {
   useEffect(() => {
     if (!user) return undefined;
     loadMessages();
-    return startVisibleInterval(() => loadMessages({ silent: true }), 5000);
+    return startLiveRefresh(() => loadMessages({ silent: true }), { eventName: MESSAGES_CHANGED_EVENT });
   }, [user]);
 
   useEffect(() => {

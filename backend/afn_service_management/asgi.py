@@ -20,13 +20,14 @@ django_asgi_app = get_asgi_application()
 # Import routing after Django setup
 from inventory.routing import websocket_urlpatterns as inventory_ws_patterns
 from messages_app.routing import websocket_urlpatterns as messages_ws_patterns
+from notifications.routing import websocket_urlpatterns as notifications_ws_patterns
 
 application = ProtocolTypeRouter({
     'http': django_asgi_app,
     'websocket': AuthMiddlewareStack(
         TokenAuthMiddlewareStack(
             URLRouter(
-                messages_ws_patterns + inventory_ws_patterns,
+                messages_ws_patterns + inventory_ws_patterns + notifications_ws_patterns,
             )
         )
     ),

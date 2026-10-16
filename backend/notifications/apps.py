@@ -3,3 +3,6 @@ from django.apps import AppConfig
 
 class NotificationsConfig(AppConfig):
     name = 'notifications'
+
+    def ready(self):
+        from notifications import signals  # noqa: F401  (connect live-update signals)

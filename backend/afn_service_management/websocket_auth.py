@@ -34,6 +34,13 @@ class TokenAuthMiddleware:
                     if auth_type.lower() == 'token':
                         token_key = auth_token.strip()
                     break
+            if token_key is None:
+                # Browsers cannot set headers on WebSockets, so they send
+                # ['afn.token', '<token>'] as subprotocols; this keeps the token
+                # out of URLs and access logs.
+                subprotocols = scope.get('subprotocols') or []
+                if len(subprotocols) >= 2 and subprotocols[0] == 'afn.token':
+                    token_key = subprotocols[1].strip()
 
             scope['user'] = await _get_user_for_token(token_key)
 

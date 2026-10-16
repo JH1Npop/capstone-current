@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { FiCheckCircle, FiClock, FiMessageSquare, FiRefreshCw, FiSend } from 'react-icons/fi';
 import { formatSupportCaseId } from '../../utils/roleIds';
-import { startVisibleInterval } from '../../utils/visibleInterval';
+import { MESSAGES_CHANGED_EVENT, startLiveRefresh } from '../../utils/liveUpdates';
 
 const CLOSED_STATUSES = ['resolved', 'closed'];
 
@@ -113,9 +113,9 @@ export default function AdminClientSupport() {
 
   useEffect(() => {
     load(false);
-    return startVisibleInterval(() => {
+    return startLiveRefresh(() => {
       load(true);
-    }, 5000);
+    }, { eventName: MESSAGES_CHANGED_EVENT });
   }, [user?.username]);
 
   useEffect(() => {

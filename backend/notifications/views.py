@@ -6,6 +6,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from django.utils import timezone
 from .models import Notification
 from .serializers import NotificationSerializer
+from notifications.realtime import broadcast_unread_count
 
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
@@ -52,6 +53,8 @@ class NotificationViewSet(viewsets.ModelViewSet):
             status='read',
             read_at=read_at,
         )
+        # Bulk updates skip save signals; push the new count to the user's other tabs.
+        broadcast_unread_count(request.user.id)
         return Response({
             'status': 'All notifications marked as read',
             'updated_count': updated_count,

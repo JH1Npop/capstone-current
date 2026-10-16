@@ -7,17 +7,29 @@ import {
   markNotificationAsRead,
 } from '../api/api';
 import { useAuth } from './AuthContext';
+import { API_BASE_URL } from '../api/core';
 import { startVisibleInterval } from '../utils/visibleInterval';
+import { MESSAGES_CHANGED_EVENT, setLiveUpdatesConnected } from '../utils/liveUpdates';
 
 const NotificationContext = createContext(null);
 const NOTIFICATION_REFRESH_MS = 25_000;
+// While the live socket is connected, polling only runs as a slow safety net.
+const LIVE_SAFETY_POLL_MS = 120_000;
+
+function notificationSocketUrl() {
+  const base = /^https?:\/\//i.test(API_BASE_URL) ? new URL(API_BASE_URL) : window.location;
+  const protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${base.host}/ws/notifications/`;
+}
 
 export function NotificationProvider({ children }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const requestVersion = useRef(0);
   const unreadCountRef = useRef(null);
+  const socketLiveRef = useRef(false);
+  const lastPollRef = useRef(0);
 
   useEffect(() => {
     unreadCountRef.current = unreadCount;
@@ -44,6 +56,8 @@ export function NotificationProvider({ children }) {
 
   const pollNotifications = useCallback(async () => {
     if (!user?.id) return;
+    if (socketLiveRef.current && Date.now() - lastPollRef.current < LIVE_SAFETY_POLL_MS) return;
+    lastPollRef.current = Date.now();
     try {
       const count = Number(await getUnreadNotificationCount()) || 0;
       if (count !== unreadCountRef.current) await refreshNotifications();
@@ -69,6 +83,59 @@ export function NotificationProvider({ children }) {
       window.removeEventListener('afn:notifications-updated', refreshNotifications);
     };
   }, [pollNotifications, refreshNotifications, user?.id]);
+
+  // Live updates: the server pushes the new unread count whenever this user's
+  // notifications change; reload the list only when the count actually differs.
+  useEffect(() => {
+    if (!user?.id || !token || typeof WebSocket === 'undefined') return undefined;
+    let socket = null;
+    let retryTimer = null;
+    let attempts = 0;
+    let stopped = false;
+
+    const connect = () => {
+      if (stopped) return;
+      socket = new WebSocket(notificationSocketUrl(), ['afn.token', token]);
+      socket.onopen = () => {
+        attempts = 0;
+        socketLiveRef.current = true;
+        setLiveUpdatesConnected(true);
+        refreshNotifications();
+      };
+      socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload?.type === 'notifications.changed' && Number(payload.unread_count) !== unreadCountRef.current) {
+            refreshNotifications();
+          } else if (payload?.type === 'messages.changed') {
+            window.dispatchEvent(new CustomEvent(MESSAGES_CHANGED_EVENT));
+          }
+        } catch {
+          // Ignore malformed frames; polling remains as a fallback.
+        }
+      };
+      socket.onclose = () => {
+        socketLiveRef.current = false;
+        setLiveUpdatesConnected(false);
+        if (stopped) return;
+        attempts += 1;
+        retryTimer = window.setTimeout(connect, Math.min(30_000, 1000 * 2 ** attempts));
+      };
+      socket.onerror = () => socket?.close();
+    };
+
+    connect();
+    return () => {
+      stopped = true;
+      socketLiveRef.current = false;
+      setLiveUpdatesConnected(false);
+      window.clearTimeout(retryTimer);
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+    };
+  }, [refreshNotifications, token, user?.id]);
 
   const markNotificationRead = useCallback(async (notificationId) => {
     await markNotificationAsRead(notificationId);
