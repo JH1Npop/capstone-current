@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-17 01:19 Asia/Singapore**
+Last updated: **2026-10-17 01:23 Asia/Singapore**
 Current focused objective: **Deliver configurable per-service pre-service deposits without letting quotation acceptance, manual assignment, auto-dispatch, or later sales collection bypass or double-count the requirement.**
 Current objective: **Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the existing inspection-first path and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
@@ -523,12 +523,12 @@ other repository path must include this living handoff file.
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
 | Branch | `feature/analytics-decision-workspace`; no same-named remote branch was present at this checkpoint |
-| HEAD | `09f32fc Add quotation approval, payment tracking, handover confirmation and sales prompts` |
+| HEAD | Deposit runtime commit `1159b9a Add configurable service deposits and dispatch gate`, plus this accompanying handoff-only release record |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | After a fresh fetch, HEAD is 10 commits ahead of and 0 behind `origin/staging-deploy`; the update is fast-forward safe before the pending deposit commit |
-| Worktree | Intentionally dirty with 16 modified and 3 untracked paths for the optional-deposit implementation and this handoff; existing work was preserved |
+| Remote comparison | After a fresh fetch and the runtime commit, the branch is 11 commits ahead of and 0 behind `origin/staging-deploy`; the update is fast-forward safe |
+| Worktree | The optional-deposit runtime is committed in `1159b9a`; this handoff-only release record is the sole follow-up change before publication |
 | Tracked deletions | None |
-| Commit/push status | The optional-deposit work is uncommitted, unpushed, and not deployed. With explicit user approval, the pending local SQLite migrations were applied on 2026-10-17; no commit, push, staging migration, production migration, or deployment was performed. |
+| Commit/push status | The optional-deposit runtime is committed locally as `1159b9a` but is not yet pushed or deployed. With explicit user approval, the pending local SQLite migrations were applied on 2026-10-17; no staging/production migration or deployment has run yet. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -1258,7 +1258,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
-- Optional per-service deposits touch `backend/services/{deposits.py,auto_dispatch.py,models/{core.py,documents.py,sales.py},serializers/{requests.py,commercial_records.py},views/{helpers.py,sales_records.py,tickets.py},tests/test_business_flow_controls.py,migrations/0061_service_deposit_policy.py}`, `frontend/src/{api/services.js,components/{client/ClientJobDecisions.jsx,shared/InspectionReviewModal.jsx,sales/QuotationDepositPanel.jsx},pages/admin/{AdminDocuments.jsx,AdminServices.jsx}}`, and this handoff. The implementation remains uncommitted; its migration and the three other pending migrations were applied only to local development SQLite on 2026-10-17 with explicit approval. Staging and production were not changed.
+- Optional per-service deposits touch `backend/services/{deposits.py,auto_dispatch.py,models/{core.py,documents.py,sales.py},serializers/{requests.py,commercial_records.py},views/{helpers.py,sales_records.py,tickets.py},tests/test_business_flow_controls.py,migrations/0061_service_deposit_policy.py}`, `frontend/src/{api/services.js,components/{client/ClientJobDecisions.jsx,shared/InspectionReviewModal.jsx,sales/QuotationDepositPanel.jsx},pages/admin/{AdminDocuments.jsx,AdminServices.jsx}}`, and this handoff. The implementation is committed in `1159b9a`; its migration and the three other previously pending migrations were applied only to local development SQLite on 2026-10-17 with explicit approval. Staging and production have not yet changed.
 
 - The reversible Analytics decision-workspace and visual-demand phase touches `backend/users/{analytics_service.py,analytics_workspaces.py}`, `backend/services/{views_dashboard.py,tests/test_analytics_workspace.py}`, `frontend/src/{utils/analyticsAssistantContext.js,components/shared/SystemAssistant.jsx,pages/admin/AdminAnalytics.jsx,pages/admin/analytics/AnalyticsDecisionLayer.jsx}`, `e2e/03-admin-workspace.spec.js`, Analytics documentation, and this handoff. It adds no migration and leaves the pre-existing ERD/system-knowledge work untouched.
 
@@ -1875,6 +1875,8 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-17 01:23: Created local release commit `1159b9a` (`Add configurable service deposits and dispatch gate`) containing exactly the reviewed 19-path optional-deposit implementation and required handoff. Pre-commit staged diff validation and credential-pattern scanning were clean. The commit remains 11 commits ahead of and 0 behind the freshly fetched `origin/staging-deploy`; it has not yet been pushed or deployed. The ignored staging logical snapshot remains outside Git.
 
 2026-10-17 01:19: Prepared the optional-deposit release for the user-authorized staging deployment. The canonical release gate passed all 555 backend tests (3 expected PostgreSQL skips), the 2,536-module production build, and 16/16 browser smoke checks. A fresh fetch proved the candidate is a fast-forward from `origin/staging-deploy`. Read-only Aiven inspection confirmed the staging schema is current through `inventory.0008`, `services.0059`, and `users.0040`, while `services.0060`, `services.0061`, and `users.0041` remain pending for the deployment startup migration. Since `pg_dump` is unavailable, created and hash-validated an ignored full Django logical snapshot from deployed revision `e993385`: `backend/local_backups/staging-predeposit-20261016T171607Z.json` (1,348 objects; 754,389 bytes; SHA-256 recorded in the validation ledger). No remote mutation occurred yet. The snapshot is explicitly not a PostgreSQL-native/restore-tested production backup, and the installed Render CLI requires login renewal; post-push verification must use direct service and database checks unless provider access is renewed.
 
