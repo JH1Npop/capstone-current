@@ -54,6 +54,28 @@ const WORKSPACE_LABELS = {
   forecasting: 'Forecasting',
 };
 
+// Roll the overview trend (any grouping) up to calendar months or Monday-start weeks.
+function rollUpTrend(rows, unit) {
+  const buckets = new Map();
+  rows.forEach((row) => {
+    if (!row?.period) return;
+    const day = new Date(`${row.period}T00:00:00`);
+    if (Number.isNaN(day.getTime())) return;
+    const start = unit === 'month'
+      ? new Date(day.getFullYear(), day.getMonth(), 1)
+      : new Date(day.getFullYear(), day.getMonth(), day.getDate() - ((day.getDay() + 6) % 7));
+    const key = start.toISOString().slice(0, 10);
+    const label = unit === 'month'
+      ? start.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })
+      : `the week of ${start.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    const bucket = buckets.get(key) || { label, requestCount: 0, completedCount: 0 };
+    bucket.requestCount += Number(row.requests || 0);
+    bucket.completedCount += Number(row.completions || 0);
+    buckets.set(key, bucket);
+  });
+  return [...buckets.values()].filter((bucket) => bucket.requestCount > 0).sort((a, b) => b.requestCount - a.requestCount);
+}
+
 function formatContextDate(value) {
   if (!value) return '';
   const date = new Date(`${value}T00:00:00`);
@@ -540,11 +562,11 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
   const historicalItems = Array.isArray(forecastHistory.historical_item_usage) ? forecastHistory.historical_item_usage : [];
   const monthlyServiceBreakdown = Array.isArray(analytics?.monthlyServiceBreakdown) ? analytics.monthlyServiceBreakdown : [];
   const inventoryDemand = analytics?.seasonalInventoryDemand || {};
-  const busiestMonths = Array.isArray(analytics?.busiestMonths) ? analytics.busiestMonths : [];
-  const busiestWeeks = Array.isArray(analytics?.busiestWeeks) ? analytics.busiestWeeks : [];
+  const requestTrend = Array.isArray(analytics?.charts?.requests_vs_completions) ? analytics.charts.requests_vs_completions : [];
+  const busiestMonths = rollUpTrend(requestTrend, 'month');
+  const busiestWeeks = rollUpTrend(requestTrend, 'week');
   const topRequestedServiceTypes = Array.isArray(analytics?.topRequestedServiceTypes) ? analytics.topRequestedServiceTypes : [];
-  const cityCompletionTrends = Array.isArray(analytics?.cityCompletionTrends) ? analytics.cityCompletionTrends : [];
-  const provinceCompletionTrends = Array.isArray(analytics?.provinceCompletionTrends) ? analytics.provinceCompletionTrends : [];
+  const locationDemand = Array.isArray(analytics?.charts?.locations) ? analytics.charts.locations : [];
   const overview = analytics?.overview || {};
   const dashboardOverview = dashboardStats?.overview || {};
   const pendingRequests = Array.isArray(dashboardStats?.pending_requests) ? dashboardStats.pending_requests : [];
@@ -558,7 +580,8 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
   const afterSalesCases = Array.isArray(dashboardStats?.after_sales?.recent_cases)
     ? dashboardStats.after_sales.recent_cases
     : [];
-  const topInventoryItem = [...(inventoryDemand?.topItems || [])].sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0))[0];
+  const issuedItems = inventoryDemand?.topItems?.length ? inventoryDemand.topItems : historicalItems.map((row) => ({ ...row, item: row.item__name || row.item__sku }));
+  const topInventoryItem = [...issuedItems].sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0))[0];
   const topInventoryCategory = [...(inventoryDemand?.categoryDemand || [])].sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0))[0];
   const wantsAllTimePerformance = includesAny(normalizedQuestion, ['all time', 'of all time', 'ever', 'lifetime', 'all recorded', 'entire history']);
   const recentTechnicians = Array.isArray(technicianPerformance) ? technicianPerformance : [];
@@ -727,29 +750,31 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
     );
   }
 
-  if (includesAny(normalizedQuestion, ['city', 'province', 'location completion', 'city completion', 'province completion'])) {
-    const topCity = cityCompletionTrends[0];
-    const topProvince = provinceCompletionTrends[0];
-    if (topCity || topProvince) {
-      const cityStr = topCity ? `${topCity.label} (${topCity.completedCount} completed)` : '';
-      const provStr = topProvince ? `${topProvince.label} (${topProvince.completedCount} completed)` : '';
+  if (includesAny(normalizedQuestion, ['city', 'province', 'top location', 'busiest location', 'requests by location'])) {
+    const ranked = [...locationDemand].sort((a, b) => Number(b.requests || 0) - Number(a.requests || 0));
+    const top = ranked[0];
+    if (top && Number(top.requests || 0) > 0) {
+      const place = [top.city, top.province].filter((part) => part && part !== 'Unknown').join(', ') || 'an unspecified location';
+      const runnerUp = ranked[1] && Number(ranked[1].requests || 0) > 0
+        ? ` Next is ${[ranked[1].city, ranked[1].province].filter((part) => part && part !== 'Unknown').join(', ') || 'an unspecified location'} with ${plural(Number(ranked[1].requests), 'request')}.`
+        : '';
       return withSource(
-        `Location completion trends: ${cityStr ? `Top city is ${cityStr}. ` : ''}${provStr ? `Top province is ${provStr}.` : ''}`,
-        'analytics location trends',
+        `Most requests in this period came from ${place} (${plural(Number(top.requests), 'request')}).${runnerUp}`,
+        'analytics demand by location',
         'high'
       );
     }
-    return withSource('No location completion trends are available yet.', 'analytics location trends', 'medium');
+    return withSource('No requests with a saved city or province were found for this period.', 'analytics demand by location', 'medium');
   }
 
   if (includesAny(normalizedQuestion, ['busiest month', 'busiest week', 'busiest time'])) {
     const topMonth = busiestMonths[0];
     const topWeek = busiestWeeks[0];
     if (topMonth || topWeek) {
-      const monthStr = topMonth ? `${topMonth.label} (${topMonth.requestCount} requests)` : '';
-      const weekStr = topWeek ? `${topWeek.label} (${topWeek.requestCount} requests)` : '';
+      const monthStr = topMonth ? `${topMonth.label} (${plural(topMonth.requestCount, 'request')})` : '';
+      const weekStr = topWeek ? `${topWeek.label} (${plural(topWeek.requestCount, 'request')})` : '';
       return withSource(
-        `Historical peak periods: ${monthStr ? `Busiest month was ${monthStr}. ` : ''}${weekStr ? `Busiest week was ${weekStr}.` : ''}`,
+        `Peak periods in the selected range: ${monthStr ? `busiest month was ${monthStr}. ` : ''}${weekStr ? `Busiest week was ${weekStr}.` : ''}`,
         'analytics historical peaks',
         'high'
       );

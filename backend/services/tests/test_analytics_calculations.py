@@ -152,3 +152,22 @@ class AnalyticsCalculationTests(APITestCase):
         # Two PHP sales on different dates are one currency, so the total is shown.
         self.assertFalse(data['data_quality']['multiple_currencies'])
         self.assertEqual(Decimal(data['kpis']['confirmed_sales_amount']['current']), Decimal('1500.00'))
+
+    def test_ai_summary_matches_the_analytics_page(self):
+        moment = datetime(2026, 9, 10, 9, tzinfo=MANILA)
+        self.create_ticket(moment=moment, status_value='Turned Over / Accepted', technician=self.tech,
+                           completed=moment + timedelta(hours=3), assigned=moment + timedelta(hours=1), rating=4)
+        self.create_ticket(moment=moment, technician=self.tech, assigned=moment + timedelta(hours=3))
+
+        page = self.get()
+        response = self.client.get('/api/admin/analytics/ai-summary/', {'days': 1, 'start_date': '2026-09-10', 'end_date': '2026-09-10'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        summary = response.data['analytics']
+
+        self.assertEqual(summary['overview']['avgResponseTimeHours'], page['kpis']['average_response_hours'])
+        self.assertEqual(summary['overview']['averageClientRating'], 4.0)
+        self.assertEqual(summary['overview']['activeTechnicians'], 1)
+        self.assertEqual(summary['topServices'][0]['serviceType'], self.solar.name)
+        self.assertEqual(summary['topTechnician']['completedJobs'], 1)
+        self.assertEqual(summary['confirmedSales']['count'], 0)
+        self.assertNotIn('completedServiceValue', summary)
