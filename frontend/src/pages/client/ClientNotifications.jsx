@@ -209,7 +209,7 @@ export default function ClientNotifications() {
                 onClick={() => setFilter(tab.value)}
                 className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-colors ${
                   filter === tab.value
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-brand-600 text-white'
                     : 'border border-slate-300 bg-white text-slate-700 hover:border-slate-400'
                 }`}
               >

@@ -201,7 +201,7 @@ export default function TechnicianSchedule() {
           <div className="md:hidden">
             <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-900 text-white">
               {WEEKDAYS.map((day) => (
-                <div key={`mobile-${day}`} className="py-2 text-center text-[10px] font-semibold uppercase">
+                <div key={`mobile-${day}`} className="py-2 text-center text-xs font-semibold uppercase">
                   {day.slice(0, 1)}
                 </div>
               ))}
@@ -227,8 +227,8 @@ export default function TechnicianSchedule() {
                           : 'bg-slate-50 text-slate-400'
                     }`}
                   >
-                    <span className={`flex h-5 w-5 items-center justify-center rounded-full font-semibold ${isToday ? 'bg-blue-600 text-white' : ''}`}>{day.getDate()}</span>
-                    {dayJobs.length > 0 ? <span className="mt-0.5 rounded-full bg-amber-100 px-1.5 text-[9px] font-bold text-amber-800">{dayJobs.length}</span> : <span className="h-3" aria-hidden="true" />}
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-full font-semibold ${isToday ? 'bg-brand-600 text-white' : ''}`}>{day.getDate()}</span>
+                    {dayJobs.length > 0 ? <span className="mt-0.5 rounded-full bg-amber-100 px-1.5 text-xs font-bold text-amber-800">{dayJobs.length}</span> : <span className="h-3" aria-hidden="true" />}
                   </button>
                 );
               })}
@@ -290,7 +290,7 @@ export default function TechnicianSchedule() {
                           {day.getDate()}
                         </span>
                         {dayJobs.length > 0 && (
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
                             {dayJobs.length}
                           </span>
                         )}

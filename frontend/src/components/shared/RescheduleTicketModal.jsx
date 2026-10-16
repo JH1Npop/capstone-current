@@ -20,7 +20,7 @@ const normalizeTimeInput = (value) => {
 
 const SummaryPill = ({ label, value }) => (
   <div className="rounded-2xl border border-surface-200 bg-white px-3 py-2">
-    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</div>
+    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</div>
     <div className="mt-1 truncate text-sm font-semibold text-slate-900">{value}</div>
   </div>
 );
@@ -52,7 +52,8 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
   const ticketId = ticket.ticket_id || ticket.id;
   const clientName = ticket.clientFullname || ticket.client || 'Client';
   const serviceName = ticket.service || ticket.service_type || 'Service';
-  const canReschedule = (ticket.status || '').toString().toLowerCase().replace(/\s+/g, '_') === 'not_started';
+  const normalizedStatus = String(ticket.status || '').toLowerCase().replace(/\s+/g, '_');
+  const canReschedule = !ticket.startTime && !ticket.start_time && !['in_progress', 'completed', 'cancelled'].includes(normalizedStatus);
 
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -82,14 +83,12 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-lg">
-        <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4">
+      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl sm:max-h-[calc(100dvh-2rem)]">
+        <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="min-w-0">
-            <h2 className="text-xl font-bold text-slate-900">{formatTicketId(ticketId)}</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              {serviceName} for {clientName}
-            </p>
+            <h2 className="text-xl font-bold text-slate-900">Reschedule Ticket</h2>
+            <p className="mt-1 truncate text-sm text-slate-600">{formatTicketId(ticketId)} · {clientName}</p>
           </div>
           <button
             type="button"
@@ -114,14 +113,13 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <SummaryPill label="Ticket" value={formatTicketId(ticketId)} />
+        <form onSubmit={handleSubmit} className="overflow-y-auto p-5 sm:p-6">
+          <div className="grid gap-3 sm:grid-cols-2">
             <SummaryPill label="Client" value={clientName} />
             <SummaryPill label="Service" value={serviceName} />
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-medium text-slate-700">
               <span className="flex items-center gap-2 font-semibold text-slate-900">
                 <FiCalendar className="text-brand-600" /> New Date
@@ -151,7 +149,7 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
             </label>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4 sm:max-w-[calc(50%-0.5rem)]">
             <label className="block text-sm font-medium text-slate-700">
               <span className="flex items-center gap-2 font-semibold text-slate-900">
                 <FiClock className="text-brand-600" /> Exact Time
@@ -165,7 +163,7 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
             </label>
           </div>
 
-          <div className="mt-4 rounded-3xl border border-surface-200 bg-surface-50 p-4">
+          <div className="mt-5 border-t border-slate-100 pt-5">
             <label className="block text-sm font-medium text-slate-700">
               <span className="flex items-center gap-2 font-semibold text-slate-900">
                 <FiMapPin className="text-brand-600" /> Reschedule Reason (required)
@@ -173,14 +171,14 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
               <textarea
                 value={form.notes}
                 onChange={(event) => updateField('notes', event.target.value)}
-                rows={4}
-                className="mt-2 w-full rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                rows={3}
+                className="mt-2 min-h-24 w-full resize-y rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 placeholder="Explain why the schedule is changing for the audit record."
               />
             </label>
           </div>
 
-          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <div className="mt-5 flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={onClose}

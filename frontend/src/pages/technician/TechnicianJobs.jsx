@@ -13,12 +13,15 @@ const formatDateLabel = (value) => {
     return 'Schedule pending';
   }
 
-  const parsedValue = new Date(value);
+  // Read plain YYYY-MM-DD values as local calendar dates so they never shift a day.
+  const parsedValue = /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
   if (Number.isNaN(parsedValue.getTime())) {
     return 'Schedule pending';
   }
 
-  return parsedValue.toLocaleDateString();
+  return parsedValue.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
 const formatTimeLabel = (value, slot) => {
@@ -30,7 +33,7 @@ const formatTimeLabel = (value, slot) => {
     }
   }
 
-  return slot ? `${formatStatusLabel(slot)} slot` : 'Time pending';
+  return slot ? `${formatStatusLabel(slot)} slot` : 'Time TBD';
 };
 
 const formatDurationLabel = (minutes) => {
@@ -176,7 +179,7 @@ export default function TechnicianJobs() {
             <div className="text-left sm:text-right">
               <button
                 onClick={() => openJobDetails(activeJob)}
-                className="w-full rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-600 sm:w-auto"
+                className="w-full rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 sm:w-auto"
               >
                 View Details
               </button>
@@ -239,7 +242,7 @@ export default function TechnicianJobs() {
                     >
                       <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <h3 className="line-clamp-2 text-base font-bold text-slate-900">{job.service}</h3>
+                          <h3 className="break-words text-base font-bold text-slate-900">{job.service}</h3>
                           <p className="text-xs text-slate-600">{formatTicketId(job.ticketId)}</p>
                         </div>
                         <StatusBadge status={job.status} size="sm" />
@@ -331,7 +334,7 @@ export default function TechnicianJobs() {
                             className={`rounded-lg px-3 py-2 text-xs font-medium text-white transition w-full ${
                               isUpdatingStatus || hasDifferentActiveJob(job)
                                 ? 'bg-slate-300 cursor-not-allowed opacity-60'
-                                : 'bg-blue-500 hover:bg-blue-600'
+                                : 'bg-blue-500 hover:bg-brand-600'
                             }`}
                           >
                             {isUpdatingStatus ? 'Starting...' : hasDifferentActiveJob(job) ? 'Hold or Finish Other Job' : 'Start Job'}
@@ -770,7 +773,7 @@ export default function TechnicianJobs() {
                   type="button"
                   onClick={() => handleStatusUpdate(selectedJob.id, 'in_progress')}
                   disabled={isUpdatingStatus || hasDifferentActiveJob(selectedJob)}
-                  className="col-span-2 rounded-lg bg-blue-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="col-span-2 rounded-lg bg-brand-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   {isUpdatingStatus ? 'Starting...' : hasDifferentActiveJob(selectedJob) ? 'Hold or Finish Other Job' : 'Start Job'}
                 </button>
@@ -786,7 +789,7 @@ export default function TechnicianJobs() {
               ) : ['completed', 'cancelled'].includes(selectedJob.status) ? (
                 <Link
                   to="/technician/job-history"
-                  className="col-span-2 rounded-lg bg-blue-600 px-4 py-2.5 text-center text-sm text-white hover:bg-blue-700"
+                  className="col-span-2 rounded-lg bg-brand-600 px-4 py-2.5 text-center text-sm text-white hover:bg-brand-700"
                 >
                   View Job History
                 </Link>
@@ -807,7 +810,7 @@ export default function TechnicianJobs() {
               ) : selectedJob.status === 'in_progress' ? (
                 <Link
                   to={selectedJob.ticketType === 'inspection' ? `/technician/inspection-checklist?ticketId=${selectedJob.ticketId}` : `/technician/checklist?ticketId=${selectedJob.ticketId}`}
-                  className="col-span-2 rounded-lg bg-blue-600 px-4 py-2.5 text-center text-sm text-white hover:bg-blue-700"
+                  className="col-span-2 rounded-lg bg-brand-600 px-4 py-2.5 text-center text-sm text-white hover:bg-brand-700"
                 >
                   Complete Checklist
                 </Link>
@@ -870,7 +873,7 @@ export default function TechnicianJobs() {
                 <div className="mb-4 flex flex-wrap items-center gap-3">
                   <label
                     htmlFor={`completion-photos-${completionJob.ticketId}`}
-                    className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
                   >
                     <FiUpload /> Choose Photos
                   </label>

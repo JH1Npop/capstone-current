@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { hasAnyCapability, INVENTORY_MANAGE_CAPABILITIES } from '../../rbac';
 import { formatReservationId, formatTicketId, formatTransactionId } from '../../utils/roleIds';
 import SearchFilterBar from '../../components/shared/SearchFilterBar';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 
 const STATUS_OPTIONS = [
   { value: 'available', label: 'Available' },
@@ -156,6 +157,7 @@ export default function AdminInventory() {
   const { user } = useAuth();
   const canManageInventory = hasAnyCapability(user, INVENTORY_MANAGE_CAPABILITIES);
   const [inventory, setInventory] = useState([]);
+  const [categoryPendingDelete, setCategoryPendingDelete] = useState(null);
   const [categories, setCategories] = useState([]);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ id: null, name: '', description: '', parent: '' });
@@ -443,10 +445,14 @@ export default function AdminInventory() {
     });
   };
 
-  const deleteCategory = async (category) => {
-    if (!window.confirm(`Delete category "${category.name}"? Empty categories can be deleted; categories in use must be reorganized first.`)) {
-      return;
-    }
+  const deleteCategory = (category) => {
+    setCategoryPendingDelete(category);
+  };
+
+  const confirmDeleteCategory = async () => {
+    const category = categoryPendingDelete;
+    setCategoryPendingDelete(null);
+    if (!category) return;
     try {
       await api.delete(`/inventory/categories/${category.id}/`);
       if (categoryForm.id === category.id) resetCategoryForm();
@@ -674,7 +680,7 @@ export default function AdminInventory() {
           <table className="w-full min-w-[960px] table-fixed text-sm admin-inventory-table">
             <thead className="bg-slate-50">
               <tr>
-                <th className="w-[17%] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[18%] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Item
                 </th>
                 <th className="w-[11%] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -683,22 +689,22 @@ export default function AdminInventory() {
                 <th className="w-[11%] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Category
                 </th>
-                <th className="w-[7%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[8%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                   On hand
                 </th>
-                <th className="w-[7%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[9%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Reserved
                 </th>
-                <th className="w-[8%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[9%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Available
                 </th>
-                <th className="w-[7%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[8%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Minimum
                 </th>
-                <th className="w-[9%] px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[8%] px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Status
                 </th>
-                <th className="w-[23%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[18%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Actions
                 </th>
               </tr>
@@ -722,7 +728,9 @@ export default function AdminInventory() {
                   <tr key={item.id} className="transition hover:bg-slate-50">
                     <td className="px-3 py-2">
                       <div className="truncate font-semibold text-slate-900" title={item.name}>{item.name}</div>
-                      <div className="truncate text-xs text-slate-400">{[item.brand, item.model].filter(Boolean).join(' / ') || item.unit_of_measurement || 'piece'}</div>
+                      {[item.brand, item.model].filter(Boolean).length > 0 ? (
+                        <div className="truncate text-xs text-slate-400">{[item.brand, item.model].filter(Boolean).join(' / ')}</div>
+                      ) : null}
                     </td>
                     <td className="px-3 py-2 text-sm text-slate-600"><div className="truncate" title={item.sku || '-'}>{item.sku || '-'}</div></td>
                     <td className="px-3 py-2 text-sm text-slate-600"><div className="truncate" title={item.category_name}>{item.category_name}</div></td>
@@ -743,7 +751,7 @@ export default function AdminInventory() {
                     <td className="px-3 py-2 text-right font-semibold text-slate-900">{item.available_quantity}</td>
                     <td className="px-3 py-2 text-right font-semibold text-slate-900">{item.minimum_stock}</td>
                     <td className="px-3 py-2 text-center">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
                         Number(item.available_quantity || 0) <= 0
                           ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
                           : item.is_low_stock
@@ -752,7 +760,7 @@ export default function AdminInventory() {
                       }`}>
                         {Number(item.available_quantity || 0) <= 0 ? 'Out' : item.is_low_stock ? 'Low' : 'OK'}
                       </span>
-                      {item.status !== 'available' ? <div className="mt-1 text-[10px] text-slate-500">{formatStatusLabel(item.status)}</div> : null}
+                      {item.status !== 'available' ? <div className="mt-1 text-xs text-slate-500">{formatStatusLabel(item.status)}</div> : null}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-1.5">
@@ -812,9 +820,9 @@ export default function AdminInventory() {
                 </span>
               </div>
               <dl className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center">
-                <div><dt className="text-[11px] uppercase tracking-wide text-slate-400">On hand</dt><dd className="mt-1 font-semibold text-slate-950">{item.quantity}</dd></div>
-                <div><dt className="text-[11px] uppercase tracking-wide text-slate-400">Reserved</dt><dd className="mt-1 font-semibold text-blue-700">{item.reserved_quantity || 0}</dd></div>
-                <div><dt className="text-[11px] uppercase tracking-wide text-slate-400">Available</dt><dd className="mt-1 font-semibold text-emerald-700">{item.available_quantity}</dd></div>
+                <div><dt className="text-xs uppercase tracking-wide text-slate-400">On hand</dt><dd className="mt-1 font-semibold text-slate-950">{item.quantity}</dd></div>
+                <div><dt className="text-xs uppercase tracking-wide text-slate-400">Reserved</dt><dd className="mt-1 font-semibold text-blue-700">{item.reserved_quantity || 0}</dd></div>
+                <div><dt className="text-xs uppercase tracking-wide text-slate-400">Available</dt><dd className="mt-1 font-semibold text-emerald-700">{item.available_quantity}</dd></div>
               </dl>
               <div className="grid grid-cols-3 gap-2">
                 <button type="button" onClick={() => openItemDetails(item)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Details</button>
@@ -1511,6 +1519,17 @@ export default function AdminInventory() {
           </div>
         </div>
       )}
+      {categoryPendingDelete ? (
+        <ConfirmationDialog
+          title={`Delete category "${categoryPendingDelete.name}"?`}
+          message="Empty categories can be deleted. Categories that still contain items or subcategories must be reorganized first."
+          tone="danger"
+          icon="danger"
+          confirmLabel="Delete category"
+          onCancel={() => setCategoryPendingDelete(null)}
+          onConfirm={confirmDeleteCategory}
+        />
+      ) : null}
     </Layout>
   );
 }

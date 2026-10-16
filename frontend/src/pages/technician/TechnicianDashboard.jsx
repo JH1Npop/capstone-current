@@ -29,6 +29,7 @@ import {
   hasAnyCapability
 } from '../../rbac';
 import { formatTicketId } from '../../utils/roleIds';
+import { startVisibleInterval } from '../../utils/visibleInterval';
 
 const EMPTY_DASHBOARD = {
   technician: { is_available: false, current_location: null },
@@ -156,8 +157,7 @@ export default function TechnicianDashboard() {
 
   useEffect(() => {
     loadData();
-    const id = window.setInterval(() => loadData({ silent: true }), AUTO_REFRESH_MS);
-    return () => window.clearInterval(id);
+    return startVisibleInterval(() => loadData({ silent: true }), AUTO_REFRESH_MS);
   }, [techName]);
 
   const rawTodaysSchedule = Array.isArray(dashboard.todays_schedule) ? dashboard.todays_schedule : [];
@@ -260,7 +260,7 @@ export default function TechnicianDashboard() {
         <section className="card min-h-full p-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Current Focus</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Current Focus</p>
               <h3 className="mt-2 text-xl font-semibold text-slate-900">
                 {currentJob ? `${formatTicketId(currentJob.id)}: ${currentJob.service_type}` : 'No active field job right now'}
               </h3>
@@ -295,24 +295,24 @@ export default function TechnicianDashboard() {
 
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border border-surface-200 bg-surface-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Schedule</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Schedule</p>
                   <p className="mt-2 text-sm font-medium text-slate-900">{formatDateLabel(currentJob.scheduled_date)}</p>
-                  <p className="mt-1 text-xs text-slate-500">{formatTimeLabel(currentJob.scheduled_time) || formatTimeSlot(currentJob.scheduled_time_slot) || 'Time not set'}</p>
+                  <p className="mt-1 text-xs text-slate-500">{formatTimeLabel(currentJob.scheduled_time) || formatTimeSlot(currentJob.scheduled_time_slot) || 'Time TBD'}</p>
                 </div>
                 <div className="rounded-lg border border-surface-200 bg-surface-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Client</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Client</p>
                   <p className="mt-2 text-sm font-medium text-slate-900">{currentJob.client?.full_name || currentJob.client}</p>
                   <p className="mt-1 text-xs text-slate-500">{currentJob.priority || 'Normal'} priority</p>
                 </div>
                 <div className="rounded-lg border border-surface-200 bg-surface-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Address</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Address</p>
                   <p className="mt-2 text-sm font-medium text-slate-900">{currentJob.location || 'Location pending'}</p>
                 </div>
               </div>
 
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
                 <div className="rounded-lg border border-surface-200 bg-white p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Readiness Checklist</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Readiness Checklist</p>
                   <div className="mt-3 space-y-2">
                     {readinessItems.map((item) => (
                       <div key={item.label} className="flex items-center justify-between gap-3 text-sm">
@@ -328,7 +328,7 @@ export default function TechnicianDashboard() {
                   </div>
                 </div>
                 <div className="rounded-lg border border-surface-200 bg-white p-3">
-                  <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                     <FiPackage className="h-4 w-4 text-brand-500" />
                     Equipment Reminder
                   </p>
@@ -398,7 +398,7 @@ export default function TechnicianDashboard() {
 
           {nextJob && (
             <div className="mt-5 rounded-lg border border-brand-200 bg-brand-50 p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand-600">Up Next</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Up Next</p>
               <p className="mt-2 text-sm font-semibold text-navy-900">{formatTicketId(nextJob.id)}: {nextJob.service_type}</p>
               <p className="mt-1 text-sm text-slate-600">
                 {nextJob.client?.full_name || nextJob.client} - {formatDateLabel(nextJob.scheduled_date)}
@@ -412,7 +412,7 @@ export default function TechnicianDashboard() {
         <section className="card min-h-full p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">GPS Status</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">GPS Status</p>
               <h3 className="mt-2 text-xl font-semibold text-slate-900">Live Tracking</h3>
               <p className="mt-2 text-sm text-slate-500">Used for route visibility and dispatch.</p>
             </div>
@@ -426,12 +426,12 @@ export default function TechnicianDashboard() {
           <div className="mt-5 divide-y divide-surface-200 rounded-lg border border-surface-200 bg-surface-50">
             <div>
               <div className="p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Availability</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Availability</p>
                 <p className="mt-1 text-sm font-medium text-slate-900">{dashboard.technician?.is_available ? 'Available for dispatch' : 'Currently on a job'}</p>
               </div>
             </div>
             <div className="p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Coordinates</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Coordinates</p>
               <p className="mt-1 break-all text-sm font-medium text-slate-900">
                 {gpsLatitude !== null && gpsLongitude !== null ? `${gpsLatitude.toFixed(6)}, ${gpsLongitude.toFixed(6)}` : 'Waiting for GPS fix'}
               </p>
@@ -529,7 +529,7 @@ export default function TechnicianDashboard() {
                       <p className="mt-1 text-sm text-slate-600">{n.message}</p>
                     </div>
                     {n.status === 'unread' && (
-                      <span className="rounded-full bg-brand-500 px-2.5 py-1 text-[10px] font-semibold text-white">Unread</span>
+                      <span className="rounded-full bg-brand-500 px-2.5 py-1 text-xs font-semibold text-white">Unread</span>
                     )}
                   </div>
                   <p className="mt-2 text-xs text-slate-400">{formatNotificationTime(n.created_at)}</p>
@@ -580,7 +580,7 @@ export default function TechnicianDashboard() {
               </div>
               <div className="hidden overflow-hidden rounded-lg border border-surface-200 md:block">
               <table className="w-full table-fixed text-left text-sm">
-                <thead className="bg-surface-50 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                <thead className="bg-surface-50 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                   <tr>
                     <th className="w-[15%] px-4 py-3">Ticket</th>
                     <th className="w-[24%] px-4 py-3">Client</th>

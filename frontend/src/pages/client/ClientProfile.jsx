@@ -42,6 +42,7 @@ export default function ClientProfile() {
   const { user, updateCurrentUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [profileData, setProfileData] = useState(emptyProfile);
+  const [emailChangePassword, setEmailChangePassword] = useState('');
   const [profileImageFile, setProfileImageFile] = useState(null);
   const [profileImagePreview, setProfileImagePreview] = useState('');
   const [loading, setLoading] = useState(false);
@@ -93,10 +94,12 @@ export default function ClientProfile() {
       const emailChanged = profileData.email.trim().toLowerCase() !== String(user?.email || '').trim().toLowerCase();
       const updatedProfile = await updateUserProfile({
         ...profileData,
+        ...(emailChanged ? { current_password: emailChangePassword } : {}),
         ...(profileImageFile ? { profile_image: profileImageFile } : {}),
       });
       releaseObjectPreview(profileImagePreview);
       updateCurrentUser(updatedProfile);
+      setEmailChangePassword('');
       setProfileImageFile(null);
       setIsEditing(false);
       setMessage({
@@ -184,6 +187,21 @@ export default function ClientProfile() {
                   <input type="email" name="email" value={profileData.email} onChange={handleProfileChange} autoComplete="email" className={`${inputClass} mt-1`} />
                   <span className="mt-1 block text-xs font-normal text-slate-500">A new address must be verified before it replaces your current email.</span>
                 </label>
+                {profileData.email.trim().toLowerCase() !== String(user?.email || '').trim().toLowerCase() ? (
+                  <label className="block text-sm font-medium text-slate-700">
+                    Current Password
+                    <input
+                      type="password"
+                      name="current_password"
+                      value={emailChangePassword}
+                      onChange={(event) => setEmailChangePassword(event.target.value)}
+                      autoComplete="current-password"
+                      required
+                      className={`${inputClass} mt-1`}
+                    />
+                    <span className="mt-1 block text-xs font-normal text-slate-500">Required to change the email address on this account.</span>
+                  </label>
+                ) : null}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block text-sm font-medium text-slate-700">
                     Phone Number

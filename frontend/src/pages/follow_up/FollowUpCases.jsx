@@ -479,7 +479,7 @@ export default function FollowUpCases() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Follow-up {formatCaseId(caseItem.id)}</span>
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${TYPE_CHIP_CLASSES[caseItem.case_type] || TYPE_CHIP_CLASSES.follow_up}`}>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${TYPE_CHIP_CLASSES[caseItem.case_type] || TYPE_CHIP_CLASSES.follow_up}`}>
                             {formatCaseType(caseItem.case_type)}
                           </span>
                         </div>

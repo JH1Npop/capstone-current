@@ -701,7 +701,7 @@ export default function AdminActivityLogs() {
                           <div className="mt-4 grid gap-4 lg:grid-cols-2">
                             <DetailItem label="Browser / device" value={log.userAgent || 'Not captured'} />
                             <div className="min-w-0">
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Event metadata</p>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Event metadata</p>
                               <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-surface-200 bg-white p-3 text-xs text-slate-700">{metadataText(log.metadata)}</pre>
                             </div>
                           </div>
@@ -750,7 +750,7 @@ export default function AdminActivityLogs() {
 function DetailItem({ label, value, strong = false }) {
   return (
     <div className="min-w-0">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
       <p className={`mt-1 break-words text-sm ${strong ? 'font-medium text-slate-900' : 'text-slate-700'}`}>
         {value || '-'}
       </p>

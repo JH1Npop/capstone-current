@@ -469,7 +469,7 @@ export default function TechnicianMapNavigation() {
             <button
               type="button"
               onClick={watching ? stopLocationSharing : startLocationSharing}
-              className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-white ${watching ? 'bg-slate-700 hover:bg-slate-800' : 'bg-blue-600 hover:bg-blue-700'}`}
+              className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-white ${watching ? 'bg-slate-700 hover:bg-slate-800' : 'bg-brand-600 hover:bg-brand-700'}`}
             >
               {watching ? 'Stop sharing' : 'Start location sharing'}
             </button>

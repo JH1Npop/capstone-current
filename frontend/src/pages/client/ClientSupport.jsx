@@ -6,6 +6,7 @@ import { fetchServiceTickets } from '../../api/services';
 import { useAuth } from '../../context/AuthContext';
 import { FiMessageSquare, FiRefreshCw } from 'react-icons/fi';
 import { formatSupportCaseId, formatTicketId } from '../../utils/roleIds';
+import { startVisibleInterval } from '../../utils/visibleInterval';
 
 const statusLabels = {
   pending: 'Pending Review',
@@ -117,10 +118,9 @@ export default function ClientSupport() {
 
   useEffect(() => {
     loadSupportMessages(false);
-    const interval = window.setInterval(() => {
+    return startVisibleInterval(() => {
       if (supportGroupKey) loadSupportMessages(true);
     }, 5000);
-    return () => window.clearInterval(interval);
   }, [supportGroupKey]);
 
   const handleSendSupportMessage = async () => {
@@ -317,13 +317,13 @@ export default function ClientSupport() {
                 return (
                   <div key={message.id} className={`flex ${sentByClient ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-6 shadow-sm ${
-                      sentByClient ? 'bg-blue-600 text-white' : 'bg-white text-slate-800'
+                      sentByClient ? 'bg-brand-600 text-white' : 'bg-white text-slate-800'
                     }`}>
                       <div className={`mb-1 text-xs font-semibold ${sentByClient ? 'text-blue-100' : 'text-slate-500'}`}>
                         {sentByClient ? 'You' : (message.senderName || 'Customer Service')}
                       </div>
                       <p>{message.text}</p>
-                      <div className={`mt-1 text-[11px] ${sentByClient ? 'text-blue-100' : 'text-slate-400'}`}>
+                      <div className={`mt-1 text-xs ${sentByClient ? 'text-blue-100' : 'text-slate-400'}`}>
                         {message.timestamp ? new Date(message.timestamp).toLocaleString() : ''}
                       </div>
                     </div>
@@ -345,7 +345,7 @@ export default function ClientSupport() {
               type="button"
               onClick={handleSendSupportMessage}
               disabled={messageSending || !supportText.trim()}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <FiMessageSquare size={16} />
               {messageSending ? 'Sending...' : 'Send'}

@@ -125,7 +125,7 @@ export default function TurnoverAcceptanceForm({ ticketId, userRole, onSuccess }
         <button
           onClick={handleSave}
           disabled={submitting}
-          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
+          className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition font-medium disabled:opacity-50"
         >
           <FiSave />
           Save Turnover Record

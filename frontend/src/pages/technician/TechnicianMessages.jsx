@@ -12,6 +12,7 @@ import {
 } from '../../api/api';
 import { FiArrowLeft, FiDownload, FiEdit2, FiImage, FiSend, FiTrash2, FiUsers, FiX } from 'react-icons/fi';
 import { formatTicketId } from '../../utils/roleIds';
+import { startVisibleInterval } from '../../utils/visibleInterval';
 
 const STAFF_GROUP_ROOM = {
   key: 'group:staff',
@@ -177,8 +178,7 @@ export default function TechnicianMessages() {
   useEffect(() => {
     if (!user) return undefined;
     loadMessages();
-    const interval = window.setInterval(() => loadMessages({ silent: true }), 5000);
-    return () => window.clearInterval(interval);
+    return startVisibleInterval(() => loadMessages({ silent: true }), 5000);
   }, [user]);
 
   useEffect(() => {
@@ -324,7 +324,7 @@ export default function TechnicianMessages() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="truncate text-sm font-semibold text-slate-950">{room.name}</div>
-                          {room.timestamp ? <div className="text-[11px] text-slate-400">{formatTime(room.timestamp)}</div> : null}
+                          {room.timestamp ? <div className="text-xs text-slate-400">{formatTime(room.timestamp)}</div> : null}
                         </div>
                         <div className="mt-0.5 truncate text-xs text-slate-500">{room.subtitle}</div>
                         <div className="mt-1 truncate text-sm text-slate-500">{room.lastMessage}</div>
@@ -416,7 +416,7 @@ export default function TechnicianMessages() {
                               </>
                             )}
                           </div>
-                          <div className={`mt-1 flex items-center gap-2 text-[11px] ${sentByCurrentUser ? 'justify-end text-slate-400' : 'ml-1 text-slate-400'}`}>
+                          <div className={`mt-1 flex items-center gap-2 text-xs ${sentByCurrentUser ? 'justify-end text-slate-400' : 'ml-1 text-slate-400'}`}>
                             <span>{formatTime(message.timestamp)}</span>
                             {message.editedAt && !message.isDeleted ? <span>Edited</span> : null}
                             {sentByCurrentUser && !message.isDeleted ? (

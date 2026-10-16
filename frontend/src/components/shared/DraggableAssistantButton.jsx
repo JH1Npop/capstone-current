@@ -19,6 +19,17 @@ export default function DraggableAssistantButton({ ariaLabel, storageKey, onOpen
   const positionRef = useRef(null);
   const suppressClickRef = useRef(false);
   const [position, setPosition] = useState(null);
+  const [showHint, setShowHint] = useState(false);
+  const hintKey = `${storageKey}:hint-shown`;
+
+  const dismissHint = () => {
+    setShowHint(false);
+    try {
+      window.localStorage.setItem(hintKey, '1');
+    } catch {
+      // Without storage the hint may appear again next session; that is harmless.
+    }
+  };
 
   const updatePosition = (nextPosition) => {
     const boundedPosition = clampPosition(nextPosition, buttonRef.current);
@@ -38,6 +49,20 @@ export default function DraggableAssistantButton({ ariaLabel, storageKey, onOpen
   }, [storageKey]);
 
   useEffect(() => {
+    // Tell first-time users the button can be moved, once per browser.
+    let alreadyShown = false;
+    try {
+      alreadyShown = Boolean(window.localStorage.getItem(hintKey) || window.localStorage.getItem(storageKey));
+    } catch {
+      alreadyShown = false;
+    }
+    if (alreadyShown) return undefined;
+    setShowHint(true);
+    const timerId = window.setTimeout(dismissHint, 7000);
+    return () => window.clearTimeout(timerId);
+  }, [hintKey, storageKey]);
+
+  useEffect(() => {
     const keepInsideViewport = () => {
       if (positionRef.current) updatePosition(positionRef.current);
     };
@@ -47,6 +72,7 @@ export default function DraggableAssistantButton({ ariaLabel, storageKey, onOpen
 
   const handlePointerDown = (event) => {
     if (event.button !== 0 && event.pointerType !== 'touch') return;
+    if (showHint) dismissHint();
     const rect = buttonRef.current.getBoundingClientRect();
     dragStateRef.current = {
       pointerId: event.pointerId,
@@ -95,6 +121,15 @@ export default function DraggableAssistantButton({ ariaLabel, storageKey, onOpen
   };
 
   return (
+    <>
+      {showHint && !position ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed bottom-[5.25rem] right-3 z-40 max-w-[12rem] rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white shadow-lg sm:bottom-[9.25rem] sm:right-5 lg:bottom-[6.25rem] lg:right-8"
+        >
+          Drag this button to move it out of the way. Tap to open.
+        </div>
+      ) : null}
     <button
       ref={buttonRef}
       type="button"
@@ -110,5 +145,6 @@ export default function DraggableAssistantButton({ ariaLabel, storageKey, onOpen
     >
       {children}
     </button>
+    </>
   );
 }

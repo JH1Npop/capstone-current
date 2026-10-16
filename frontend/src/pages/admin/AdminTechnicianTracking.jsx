@@ -10,6 +10,7 @@ import { fetchTechnicianLocationHistory, fetchTrackingData } from '../../api/api
 import { resolveServiceRegion } from '../../utils/mapRegion';
 import { formatTicketId } from '../../utils/roleIds';
 import MapTileLayer from '../../components/maps/MapTileLayer';
+import { startVisibleInterval } from '../../utils/visibleInterval';
 
 const TECH_PIN_COLORS = ['#2563eb', '#16a34a', '#f97316', '#8b5cf6', '#0891b2', '#e11d48'];
 const TECH_STATUS_RING = {
@@ -245,9 +246,7 @@ export default function AdminTechnicianTracking() {
 
   useEffect(() => {
     loadTrackingData({ showLoading: true });
-    const refreshTimer = window.setInterval(() => loadTrackingData(), TRACKING_REFRESH_MS);
-
-    return () => window.clearInterval(refreshTimer);
+    return startVisibleInterval(() => loadTrackingData(), TRACKING_REFRESH_MS);
   }, [loadTrackingData]);
 
   const trackingRegion = useMemo(
@@ -503,19 +502,19 @@ export default function AdminTechnicianTracking() {
 
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             <div className="rounded-lg bg-slate-50 px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Online technicians</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Online technicians</div>
               <div className="text-lg font-bold text-emerald-700">{onlineTechnicians}</div>
             </div>
             <div className="rounded-lg bg-slate-50 px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">On active jobs</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">On active jobs</div>
               <div className="text-lg font-bold text-blue-700">{techniciansOnJobs}</div>
             </div>
             <div className="rounded-lg bg-slate-50 px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">GPS attention</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">GPS attention</div>
               <div className="text-lg font-bold text-amber-600">{gpsAttentionCount}</div>
             </div>
             <div className="rounded-lg bg-slate-50 px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Job sites missing coordinates</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Job sites missing coordinates</div>
               <div className="text-lg font-bold text-rose-600">{ticketsWithoutCoords}</div>
             </div>
           </div>
@@ -583,18 +582,18 @@ export default function AdminTechnicianTracking() {
                 >
                   <Popup minWidth={220} maxWidth={250}>
                     <div className="w-[220px] text-xs text-slate-700">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600">Selected route</p>
+                      <p className="text-xs font-bold uppercase tracking-wide text-blue-600">Selected route</p>
                       <p className="mt-1 font-bold text-slate-950">{route.tech.name}</p>
                       <p className="mt-0.5 truncate" title={`${route.ticket.client} · ${route.ticket.service}`}>
                         To {route.ticket.client} · {route.ticket.service}
                       </p>
                       <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-200 pt-2">
                         <div>
-                          <p className="text-[10px] uppercase text-slate-400">Live direct</p>
+                          <p className="text-xs uppercase text-slate-400">Live direct</p>
                           <p className="font-semibold text-slate-900">{formatDistance(directDistance)}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] uppercase text-slate-400">Road route</p>
+                          <p className="text-xs uppercase text-slate-400">Road route</p>
                           <p className="font-semibold text-slate-900">{route.isFallback ? 'Unavailable' : formatDistance(route.ticket.routeDistance)}</p>
                         </div>
                       </div>
@@ -627,7 +626,7 @@ export default function AdminTechnicianTracking() {
                     <div className="w-[210px] text-xs text-slate-700">
                       <div className="flex items-center justify-between gap-2">
                         <strong className="truncate text-sm text-slate-950">{tech.name}</strong>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${tech.movementState === 'moving' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${tech.movementState === 'moving' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                           {formatMovement(tech)}
                         </span>
                       </div>
@@ -652,13 +651,13 @@ export default function AdminTechnicianTracking() {
                       <header className="pb-1.5">
                         <div className="flex items-center justify-between gap-2">
                           <h3 className="font-bold text-slate-950">{formatTicketId(ticket.id)}</h3>
-                          <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${statusPresentation.className}`}>
+                          <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-xs font-bold ${statusPresentation.className}`}>
                             {statusPresentation.label}
                           </span>
                         </div>
                       </header>
 
-                      <dl className="space-y-1.5 border-t border-slate-200 pt-1.5 text-[11px]">
+                      <dl className="space-y-1.5 border-t border-slate-200 pt-1.5 text-xs">
                         <div className="flex min-w-0 gap-2">
                           <dt className="w-10 shrink-0 text-slate-400">Client</dt>
                           <dd className="truncate font-semibold text-slate-900" title={ticket.client}>{ticket.client}</dd>
@@ -769,7 +768,7 @@ export default function AdminTechnicianTracking() {
           <div className="border-b border-slate-200 px-4 py-3">
             <h3 className="text-base font-semibold text-slate-900">Active Job Sites</h3>
           </div>
-          <div className="hidden grid-cols-[minmax(14rem,1.3fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_5.5rem] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid">
+          <div className="hidden grid-cols-[minmax(14rem,1.3fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_5.5rem] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid">
             <span>Destination</span>
             <span>Crew</span>
             <span>Route</span>
@@ -864,7 +863,7 @@ export default function AdminTechnicianTracking() {
                           }}
                           disabled={!techHasCoords}
                           title={techHasCoords ? `Center the map on ${tech.name}` : `${tech.name} has no live coordinates yet`}
-                          className={`rounded px-2 py-1 text-xs font-semibold text-white ${isFocused ? 'bg-blue-800' : 'bg-blue-600'} disabled:cursor-not-allowed disabled:bg-slate-300`}
+                          className={`rounded px-2 py-1 text-xs font-semibold text-white ${isFocused ? 'bg-blue-800' : 'bg-brand-600'} disabled:cursor-not-allowed disabled:bg-slate-300`}
                         >
                           {techHasCoords ? (isFocused ? 'Centered' : 'Center') : 'No GPS'}
                         </button>
@@ -886,7 +885,7 @@ export default function AdminTechnicianTracking() {
 function TrackingFact({ label, value }) {
   return (
     <div className="min-w-0 rounded-lg bg-slate-50 p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 break-words text-sm font-medium text-slate-900">{value}</p>
     </div>
   );

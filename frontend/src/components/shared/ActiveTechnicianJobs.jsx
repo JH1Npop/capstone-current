@@ -75,7 +75,7 @@ export default function ActiveTechnicianJobs({ jobs = [], title = 'Active Techni
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${
                     job.progress_track === 'inspection'
                       ? 'bg-violet-50 text-violet-700'
                       : 'bg-blue-50 text-blue-700'
@@ -101,7 +101,7 @@ export default function ActiveTechnicianJobs({ jobs = [], title = 'Active Techni
                   aria-valuenow={job.progress ?? 0}
                 />
               </div>
-              <p className="mt-1.5 text-[11px] text-slate-400">Status checkpoint · 100% only after completion</p>
+              <p className="mt-1.5 text-xs text-slate-400">Status checkpoint · 100% only after completion</p>
             </div>
 
             {/* Bottom row: Location and Start Time */}

@@ -16,7 +16,7 @@ import { formatRequestId, formatTicketId } from '../../utils/roleIds';
 
 const Detail = ({ icon: Icon, label, value, wide = false }) => (
   <div className={`rounded-xl border border-slate-200 bg-slate-50 p-3 ${wide ? 'sm:col-span-2' : ''}`}>
-    <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
       <Icon className="text-brand-600" /> {label}
     </div>
     <div className="mt-1.5 whitespace-pre-wrap break-words text-sm font-medium text-slate-800">{value || 'Not provided'}</div>

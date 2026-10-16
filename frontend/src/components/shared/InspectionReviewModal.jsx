@@ -124,15 +124,15 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
 
           <div className="mb-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-surface-200 bg-surface-50 p-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Review Scope</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Review Scope</div>
               <div className="mt-2 text-sm font-semibold text-slate-900">Choose the next system action</div>
             </div>
             <div className="rounded-2xl border border-surface-200 bg-surface-50 p-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Ticket</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Ticket</div>
               <div className="mt-2 text-sm font-semibold text-slate-900">{ticketLabel}</div>
             </div>
             <div className="rounded-2xl border border-surface-200 bg-surface-50 p-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Client</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Client</div>
               <div className="mt-2 text-sm font-semibold text-slate-900">{clientLabel}</div>
             </div>
           </div>

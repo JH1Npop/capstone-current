@@ -267,6 +267,7 @@ export const normalizeTicket = (ticket) => {
     clientAddress,
     requestSource,
     requestSourceLabel,
+    requiresSiteInspection: Boolean(requestDetails?.service_requires_site_inspection),
     serviceTypeId: requestDetails?.service_type || ticket?.service_type || ticket?.serviceTypeId || null,
     serviceItems,
     service: requestDetails?.service_summary || serviceNames.join(', ') || requestDetails?.service_type_name || ticket?.service || 'Service',

@@ -173,6 +173,8 @@ export default function AdminCalendar() {
   const [selectedDateKey, setSelectedDateKey] = useState(() => getLocalDateKey(new Date()));
   const [serviceTypes, setServiceTypes] = useState([]);
   const [filters, setFilters] = useState({ service: 'all', technician: 'all', status: 'all', workflow: 'all' });
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const activeFilterCount = Object.values(filters).filter((value) => value !== 'all').length;
 
   const monthDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
   const monthRange = useMemo(() => getMonthRange(calendarMonth), [calendarMonth]);
@@ -334,7 +336,7 @@ export default function AdminCalendar() {
           ['Needs reschedule', calendarSummary.reschedule, 'text-rose-700'],
           ['Time conflicts', calendarSummary.conflicts, calendarSummary.conflicts ? 'text-rose-700' : 'text-emerald-700'],
         ].map(([label, value, tone]) => (
-          <div key={label} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+          <div key={label} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm last:col-span-2 lg:last:col-span-1">
             <p className="text-xs font-medium text-slate-500">{label}</p>
             <p className={`mt-1 text-2xl font-bold ${tone}`}>{value}</p>
           </div>
@@ -373,30 +375,40 @@ export default function AdminCalendar() {
         </div>
 
         <div className="border-b border-slate-200 bg-white px-4 py-3">
-          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500"><FiFilter /> Filter schedule</div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500"><FiFilter /> Filter schedule</div>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen((open) => !open)}
+              aria-expanded={mobileFiltersOpen}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:hidden"
+            >
+              {mobileFiltersOpen ? 'Hide filters' : `Show filters${activeFilterCount ? ` (${activeFilterCount})` : ''}`}
+            </button>
+          </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             <input type="date" value={selectedDateKey} onChange={(event) => selectMobileDate(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 md:hidden" aria-label="Selected calendar date" />
-            <select value={filters.workflow} onChange={(event) => setFilters((current) => ({ ...current, workflow: event.target.value }))} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700" aria-label="Filter by workflow">
+            <select value={filters.workflow} onChange={(event) => setFilters((current) => ({ ...current, workflow: event.target.value }))} className={`${mobileFiltersOpen ? 'block' : 'hidden'} h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 sm:block`} aria-label="Filter by workflow">
               <option value="all">All work types</option>
               <option value="request">Client requests</option>
               <option value="inspection">Inspections</option>
               <option value="installation">Service jobs</option>
               <option value="maintenance">Maintenance</option>
             </select>
-            <select value={filters.service} onChange={(event) => setFilters((current) => ({ ...current, service: event.target.value }))} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700" aria-label="Filter by service">
+            <select value={filters.service} onChange={(event) => setFilters((current) => ({ ...current, service: event.target.value }))} className={`${mobileFiltersOpen ? 'block' : 'hidden'} h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 sm:block`} aria-label="Filter by service">
               <option value="all">All services</option>
               {serviceColorLegend.map((service) => <option key={service.name} value={service.name}>{service.name}</option>)}
             </select>
-            <select value={filters.technician} onChange={(event) => setFilters((current) => ({ ...current, technician: event.target.value }))} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700" aria-label="Filter by technician">
+            <select value={filters.technician} onChange={(event) => setFilters((current) => ({ ...current, technician: event.target.value }))} className={`${mobileFiltersOpen ? 'block' : 'hidden'} h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 sm:block`} aria-label="Filter by technician">
               <option value="all">All technicians</option>
               <option value="unassigned">Unassigned only</option>
               {technicianOptions.map((name) => <option key={name} value={name}>{name}</option>)}
             </select>
-            <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700" aria-label="Filter by status">
+            <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))} className={`${mobileFiltersOpen ? 'block' : 'hidden'} h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 sm:block`} aria-label="Filter by status">
               <option value="all">All statuses</option>
               {statusOptions.map((statusValue) => <option key={statusValue} value={statusValue}>{getStatusStyle(statusValue).label}</option>)}
             </select>
-            <button type="button" onClick={() => setFilters({ service: 'all', technician: 'all', status: 'all', workflow: 'all' })} className="h-10 rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100">Clear filters</button>
+            <button type="button" onClick={() => setFilters({ service: 'all', technician: 'all', status: 'all', workflow: 'all' })} className={`${mobileFiltersOpen ? 'block' : 'hidden'} h-10 rounded-lg border border-slate-300 bg-slate-50 px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 sm:block`}>Clear filters</button>
           </div>
         </div>
 
@@ -428,7 +440,7 @@ export default function AdminCalendar() {
           <>
             <div className="grid grid-cols-7 border-b border-slate-200 md:hidden" aria-label="Mobile month calendar">
               {WEEKDAYS.map((day) => (
-                <div key={`mobile-${day}`} className="bg-slate-900 px-1 py-2 text-center text-[10px] font-semibold uppercase text-white">
+                <div key={`mobile-${day}`} className="bg-slate-900 px-1 py-2 text-center text-xs font-semibold uppercase text-white">
                   {day.slice(0, 1)}
                 </div>
               ))}
@@ -453,11 +465,11 @@ export default function AdminCalendar() {
                           : 'bg-slate-50 text-slate-400'
                     }`}
                   >
-                    <span className={`flex h-6 w-6 items-center justify-center rounded-full font-semibold ${isToday ? 'bg-blue-600 text-white' : ''}`}>
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-full font-semibold ${isToday ? 'bg-brand-600 text-white' : ''}`}>
                       {day.getDate()}
                     </span>
                     {dayEvents.length > 0 ? (
-                      <span className="mt-1 min-w-4 rounded-full bg-amber-100 px-1 text-[10px] font-bold text-amber-800">
+                      <span className="mt-1 min-w-4 rounded-full bg-amber-100 px-1 text-xs font-bold text-amber-800">
                         {dayEvents.length}
                       </span>
                     ) : (
@@ -503,7 +515,7 @@ export default function AdminCalendar() {
                         {day.getDate()}
                       </span>
                       {dayEvents.length > 0 && (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
                           {dayEvents.length}
                         </span>
                       )}
@@ -522,7 +534,7 @@ export default function AdminCalendar() {
                               openEvent(event);
                             }}
                             style={getServiceColorStyle(event)}
-                            className="block w-full rounded-md border border-l-8 border-slate-200 px-1.5 py-1 text-left text-[11px] text-slate-800 transition hover:border-slate-300 hover:shadow-sm"
+                            className="block w-full rounded-md border border-l-8 border-slate-200 px-1.5 py-1 text-left text-xs text-slate-800 transition hover:border-slate-300 hover:shadow-sm"
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
@@ -533,10 +545,10 @@ export default function AdminCalendar() {
                                   />
                                   <span className="truncate">{event.service_type || 'Service'}</span>
                                 </p>
-                                <p className="truncate text-[10px] opacity-75">{formatEventTime(event)} · {event.client || 'Client'}</p>
+                                <p className="truncate text-xs opacity-75">{formatEventTime(event)} · {event.client || 'Client'}</p>
                               </div>
                               <span
-                                className="mt-0.5 shrink-0 rounded bg-white/75 px-1 text-[9px] font-semibold uppercase text-slate-500"
+                                className="mt-0.5 shrink-0 rounded bg-white/75 px-1 text-xs font-semibold uppercase text-slate-500"
                                 title={style.label}
                               >
                                 {getCompactStatusLabel(event.calendar_status)}
@@ -553,7 +565,7 @@ export default function AdminCalendar() {
                             clickEvent.stopPropagation();
                             setSelectedDateKey(key);
                           }}
-                          className="w-full rounded-md bg-slate-100 px-1.5 py-1 text-left text-[10px] font-semibold text-slate-500 hover:bg-slate-200"
+                          className="w-full rounded-md bg-slate-100 px-1.5 py-1 text-left text-xs font-semibold text-slate-500 hover:bg-slate-200"
                         >
                           +{dayEvents.length - visibleEvents.length} more
                         </button>
@@ -620,10 +632,10 @@ export default function AdminCalendar() {
                       {style.label}
                     </span>
                     {event.is_rescheduled ? (
-                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">Rescheduled</span>
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">Rescheduled</span>
                     ) : null}
                     {conflictEventIds.has(event.id) ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700"><FiAlertTriangle /> Conflict</span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700"><FiAlertTriangle /> Conflict</span>
                     ) : null}
                   </div>
                 </button>

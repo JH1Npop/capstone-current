@@ -509,7 +509,7 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
     <div className="space-y-3 pb-3">
       {displayMenu.sections.map((section) => (
         <div key={section.title}>
-          <div className={`mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-brand-200/70 ${collapsed ? 'lg:sr-only' : ''}`}>
+          <div className={`mb-1.5 px-2 text-xs font-semibold uppercase tracking-[0.08em] text-brand-200/70 ${collapsed ? 'lg:sr-only' : ''}`}>
             {section.title}
           </div>
 
@@ -582,7 +582,7 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
                   {item.badge !== undefined &&
                     item.badge !== null && (
                       <span
-                        className={`${collapsed ? 'lg:absolute lg:right-1 lg:top-0 lg:min-w-[16px] lg:px-1 lg:text-[9px]' : 'ml-auto'} inline-flex min-w-[22px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        className={`${collapsed ? 'lg:absolute lg:right-1 lg:top-0 lg:min-w-[16px] lg:px-1 lg:text-xs' : 'ml-auto'} inline-flex min-w-[22px] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold ${
                           itemIsActive && item.badgeTone === 'red'
                             ? 'bg-red-500 text-white'
                             : itemIsActive
@@ -624,7 +624,7 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
         <p className="truncate text-[12px] font-medium text-white">
           {displayName}
         </p>
-        <p className="truncate text-[10px] uppercase text-brand-100/75">
+        <p className="truncate text-xs uppercase text-brand-100/75">
           {role}
         </p>
       </div>
@@ -634,13 +634,13 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
       ref={logoutButtonRef}
       type="button"
       onClick={() => setShowLogoutConfirm(true)}
-      className={`mt-2.5 w-full rounded-[8px] bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white ring-1 ring-white/10 transition hover:bg-white/15 ${collapsed ? 'lg:px-2 lg:text-[0px]' : ''}`}
+      className={`mt-2.5 w-full rounded-[8px] bg-white/10 px-3 py-1.5 text-xs font-medium text-white ring-1 ring-white/10 transition hover:bg-white/15 ${collapsed ? 'lg:px-2 lg:text-[0px]' : ''}`}
       title={collapsed ? 'Logout' : undefined}
       aria-haspopup="dialog"
       aria-expanded={showLogoutConfirm}
     >
       <span className={collapsed ? 'lg:sr-only' : ''}>Logout</span>
-      <span className={`hidden text-[11px] ${collapsed ? 'lg:inline' : ''}`}>Out</span>
+      <span className={`hidden text-xs ${collapsed ? 'lg:inline' : ''}`}>Out</span>
     </button>
 
   </div>

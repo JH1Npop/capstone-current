@@ -509,6 +509,7 @@ export const createService = async (service) => {
       estimated_cost: Number(service.estimated_cost || 0),
       max_daily_assignments: Number(service.max_daily_assignments || 1),
       is_active: service.is_active !== false,
+      requires_site_inspection: Boolean(service.requires_site_inspection),
       procedures: Array.isArray(service.procedures)
         ? service.procedures
             .map((procedure, index) => ({
@@ -555,6 +556,7 @@ export const updateService = async (id, updates) => {
       estimated_cost: Number(updates.estimated_cost || 0),
       max_daily_assignments: Number(updates.max_daily_assignments || 1),
       is_active: updates.is_active !== false,
+      requires_site_inspection: Boolean(updates.requires_site_inspection),
       procedures: Array.isArray(updates.procedures)
         ? updates.procedures
             .map((procedure, index) => ({

@@ -332,6 +332,22 @@ textarea {
   white-space: nowrap;
 }
 
+/* Analytics tables scroll horizontally instead of truncating every cell. */
+.admin-workspace-density table.analytics-table {
+  table-layout: auto;
+  min-width: max-content !important;
+}
+
+.admin-workspace-density table.analytics-table-auto {
+  width: auto;
+}
+
+.admin-workspace-density table.analytics-table th,
+.admin-workspace-density table.analytics-table td {
+  max-width: none;
+  overflow: visible;
+}
+
 .admin-workspace-density table thead th {
   font-size: 11px;
   line-height: 1rem;

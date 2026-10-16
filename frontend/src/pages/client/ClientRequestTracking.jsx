@@ -239,12 +239,12 @@ export default function ClientRequestTracking() {
                     <div className="space-y-3 px-4 py-3">
                       <div className="flex flex-wrap gap-1.5">
                         {request.priority && (
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-slate-600">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold capitalize text-slate-600">
                             {request.priority}
                           </span>
                         )}
                         {request.request_source_label && (
-                          <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                          <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
                             {request.request_source_label}
                           </span>
                         )}
@@ -259,7 +259,7 @@ export default function ClientRequestTracking() {
 
                       <dl className="grid grid-cols-2 gap-x-3 gap-y-3 rounded-xl bg-slate-50 p-3 text-sm">
                         <div className="min-w-0">
-                          <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                          <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                             <FiCalendar size={13} /> Schedule
                           </dt>
                           <dd className="mt-1 font-medium text-slate-700">
@@ -267,7 +267,7 @@ export default function ClientRequestTracking() {
                           </dd>
                         </div>
                         <div className="min-w-0">
-                          <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                          <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                             <FiUser size={13} /> Technician
                           </dt>
                           <dd className="mt-1 truncate font-medium text-slate-700">
@@ -275,13 +275,13 @@ export default function ClientRequestTracking() {
                           </dd>
                         </div>
                         <div className="min-w-0">
-                          <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ticket</dt>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ticket</dt>
                           <dd className="mt-1 font-medium text-slate-700">
                             {request.ticket_id ? formatTicketId(request.ticket_id) : 'Not created'}
                           </dd>
                         </div>
                         <div className="min-w-0">
-                          <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Requested</dt>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Requested</dt>
                           <dd className="mt-1 font-medium text-slate-700">{formatDate(request.request_date)}</dd>
                         </div>
                       </dl>
@@ -349,12 +349,12 @@ export default function ClientRequestTracking() {
                           </button>
                           <div className="mt-1 flex flex-wrap gap-1.5">
                             {request.priority && (
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-slate-600">
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold capitalize text-slate-600">
                                 {request.priority}
                               </span>
                             )}
                             {request.request_source_label && (
-                              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
                                 {request.request_source_label}
                               </span>
                             )}

@@ -12,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { FiCheckCircle, FiClock, FiMessageSquare, FiRefreshCw, FiSend } from 'react-icons/fi';
 import { formatSupportCaseId } from '../../utils/roleIds';
+import { startVisibleInterval } from '../../utils/visibleInterval';
 
 const CLOSED_STATUSES = ['resolved', 'closed'];
 
@@ -112,10 +113,9 @@ export default function AdminClientSupport() {
 
   useEffect(() => {
     load(false);
-    const interval = window.setInterval(() => {
+    return startVisibleInterval(() => {
       load(true);
     }, 5000);
-    return () => window.clearInterval(interval);
   }, [user?.username]);
 
   useEffect(() => {
@@ -326,9 +326,9 @@ export default function AdminClientSupport() {
                         <div className={`max-w-[86%] rounded-2xl px-4 py-2.5 shadow-sm ${
                           sentByStaff ? 'rounded-br-md bg-sky-600 text-white' : 'rounded-bl-md bg-white text-slate-950'
                         }`}>
-                          <p className="mb-1 text-[11px] font-semibold opacity-70">{sentByStaff ? 'You' : message.senderName}</p>
+                          <p className="mb-1 text-xs font-semibold opacity-70">{sentByStaff ? 'You' : message.senderName}</p>
                           <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.isDeleted ? 'Message unsent' : message.text}</p>
-                          <p className={`mt-1 text-[11px] ${sentByStaff ? 'text-sky-100' : 'text-slate-400'}`}>{formatTime(message.timestamp)}</p>
+                          <p className={`mt-1 text-xs ${sentByStaff ? 'text-sky-100' : 'text-slate-400'}`}>{formatTime(message.timestamp)}</p>
                         </div>
                       </div>
                     );

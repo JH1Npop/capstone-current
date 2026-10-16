@@ -7,6 +7,7 @@ import {
   markNotificationAsRead,
 } from '../api/api';
 import { useAuth } from './AuthContext';
+import { startVisibleInterval } from '../utils/visibleInterval';
 
 const NotificationContext = createContext(null);
 const NOTIFICATION_REFRESH_MS = 25_000;
@@ -16,6 +17,11 @@ export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const requestVersion = useRef(0);
+  const unreadCountRef = useRef(null);
+
+  useEffect(() => {
+    unreadCountRef.current = unreadCount;
+  }, [unreadCount]);
 
   const refreshNotifications = useCallback(async () => {
     if (!user?.id) return;
@@ -30,10 +36,21 @@ export function NotificationProvider({ children }) {
         [...items].sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0)),
       );
       setUnreadCount(Number(count) || 0);
+      unreadCountRef.current = Number(count) || 0;
     } catch {
       // Preserve the last known shell state through a transient refresh failure.
     }
   }, [user?.id]);
+
+  const pollNotifications = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const count = Number(await getUnreadNotificationCount()) || 0;
+      if (count !== unreadCountRef.current) await refreshNotifications();
+    } catch {
+      // Keep the current list; the next poll retries.
+    }
+  }, [refreshNotifications, user?.id]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -44,14 +61,14 @@ export function NotificationProvider({ children }) {
     }
 
     refreshNotifications();
-    const intervalId = window.setInterval(refreshNotifications, NOTIFICATION_REFRESH_MS);
+    const stopPolling = startVisibleInterval(pollNotifications, NOTIFICATION_REFRESH_MS);
     window.addEventListener('afn:notifications-updated', refreshNotifications);
     return () => {
       requestVersion.current += 1;
-      window.clearInterval(intervalId);
+      stopPolling();
       window.removeEventListener('afn:notifications-updated', refreshNotifications);
     };
-  }, [refreshNotifications, user?.id]);
+  }, [pollNotifications, refreshNotifications, user?.id]);
 
   const markNotificationRead = useCallback(async (notificationId) => {
     await markNotificationAsRead(notificationId);

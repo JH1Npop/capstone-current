@@ -2468,7 +2468,7 @@ function TextField({ label, value, onChange, type = 'text' }) {
 
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</span>
+      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</span>
       {type === 'date' ? (
         <input
           type={type}
@@ -3507,7 +3507,7 @@ export default function AdminDocuments() {
             <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
               <div className="grid gap-3">
                 <label className="block">
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Ticket</span>
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Ticket</span>
                   <div className="relative" ref={dropdownRef}>
                     <div 
                       className="flex h-10 w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100 cursor-text"
@@ -3598,7 +3598,7 @@ export default function AdminDocuments() {
                   </div>
                 ) : null}
                 <label className="block">
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Paper Size</span>
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Paper Size</span>
                   <select
                     value={paperSize}
                     onChange={(event) => setPaperSize(event.target.value)}
@@ -3611,7 +3611,7 @@ export default function AdminDocuments() {
                 </label>
                 {activeTemplate === 'field_service_report' && (documentPrefill?.field_service_reports?.length || 0) > 0 ? (
                   <label className="block">
-                    <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Service Report Source</span>
+                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Service Report Source</span>
                     <select
                       value={selectedFieldServiceReportId}
                       onChange={(event) => setSelectedFieldServiceReportId(event.target.value)}
@@ -3636,7 +3636,7 @@ export default function AdminDocuments() {
                     <TextField label="Irradiance" value={commissioningForm.irradiance} onChange={(value) => updateCommissioningField('irradiance', value)} />
                     <TextField label="Ambient Temperature" value={commissioningForm.ambient_temperature} onChange={(value) => updateCommissioningField('ambient_temperature', value)} />
                     <label className="block">
-                      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Checklist Status</span>
+                      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Checklist Status</span>
                       <select
                         value={commissioningForm.status}
                         onChange={(event) => updateCommissioningField('status', event.target.value)}

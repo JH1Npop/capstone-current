@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiSave, FiCheck, FiFileText } from 'react-icons/fi';
 import { fetchTechnicalDataSheet, saveTechnicalDataSheet, submitTechnicalDataSheet, reviewTechnicalDataSheet } from '../../api/services';
+import ConfirmationDialog from '../shared/ConfirmationDialog';
 
 const PREMISE_TYPES = ['Residential', 'Commercial', 'Industrial'];
 const OWNERSHIP_TYPES = ['Owned', 'Rented', 'Leased'];
@@ -8,6 +9,7 @@ const OWNERSHIP_TYPES = ['Owned', 'Rented', 'Leased'];
 export default function TechnicalDataSheetForm({ ticketId, userRole, onSuccess }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
   const [tds, setTds] = useState(null);
   const [message, setMessage] = useState('');
   
@@ -81,9 +83,14 @@ export default function TechnicalDataSheetForm({ ticketId, userRole, onSuccess }
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!tds?.id) return;
-    if (!window.confirm("Are you sure you want to submit this TDS? It will become read-only for technicians.")) return;
+    setConfirmSubmitOpen(true);
+  };
+
+  const confirmSubmit = async () => {
+    setConfirmSubmitOpen(false);
+    if (!tds?.id) return;
     try {
       setSubmitting(true);
       setMessage('');
@@ -224,7 +231,7 @@ export default function TechnicalDataSheetForm({ ticketId, userRole, onSuccess }
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition font-medium disabled:opacity-50"
           >
             <FiCheck />
             Submit TDS
@@ -242,6 +249,17 @@ export default function TechnicalDataSheetForm({ ticketId, userRole, onSuccess }
           </button>
         )}
       </div>
+      {confirmSubmitOpen ? (
+        <ConfirmationDialog
+          title="Submit this technical data sheet?"
+          message="After submission it becomes read-only for technicians."
+          tone="brand"
+          icon="info"
+          confirmLabel="Submit TDS"
+          onCancel={() => setConfirmSubmitOpen(false)}
+          onConfirm={confirmSubmit}
+        />
+      ) : null}
     </div>
   );
 }

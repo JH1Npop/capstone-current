@@ -6,6 +6,7 @@ import SolarCalculator from '../../components/SolarCalculator';
 import { deleteSolarEstimate, fetchPublicLandingSettings, fetchSolarEstimates } from '../../api/api';
 import { mergeLandingSettings } from '../../utils/landingSettings';
 import { formatEstimateId } from '../../utils/roleIds';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 
 
 const number = (value, digits = 1) => Number(value || 0).toLocaleString('en-PH', {
@@ -16,6 +17,7 @@ const number = (value, digits = 1) => Number(value || 0).toLocaleString('en-PH',
 export default function ClientSolarEstimates() {
   const navigate = useNavigate();
   const [estimates, setEstimates] = useState([]);
+  const [estimatePendingDelete, setEstimatePendingDelete] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCalculator, setShowCalculator] = useState(false);
@@ -57,8 +59,14 @@ export default function ClientSolarEstimates() {
     setEstimates((current) => [estimate, ...current.filter((item) => item.id !== estimate.id)]);
   };
 
-  const removeEstimate = async (estimate) => {
-    if (!window.confirm(`Delete draft ${estimate.estimate_code || formatEstimateId(estimate.id)}?`)) return;
+  const removeEstimate = (estimate) => {
+    setEstimatePendingDelete(estimate);
+  };
+
+  const confirmRemoveEstimate = async () => {
+    const estimate = estimatePendingDelete;
+    setEstimatePendingDelete(null);
+    if (!estimate) return;
     try {
       await deleteSolarEstimate(estimate.id);
       setEstimates((current) => current.filter((item) => item.id !== estimate.id));
@@ -118,11 +126,11 @@ export default function ClientSolarEstimates() {
                 </div>
                 <div className="mt-5 flex flex-wrap gap-2">
                   {estimate.service_request ? (
-                    <button onClick={() => navigate(`/client/requests/${estimate.service_request}`)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">
+                    <button onClick={() => navigate(`/client/requests/${estimate.service_request}`)} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white">
                       View request <FiArrowRight />
                     </button>
                   ) : (
-                    <button onClick={() => navigate(`/client/service-requests?solarEstimate=${estimate.id}`)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">
+                    <button onClick={() => navigate(`/client/service-requests?solarEstimate=${estimate.id}`)} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white">
                       Request assessment <FiArrowRight />
                     </button>
                   )}
@@ -137,6 +145,17 @@ export default function ClientSolarEstimates() {
           })}
         </div>
       </div>
+      {estimatePendingDelete ? (
+        <ConfirmationDialog
+          title={`Delete draft ${estimatePendingDelete.estimate_code || formatEstimateId(estimatePendingDelete.id)}?`}
+          message="This saved calculation will be removed. Submitted or converted estimates are kept."
+          tone="danger"
+          icon="danger"
+          confirmLabel="Delete draft"
+          onCancel={() => setEstimatePendingDelete(null)}
+          onConfirm={confirmRemoveEstimate}
+        />
+      ) : null}
     </Layout>
   );
 }

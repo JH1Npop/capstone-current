@@ -67,7 +67,7 @@ export default function ProfileIdentityCard({
       <dl className="grid grid-cols-2 gap-px border-t border-slate-200 bg-slate-200 sm:grid-cols-4">
         {facts.map(({ icon: Icon, label, value }) => (
           <div key={label} className="min-w-0 bg-slate-50 px-3 py-3 sm:px-4">
-            <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <Icon size={13} /> {label}
             </dt>
             <dd className="mt-1 truncate text-sm font-semibold text-slate-900" title={String(value)}>{value}</dd>

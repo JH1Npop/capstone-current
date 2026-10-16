@@ -91,6 +91,10 @@ const TERMINABLE_TICKET_STATUSES = new Set([
 ]);
 const isClosedTicket = (ticket) => CLOSED_QUEUE_STATUSES.has(normalizeStatus(ticket.status));
 const canTerminateTicket = (ticket) => TERMINABLE_TICKET_STATUSES.has(normalizeStatus(ticket.status));
+const canRescheduleTicket = (ticket) => {
+  const status = normalizeStatus(ticket?.status);
+  return Boolean(ticket) && !ticket.startTime && !ticket.start_time && !['in_progress', 'completed', 'cancelled'].includes(status);
+};
 const ITEMS_PER_PAGE = 10;
 const QUEUE_FOCUS_OPTIONS = [
   { value: 'active', label: 'All active' },
@@ -743,7 +747,7 @@ export default function AdminServiceTickets() {
         <div className="stat-card p-4">
           <p className="text-[13px] font-medium text-slate-500">All Active Tickets</p>
           <p className="mt-1 text-3xl font-bold text-slate-800">{activeQueueCount}</p>
-          <p className="mt-1 text-[11px] text-slate-400">Assigned and unassigned work</p>
+          <p className="mt-1 text-xs text-slate-400">Assigned and unassigned work</p>
         </div>
         <div className="stat-card p-4">
           <p className="text-[13px] font-medium text-slate-500">Needs Reschedule</p>
@@ -768,7 +772,7 @@ export default function AdminServiceTickets() {
 
       <nav aria-label="Ticket queue views" className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-600">Queue view</p>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-600">Queue view</p>
           <p className="mt-0.5 text-sm text-slate-500">Focus the workspace on the tickets that need a specific action.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
@@ -791,7 +795,7 @@ export default function AdminServiceTickets() {
                 className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${selected ? 'border-brand-600 bg-brand-600 text-white shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700'}`}
               >
                 <span>{option.label}</span>
-                <span className={`grid h-6 min-w-6 place-items-center rounded-lg px-1.5 text-[11px] font-bold ${selected ? 'bg-white/20 text-white' : 'bg-white text-slate-600 shadow-sm ring-1 ring-slate-200'}`}>
+                <span className={`grid h-6 min-w-6 place-items-center rounded-lg px-1.5 text-xs font-bold ${selected ? 'bg-white/20 text-white' : 'bg-white text-slate-600 shadow-sm ring-1 ring-slate-200'}`}>
                   {counts[option.value]}
                 </span>
               </button>
@@ -842,10 +846,10 @@ export default function AdminServiceTickets() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-bold text-brand-600">{formatTicketId(ticket.id)}</div>
-                    <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400">Ticket ID</div>
+                    <div className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">Ticket ID</div>
                     <div className="font-semibold text-slate-900">{ticket.service} {ticket.ticket_type === 'inspection' && <span className="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded ml-1">Inspection</span>}</div>
                     <div className="text-sm text-slate-600">{ticket.clientFullname}</div>
-                    <div className="mt-1 w-fit rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">
+                    <div className="mt-1 w-fit rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">
                       {ticket.requestSourceLabel}
                     </div>
                   </div>
@@ -947,14 +951,14 @@ export default function AdminServiceTickets() {
                   >
                     <td className="border-b border-slate-100 px-3 py-2 align-middle">
                       <div className="font-bold text-brand-600">{formatTicketId(ticket.id)}</div>
-                      <div className="mt-0.5 text-[11px] font-medium text-slate-500">{shortSourceLabel(ticket.requestSourceLabel)}</div>
+                      <div className="mt-0.5 text-xs font-medium text-slate-500">{shortSourceLabel(ticket.requestSourceLabel)}</div>
                     </td>
                     <td className="border-b border-slate-100 px-3 py-2 align-middle">
                       <div className="truncate font-semibold text-slate-900" title={ticket.clientFullname || ''}>{ticket.clientFullname}</div>
                       <div className="mt-0.5 text-xs font-medium text-slate-500">{formatClientId(ticket.clientId)}</div>
                       <div className="mt-1 flex min-w-0 items-center gap-2">
                         <StatusBadge status={ticket.priority || 'low'} size="sm" />
-                        <span className="truncate text-[11px] text-slate-600" title={ticket.service || ''}>{ticket.service}</span>
+                        <span className="truncate text-xs text-slate-600" title={ticket.service || ''}>{ticket.service}</span>
                       </div>
                     </td>
                     <td className="border-b border-slate-100 px-3 py-2 align-middle">
@@ -1160,7 +1164,7 @@ export default function AdminServiceTickets() {
                   </button>
                 )}
 
-                {canManageTickets && (!actionModalTicket.assignedTech || actionModalTicket.status === 'not_started') && (
+                {canManageTickets && canRescheduleTicket(actionModalTicket) && (
                   <button
                     onClick={() => {
                       closeTicketActions();

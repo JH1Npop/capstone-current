@@ -263,7 +263,7 @@ export default function AdminReports() {
 
   const workflowSegments = [
     { label: 'Completed', value: summaryStats.completed, color: '#10b981', className: 'bg-emerald-500' },
-    { label: 'Active', value: summaryStats.active, color: '#2563eb', className: 'bg-blue-600' },
+    { label: 'Active', value: summaryStats.active, color: '#2563eb', className: 'bg-brand-600' },
     { label: 'Cancelled', value: summaryStats.cancelled, color: '#f43f5e', className: 'bg-rose-500' },
   ];
 
@@ -472,7 +472,7 @@ export default function AdminReports() {
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="flex min-h-[340px] flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-blue-600">Workflow composition</p>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Workflow composition</p>
                 <h2 className="mt-1 text-base font-semibold text-slate-900">How the selected tickets are distributed</h2>
               </div>
               <div className="mt-5 flex flex-1 flex-col items-center justify-center gap-5 sm:flex-row sm:items-start">
@@ -480,7 +480,7 @@ export default function AdminReports() {
                   <div className="absolute inset-[18px] grid place-items-center rounded-full bg-white text-center shadow-inner">
                     <div>
                       <p className="text-2xl font-bold text-slate-900">{summaryStats.total}</p>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Tickets</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tickets</p>
                     </div>
                   </div>
                 </div>
@@ -503,7 +503,7 @@ export default function AdminReports() {
             <article className="flex min-h-[340px] flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-blue-600">Service workload</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Service workload</p>
                   <h2 className="mt-1 text-base font-semibold text-slate-900">Top services in the selected report</h2>
                 </div>
                 <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label="Service workload chart layout">
@@ -571,7 +571,7 @@ export default function AdminReports() {
                   <button type="button" onClick={printReport} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
                     <FiPrinter size={14} /> Print
                   </button>
-                  <button type="button" onClick={downloadCSV} className="inline-flex h-9 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700">
+                  <button type="button" onClick={downloadCSV} className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white transition hover:bg-brand-700">
                     <FiDownload size={14} /> Export CSV
                   </button>
                 </>
@@ -614,7 +614,7 @@ export default function AdminReports() {
                       </div>
                       <div className="min-w-0 rounded-lg bg-slate-50 p-2.5">
                         <dt className="font-semibold uppercase tracking-wide text-slate-500">SLA / Next step</dt>
-                        <dd className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${getSlaColor(ticket.sla?.status)}`}>{ticket.sla?.status || '-'}</dd>
+                        <dd className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getSlaColor(ticket.sla?.status)}`}>{ticket.sla?.status || '-'}</dd>
                         <dd className="mt-1 break-words text-slate-600">{ticket.next_step || '-'}</dd>
                       </div>
                     </dl>
@@ -636,7 +636,7 @@ export default function AdminReports() {
                     <tr key={ticket.id} className="transition hover:bg-slate-50">
                       <td className="border-b border-slate-100 px-3 py-2 align-middle">
                         <div className="font-semibold text-brand-700">{formatTicketId(ticket.id)}</div>
-                        <div className="mt-0.5 text-[11px] text-slate-500">{formatDate(ticket.created_at)}</div>
+                        <div className="mt-0.5 text-xs text-slate-500">{formatDate(ticket.created_at)}</div>
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2 align-middle">
                         <div className="truncate font-medium text-slate-900" title={ticket.client_fullname || ticket.client || ''}>
@@ -644,7 +644,7 @@ export default function AdminReports() {
                         </div>
                         <div className="mt-0.5 flex min-w-0 items-center gap-2">
                           <StatusBadge status={ticket.priority || 'low'} size="sm" />
-                          <span className="truncate text-[11px] text-slate-600" title={ticket.service || ''}>{ticket.service || 'Service'}</span>
+                          <span className="truncate text-xs text-slate-600" title={ticket.service || ''}>{ticket.service || 'Service'}</span>
                         </div>
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2 align-middle">
@@ -654,10 +654,10 @@ export default function AdminReports() {
                         <div className="truncate font-medium text-slate-900" title={ticket.technician_fullname || ''}>
                           {ticket.technician_fullname || 'Unassigned'}
                         </div>
-                        <div className="mt-0.5 text-[11px] text-slate-500">{formatTechnicianId(ticket.technician_id)}</div>
+                        <div className="mt-0.5 text-xs text-slate-500">{formatTechnicianId(ticket.technician_id)}</div>
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2 align-middle">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${getSlaColor(ticket.sla?.status)}`}>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getSlaColor(ticket.sla?.status)}`}>
                           {ticket.sla?.status || '-'}
                         </span>
                         <div className="mt-1 line-clamp-2 text-xs text-slate-600" title={ticket.next_step || ''}>{ticket.next_step || '-'}</div>

@@ -164,7 +164,7 @@ export default function Topbar({
           </button>
 
          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-600 sm:text-[11px] sm:tracking-[0.22em]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600 sm:text-xs sm:tracking-[0.22em]">
               {activeRoute?.section || activeRole?.workspace || 'Portal'}
             </p>
 
@@ -203,7 +203,7 @@ export default function Topbar({
               <FiBell size={17} />
               {unreadCount > 0 && (
                 <>
-                  <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                  <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white shadow-sm">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                   <span className="absolute -right-1 -top-1 h-[18px] min-w-[18px] animate-ping rounded-full bg-red-400 opacity-40" />
@@ -249,7 +249,7 @@ export default function Topbar({
                               {n.status === 'unread' && <FiAlertCircle className="mt-0.5 shrink-0 text-red-500" size={14} />}
                             </div>
                             <p className="mt-0.5 line-clamp-2 text-[13px] text-slate-600">{n.message}</p>
-                            <p className="mt-1.5 text-[11px] text-slate-400">{formatNotificationTime(n.created_at)}</p>
+                            <p className="mt-1.5 text-xs text-slate-400">{formatNotificationTime(n.created_at)}</p>
                           </div>
                         </div>
                       </button>

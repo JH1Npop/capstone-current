@@ -40,6 +40,7 @@ import {
   getDisplayText
 } from '../../utils/dashboardHelpers';
 import { formatClientId } from '../../utils/roleIds';
+import { startVisibleInterval } from '../../utils/visibleInterval';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -173,8 +174,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadDashboard();
-    const intervalId = window.setInterval(() => loadDashboard({ silent: true }), AUTO_REFRESH_MS);
-    return () => window.clearInterval(intervalId);
+    return startVisibleInterval(() => loadDashboard({ silent: true }), AUTO_REFRESH_MS);
   }, []);
 
   useEffect(() => {
@@ -375,7 +375,7 @@ export default function AdminDashboard() {
         )}
 
         {/* ── Stat cards ── */}
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatsCard
             title="Pending Approvals"
             value={pendingApprovalsCount}

@@ -21,14 +21,14 @@ const TONE_CLASS_MAP = {
 
 const InfoCard = ({ label, value, tone = 'slate' }) => (
   <div className="rounded-2xl border border-surface-200 bg-white p-4 shadow-sm">
-    <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</span>
+    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</span>
     <div className={`mt-2 text-sm font-semibold ${TONE_CLASS_MAP[tone] || TONE_CLASS_MAP.slate}`}>{value}</div>
   </div>
 );
 
 const NoteBlock = ({ title, value, className }) => (
   <div className={`rounded-2xl border p-4 text-sm leading-6 ${className}`}>
-    <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] opacity-80">{title}</span>
+    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] opacity-80">{title}</span>
     <p className="whitespace-pre-wrap">{value}</p>
   </div>
 );
@@ -104,7 +104,7 @@ export default function InspectionDetailsModal({ ticket, onClose }) {
                 <InfoCard label="Electrical Adequate" value={formatField(inspection.electrical_adequate)} tone={inspection.electrical_adequate ? 'emerald' : 'rose'} />
                 <InfoCard label="Safety Equipment" value={formatField(inspection.safety_equipment_present)} tone={inspection.safety_equipment_present ? 'emerald' : 'rose'} />
                 <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4 shadow-sm">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-700">Recommendation</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">Recommendation</span>
                   <div className={`mt-2 text-sm font-bold ${recommendation === 'Approved' ? 'text-emerald-700' : 'text-amber-700'}`}>
                     {recommendation}
                   </div>
@@ -206,7 +206,7 @@ export default function InspectionDetailsModal({ ticket, onClose }) {
                               }}
                             />
                           )}
-                          <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/70 to-transparent px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/90">
+                          <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/70 to-transparent px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/90">
                             {isVideoProof(media, url) ? 'Video' : 'Photo'} {index + 1}
                           </figcaption>
                         </figure>

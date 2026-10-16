@@ -85,6 +85,8 @@ export default function AdminSettings() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingSla, setSavingSla] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [savedSettingsSnapshot, setSavedSettingsSnapshot] = useState('');
+  const [savedSlaSnapshot, setSavedSlaSnapshot] = useState('');
 
   const activeRules = useMemo(
     () => slaRules.filter((rule) => rule.is_active).length,
@@ -97,8 +99,14 @@ export default function AdminSettings() {
 
     try {
       const [settingsData, rulesData] = await Promise.all([fetchAdminSettings(), fetchSlaRules()]);
-      setSettings((current) => ({ ...current, ...settingsData }));
-      setSlaRules(Array.isArray(rulesData) ? rulesData : []);
+      const loadedRules = Array.isArray(rulesData) ? rulesData : [];
+      setSettings((current) => {
+        const merged = { ...current, ...settingsData };
+        setSavedSettingsSnapshot(JSON.stringify(merged));
+        return merged;
+      });
+      setSlaRules(loadedRules);
+      setSavedSlaSnapshot(JSON.stringify(loadedRules));
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to load settings.' });
     } finally {
@@ -117,11 +125,11 @@ export default function AdminSettings() {
   const saveSettings = async () => {
     if (!settings.systemName?.trim()) {
       setMessage({ type: 'error', text: 'System name is required.' });
-      return;
+      return false;
     }
     if (!settings.supportEmail?.trim()) {
       setMessage({ type: 'error', text: 'Support email is required.' });
-      return;
+      return false;
     }
     const overtimeMinutes = Number(settings.overtimeDailyCapacityMinutes || 600);
     if (
@@ -129,11 +137,11 @@ export default function AdminSettings() {
       (!Number.isFinite(overtimeMinutes) || overtimeMinutes < 480 || overtimeMinutes > 960)
     ) {
       setMessage({ type: 'error', text: 'Overtime daily capacity must be between 8 and 16 hours.' });
-      return;
+      return false;
     }
     if (!settings.locationValidationEnabled && !settings.locationValidationDisabledReason?.trim()) {
       setMessage({ type: 'error', text: 'A reason is required when location validation is turned off.' });
-      return;
+      return false;
     }
 
     setSavingSettings(true);
@@ -150,12 +158,16 @@ export default function AdminSettings() {
       }
       delete payload.canManageOrganizationSettings;
       const response = await updateAdminSettings(payload);
-      if (response?.settings) {
-        setSettings((current) => ({ ...current, ...response.settings }));
-      }
+      setSettings((current) => {
+        const merged = { ...current, ...(response?.settings || {}) };
+        setSavedSettingsSnapshot(JSON.stringify(merged));
+        return merged;
+      });
       setMessage({ type: 'success', text: 'System settings updated.' });
+      return true;
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to update settings.' });
+      return false;
     } finally {
       setSavingSettings(false);
     }
@@ -177,7 +189,7 @@ export default function AdminSettings() {
         type: 'error',
         text: `${invalidRule.label || invalidRule.key}: warning minutes must be positive and less than overdue minutes.`,
       });
-      return;
+      return false;
     }
 
     setSavingSla(true);
@@ -194,13 +206,40 @@ export default function AdminSettings() {
           })
         )
       );
+      setSavedSlaSnapshot(JSON.stringify(slaRules));
       setMessage({ type: 'success', text: 'SLA rules updated.' });
+      return true;
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to update SLA rules.' });
+      return false;
     } finally {
       setSavingSla(false);
     }
   };
+
+  const settingsDirty = !loading && Boolean(savedSettingsSnapshot) && JSON.stringify(settings) !== savedSettingsSnapshot;
+  const slaDirty = !loading && Boolean(savedSlaSnapshot) && JSON.stringify(slaRules) !== savedSlaSnapshot;
+  const hasUnsavedChanges = settingsDirty || slaDirty;
+  const saving = savingSettings || savingSla;
+
+  const saveAllChanges = async () => {
+    let saved = true;
+    if (settingsDirty) saved = await saveSettings();
+    if (saved && slaDirty) saved = await saveSlaRules();
+    if (saved && settingsDirty && slaDirty) {
+      setMessage({ type: 'success', text: 'All changes saved.' });
+    }
+  };
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return undefined;
+    const warnBeforeLeaving = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [hasUnsavedChanges]);
 
   return (
     <Layout>
@@ -216,7 +255,24 @@ export default function AdminSettings() {
             </div>
           ) : null}
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <SummaryCard icon={FiBell} label="Notifications" value={settings.enableNotifications ? 'On' : 'Off'} />
+            <SummaryCard icon={FiTruck} label="Auto Dispatch" value={settings.autoDispatchEnabled ? 'On' : 'Off'} />
+            <SummaryCard
+              icon={FiUsers}
+              label="Daily Capacity"
+              value={settings.allowOvertimeDispatch ? formatCapacityHours(settings.overtimeDailyCapacityMinutes) : '8 hours'}
+            />
+            <SummaryCard
+              icon={FiMapPin}
+              label="Arrival Validation"
+              value={settings.locationValidationEnabled ? `${settings.arrivalRadiusMeters || 30}m radius` : 'Bypassed'}
+              warning={!settings.locationValidationEnabled}
+            />
+            <SummaryCard icon={FiClock} label="Active SLA Rules" value={`${activeRules}/${slaRules.length || 0}`} />
+          </div>
+
+          <div className="grid gap-6">
             <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
@@ -255,15 +311,6 @@ export default function AdminSettings() {
                     type="email"
                     value={settings.supportEmail || ''}
                     onChange={(event) => updateSetting('supportEmail', event.target.value)}
-                    className={inputClass}
-                    disabled={loading}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-700">Default Time Zone</span>
-                  <input
-                    value={settings.defaultTimeZone || browserTimeZone}
-                    onChange={(event) => updateSetting('defaultTimeZone', event.target.value)}
                     className={inputClass}
                     disabled={loading}
                   />
@@ -437,33 +484,8 @@ export default function AdminSettings() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={saveSettings}
-                disabled={loading || savingSettings}
-                className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 disabled:opacity-60"
-              >
-                <FiSave size={16} />
-                {savingSettings ? 'Saving...' : 'Save Settings'}
-              </button>
             </section>
 
-            <aside className="space-y-4">
-              <SummaryCard icon={FiBell} label="Notifications" value={settings.enableNotifications ? 'On' : 'Off'} />
-              <SummaryCard icon={FiTruck} label="Auto Dispatch" value={settings.autoDispatchEnabled ? 'On' : 'Off'} />
-              <SummaryCard
-                icon={FiUsers}
-                label="Daily Capacity"
-                value={settings.allowOvertimeDispatch ? formatCapacityHours(settings.overtimeDailyCapacityMinutes) : '8 hours'}
-              />
-              <SummaryCard
-                icon={FiMapPin}
-                label="Arrival Validation"
-                value={settings.locationValidationEnabled ? `${settings.arrivalRadiusMeters || 30}m radius` : 'Bypassed'}
-              />
-              <SummaryCard icon={FiClock} label="Active SLA Rules" value={`${activeRules}/${slaRules.length || 0}`} />
-              <SummaryCard icon={FiMail} label="Support" value={settings.supportEmail || 'Not set'} />
-            </aside>
           </div>
 
           <section className="mt-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -472,15 +494,6 @@ export default function AdminSettings() {
                 <h3 className="text-lg font-semibold text-slate-900">SLA Rules</h3>
                 <p className="mt-1 text-sm text-slate-500">Warning time must be less than overdue time. These values feed dashboards, queues, and reports.</p>
               </div>
-              <button
-                type="button"
-                onClick={saveSlaRules}
-                disabled={loading || savingSla || slaRules.length === 0}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
-              >
-                <FiSave size={16} />
-                {savingSla ? 'Saving...' : 'Save SLA Rules'}
-              </button>
             </div>
 
             <div className="overflow-x-auto">
@@ -546,6 +559,23 @@ export default function AdminSettings() {
               </table>
             </div>
           </section>
+
+          <div className="sticky bottom-0 z-30 mt-6 pb-2">
+            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white/95 p-3 pr-20 shadow-elevated backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+              <p className={`text-sm font-medium ${hasUnsavedChanges ? 'text-amber-700' : 'text-slate-500'}`} role="status">
+                {hasUnsavedChanges ? 'You have unsaved changes.' : 'All changes are saved.'}
+              </p>
+              <button
+                type="button"
+                onClick={saveAllChanges}
+                disabled={loading || saving || !hasUnsavedChanges}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60"
+              >
+                <FiSave size={16} />
+                {saving ? 'Saving...' : 'Save changes'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </Layout>
@@ -612,11 +642,11 @@ function DurationSelect({ value, onChange, disabled }) {
   );
 }
 
-function SummaryCard({ icon: Icon, label, value }) {
+function SummaryCard({ icon: Icon, label, value, warning = false }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className={`rounded-lg border p-4 shadow-sm ${warning ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}>
       <div className="flex items-center gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${warning ? 'bg-amber-100 text-amber-700' : 'bg-brand-50 text-brand-700'}`}>
           <Icon size={17} />
         </span>
         <div className="min-w-0">

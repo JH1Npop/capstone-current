@@ -174,7 +174,7 @@ export default function ActiveJobDetailsDialog({
         <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${track === 'inspection' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${track === 'inspection' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}>
                 {trackLabel}
               </span>
               <StatusBadge status={status} size="sm" />

@@ -18,6 +18,7 @@ import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import { fetchDashboardStats } from '../../api/api';
 import { AUTO_REFRESH_MS, formatDate, formatDateTime } from '../../utils/dashboardHelpers';
 import { clientTechnicianDisplayOrDash } from '../../utils/clientTechnicianDisplay';
+import { startVisibleInterval } from '../../utils/visibleInterval';
 
 export default function ClientDashboard() {
   const navigate = useNavigate();
@@ -46,8 +47,7 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     loadDashboard();
-    const id = window.setInterval(() => loadDashboard({ silent: true }), AUTO_REFRESH_MS);
-    return () => window.clearInterval(id);
+    return startVisibleInterval(() => loadDashboard({ silent: true }), AUTO_REFRESH_MS);
   }, []);
 
   const overview = stats?.overview || {};
@@ -120,7 +120,7 @@ export default function ClientDashboard() {
             className="flex w-full flex-col gap-4 rounded-2xl border border-sky-200 bg-sky-50/80 p-5 text-left transition hover:border-sky-300 hover:bg-sky-50 lg:flex-row lg:items-center lg:justify-between"
           >
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Next Appointment</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Next Appointment</p>
               <h2 className="mt-2 text-lg font-semibold text-slate-950">{nextAppointment.service_type}</h2>
               <p className="mt-1 text-sm text-slate-600">
                 Technician: {clientTechnicianDisplayOrDash(nextAppointment)}
@@ -286,13 +286,13 @@ export default function ClientDashboard() {
               <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {pipelineItems.map((item) => (
                   <div key={item.label} className="rounded-xl border border-surface-200 bg-surface-50 px-3 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
                     <p className="mt-1 text-xl font-bold text-slate-900">{item.value}</p>
                   </div>
                 ))}
               </div>
               <div className="mt-4 border-t border-surface-200 pt-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Service rating</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Service rating</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
                   {performance.avg_rating != null ? `${performance.avg_rating}/5` : '-'}
                 </p>

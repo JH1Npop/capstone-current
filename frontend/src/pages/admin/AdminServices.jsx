@@ -31,6 +31,7 @@ const DEFAULT_SERVICE_FORM = {
   estimated_cost: 0,
   max_daily_assignments: 5,
   is_active: true,
+  requires_site_inspection: false,
   procedures: [],
   required_equipment: [],
 };
@@ -81,6 +82,7 @@ const toServiceFormState = (service) => ({
   estimated_cost: Number(service?.estimated_cost || 0),
   max_daily_assignments: Number(service?.max_daily_assignments || 5),
   is_active: service?.is_active !== false,
+  requires_site_inspection: Boolean(service?.requires_site_inspection),
   procedures: normalizeProcedures(service?.procedures),
   required_equipment: normalizeEquipment(service?.required_equipment),
 });
@@ -159,7 +161,7 @@ function ProcedureEditor({ procedures, onChange }) {
         <div className="space-y-2">
           {procedures.map((proc, i) => (
             <div key={i} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
-              <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-500 text-[11px] font-bold text-white">
+              <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">
                 {i + 1}
               </span>
               <div className="flex-1 space-y-1">
@@ -300,18 +302,23 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
               title={service.color || '#2563eb'}
             />
             <h4 className="min-w-0 basis-[calc(100%-1.5rem)] break-words text-base font-semibold text-slate-900 sm:basis-auto">{service.name}</h4>
-            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
               service.is_active === false
                 ? 'bg-slate-100 text-slate-600'
                 : 'bg-emerald-50 text-emerald-700'
             }`}>
               {service.is_active === false ? 'Inactive' : 'Active'}
             </span>
-            <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-[11px] font-semibold text-brand-600">
+            {service.requires_site_inspection ? (
+              <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                Site inspection first
+              </span>
+            ) : null}
+            <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-600">
               {formatDuration(service.estimated_duration)}
             </span>
             {service.category && (
-              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
                 {service.category}
               </span>
             )}
@@ -320,8 +327,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
 
           {/* Quick stats row */}
           <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
-            <span className="inline-flex items-center gap-1">
-              <span className="text-[11px] font-bold text-emerald-600">PHP</span>
+            <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
               {formatCost(service.estimated_cost)}
             </span>
             <span className="inline-flex items-center gap-1">
@@ -386,7 +392,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
               <div className="space-y-1.5">
                 {procedures.map((proc, i) => (
                   <div key={i} className="flex items-start gap-2 text-sm">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-600">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-600">
                       {proc.step || i + 1}
                     </span>
                     <div>
@@ -818,6 +824,18 @@ export default function AdminServices() {
                 className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                 checked={serviceFormData.is_active}
                 onChange={(e) => setServiceFormData({ ...serviceFormData, is_active: e.target.checked })}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2">
+              <span>
+                <span className="block text-sm font-medium text-slate-700">Requires site inspection first</span>
+                <span className="block text-xs text-slate-500">Jobs for this service are dispatched as an inspection visit, and service work is scheduled only after the inspection is reviewed. Leave off for routine work such as cleaning or maintenance.</span>
+              </span>
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                checked={Boolean(serviceFormData.requires_site_inspection)}
+                onChange={(e) => setServiceFormData({ ...serviceFormData, requires_site_inspection: e.target.checked })}
               />
             </label>
             <div className="md:col-span-2">

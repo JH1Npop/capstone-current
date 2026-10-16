@@ -760,7 +760,7 @@ export default function AdminJobHistory() {
                         >
                           <td className="border-b border-slate-100 px-3 py-2 align-middle">
                             <div className="font-semibold text-brand-700">{formatTicketId(job.ticket_id)}</div>
-                            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
                               <FiClock className="text-slate-400" size={12} />
                               <span className="truncate">{formatDate(job.completed_date || job.scheduled_date)}</span>
                             </div>
@@ -769,25 +769,25 @@ export default function AdminJobHistory() {
                             <div className="truncate font-medium text-slate-900" title={job.client || ''}>{job.client}</div>
                             <div className="mt-0.5 flex min-w-0 items-center gap-2">
                               <StatusBadge status={job.priority || 'low'} size="sm" />
-                              <span className="truncate text-[11px] text-slate-600" title={job.service_type || ''}>{job.service_type}</span>
+                              <span className="truncate text-xs text-slate-600" title={job.service_type || ''}>{job.service_type}</span>
                             </div>
                           </td>
                           <td className="border-b border-slate-100 px-3 py-2 align-middle">
                             <div className="truncate font-medium text-slate-700" title={job.technician || ''}>{job.technician}</div>
-                            <div className="mt-0.5 truncate text-[11px] text-slate-500" title={`${job.address || 'No address'}${job.city ? `, ${job.city}` : ''}`}>
+                            <div className="mt-0.5 truncate text-xs text-slate-500" title={`${job.address || 'No address'}${job.city ? `, ${job.city}` : ''}`}>
                               {job.address || 'No address'}{job.city ? `, ${job.city}` : ''}
                             </div>
                           </td>
                           <td className="border-b border-slate-100 px-3 py-2 align-middle">
                             <div className="flex flex-wrap items-center gap-1.5">
                               {job.inspection ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
                                   <FiCheckCircle size={11} /> Checklist
                                 </span>
                               ) : (
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">No checklist</span>
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">No checklist</span>
                               )}
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
                                 {job.client_rating ? `${job.client_rating}/5` : 'No rating'}
                               </span>
                             </div>
@@ -1126,7 +1126,7 @@ export default function AdminJobHistory() {
                                     <p className="truncate font-semibold text-slate-950">{equipment.equipment_type || 'Equipment'}</p>
                                     <p className="mt-1 truncate text-slate-600">{equipment.brand_model || 'No brand/model recorded'}</p>
                                   </div>
-                                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Linked</span>
+                                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Linked</span>
                                 </div>
                                 <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                                   <div className="rounded-md bg-slate-50 p-2">
@@ -1168,7 +1168,7 @@ export default function AdminJobHistory() {
                                     <p className="truncate font-semibold text-sky-950">{report.brand_model || 'Equipment noted in report'}</p>
                                     <p className="mt-1 text-xs text-sky-700">From Field Service Report</p>
                                   </div>
-                                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-sky-700">Report</span>
+                                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-sky-700">Report</span>
                                 </div>
                                 <div className="mt-3 rounded-md bg-white/70 p-2 text-xs">
                                   <p className="font-medium text-sky-700">Serial Number</p>

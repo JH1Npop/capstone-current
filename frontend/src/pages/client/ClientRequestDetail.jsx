@@ -247,7 +247,8 @@ export default function ClientRequestDetail() {
   }
 
   const isCompleted = request.status === 'completed';
-  const canRequestReschedule = Boolean(request.ticket_id) && request.status !== 'completed' && request.status !== 'cancelled';
+  const normalizedRequestStatus = String(request.status || '').toLowerCase().replace(/\s+/g, '_');
+  const canRequestReschedule = Boolean(request.ticket_id) && !['in_progress', 'completed', 'cancelled'].includes(normalizedRequestStatus);
   const technicianLabel = clientTechnicianDisplayString(request);
   const noticeClassName = {
     success: 'border-emerald-200 bg-emerald-50 text-emerald-800',

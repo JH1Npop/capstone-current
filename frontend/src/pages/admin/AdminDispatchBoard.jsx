@@ -258,6 +258,12 @@ export default function AdminDispatchBoard() {
         ticketId: selectedTicket.id,
         technicianId: selectedTech.id,
         crewIds: selectedCrewIds,
+        // Services that require a site inspection are dispatched as an
+        // inspection visit until the inspection has been reviewed.
+        dispatchStage: selectedTicket.requiresSiteInspection
+          && !['inspection_completed', 'ready_for_service'].includes(selectedTicket.status)
+          ? 'inspection'
+          : 'service',
         equipmentReservations: equipmentPlan
           .map((entry) => ({
             ...entry,
@@ -434,7 +440,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
             <div key={item.label} className="stat-card p-4">
               <p className="text-[13px] font-medium text-slate-500">{item.label}</p>
               <p className={`mt-1 text-3xl font-bold ${item.tone}`}>{item.value}</p>
-              {item.helper && <p className="mt-1 text-[11px] text-slate-400">{item.helper}</p>}
+              {item.helper && <p className="mt-1 text-xs text-slate-400">{item.helper}</p>}
             </div>
           ))}
         </section>
@@ -455,7 +461,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                   </span>
                   <span className="min-w-0">
                     <span className="block text-xs font-semibold">{step.label}</span>
-                    <span className="block text-[11px] opacity-70">{step.helper}</span>
+                    <span className="block text-xs opacity-70">{step.helper}</span>
                   </span>
                   {index < 2 && <FiArrowRight className="absolute -right-3 top-1/2 z-10 hidden -translate-y-1/2 text-slate-300 sm:block" aria-hidden="true" />}
                 </li>
@@ -502,7 +508,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                         {ticket.isMissedDispatch ? <StatusBadge status="missed" size="sm" /> : <StatusBadge status={ticket.priority || 'low'} size="sm" />}
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">
+                        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">
                           {ticket.requestSourceLabel}
                         </span>
                         <StatusBadge status={ticket.status} size="sm" />
@@ -631,7 +637,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                           return (
                             <div key={`${entry.item}-${index}`} className={`rounded-lg border bg-white p-3 ${shortageQuantity ? 'border-amber-300' : 'border-surface-200'}`}>
                               <div className="flex items-center justify-between gap-3">
-                                <label htmlFor={`equipment-item-${index}`} className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Inventory item</label>
+                                <label htmlFor={`equipment-item-${index}`} className="text-xs font-semibold uppercase tracking-wider text-slate-500">Inventory item</label>
                                 <button
                                   type="button"
                                   onClick={() => removeEquipmentPlanRow(index)}
@@ -659,7 +665,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
 
                               <div className="mt-3 grid gap-3 sm:grid-cols-[112px_1fr] sm:items-end">
                                 <div>
-                                  <label htmlFor={`equipment-quantity-${index}`} className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Quantity</label>
+                                  <label htmlFor={`equipment-quantity-${index}`} className="text-xs font-semibold uppercase tracking-wider text-slate-500">Quantity</label>
                                   <input
                                     id={`equipment-quantity-${index}`}
                                     aria-describedby={`equipment-stock-${index}`}
@@ -735,7 +741,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                 <span><span className="mr-2 text-xs font-bold uppercase tracking-wider text-emerald-600">2</span>{selectedTicket ? `Team for ${selectedTicket.service}` : 'Choose a Team'}</span>
               </h2>
               <p className="text-xs text-slate-500">{selectedTicket ? `${serviceMatchedTechs.length} technicians match this service` : 'Select a ticket before choosing technicians'}</p>
-              <p className="mt-1 text-[11px] text-slate-400">Available is shown only when a technician is online and has no active job. Offline technicians may still be scheduled for future work.</p>
+              <p className="mt-1 text-xs text-slate-400">Available is shown only when a technician is online and has no active job. Offline technicians may still be scheduled for future work.</p>
             </div>
             <div className="border-b border-surface-200 p-3">
               <label className="mb-1 flex items-center gap-1 text-xs font-semibold text-slate-600">
@@ -858,7 +864,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                   </div>
                 </dl>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <span className="inline-flex rounded-md bg-sky-100 px-2 py-1 text-[10px] font-semibold text-sky-700">{ticket.requestSourceLabel}</span>
+                  <span className="inline-flex rounded-md bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-700">{ticket.requestSourceLabel}</span>
                   <button
                     type="button"
                     onClick={() => editAssignment(ticket)}
@@ -880,35 +886,35 @@ const paginatedAssignedTickets = assignedTickets.slice(
           <table className="hidden w-full text-sm md:table">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Ticket
                 </th>
 
-                <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Service / Client
                 </th>
 
-                <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Assigned To
                 </th>
 
-                <th className="hidden xl:table-cell px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="hidden xl:table-cell px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Assigned By
                 </th>
 
-                <th className="hidden lg:table-cell px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="hidden lg:table-cell px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Assigned Time
                 </th>
 
-                <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Status
                 </th>
 
-                <th className="hidden lg:table-cell px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="hidden lg:table-cell px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Crew
                 </th>
 
-                <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Action
                 </th>
               </tr>
@@ -953,7 +959,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                           {ticket.clientFullname || ticket.client}
                         </div>
 
-                        <span className="inline-flex rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                        <span className="inline-flex rounded-md bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">
                           {ticket.requestSourceLabel}
                         </span>
                       </div>
