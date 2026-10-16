@@ -21,6 +21,7 @@ from ..sla import (
     serialize_sla_evaluation,
 )
 from ..user_display import client_technician_label
+from services.ticket_status import COMPLETED_TICKET_STATUSES
 
 class AfterSalesCaseEventSerializer(serializers.ModelSerializer):
     actor_name = serializers.SerializerMethodField()
@@ -171,7 +172,7 @@ class FollowUpCaseSerializer(serializers.ModelSerializer):
         if status_value in {'resolved', 'closed'} and not resolution_notes:
             raise serializers.ValidationError({'resolution_notes': 'Resolution notes are required to resolve or close a case.'})
 
-        if service_ticket and service_ticket.status not in {'Completed', 'Turned Over / Accepted'}:
+        if service_ticket and service_ticket.status not in COMPLETED_TICKET_STATUSES:
             raise serializers.ValidationError({
                 'service_ticket': 'After-sales cases can only be opened for completed tickets.',
             })

@@ -101,6 +101,7 @@ from inventory.models import (
     InventoryTransaction,
 )
 from services.user_display import client_technician_label
+from services.ticket_status import CLOSED_TICKET_STATUSES, COMPLETED_TICKET_STATUSES
 
 
 RESCHEDULE_HISTORY_PREFIX = 'Rescheduled to'
@@ -335,7 +336,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             )
         ):
             return base_queryset.filter(
-                status__in=['Completed', 'Turned Over / Accepted'],
+                status__in=COMPLETED_TICKET_STATUSES,
             ).order_by('-completed_date', '-id')
 
         qs = get_visible_service_tickets_queryset(self.request.user, base_queryset=base_queryset)
@@ -345,7 +346,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             qs = qs.filter(build_ticket_search_query(search_query))
 
         if queue_param == 'active':
-            qs = qs.exclude(status__in=['Completed', 'Cancelled'])
+            qs = qs.exclude(status__in=CLOSED_TICKET_STATUSES)
             
         return qs
 
@@ -356,7 +357,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         tickets = list(queryset)
         active_tickets = [
             ticket for ticket in tickets
-            if ticket.status not in ['Completed', 'Cancelled']
+            if ticket.status not in CLOSED_TICKET_STATUSES
         ]
         dispatchable_tickets = [
             ticket for ticket in active_tickets
@@ -522,7 +523,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             return Response({'action': 'Use submit, verify, or reject.'}, status=status.HTTP_400_BAD_REQUEST)
         if not is_ticket_technician:
             raise PermissionDenied('Only the assigned technician can submit this equipment return.')
-        if ticket.status not in {'Completed', 'Turned Over / Accepted'}:
+        if ticket.status not in COMPLETED_TICKET_STATUSES:
             return Response(
                 {'ticket': 'Equipment returns can be submitted after the job is completed.'},
                 status=status.HTTP_409_CONFLICT,
@@ -1805,7 +1806,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         ticket = self.get_locked_ticket()
         if request.user.role != 'client' or ticket.request.client_id != request.user.id:
             raise PermissionDenied('You can only rate your own completed tickets.')
-        if ticket.status not in {'Completed', 'Turned Over / Accepted'}:
+        if ticket.status not in COMPLETED_TICKET_STATUSES:
             return Response({'error': 'Feedback can only be submitted for completed tickets'}, status=status.HTTP_400_BAD_REQUEST)
 
         rating = request.data.get('rating', request.data.get('client_rating'))
@@ -2159,7 +2160,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             if not user_can_manage_service_requests(request.user) and not CanManageServiceTickets().has_permission(request, self):
                 raise PermissionDenied('You do not have permission to reschedule tickets.')
 
-            if ticket.status in {'Completed', 'Turned Over / Accepted', 'Cancelled'}:
+            if ticket.status in CLOSED_TICKET_STATUSES:
                 return Response(
                     {'error': f'A {ticket.status.lower()} ticket cannot be rescheduled.'},
                     status=status.HTTP_400_BAD_REQUEST,

@@ -15,9 +15,10 @@ from services.models import SalesRecord, SalesRecordLine, ServiceTicket
 from services.serializers import SalesRecordSerializer
 from users.permissions import CanAccessDocuments, CanManageDocuments
 from users.rbac import is_admin_workspace_role
+from services.ticket_status import COMPLETED_TICKET_STATUSES
 
 
-FINAL_TICKET_STATUSES = {'Completed', 'Turned Over / Accepted'}
+FINAL_TICKET_STATUSES = COMPLETED_TICKET_STATUSES
 
 
 def _decimal_or_none(value):

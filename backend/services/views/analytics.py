@@ -205,7 +205,7 @@ class ServiceAnalyticsViewSet(viewsets.ModelViewSet):
             .values('request__service_type__name')
             .annotate(
                 total=Count('id'),
-                completed=Count('id', filter=Q(status__in=['Completed', 'Turned Over / Accepted'])),
+                completed=Count('id', filter=Q(status__in=COMPLETED_TICKET_STATUSES)),
                 avg_rating=Avg('client_rating'),
             )
             .order_by('-total')
@@ -315,7 +315,7 @@ class ServiceAnalyticsViewSet(viewsets.ModelViewSet):
         """Calculate average time from assignment to completion"""
         tickets = ServiceTicket.objects.filter(
             completed_date__date=date,
-            status__in=['Completed', 'Turned Over / Accepted'],
+            status__in=COMPLETED_TICKET_STATUSES,
             assigned_at__isnull=False,
             completed_date__isnull=False
         )
@@ -341,7 +341,7 @@ class ServiceAnalyticsViewSet(viewsets.ModelViewSet):
             tickets = ServiceTicket.objects.filter(
                 technician=technician,
                 completed_date__date=date,
-                status__in=['Completed', 'Turned Over / Accepted'],
+                status__in=COMPLETED_TICKET_STATUSES,
                 start_time__isnull=False,
                 end_time__isnull=False
             )

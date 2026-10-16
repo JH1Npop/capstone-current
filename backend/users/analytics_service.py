@@ -32,13 +32,7 @@ GROUPINGS = {
 }
 COMPARISON_MODES = {'previous_period', 'previous_month', 'previous_quarter', 'previous_year', 'custom', 'none'}
 WORKSPACES = {'overview', 'technicians', 'demand', 'sales', 'inventory', 'after_sales', 'forecasting'}
-# A finished ticket moves Completed -> Turned Over / Accepted after handover, so
-# every "completed work" measure must count both statuses.
-COMPLETED_TICKET_STATUSES = ['Completed', 'Turned Over / Accepted']
-ACTIVE_TICKET_STATUSES = [
-    value for value, _label in ServiceTicket.STATUS_CHOICES
-    if value not in {'Completed', 'Cancelled', 'Turned Over / Accepted'}
-]
+from services.ticket_status import ACTIVE_TICKET_STATUSES, COMPLETED_TICKET_STATUSES  # noqa: E402,F401
 
 
 def _business_timezone():

@@ -9,6 +9,7 @@ from notifications.models import Notification
 
 from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent
 from .models import InspectionChecklist, MaintenanceSchedule, ServiceTicket
+from services.ticket_status import COMPLETED_TICKET_STATUSES
 
 
 DEFAULT_FOLLOW_UP_WINDOW_DAYS = 7
@@ -205,7 +206,7 @@ def sync_ticket_warranty(ticket, reference_date=None):
     has_inspection_warranty = inspection and inspection.warranty_provided and inspection.warranty_period_days
 
     warranty_was_created = False
-    if ticket.status in {'Completed', 'Turned Over / Accepted'} and (has_inspection_warranty or turnover_active or ticket.warranty_start_date):
+    if ticket.status in COMPLETED_TICKET_STATUSES and (has_inspection_warranty or turnover_active or ticket.warranty_start_date):
         if turnover and turnover.warranty_start_date:
             start_date = turnover.warranty_start_date
         elif turnover and turnover.turnover_date:
@@ -272,7 +273,7 @@ def sync_ticket_warranty(ticket, reference_date=None):
 
 
 def sync_completion_warranty_case(ticket, reference_date=None):
-    if ticket.status not in {'Completed', 'Turned Over / Accepted'} or ticket.warranty_status != 'active':
+    if ticket.status not in COMPLETED_TICKET_STATUSES or ticket.warranty_status != 'active':
         return None
 
     try:
@@ -478,7 +479,7 @@ def _notify_completion_follow_up_case(case, *, created):
 
 
 def sync_completion_follow_up_case(ticket, reference_date=None):
-    if ticket.status not in {'Completed', 'Turned Over / Accepted'}:
+    if ticket.status not in COMPLETED_TICKET_STATUSES:
         return None
 
     try:

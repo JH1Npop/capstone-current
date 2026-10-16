@@ -215,10 +215,15 @@ from inventory.automation import (
     serialize_ticket_inventory,
     sync_ticket_reservations,
 )
-from services.job_progress import ACTIVE_TICKET_STATUSES
+from services.ticket_status import (
+    ACTIVE_TICKET_STATUSES,
+    COMPLETED_TICKET_STATUSES,
+    FIELD_WORK_TICKET_STATUSES,
+    SCHEDULED_LOAD_TICKET_STATUSES,
+)
 from notifications.notification_utils import send_team_notification, send_user_notification
 
-BUSY_TECHNICIAN_TICKET_STATUSES = ('Navigating', 'Arrived on Site', 'In Progress')
+BUSY_TECHNICIAN_TICKET_STATUSES = FIELD_WORK_TICKET_STATUSES
 
 TICKET_REQUEST_STATUS_MAP = {
     'Not Started': 'Approved',
@@ -357,7 +362,7 @@ def sync_ticket_maintenance_schedule(ticket):
     """Refresh post-service lifecycle data without blocking ticket flow."""
     try:
         sync_ticket_warranty(ticket)
-        if ticket.status in {'Completed', 'Turned Over / Accepted'}:
+        if ticket.status in COMPLETED_TICKET_STATUSES:
             sync_maintenance_schedule(ticket)
             sync_completion_follow_up_case(ticket)
             try:
@@ -1071,7 +1076,7 @@ def score_technician_fit(
     ).exclude(pk=ticket.pk).count()
     same_day_load = technician_tickets.filter(
         scheduled_date=ticket.scheduled_date,
-        status__in=['Not Started', 'In Progress', 'On Hold', 'Completed'],
+        status__in=SCHEDULED_LOAD_TICKET_STATUSES,
     ).exclude(pk=ticket.pk).count()
 
     capacity = get_technician_daily_capacity(technician, ticket.scheduled_date, ticket)

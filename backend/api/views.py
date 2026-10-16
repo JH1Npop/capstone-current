@@ -36,6 +36,7 @@ from users.rbac import (
     is_admin_workspace_role,
     user_has_any_capability,
 )
+from services.ticket_status import CLOSED_TICKET_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -453,7 +454,7 @@ def checklist_view(request):
     if not ticket_has_technician_access(ticket, request.user):
         return Response({'error': 'Ticket not found'}, status=404)
 
-    if ticket.status in {'Completed', 'Turned Over / Accepted', 'Cancelled'}:
+    if ticket.status in CLOSED_TICKET_STATUSES:
         return Response(
             {'error': 'This job is already closed, so its checklist can no longer be edited.'},
             status=status.HTTP_400_BAD_REQUEST,

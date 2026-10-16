@@ -2,6 +2,7 @@
 from services.views.helpers import *  # noqa: F401,F403
 from services.user_display import client_technician_label
 from django.utils.dateparse import parse_date
+from services.ticket_status import COMPLETED_TICKET_STATUSES
 
 
 def _serialize_ticket_service_checklists(ticket):
@@ -748,7 +749,7 @@ class TechnicianScheduleView(viewsets.ViewSet):
             status='Cancelled'
         ).order_by('scheduled_date')
         if not show_completed:
-            tickets = tickets.exclude(status__in=['Completed', 'Turned Over / Accepted'])
+            tickets = tickets.exclude(status__in=COMPLETED_TICKET_STATUSES)
 
         schedule = []
         for ticket in tickets:
@@ -897,7 +898,7 @@ class TechnicianHistoryView(viewsets.ViewSet):
                 'generated_documents',
             )
         ).filter(
-            status__in=['Completed', 'Turned Over / Accepted']
+            status__in=COMPLETED_TICKET_STATUSES
         )
 
         search = str(request.query_params.get('search') or '').strip()

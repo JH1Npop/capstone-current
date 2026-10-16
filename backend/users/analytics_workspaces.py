@@ -51,6 +51,7 @@ from users.forecasting_service import (
     service_model_readiness,
 )
 from users.models import ClientProfile, User
+from services.ticket_status import CLOSED_TICKET_STATUSES, FIELD_WORK_TICKET_STATUSES
 
 
 def _range_q(field, filters, previous=False):
@@ -219,7 +220,7 @@ def _technician_workspace(params, filters):
             previous_assigned=Count('id', filter=previous_q),
             completed=Count('id', filter=current_q & Q(status__in=COMPLETED_TICKET_STATUSES)),
             previous_completed=Count('id', filter=previous_q & Q(status__in=COMPLETED_TICKET_STATUSES)),
-            pending=Count('id', filter=current_q & ~Q(status__in=['Completed', 'Cancelled', 'Turned Over / Accepted'])),
+            pending=Count('id', filter=current_q & ~Q(status__in=CLOSED_TICKET_STATUSES)),
             duration=Avg(duration_expression, filter=current_q & valid_duration),
             previous_duration=Avg(duration_expression, filter=previous_q & valid_duration),
             ratings=Count('id', filter=current_q & Q(client_rating__isnull=False)),
@@ -335,7 +336,7 @@ def _technician_workspace(params, filters):
     active = User.objects.filter(role='technician', status='active', is_active=True)
     active_count = active.count()
     available_count = active.filter(technician_profile__is_available=True).count()
-    current_job_count = active.filter(assigned_tickets__status__in=['Navigating', 'Arrived on Site', 'In Progress']).distinct().count()
+    current_job_count = active.filter(assigned_tickets__status__in=FIELD_WORK_TICKET_STATUSES).distinct().count()
     total_hours = round(sum(row['estimated_scheduled_hours'] for row in leaderboard), 1)
     skills = list(
         ServiceType.objects.filter(is_active=True).values('id', 'name').annotate(
@@ -587,7 +588,7 @@ def _inventory_workspace(params, filters):
 
     affected_ticket_q = Q(
         service_type__servicerequest__serviceticket__scheduled_date__range=(filters['start_date'], filters['end_date']),
-    ) & ~Q(service_type__servicerequest__serviceticket__status__in=['Completed', 'Cancelled', 'Turned Over / Accepted'])
+    ) & ~Q(service_type__servicerequest__serviceticket__status__in=CLOSED_TICKET_STATUSES)
     requirement_rows = list(
         ServiceTypeInventoryRequirement.objects.filter(item__in=items)
         .values(

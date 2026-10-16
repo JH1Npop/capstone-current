@@ -1,16 +1,6 @@
 """Canonical, evidence-based service-ticket workflow progress."""
 
-ACTIVE_TICKET_STATUSES = [
-    'Not Started',
-    'For Inspection',
-    'Inspection Completed',
-    'Ready for Service',
-    'Awaiting Materials',
-    'Navigating',
-    'Arrived on Site',
-    'In Progress',
-    'On Hold',
-]
+from services.ticket_status import ACTIVE_TICKET_STATUSES  # noqa: F401  (re-exported)
 
 
 SERVICE_WORKFLOW_STAGES = {

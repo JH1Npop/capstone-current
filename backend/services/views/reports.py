@@ -8,6 +8,7 @@ from users.permissions import (
 from django.conf import settings
 from django.db.models import Prefetch
 from rest_framework.throttling import ScopedRateThrottle
+from services.ticket_status import COMPLETED_TICKET_STATUSES
 
 
 def _bounded_days(request, default=30, minimum=1, maximum=365):
@@ -239,7 +240,7 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
 
         # Build queryset
         tickets = ServiceTicket.objects.filter(
-            status__in=['Completed', 'Turned Over / Accepted']
+            status__in=COMPLETED_TICKET_STATUSES
         ).select_related(
             'request__service_type',
             'request__client',

@@ -56,6 +56,7 @@ from users.rbac import (
     is_admin_workspace_role,
     user_has_any_capability,
 )
+from services.ticket_status import COMPLETED_TICKET_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -857,7 +858,7 @@ class AdminCalendarView(APIView):
             # Keep recent completions visible in the operational calendar while
             # moving older records to the opt-in history view.
             tickets = tickets.exclude(
-                status__in=['Completed', 'Turned Over / Accepted'],
+                status__in=COMPLETED_TICKET_STATUSES,
                 completed_date__date__lt=completed_cutoff,
             )
 

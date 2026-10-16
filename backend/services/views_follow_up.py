@@ -15,6 +15,7 @@ from .maintenance import process_maintenance_alerts
 from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent, MaintenanceSchedule, ServiceTicket
 from .serializers import FollowUpCaseSerializer, MaintenanceScheduleSerializer
 from .views.helpers import _display_name, _notify_admin_superadmin
+from services.ticket_status import COMPLETED_TICKET_STATUSES
 
 
 class FollowUpCaseViewSet(viewsets.ModelViewSet):
@@ -98,7 +99,7 @@ class FollowUpCaseViewSet(viewsets.ModelViewSet):
         assigned_to = serializer.validated_data.get('assigned_to')
         case_type = serializer.validated_data.get('case_type', 'follow_up')
 
-        if service_ticket.status not in {'Completed', 'Turned Over / Accepted'}:
+        if service_ticket.status not in COMPLETED_TICKET_STATUSES:
             raise ValidationError({'service_ticket': 'Follow-up cases can only be opened for completed tickets.'})
 
         if case_type == 'warranty':
@@ -261,7 +262,7 @@ class FollowUpCaseViewSet(viewsets.ModelViewSet):
             revisit_cases=Count('id', filter=Q(requires_revisit=True)),
         )
 
-        follow_up_candidates = ServiceTicket.objects.filter(status__in=['Completed', 'Turned Over / Accepted']).exclude(
+        follow_up_candidates = ServiceTicket.objects.filter(status__in=COMPLETED_TICKET_STATUSES).exclude(
             after_sales_cases__isnull=False
         ).count()
         maintenance_summary = MaintenanceSchedule.objects.exclude(status__in=['completed', 'dismissed']).aggregate(

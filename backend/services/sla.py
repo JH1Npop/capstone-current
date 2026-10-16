@@ -1,6 +1,7 @@
 from datetime import datetime, time, timedelta
 
 from django.utils import timezone
+from services.ticket_status import CLOSED_TICKET_STATUSES
 
 
 SLA_STATE_INACTIVE = 'inactive'
@@ -227,7 +228,7 @@ def get_ticket_dispatch_state(ticket, *, now=None):
 
     local_now = timezone.localtime(now)
     scheduled_start = _resolve_scheduled_start(ticket)
-    closed_statuses = {'Completed', 'Cancelled'}
+    closed_statuses = set(CLOSED_TICKET_STATUSES)
 
     if ticket.status in closed_statuses:
         return {
@@ -337,7 +338,7 @@ def evaluate_service_ticket_sla(service_ticket, *, now=None):
     if now is None:
         now = timezone.now()
 
-    if service_ticket.status in {'Completed', 'Cancelled'}:
+    if service_ticket.status in CLOSED_TICKET_STATUSES:
         return _build_result(
             state=SLA_STATE_PAUSED,
             label='Ticket SLA paused',

@@ -4,6 +4,7 @@ from datetime import timedelta
 from django.db.models import Sum, Avg, Q
 from services.models import TechnicianPerformance, ServiceTicket
 from users.models import User
+from services.ticket_status import ACTIVE_TICKET_STATUSES
 
 
 class Command(BaseCommand):
@@ -84,7 +85,7 @@ class Command(BaseCommand):
 
                 tickets_assigned = tickets.count()
                 tickets_completed = completed_tickets.count()
-                tickets_pending = tickets.filter(status__in=['Not Started', 'In Progress']).count()
+                tickets_pending = tickets.filter(status__in=ACTIVE_TICKET_STATUSES).count()
 
                 # Calculate time metrics
                 total_work_hours = 0
