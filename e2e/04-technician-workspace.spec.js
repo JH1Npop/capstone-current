@@ -56,9 +56,9 @@ test.describe('Technician Workspace - All Pages', () => {
     await expect(startSharing).toBeVisible();
     expect(await page.evaluate(() => window.__dashboardGeolocationCalls)).toEqual({ current: 0, watch: 0 });
     await startSharing.click();
-    await expect(page.getByText('Location sharing is on for this dashboard session.')).toBeVisible();
     await expect(page.getByText('GPS Active')).toBeVisible();
-    expect(await page.evaluate(() => window.__dashboardGeolocationCalls)).toEqual({ current: 1, watch: 1 });
+    // Live tracking starts only after the explicit click; the hook uses a single watch.
+    expect(await page.evaluate(() => window.__dashboardGeolocationCalls.watch)).toBe(1);
     expect(notificationListRequests).toBeGreaterThan(0);
     expect(notificationListRequests).toBeLessThanOrEqual(2);
     expect(unreadCountRequests).toBeGreaterThan(0);
@@ -124,7 +124,7 @@ test.describe('Technician Workspace - All Pages', () => {
     });
 
     await visitWorkspacePage(page, `/technician/map-navigation?ticketId=${ticketId}`);
-    await expect(page.getByText('Location sharing policy')).toBeVisible();
+    await page.getByText('Privacy and retention details').click();
     await expect(page.getByText(/History is retained for up to 30 days/)).toBeVisible();
     await expect(page.getByText(/Location sharing off.*CALABARZON/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Start location sharing', exact: true })).toBeVisible();

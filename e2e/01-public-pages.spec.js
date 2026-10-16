@@ -261,7 +261,7 @@ test.describe('Public Pages', () => {
     // implementation-specific class names. The backend can take longer than
     // 10s to reject credentials on the local dev stack.
     await expect(
-      page.getByText(/invalid credentials|invalid username or password|login failed/i)
+      page.getByText(/username\/email or password is incorrect/i)
     ).toBeVisible({ timeout: 45000 });
 
     await page.screenshot({ path: 'test-results/screenshots/01-login-error.png' });

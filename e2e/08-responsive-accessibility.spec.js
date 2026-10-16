@@ -35,6 +35,7 @@ async function expectKeyboardFocus(page) {
 async function expectNoOverlappingMainButtons(page) {
   const result = await page.locator('main button:visible').evaluateAll((buttons) => {
     const entries = buttons.map((button) => ({
+      element: button,
       label: button.getAttribute('aria-label') || button.textContent?.trim() || '(unlabelled button)',
       rect: button.getBoundingClientRect(),
     })).filter(({ rect }) => rect.width > 0 && rect.height > 0);
@@ -51,8 +52,19 @@ async function expectNoOverlappingMainButtons(page) {
         }
       }
     }
+    // Buttons inside their own horizontal scroller (for example the printable
+    // document paper) stay reachable by scrolling, so they are not clipped.
+    const insideHorizontalScroller = (element) => {
+      let current = element.parentElement;
+      while (current && current !== document.body) {
+        const overflowX = window.getComputedStyle(current).overflowX;
+        if ((overflowX === 'auto' || overflowX === 'scroll') && current.scrollWidth > current.clientWidth) return true;
+        current = current.parentElement;
+      }
+      return false;
+    };
     const clipped = entries
-      .filter(({ rect }) => rect.left < -1 || rect.right > window.innerWidth + 1)
+      .filter(({ rect, element }) => (rect.left < -1 || rect.right > window.innerWidth + 1) && !insideHorizontalScroller(element))
       .map(({ label }) => label);
     return { collisions, clipped };
   });
@@ -67,8 +79,16 @@ async function expectAssistantDoesNotCoverMainButtons(page) {
   const covered = await page.locator('main button:visible').evaluateAll((buttons, box) => (
     buttons.filter((button) => {
       const rect = button.getBoundingClientRect();
-      return Math.min(rect.right, box.x + box.width) - Math.max(rect.left, box.x) > 1
-        && Math.min(rect.bottom, box.y + box.height) - Math.max(rect.top, box.y) > 1;
+      const overlapWidth = Math.min(rect.right, box.x + box.width) - Math.max(rect.left, box.x);
+      const overlapHeight = Math.min(rect.bottom, box.y + box.height) - Math.max(rect.top, box.y);
+      if (overlapWidth <= 1 || overlapHeight <= 1) return false;
+      // Edge-only contact with a wide button leaves its centre and label usable.
+      // Flag a button when the assistant covers its centre or over a quarter of it.
+      const centreX = rect.left + rect.width / 2;
+      const centreY = rect.top + rect.height / 2;
+      const coversCentre = centreX >= box.x && centreX <= box.x + box.width
+        && centreY >= box.y && centreY <= box.y + box.height;
+      return coversCentre || (overlapWidth * overlapHeight) / (rect.width * rect.height) > 0.25;
     }).map((button) => button.getAttribute('aria-label') || button.textContent?.trim() || '(unlabelled button)')
   ), assistantBox);
   expect(covered).toEqual([]);
@@ -103,7 +123,8 @@ test.describe('Responsive and keyboard smoke coverage', () => {
         const firstStatCard = page.locator('main .stat-card').first();
         await expect(firstStatCard).toBeVisible();
         const cardBox = await firstStatCard.boundingBox();
-        expect(cardBox?.width).toBeGreaterThanOrEqual(350);
+        // Phones show the stat cards two per row; each card must still use about half the screen.
+        expect(cardBox?.width).toBeGreaterThanOrEqual(150);
       }
       await expectKeyboardFocus(page);
     });

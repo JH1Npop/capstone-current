@@ -502,7 +502,7 @@ test.describe('Admin Workspace - All Pages', () => {
 
   test('3.10 - Analytics page with charts', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/analytics', 'test-results/screenshots/03-admin-analytics.png');
-    await expect(page.getByRole('heading', { name: 'Analytics & Forecasting' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Analytics', exact: true, level: 1 })).toBeVisible();
     await expect(page.getByText('Total tickets', { exact: true })).toBeVisible();
     await expect(page.getByText('Completion rate', { exact: true })).toBeVisible();
     await expect(page.getByText(/Compared with/)).toBeVisible();
@@ -512,11 +512,24 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.getByRole('heading', { name: 'Ticket statuses' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Technician workload' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Demand by location' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Current attention' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ask Analytics' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open analytics assistant' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Needs attention today' })).toBeVisible();
+    // The colour key and scope note live in the collapsible reading guide.
+    await page.getByText('How to read this page', { exact: true }).click();
+    await expect(page.getByLabel('Dashboard and Analytics scope guide')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Forecast readiness' })).toBeVisible();
     await expect(page.locator('svg.recharts-surface').first()).toBeVisible({ timeout: 15000 });
     await expect(page.locator('main p').filter({ hasText: /^E2E Solar Installation$/ }).first()).toBeVisible();
     await expect(page.locator('main .truncate')).toHaveCount(0);
+    const cardGap = async (upperHeading, lowerHeading) => {
+      const upper = await page.getByRole('heading', { name: upperHeading }).locator('..').locator('..').locator('..').boundingBox();
+      const lower = await page.getByRole('heading', { name: lowerHeading }).locator('..').locator('..').locator('..').boundingBox();
+      return lower.y - (upper.y + upper.height);
+    };
+    expect(await cardGap('Primary service demand', 'Technician workload')).toBeLessThanOrEqual(20);
+    expect(await cardGap('Ticket statuses', 'Demand by location')).toBeLessThanOrEqual(20);
+    expect(await cardGap('Demand by location', 'Forecast readiness')).toBeLessThanOrEqual(20);
 
     const assistantForecastResponse = page.waitForResponse((response) => (
       response.url().includes('/api/admin/analytics/')
@@ -529,7 +542,7 @@ test.describe('Admin Workspace - All Pages', () => {
     const askAssistant = page.getByRole('button', { name: 'Ask analytics assistant' });
     await expect(askAssistant).toBeEnabled({ timeout: 15000 });
     await askAssistant.click();
-    await expect(page.getByText(/Forecast accuracy and confidence are unavailable/)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/forecast accuracy[^.]{0,60}(unavailable|not available)|no validated forecast accuracy/i)).toBeVisible({ timeout: 15000 });
     await expect(page.getByText(/next 7 days forecast/i)).toHaveCount(0);
     const assistantPanel = page.getByRole('heading', { name: 'Analytics Assistant' }).locator('xpath=ancestor::section');
     await expect(assistantPanel.locator('[class*="overflow-hidden"]')).toHaveCount(0);
@@ -557,6 +570,26 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.getByRole('heading', { name: 'Top technician categories' })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('heading', { name: 'Technician leaderboard' })).toBeVisible();
 
+    await page.getByRole('button', { name: '30 days', exact: true }).click();
+    await page.getByRole('tab', { name: 'Demand', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Demand flow' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: 'Service mix over time' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Demand versus completion output' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Demand share by location' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Service-location concentration' })).toBeVisible();
+    await expect(page.getByLabel('Stacked service demand by period')).toBeVisible();
+    await expect(page.getByLabel('Service request and completion output scatter plot')).toBeVisible();
+    await expect(page.getByLabel('Demand share by location treemap')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Measurement limits' })).toBeVisible();
+    const assistantDemandResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/admin/analytics/')
+      && response.url().includes('workspace=demand')
+      && response.request().method() === 'GET'
+    ));
+    await page.getByRole('button', { name: 'Open analytics assistant' }).click();
+    expect((await assistantDemandResponse).ok()).toBeTruthy();
+    await page.getByRole('button', { name: 'Close system assistant' }).click();
+
     await page.getByRole('tab', { name: 'Sales', exact: true }).click();
     await expect(page.getByText('Confirmed sales amount', { exact: true })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('heading', { name: 'Financial data quality' })).toBeVisible();
@@ -569,7 +602,7 @@ test.describe('Admin Workspace - All Pages', () => {
 
     await page.getByRole('tab', { name: 'After-Sales & Maintenance' }).click();
     await expect(page.getByText('After-sales cases', { exact: true })).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText('Maintenance', { exact: true })).toBeVisible();
+    await expect(page.getByRole('main').getByText('Maintenance', { exact: true })).toBeVisible();
 
     await page.getByRole('tab', { name: 'Forecasting' }).click();
     await expect(page.getByRole('heading', { name: 'Evidence and model status' })).toBeVisible({ timeout: 15000 });
@@ -585,13 +618,19 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.getByText('Total tickets', { exact: true })).toBeVisible({ timeout: 15000 });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByRole('heading', { name: 'Analytics & Forecasting' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Analytics', exact: true, level: 1 })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'After-Sales & Maintenance' })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Forecasting' })).toBeVisible();
     await expect(page.locator('main .truncate')).toHaveCount(0);
     const mobileOverflow = await page.locator('main').evaluate((element) => element.scrollWidth > element.clientWidth);
     expect(mobileOverflow).toBeFalsy();
     await page.screenshot({ path: 'test-results/screenshots/03-admin-analytics-mobile.png', fullPage: true });
+
+    await page.goto('/admin/analytics?analyticsMode=legacy');
+    await expect(page.getByRole('button', { name: 'Use decision view' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: 'Ask Analytics' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Demand', exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Cross-domain operational attention')).toBeVisible();
   });
 
   test('3.11 - Reports page loads', async ({ page }) => {
