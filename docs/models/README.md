@@ -48,7 +48,7 @@ Regenerate the exhaustive single-page Chen ERD from the same models:
 ```
 
 The resulting `.drawio` file is generated directly from `AFN_ERD.dbml` and
-contains all 51 application entities, all 676 local attributes, and a Chen
+contains all 51 application entities, all 682 local attributes, and a Chen
 relationship diamond for all 102 in-scope relationships. Every relationship
 edge connects the actual canonical entity box to its diamond. Connections leave
 through clear space below each entity, share an orderly domain gutter, and then

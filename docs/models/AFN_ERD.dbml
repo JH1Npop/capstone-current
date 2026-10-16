@@ -382,6 +382,7 @@ Table services_maintenanceschedule {
   due_notified_at timestamp
   client_notified_at timestamp
   client_three_day_notified_at timestamp
+  client_due_notified_at timestamp
   risk_level varchar(20) [not null]
   risk_score double [not null]
   prediction_notes text
@@ -933,6 +934,7 @@ Table users_technicianprofile {
   current_latitude decimal(9,6)
   current_longitude decimal(9,6)
   last_location_update timestamp
+  last_seen_at timestamp
   is_available boolean [not null]
   skill_level varchar(20) [not null]
   preferred_work_areas text [not null]
@@ -968,6 +970,10 @@ Table users_user {
   email_verification_sent_at timestamp
   pending_email varchar(254)
   pending_email_verification_sent_at timestamp
+  mfa_enabled boolean [not null]
+  mfa_secret_encrypted text [not null]
+  mfa_recovery_code_hashes jsonb [not null]
+  mfa_confirmed_at timestamp
   created_at timestamp
   updated_at timestamp
 
