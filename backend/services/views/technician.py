@@ -90,7 +90,7 @@ class TechnicianDashboardView(viewsets.ViewSet):
         assigned_tickets = get_technician_ticket_queryset(
             technician,
             base_queryset=ServiceTicket.objects.select_related(
-                'request__service_type', 'request__client', 'request__location', 'technician'
+                'request__service_type', 'request__client', 'request__location', 'technician', 'inspection'
             ).prefetch_related(
                 'request__service_items__service_type',
                 'crew_assignments__technician',
@@ -195,8 +195,8 @@ class TechnicianDashboardView(viewsets.ViewSet):
             'notes': ticket.notes,
             'assigned_at': ticket.assigned_at,
             'assignment_role': 'lead' if ticket.technician_id == technician.id else 'crew',
-            'crew_members': serialize_ticket_crew_members(ticket),
-            'inventory_reservations': serialize_ticket_inventory(ticket),
+            'crew_members': serialize_ticket_crew_members(ticket, use_prefetch=True),
+            'inventory_reservations': serialize_ticket_inventory(ticket, use_prefetch=True),
             'required_equipment': ticket.request.service_type.required_equipment if ticket.request.service_type else [],
             'checklist_completed': checklist_completed,
         }
@@ -316,8 +316,8 @@ class TechnicianJobsView(viewsets.ViewSet):
             'notes': ticket.notes or '',
             'technician': client_technician_label(ticket.technician) if ticket.technician else None,
             'lead_technician': client_technician_label(ticket.technician) if ticket.technician else None,
-            'crew_members': serialize_ticket_crew_members(ticket),
-            'inventory_reservations': serialize_ticket_inventory(ticket),
+            'crew_members': serialize_ticket_crew_members(ticket, use_prefetch=True),
+            'inventory_reservations': serialize_ticket_inventory(ticket, use_prefetch=True),
             'assignment_role': assignment_role,
             'checklist_completed': checklist_completed,
             'checklist_completed_at': checklist_completed_at,
@@ -333,7 +333,7 @@ class TechnicianJobsView(viewsets.ViewSet):
         tickets = get_technician_ticket_queryset(
             technician,
             base_queryset=ServiceTicket.objects.select_related(
-                'request__service_type', 'request__client', 'request__location', 'technician'
+                'request__service_type', 'request__client', 'request__location', 'technician', 'inspection'
             ).prefetch_related(
                 'request__service_items__service_type',
                 'crew_assignments__technician',
@@ -351,7 +351,7 @@ class TechnicianJobsView(viewsets.ViewSet):
             ticket = get_technician_ticket_queryset(
                 request.user,
                 base_queryset=ServiceTicket.objects.select_related(
-                    'request__service_type', 'request__client', 'request__location', 'technician'
+                    'request__service_type', 'request__client', 'request__location', 'technician', 'inspection'
                 ).prefetch_related(
                     'request__service_items__service_type',
                     'crew_assignments__technician',
@@ -665,6 +665,7 @@ class TechnicianJobsView(viewsets.ViewSet):
                 inventory_usage=request.data.get('inventory_usage') if new_status == 'Completed' else None,
             )
         except ValueError as exc:
+            transaction.set_rollback(True)
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         if resolved_status == 'Completed':
@@ -771,7 +772,7 @@ class TechnicianScheduleView(viewsets.ViewSet):
                 'scheduled_time_slot': ticket.scheduled_time_slot,
                 'notes': ticket.notes or '',
                 'assignment_role': 'lead' if ticket.technician_id == technician.id else 'crew',
-                'crew_members': serialize_ticket_crew_members(ticket),
+                'crew_members': serialize_ticket_crew_members(ticket, use_prefetch=True),
             })
 
         return Response(schedule)
@@ -970,8 +971,8 @@ class TechnicianHistoryView(viewsets.ViewSet):
                 'address': address,
                 'assignmentRole': 'lead' if ticket.technician_id == request.user.id else 'crew',
                 'lead_technician': client_technician_label(ticket.technician) if ticket.technician_id else '',
-                'crew_members': serialize_ticket_crew_members(ticket),
-                'inventory_reservations': serialize_ticket_inventory(ticket),
+                'crew_members': serialize_ticket_crew_members(ticket, use_prefetch=True),
+                'inventory_reservations': serialize_ticket_inventory(ticket, use_prefetch=True),
                 'client_rating': ticket.client_rating,
                 'client_feedback': ticket.client_feedback,
                 'warranty_status': ticket.warranty_status,

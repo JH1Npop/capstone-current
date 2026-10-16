@@ -5,7 +5,7 @@ from .views import (
     ServiceTicketViewSet, TechnicianSkillViewSet, ServiceStatusHistoryViewSet,
     InspectionChecklistViewSet, SolarCommissioningChecklistViewSet, TurnoverAcceptanceViewSet, TechnicalDataSheetViewSet, InstallationContractViewSet, TechnicianLocationHistoryViewSet, GISDashboardView,
     ServiceAnalyticsViewSet, TechnicianPerformanceViewSet, DemandForecastViewSet, ServiceTrendViewSet,
-    TechnicianClientsView, StatusReportsViewSet, ORSViewSet, CoverageHeatmapViewSet,
+    TechnicianClientsView, ORSViewSet, CoverageHeatmapViewSet,
     TechnicianDashboardView, TechnicianJobsView, TechnicianScheduleView
 )
 from .views_follow_up import FollowUpCaseViewSet, MaintenanceScheduleViewSet

@@ -353,21 +353,21 @@ class DashboardView(APIView):
 
         # User statistics
         total_users = User.objects.count()
-        active_technicians = User.objects.filter(role='technician', status='active').count()
+        active_technicians = User.objects.filter(role='technician', status='active', is_active=True).count()
 
         # Recent activity - use select_related to avoid N+1 queries
         # ServiceTicket has no created_at field, so use the request date or ticket id
         recent_tickets = ServiceTicket.objects.select_related(
-            'request', 'request__client', 'request__service_type', 'technician'
+            'request', 'request__client', 'request__service_type', 'request__location', 'technician'
         ).order_by('-id')[:5]
         # ServiceRequest uses request_date for creation
         recent_requests = ServiceRequest.objects.select_related(
-            'client', 'service_type'
+            'client', 'service_type', 'location'
         ).order_by('-request_date')[:5]
 
         # Client schedule for upcoming assignment tasks - load all relationships
         client_schedule_queryset = ServiceTicket.objects.select_related(
-            'request', 'request__client', 'request__service_type', 'technician'
+            'request', 'request__client', 'request__service_type', 'request__location', 'technician'
         ).filter(
             status__in=ACTIVE_TICKET_STATUSES,
             scheduled_date__isnull=False
@@ -376,17 +376,17 @@ class DashboardView(APIView):
         unassigned_scheduled_jobs = client_schedule_queryset.filter(technician__isnull=True).count()
         client_schedule_tickets = client_schedule_queryset.order_by('scheduled_date', 'scheduled_time')[:20]
         sla_service_tickets = ServiceTicket.objects.select_related(
-            'request', 'request__client', 'request__service_type', 'technician'
-        ).filter(status__in=ACTIVE_TICKET_STATUSES)
+            'request', 'request__client', 'request__service_type', 'request__location', 'technician'
+        ).filter(status__in=ACTIVE_TICKET_STATUSES).prefetch_related('status_history')
 
         # Pending requests from clients (new)
         pending_requests_queryset = ServiceRequest.objects.select_related(
-            'client', 'service_type'
+            'client', 'service_type', 'location'
         ).filter(status='Pending')
         pending_requests_count = pending_requests_queryset.count()
         pending_requests = pending_requests_queryset.order_by('request_date')[:10]
         sla_service_requests = ServiceRequest.objects.select_related(
-            'client', 'service_type'
+            'client', 'service_type', 'location'
         ).filter(status='Pending')
         maintenance_schedules = MaintenanceSchedule.objects.select_related(
             'client',
@@ -406,7 +406,7 @@ class DashboardView(APIView):
         # Operations functionality for the admin dashboard
         thirty_days_ago = timezone.now() - timedelta(days=30)
         team_tickets = ServiceTicket.objects.select_related(
-            'request', 'request__client', 'request__service_type', 'technician'
+            'request', 'request__client', 'request__service_type', 'request__location', 'technician'
         )
         team_ticket_count = team_tickets.count()
         active_team_tickets = team_tickets.filter(status__in=ACTIVE_TICKET_STATUSES).count()
@@ -871,6 +871,8 @@ class AdminCalendarView(APIView):
             preferred_date__lte=end_date,
         ).exclude(
             id__in=ticket_request_ids,
+        ).exclude(
+            status='Cancelled',
         ).order_by('preferred_date', 'id')
 
         events = [self._serialize_ticket_event(ticket) for ticket in tickets]
@@ -908,7 +910,7 @@ class AdminCalendarView(APIView):
         assignment_status = 'assigned' if ticket.technician_id else 'unassigned'
         latest_reschedule = (
             ticket.status_history
-            .filter(notes__icontains='Schedule confirmed')
+            .filter(Q(notes__startswith='Rescheduled to ') | Q(notes__icontains='Schedule confirmed'))
             .order_by('-timestamp')
             .first()
         )

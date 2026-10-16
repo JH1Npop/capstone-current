@@ -30,7 +30,6 @@ from services.views.inspection import (
 
 # reports.py
 from services.views.reports import (
-    StatusReportsViewSet,
     CoverageHeatmapViewSet,
     ORSViewSet,
 )

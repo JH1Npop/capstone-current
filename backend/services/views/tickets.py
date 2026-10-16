@@ -75,6 +75,7 @@ from services.views.helpers import (
     sync_ticket_reservations,
     sync_ticket_team_availability,
     ticket_has_technician_access,
+    ticket_requires_inspection_visit,
     timezone,
     transaction,
     user_can_manage_service_requests,
@@ -100,6 +101,9 @@ from inventory.models import (
     InventoryTransaction,
 )
 from services.user_display import client_technician_label
+
+
+RESCHEDULE_HISTORY_PREFIX = 'Rescheduled to'
 
 
 def _notify_admin_ticket_progress(*, ticket, actor, title, body, notification_type='info'):
@@ -272,6 +276,12 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             raise ValidationError({
                 'status': 'Use the update-status action to change ticket status.'
             })
+        if 'technician' in serializer.validated_data and (
+            serializer.validated_data['technician'] != serializer.instance.technician
+        ):
+            raise ValidationError({
+                'technician': 'Use the assign action so skill, capacity, and schedule checks run.'
+            })
         serializer.save()
 
     def destroy(self, request, *args, **kwargs):
@@ -304,6 +314,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             'inspection',
             'maintenance_schedule'
         ).prefetch_related(
+            'request__service_items__service_type',
             'crew_assignments__technician',
             'inventory_reservations__item',
             'inventory_reservations__technician',
@@ -1155,6 +1166,8 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 ticket.assigned_admin = _default_ticket_admin_for_actor(request.user)
             ticket.technician = technician
             ticket.assigned_at = timezone.now()
+            if dispatch_stage == 'inspection':
+                ticket.ticket_type = 'inspection'
             apply_schedule_fields(
                 ticket,
                 scheduled_date=scheduled_date,
@@ -1185,6 +1198,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                         ),
                     )
                 except ValueError as exc:
+                    transaction.set_rollback(True)
                     return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
             inventory_summary = sync_ticket_reservations(ticket, performed_by=request.user)
@@ -1197,6 +1211,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                         performed_by=request.user,
                     )
                 except (InventoryItem.DoesNotExist, TypeError, ValueError) as exc:
+                    transaction.set_rollback(True)
                     return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
             # Calculate routing information if coordinates available
@@ -1335,6 +1350,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             # Make sure it saves
             ticket.save()
         except ValueError as exc:
+            transaction.set_rollback(True)
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         if is_approval:
@@ -1479,7 +1495,11 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             sync_ticket_crew_assignments(ticket, [])
 
             sync_ticket_team_availability(ticket, extra_technicians=previous_team_ids)
-            
+
+            if ticket_requires_inspection_visit(ticket):
+                ticket.ticket_type = 'inspection'
+                ticket.save(update_fields=['ticket_type'])
+
             assignment_status = None
             if ticket.ticket_type == 'inspection' and ticket.status != 'For Inspection':
                 assignment_status = 'For Inspection'
@@ -1499,6 +1519,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                         ),
                     )
                 except ValueError as exc:
+                    transaction.set_rollback(True)
                     return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
             inventory_summary = sync_ticket_reservations(ticket, performed_by=request.user)
@@ -1509,12 +1530,13 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 start_coords = (float(loc.longitude), float(loc.latitude))
                 end_coords = (float(selected_technician.current_longitude), float(selected_technician.current_latitude))
                 # Start route calculation in background thread
-                route_thread = Thread(
+                # Start only after commit: the worker re-saves the whole ticket and
+                # must not read (and later overwrite with) the pre-assignment row.
+                transaction.on_commit(lambda ticket_id=ticket.id: Thread(
                     target=_calculate_route_async,
-                    args=(ticket.id, start_coords, end_coords),
-                    daemon=True
-                )
-                route_thread.start()
+                    args=(ticket_id, start_coords, end_coords),
+                    daemon=True,
+                ).start())
 
             # Create status history
             action = "re-assigned" if current_tech_id and current_tech_id != selected_technician.id else "auto-assigned"
@@ -1742,6 +1764,8 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 inventory_usage=request.data.get('inventory_usage'),
             )
         except ValueError as exc:
+            # The status save precedes stock issuing; undo it so a rejected request leaves no partial completion.
+            transaction.set_rollback(True)
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         if resolved_status == 'Completed':
@@ -2058,7 +2082,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             if request.user.role != 'client' or ticket.request.client_id != request.user.id:
                 raise PermissionDenied('Only the client can request a reschedule.')
 
-            if ticket.status in ['In Progress', 'Completed', 'Cancelled'] or ticket.start_time:
+            if ticket.status not in CLIENT_RESCHEDULABLE_TICKET_STATUSES or ticket.start_time:
                 return Response(
                     {'error': 'Reschedule can only be requested before work has started.'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -2134,6 +2158,12 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             ticket = self.get_locked_ticket()
             if not user_can_manage_service_requests(request.user) and not CanManageServiceTickets().has_permission(request, self):
                 raise PermissionDenied('You do not have permission to reschedule tickets.')
+
+            if ticket.status in {'Completed', 'Turned Over / Accepted', 'Cancelled'}:
+                return Response(
+                    {'error': f'A {ticket.status.lower()} ticket cannot be rescheduled.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             scheduled_date = request.data.get('scheduled_date')
             scheduled_time_slot = request.data.get('scheduled_time_slot')
@@ -2216,11 +2246,12 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             ticket.save(update_fields=list(dict.fromkeys(update_fields)))
             sync_ticket_team_availability(ticket)
 
+            slot_label = f' ({ticket.scheduled_time_slot})' if ticket.scheduled_time_slot else ''
             ServiceStatusHistory.objects.create(
                 ticket=ticket,
                 status=ticket.status,
                 changed_by=request.user,
-                notes=notes,
+                notes=f'{RESCHEDULE_HISTORY_PREFIX} {ticket.scheduled_date}{slot_label}: {notes}',
             )
 
             send_user_notification(

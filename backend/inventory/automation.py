@@ -23,8 +23,14 @@ def _notify_roles(message, notification_type='info', roles=None):
         )
 
 
-def serialize_ticket_inventory(ticket):
-    reservations = ticket.inventory_reservations.select_related('item', 'technician').order_by('id')
+def serialize_ticket_inventory(ticket, *, use_prefetch=False):
+    # Read-only list views pass use_prefetch=True to reuse prefetched reservations;
+    # write paths keep the fresh query so they never serialize stale data.
+    cached = getattr(ticket, '_prefetched_objects_cache', {}).get('inventory_reservations') if use_prefetch else None
+    if cached is not None:
+        reservations = sorted(cached, key=lambda reservation: reservation.id)
+    else:
+        reservations = ticket.inventory_reservations.select_related('item', 'technician').order_by('id')
     return [
         {
             'id': reservation.id,

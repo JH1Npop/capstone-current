@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
@@ -252,15 +253,21 @@ def send_user_notification(
         request=request,
     )
 
-    if notification and send_email and email_enabled:
-        notification.email_sent = send_notification_email(user=user, title=title, body=body)
-        notification.save(update_fields=['email_sent'])
-
-    if notification:
-        return notification
     if send_email and email_enabled:
-        send_notification_email(user=user, title=title, body=body)
-    return None
+        from .models import Notification
+
+        notification_id = notification.pk if notification else None
+
+        def deliver():
+            sent = send_notification_email(user=user, title=title, body=body)
+            if notification_id:
+                Notification.objects.filter(pk=notification_id).update(email_sent=sent)
+
+        # Deliver only after commit so rolled-back work sends nothing and the
+        # request does not hold row locks while the email provider responds.
+        transaction.on_commit(deliver, robust=True)
+
+    return notification
 
 
 def send_team_notification(

@@ -202,7 +202,8 @@ class InventoryCapabilityTests(APITestCase):
         )
         allowed = self.client.get('/api/dashboard/stats/', {'role': 'technician'})
         self.assertEqual(allowed.status_code, status.HTTP_200_OK)
-        self.assertEqual([item['id'] for item in allowed.data['low_stock_alerts']], [self.item.id])
+        # The seeded operational catalog may contribute its own low-stock rows.
+        self.assertIn(self.item.id, [item['id'] for item in allowed.data['low_stock_alerts']])
 
     def test_client_cannot_access_inventory(self):
         user = self.create_user('inventory-client-isolated', 'client')
@@ -507,6 +508,44 @@ class AutoInventoryWorkflowTests(APITestCase):
                 transaction_type='cancellation',
             ).exists()
         )
+
+    def test_rejected_inventory_usage_leaves_ticket_uncompleted(self):
+        self.assertEqual(self.assign_ticket().status_code, status.HTTP_200_OK)
+        self.ticket.status = 'Arrived on Site'
+        self.ticket.save(update_fields=['status'])
+        reservation = InventoryReservation.objects.get(service_ticket=self.ticket)
+        self.client.force_authenticate(user=self.technician_user)
+        self.client.post(
+            f'/api/services/service-tickets/{self.ticket.id}/start_work/',
+            {},
+            format='json',
+        )
+        InspectionChecklist.objects.create(
+            ticket=self.ticket,
+            is_completed=True,
+            completed_at=timezone.now(),
+            completed_by=self.technician_user,
+        )
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{self.ticket.id}/complete_work/',
+            {
+                'completion_proof_images': ['data:image/jpeg;base64,rejected-usage-proof'],
+                'inventory_usage': [
+                    {'reservation_id': reservation.id, 'quantity_used': reservation.quantity + 1},
+                ],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.status, 'In Progress')
+        self.assertIsNone(self.ticket.completed_date)
+        self.ticket.request.refresh_from_db()
+        self.assertEqual(self.ticket.request.status, 'In Progress')
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.status, 'pending')
 
     def test_ticket_equipment_reconciliation_returns_only_outstanding_issued_stock(self):
         self.ticket.technician = self.technician_user

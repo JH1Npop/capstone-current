@@ -39,6 +39,10 @@ class TechnicalDataSheetSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if self.instance and self.instance.status == 'reviewed':
             raise serializers.ValidationError("Cannot update a Technical Data Sheet that has already been reviewed.")
+        request = self.context.get('request')
+        if request is not None and getattr(request.user, 'role', None) == 'technician':
+            # Status moves only through the submit and review actions.
+            attrs.pop('status', None)
         expected_types = {
             'purpose_of_going_solar': list,
             'load_schedule_json': list,

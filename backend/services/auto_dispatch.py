@@ -102,8 +102,8 @@ def find_best_technician(ticket: ServiceTicket) -> Optional[Dict[str, Any]]:
     """
     Find the best technician to assign to a ticket.
 
-    Evaluates all available technicians with matching skills and returns
-    the one with the highest fitness score.
+    Among qualified technicians (score above the threshold), prefers the one
+    with the fewest booked minutes that day, then the highest fitness score.
 
     Args:
         ticket: ServiceTicket to find technician for
@@ -204,6 +204,24 @@ def auto_assign_technician(ticket: ServiceTicket) -> bool:
                 f"Auto-assigned ticket {ticket.id} to technician {technician.username} "
                 f"with score {best_match['score']}"
             )
+
+            # Same rule as manual dispatch: a service that needs a site
+            # inspection is dispatched as an inspection visit first.
+            from services.views.helpers import (
+                ALLOWED_TICKET_TRANSITIONS,
+                apply_ticket_status_change,
+                ticket_requires_inspection_visit,
+            )
+            if ticket_requires_inspection_visit(ticket):
+                ticket.ticket_type = 'inspection'
+                ticket.save(update_fields=['ticket_type'])
+                if 'For Inspection' in ALLOWED_TICKET_TRANSITIONS.get(ticket.status, set()):
+                    apply_ticket_status_change(
+                        ticket,
+                        'For Inspection',
+                        changed_by=None,
+                        notes='Auto-dispatched for the required site inspection.',
+                    )
 
             # Notify technician
             send_user_notification(

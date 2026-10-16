@@ -665,7 +665,7 @@ Maintenance Details:
 - Last Service Date: {schedule.last_service_date}
 - Interval: {schedule.interval_days} days
 
-Risk Assessment: {schedule.get_risk_level_display().title()} (Score: {schedule.risk_score}/100)
+Risk Assessment: {str(schedule.risk_level or 'normal').title()} (Score: {schedule.risk_score}/100)
 
 Please schedule your maintenance appointment at your earliest convenience to ensure your equipment continues to operate optimally. Our team is ready to assist you!
 

@@ -26,6 +26,13 @@ from ..job_progress import get_ticket_workflow_progress
 from .field_operations import InspectionChecklistSerializer, ServiceStatusHistorySerializer
 from .requests import ServiceRequestSerializer
 
+
+def _prefetched_or(obj, relation, fallback, *, key, reverse=False):
+    """Sort a prefetched relation in Python; query only when the caller did not prefetch it."""
+    cached = getattr(obj, '_prefetched_objects_cache', {}).get(relation)
+    rows = list(cached) if cached is not None else list(fallback())
+    return sorted(rows, key=key, reverse=reverse)
+
 class TechnicianLocationHistorySerializer(serializers.ModelSerializer):
     technician_name = serializers.SerializerMethodField()
 
@@ -257,7 +264,10 @@ class ServiceTicketSerializer(serializers.ModelSerializer):
                     or assignment.technician.username
                 ),
             }
-            for assignment in obj.crew_assignments.select_related('technician').order_by('created_at', 'id')
+            for assignment in _prefetched_or(
+                obj, 'crew_assignments', lambda: obj.crew_assignments.select_related('technician'),
+                key=lambda row: (row.created_at, row.id),
+            )
         ]
 
     def get_sla(self, obj):
@@ -328,7 +338,10 @@ class ServiceTicketSerializer(serializers.ModelSerializer):
                 'warranty_start': equipment.warranty_start,
                 'warranty_end': equipment.warranty_end,
             }
-            for equipment in obj.installed_equipment.all().order_by('-created_at', '-id')
+            for equipment in _prefetched_or(
+                obj, 'installed_equipment', obj.installed_equipment.all,
+                key=lambda row: (row.created_at, row.id), reverse=True,
+            )
         ]
 
     def get_field_service_reports(self, obj):
@@ -340,7 +353,10 @@ class ServiceTicketSerializer(serializers.ModelSerializer):
                 'recommendation': report.recommendation,
                 'client_acknowledged': report.client_acknowledged,
             }
-            for report in obj.field_service_reports.all().order_by('-created_at', '-id')
+            for report in _prefetched_or(
+                obj, 'field_service_reports', obj.field_service_reports.all,
+                key=lambda row: (row.created_at, row.id), reverse=True,
+            )
         ]
 
     def get_ticket_code(self, obj):

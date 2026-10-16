@@ -129,9 +129,18 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
             ticket=ticket,
             status='For Inspection',
         ).exists()
-        if ticket.status not in {'For Inspection', 'In Progress'} or not was_dispatched_for_inspection:
+        if ticket.status not in {'For Inspection', 'Arrived on Site', 'In Progress'} or not was_dispatched_for_inspection:
             return
         try:
+            if ticket.status == 'Arrived on Site':
+                # The report can be submitted straight after arrival (the dashboard offers it then);
+                # record the visit as started so the state machine reaches Inspection Completed.
+                apply_ticket_status_change(
+                    ticket,
+                    'In Progress',
+                    changed_by=self.request.user,
+                    notes='Site inspection started on arrival.',
+                )
             apply_ticket_status_change(
                 ticket,
                 'Inspection Completed',
@@ -382,6 +391,7 @@ class TurnoverAcceptanceViewSet(viewsets.ModelViewSet):
                 extra_update_fields=warranty_update_fields,
             )
         except ValueError as exc:
+            transaction.set_rollback(True)
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         sync_ticket_maintenance_schedule(ticket)
 
@@ -570,9 +580,9 @@ class TechnicianLocationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
 
         technicians = User.objects.filter(
             role='technician',
-            is_available=True,
+            technician_profile__is_available=True,
             status='active'
-        )
+        ).select_related('technician_profile')
 
         nearby = []
         for tech in technicians:

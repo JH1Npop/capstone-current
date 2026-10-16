@@ -530,7 +530,10 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         ticket.refresh_from_db()
         self.assertEqual(ticket.scheduled_date, original_date + timedelta(days=1))
         history = ServiceStatusHistory.objects.filter(ticket=ticket).latest('timestamp')
-        self.assertEqual(history.notes, 'Client confirmed the revised access window.')
+        self.assertEqual(
+            history.notes,
+            f'Rescheduled to {ticket.scheduled_date}: Client confirmed the revised access window.',
+        )
 
     def test_manual_status_change_requires_and_preserves_operator_reason(self):
         request_obj = ServiceRequest.objects.create(
@@ -1415,11 +1418,12 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         )
 
         self.client.force_authenticate(user=self.admin_user)
-        response = self.client.post(
-            f'/api/services/service-tickets/{ticket.id}/auto_assign/',
-            {},
-            format='json',
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f'/api/services/service-tickets/{ticket.id}/auto_assign/',
+                {},
+                format='json',
+            )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         assignee_notification = Notification.objects.filter(
@@ -1802,11 +1806,12 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         )
 
         self.client.force_authenticate(user=self.supervisor_user)
-        response = self.client.post(
-            f'/api/services/service-tickets/{ticket.id}/assign/',
-            {'technician_id': self.technician_user.id},
-            format='json',
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f'/api/services/service-tickets/{ticket.id}/assign/',
+                {'technician_id': self.technician_user.id},
+                format='json',
+            )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         assignee_notification = Notification.objects.filter(

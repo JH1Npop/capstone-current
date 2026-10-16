@@ -111,7 +111,16 @@ class UserViewSet(viewsets.ModelViewSet):
         """Get current user info"""
         if request.method.lower() == 'patch':
             old_email = str(request.user.email or '').strip()
-            serializer = SelfUserUpdateSerializer(request.user, data=request.data, partial=True)
+            payload = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+            current_password = str(payload.pop('current_password', '') or '')
+            requested_email = str(payload.get('email') or '').strip()
+            if requested_email and requested_email.lower() != old_email.lower():
+                if not request.user.check_password(current_password):
+                    return Response(
+                        {'current_password': 'Enter your current password to change your email address.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            serializer = SelfUserUpdateSerializer(request.user, data=payload, partial=True)
             if serializer.is_valid():
                 user = serializer.save()
                 pending_email = str(getattr(user, 'pending_email', '') or '').strip()
@@ -208,7 +217,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not default_token_generator.check_token(user, token):
+        if not email_verification_token_generator.check_token(user, token):
             return Response(
                 {'error': 'This verification link is invalid or has expired.'},
                 status=status.HTTP_400_BAD_REQUEST,

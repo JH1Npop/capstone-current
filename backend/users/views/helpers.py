@@ -1,8 +1,17 @@
 from django.conf import settings as django_settings
 from django.contrib.auth import authenticate
-from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.tokens import PasswordResetTokenGenerator, default_token_generator
+
+
+class EmailVerificationTokenGenerator(PasswordResetTokenGenerator):
+    """Distinct signing salt so a verification link can never reset a password."""
+    key_salt = 'users.views.helpers.EmailVerificationTokenGenerator'
+
+
+email_verification_token_generator = EmailVerificationTokenGenerator()
 from django.core.mail import send_mail
 from django.db import transaction
+from django.db.models import ProtectedError
 from django.db.models import Avg, Count, Q, F
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -73,10 +82,19 @@ def delete_expired_unverified_clients():
         Q(email_verification_sent_at__isnull=True, date_joined__lt=cutoff)
     )
 
+    # Only unverified accounts with no service history are removable. Deleting
+    # a client cascades to their requests, tickets, and history, so an account
+    # an administrator already created work for must be kept.
+    expired_clients = expired_clients.filter(servicerequest__isnull=True, solar_estimates__isnull=True)
+
     deleted_count = 0
     for client in expired_clients:
         client._activity_reason = 'Email verification was not completed before the expiry window.'
-        client.delete()
+        try:
+            client.delete()
+        except ProtectedError:
+            logger.warning('Skipped purge of unverified client %s: protected records exist.', client.pk)
+            continue
         deleted_count += 1
     return deleted_count
 
@@ -194,7 +212,7 @@ def send_email_verification_email(user, request=None):
         return
 
     uid = urlsafe_base64_encode(force_bytes(user.pk))
-    token = default_token_generator.make_token(user)
+    token = email_verification_token_generator.make_token(user)
     frontend_base_url = _frontend_base_url_from_request(request)
     verify_link = (
         f"{frontend_base_url}/verify-email"
@@ -225,7 +243,7 @@ def send_pending_email_verification_email(user, request=None):
         return
 
     uid = urlsafe_base64_encode(force_bytes(user.pk))
-    token = default_token_generator.make_token(user)
+    token = email_verification_token_generator.make_token(user)
     frontend_base_url = _frontend_base_url_from_request(request)
     verify_link = (
         f"{frontend_base_url}/verify-email"

@@ -230,16 +230,17 @@ class NotificationUtilityTests(APITestCase):
 
     @patch('notifications.notification_utils.send_notification_email', return_value=True)
     def test_send_team_notification_creates_one_notification_per_recipient(self, mock_send_email):
-        result = send_team_notification(
-            'Team Task',
-            'Please review the new job assignment.',
-            role='technician',
-            notification_type='ticket_assigned',
-            data={
-                'action': 'view_job',
-                'job_id': 42,
-            },
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            result = send_team_notification(
+                'Team Task',
+                'Please review the new job assignment.',
+                role='technician',
+                notification_type='ticket_assigned',
+                data={
+                    'action': 'view_job',
+                    'job_id': 42,
+                },
+            )
 
         notifications = Notification.objects.filter(title='Team Task')
 
@@ -295,22 +296,23 @@ class NotificationUtilityTests(APITestCase):
             priority='Urgent',
         )
 
-        notify_supervisors_ticket_escalation(
-            ticket,
-            'start_overdue',
-            {
-                'minutes_overdue': 30,
-                'action_required': 'Start work',
-            },
-        )
-        notify_supervisors_ticket_escalation(
-            ticket,
-            'start_overdue',
-            {
-                'minutes_overdue': 60,
-                'action_required': 'Start work',
-            },
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_supervisors_ticket_escalation(
+                ticket,
+                'start_overdue',
+                {
+                    'minutes_overdue': 30,
+                    'action_required': 'Start work',
+                },
+            )
+            notify_supervisors_ticket_escalation(
+                ticket,
+                'start_overdue',
+                {
+                    'minutes_overdue': 60,
+                    'action_required': 'Start work',
+                },
+            )
 
         notifications = Notification.objects.filter(
             ticket=ticket,

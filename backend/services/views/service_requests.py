@@ -91,7 +91,9 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_throttles(self):
-        if self.action == 'create':
+        # The hourly cap protects against client spam; staff intake (walk-in,
+        # phone) is not limited by it.
+        if self.action == 'create' and getattr(self.request.user, 'role', None) == 'client':
             self.throttle_scope = 'service_request_create'
             return [ScopedRateThrottle()]
         return super().get_throttles()
@@ -181,10 +183,13 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
-        """Approve request (ticket already auto-created at submission)"""
+        """Approve a pending request and create its operational ticket."""
         with transaction.atomic():
             service_request = self.get_locked_request()
-            require_inspection = str(request.data.get('require_inspection', '')).lower() == 'true'
+            require_inspection = (
+                str(request.data.get('require_inspection', '')).lower() == 'true'
+                or bool(service_request.service_type.requires_site_inspection)
+            )
 
             if service_request.status != 'Pending':
                 return Response(

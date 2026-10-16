@@ -31,10 +31,63 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
     ticket_count = serializers.SerializerMethodField()
     usage_count = serializers.SerializerMethodField()
 
+    def _viewer_level(self):
+        # 'staff' for catalog viewers and internal callers, otherwise 'user' or 'anonymous'.
+        from users.rbac import (
+            SERVICE_CATALOG_VIEW_CAPABILITIES,
+            is_admin_workspace_role,
+            user_has_any_capability,
+        )
+
+        # Resolved once per serializer: in a list the same child serializer renders every row.
+        cached = getattr(self, '_viewer_level_cache', None)
+        if cached is not None:
+            return cached
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request is not None else None
+        if request is None:
+            level = 'staff'
+        elif not user or not user.is_authenticated:
+            level = 'anonymous'
+        elif is_admin_workspace_role(user.role) and user_has_any_capability(user, SERVICE_CATALOG_VIEW_CAPABILITIES):
+            level = 'staff'
+        else:
+            level = 'user'
+        self._viewer_level_cache = level
+        return level
+
+    @staticmethod
+    def _requirement_rows(obj):
+        prefetched = getattr(obj, '_prefetched_objects_cache', {}).get('inventory_requirements')
+        if prefetched is not None:
+            return list(prefetched)
+        return list(obj.inventory_requirements.select_related('item').order_by('item__name', 'id'))
+
     def get_inventory_requirements_count(self, obj):
-        return obj.inventory_requirements.count()
+        if self._viewer_level() != 'staff':
+            return None
+        annotated = getattr(obj, 'annotated_requirement_count', None)
+        if annotated is not None:
+            return annotated
+        return len(self._requirement_rows(obj))
 
     def get_inventory_requirements(self, obj):
+        level = self._viewer_level()
+        if level == 'anonymous':
+            return []
+        rows = self._requirement_rows(obj)
+        if level == 'user':
+            # Customers may see which materials a service plans to use, but not
+            # SKUs or live stock levels.
+            return [
+                {
+                    'id': requirement.id,
+                    'item_name': requirement.item.name,
+                    'quantity': requirement.quantity,
+                    'auto_reserve': requirement.auto_reserve,
+                }
+                for requirement in rows
+            ]
         return [
             {
                 'id': requirement.id,
@@ -45,16 +98,28 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
                 'available_quantity': requirement.item.available_quantity,
                 'auto_reserve': requirement.auto_reserve,
             }
-            for requirement in obj.inventory_requirements.select_related('item').order_by('item__name', 'id')
+            for requirement in rows
         ]
 
     def get_request_count(self, obj):
+        if self._viewer_level() != 'staff':
+            return None
+        annotated = getattr(obj, 'annotated_request_count', None)
+        if annotated is not None:
+            return annotated
         return ServiceRequest.objects.filter(service_type=obj).count()
 
     def get_ticket_count(self, obj):
+        if self._viewer_level() != 'staff':
+            return None
+        annotated = getattr(obj, 'annotated_ticket_count', None)
+        if annotated is not None:
+            return annotated
         return ServiceTicket.objects.filter(request__service_type=obj).count()
 
     def get_usage_count(self, obj):
+        if self._viewer_level() != 'staff':
+            return None
         return self.get_request_count(obj) + self.get_ticket_count(obj)
 
     def validate_name(self, value):
@@ -114,7 +179,7 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
         model = ServiceType
         fields = ['id', 'name', 'description', 'category', 'color', 'icon', 'display_order',
                   'estimated_duration', 'estimated_cost', 'max_daily_assignments',
-                  'procedures', 'required_equipment', 'is_active',
+                  'procedures', 'required_equipment', 'is_active', 'requires_site_inspection',
                   'request_count', 'ticket_count', 'usage_count',
                   'inventory_requirements_count', 'inventory_requirements']
 
@@ -219,6 +284,7 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
     client_email = serializers.SerializerMethodField()
     client_address = serializers.SerializerMethodField()
     service_type_name = serializers.CharField(source='service_type.name', read_only=True)
+    service_requires_site_inspection = serializers.BooleanField(source='service_type.requires_site_inspection', read_only=True)
     service_summary = serializers.SerializerMethodField()
     request_source_label = serializers.CharField(source='get_request_source_display', read_only=True)
     service_items = serializers.SerializerMethodField()
@@ -493,7 +559,11 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
             )
 
     def _get_service_item_data(self, obj):
-        items = list(obj.service_items.select_related('service_type').order_by('sort_order', 'id'))
+        cached = getattr(obj, '_prefetched_objects_cache', {}).get('service_items')
+        if cached is not None:
+            items = sorted(cached, key=lambda item: (item.sort_order, item.id))
+        else:
+            items = list(obj.service_items.select_related('service_type').order_by('sort_order', 'id'))
         if not items and obj.service_type_id:
             items = [
                 ServiceRequestService(
@@ -528,7 +598,7 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
         model = ServiceRequest
         fields = [
             'id', 'client', 'client_name', 'client_fullname', 'client_phone', 'client_email', 'client_address',
-            'service_type', 'service_type_name',
+            'service_type', 'service_type_name', 'service_requires_site_inspection',
             'service_types', 'service_items', 'service_summary',
             'description', 'priority', 'status', 'preferred_date',
             'preferred_time_slot', 'request_source', 'request_source_label',

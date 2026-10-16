@@ -280,8 +280,12 @@ class TurnoverAcceptanceSerializer(serializers.ModelSerializer):
         return client_technician_label(obj.finalized_by) or ''
 
     def validate(self, attrs):
-        if self.instance and self.instance.status == 'accepted':
-            raise serializers.ValidationError("Cannot update a Turnover Acceptance that has already been accepted.")
+        if self.instance and self.instance.status in {'finalized', 'accepted'}:
+            raise serializers.ValidationError("Cannot update a Turnover Acceptance that has already been finalized.")
+        request = self.context.get('request')
+        if request is not None and getattr(request.user, 'role', None) == 'technician':
+            # Finalizing is an office action performed through the finalize endpoint.
+            attrs.pop('status', None)
         return super().validate(attrs)
 
     class Meta:

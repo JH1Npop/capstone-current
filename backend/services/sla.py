@@ -169,6 +169,58 @@ def _resolve_scheduled_start(ticket):
     return naive_start.astimezone(current_timezone)
 
 
+def _status_entered_at(ticket):
+    """When the ticket most recently entered its current status, if recorded."""
+    try:
+        events = ticket.status_history.all()
+    except (ValueError, AttributeError):
+        return None
+    times = [event.timestamp for event in events if event.status == ticket.status and event.timestamp]
+    return max(times) if times else None
+
+
+def _evaluate_waiting_stage(service_ticket, *, rule, label_prefix, action_required, warning_default, overdue_default, now):
+    scheduled_start = _resolve_scheduled_start(service_ticket)
+    if service_ticket.technician_id and scheduled_start:
+        # Assigned, scheduled work is measured against its appointment.
+        warning_after, overdue_after = _rule_durations('start_delay', START_WARNING_AFTER, START_OVERDUE_AFTER)
+        return _build_timed_result(
+            rule='start_delay',
+            label_prefix='Start time',
+            warning_at=scheduled_start + warning_after,
+            due_at=scheduled_start + overdue_after,
+            action_required='Start work',
+            now=now,
+        )
+
+    entered_at = (
+        _status_entered_at(service_ticket)
+        or service_ticket.updated_at
+        or service_ticket.created_at
+        or now
+    )
+    warning_after, overdue_after = _rule_durations(rule, warning_default, overdue_default)
+    result = _build_timed_result(
+        rule=rule,
+        label_prefix=label_prefix,
+        warning_at=entered_at + warning_after,
+        due_at=entered_at + overdue_after,
+        action_required=action_required,
+        now=now,
+    )
+    if scheduled_start and scheduled_start > now and result['state'] == SLA_STATE_OVERDUE:
+        return _build_result(
+            state=SLA_STATE_INACTIVE,
+            rule=rule,
+            label=f'{label_prefix} SLA not due yet',
+            warning_at=result.get('warning_at'),
+            due_at=result.get('due_at'),
+            action_required=action_required,
+            now=now,
+        )
+    return result
+
+
 def get_ticket_dispatch_state(ticket, *, now=None):
     if now is None:
         now = timezone.now()
@@ -380,34 +432,24 @@ def evaluate_service_ticket_sla(service_ticket, *, now=None):
         )
 
     if service_ticket.status == 'For Inspection':
-        inspection_start = service_ticket.updated_at or service_ticket.created_at or now
-        warning_after, overdue_after = _rule_durations(
-            'inspection_delay',
-            INSPECTION_WARNING_AFTER,
-            INSPECTION_OVERDUE_AFTER,
-        )
-        return _build_timed_result(
+        return _evaluate_waiting_stage(
+            service_ticket,
             rule='inspection_delay',
             label_prefix='Site inspection',
-            warning_at=inspection_start + warning_after,
-            due_at=inspection_start + overdue_after,
             action_required='Complete inspection',
+            warning_default=INSPECTION_WARNING_AFTER,
+            overdue_default=INSPECTION_OVERDUE_AFTER,
             now=now,
         )
 
     if service_ticket.status == 'Ready for Service':
-        ready_start = service_ticket.updated_at or service_ticket.created_at or now
-        warning_after, overdue_after = _rule_durations(
-            'service_ready_delay',
-            SERVICE_READY_WARNING_AFTER,
-            SERVICE_READY_OVERDUE_AFTER,
-        )
-        return _build_timed_result(
+        return _evaluate_waiting_stage(
+            service_ticket,
             rule='service_ready_delay',
             label_prefix='Ready for service',
-            warning_at=ready_start + warning_after,
-            due_at=ready_start + overdue_after,
             action_required='Schedule service',
+            warning_default=SERVICE_READY_WARNING_AFTER,
+            overdue_default=SERVICE_READY_OVERDUE_AFTER,
             now=now,
         )
 
@@ -519,10 +561,11 @@ def check_and_escalate_sla_breaches(*, now=None):
 def _escalate_assignment_overdue(ticket, evaluation, logger):
     """Handle escalation for overdue assignment SLA."""
     from notifications.sla_notifications import notify_supervisors_ticket_escalation
-    from services.auto_dispatch import auto_assign_technician
+    from services.auto_dispatch import auto_assign_technician, should_attempt_auto_dispatch
 
-    # If ticket still not assigned, attempt auto-dispatch
-    if not ticket.technician:
+    # Only auto-assign when the administrator has enabled automatic dispatch;
+    # otherwise escalation notifies people and leaves the decision to them.
+    if not ticket.technician and should_attempt_auto_dispatch(ticket):
         logger.info(f"Attempting auto-dispatch for overdue ticket {ticket.id}")
         if auto_assign_technician(ticket):
             logger.info(f"Successfully auto-assigned ticket {ticket.id} after SLA escalation")

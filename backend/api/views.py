@@ -476,7 +476,6 @@ def checklist_view(request):
     if required_equipment_snapshot and not isinstance(required_equipment_snapshot, list):
         return Response({'required_equipment_snapshot': 'Required equipment must be provided as a list.'}, status=400)
 
-    all_complete = all(bool(value) for value in completed.values()) if completed else False
     if not checklist_items and completed:
         checklist_items = [
             {
@@ -486,6 +485,24 @@ def checklist_view(request):
             }
             for index, value in sorted(completed.items(), key=lambda item: int(item[0]) if str(item[0]).isdigit() else str(item[0]))
         ]
+    # Completion is derived from the submitted steps and checked against the
+    # procedures configured for every service on the ticket.
+    from services.views.technician import _serialize_ticket_service_checklists
+
+    expected_steps = sum(
+        len(service.get('procedures') or [])
+        for service in _serialize_ticket_service_checklists(ticket)
+    )
+    all_complete = bool(checklist_items) and all(
+        isinstance(item, dict) and bool(item.get('completed'))
+        for item in checklist_items
+    )
+    if all_complete and len(checklist_items) < expected_steps:
+        return Response(
+            {'checklist_items': f'Complete all {expected_steps} configured procedure steps before submitting.'},
+            status=400,
+        )
+
     maintenance_required = str(request.data.get('maintenance_required', '')).lower() in {'true', '1', 'yes'} if isinstance(request.data.get('maintenance_required'), str) else bool(request.data.get('maintenance_required'))
     maintenance_profile = request.data.get('maintenance_profile') or None
     maintenance_interval_days = request.data.get('maintenance_interval_days') or None
@@ -590,11 +607,6 @@ def checklist_view(request):
             'completed_by': request.user if all_complete else None,
             'submitted_by': request.user,
             'submitted_at': timezone.now(),
-            'site_accessible': all_complete,
-            'electrical_available': all_complete,
-            'electrical_adequate': all_complete,
-            'safety_equipment_present': all_complete,
-            'recommendation': 'Approved' if all_complete else 'Pending',
             'additional_notes': notes,
             'maintenance_required': maintenance_required,
             'maintenance_profile': maintenance_profile,

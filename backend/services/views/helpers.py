@@ -87,6 +87,7 @@ __all__ = ['record_arrival_validation_log', 'compute_arrival_validation_result',
     'clear_reschedule_request',
     'sync_request_status_from_ticket',
     'validate_ticket_transition',
+    'ticket_requires_inspection_visit',
     'ensure_ticket_checklist_completed',
     'ensure_ticket_completion_proof',
     'apply_ticket_status_change',
@@ -156,7 +157,7 @@ def _calculate_route_async(ticket_id, start_coords, end_coords):
             ticket.route_geometry = geom
             ticket.route_distance = props.get('distance')
             ticket.route_duration = props.get('duration')
-            ticket.save()
+            ticket.save(update_fields=['route_geometry', 'route_distance', 'route_duration'])
             logger.info(f"Route for ticket {ticket_id}: {ticket.route_distance}m, {ticket.route_duration}s")
     except Exception as e:
         logger.warning(f"Async route calculation failed for ticket {ticket_id}: {e}")
@@ -283,17 +284,27 @@ def send_notification_email(user, subject, message):
     if not notifications_enabled():
         return
 
-    if user.email:
+    if not user.email:
+        return
+
+    recipient_email = user.email
+    user_id = user.id
+
+    def deliver():
         try:
             send_mail(
                 subject,
                 message,
                 settings.DEFAULT_FROM_EMAIL,
-                [user.email],
+                [recipient_email],
                 fail_silently=False,
             )
         except Exception as e:
-            logger.warning(f"Email notification failed for user {user.id} ({user.email}): {e}")
+            logger.warning(f"Email notification failed for user {user_id} ({recipient_email}): {e}")
+
+    # Never send mail for a change that may still roll back, and do not hold
+    # row locks while waiting on the email provider.
+    transaction.on_commit(deliver, robust=True)
 
 
 def create_notification(user, message, notification_type='info'):
@@ -447,14 +458,20 @@ def ticket_has_technician_access(ticket, technician):
     return ticket.crew_assignments.filter(technician_id=technician.id).exists()
 
 
-def serialize_ticket_crew_members(ticket):
+def serialize_ticket_crew_members(ticket, *, use_prefetch=False):
+    cached = getattr(ticket, '_prefetched_objects_cache', {}).get('crew_assignments') if use_prefetch else None
+    assignments = (
+        sorted(cached, key=lambda assignment: (assignment.created_at, assignment.id))
+        if cached is not None
+        else ticket.crew_assignments.select_related('technician').order_by('created_at', 'id')
+    )
     return [
         {
             'id': assignment.technician_id,
             'username': assignment.technician.username,
             'name': _display_name(assignment.technician),
         }
-        for assignment in ticket.crew_assignments.select_related('technician').order_by('created_at', 'id')
+        for assignment in assignments
     ]
 
 
@@ -1113,7 +1130,9 @@ def score_technician_fit(
 
 def get_visible_service_requests_queryset(user, base_queryset=None, include_follow_up=False):
     if base_queryset is None:
-        base_queryset = ServiceRequest.objects.select_related('client', 'location', 'service_type')
+        base_queryset = ServiceRequest.objects.select_related('client', 'location', 'service_type').prefetch_related(
+            'service_items__service_type',
+        )
     # Keep approval queues oldest-first so the most time-sensitive requests surface first.
     base_queryset = base_queryset.order_by('request_date', 'id')
 
@@ -1214,6 +1233,18 @@ def validate_ticket_transition(ticket, new_status, *, allow_same=False):
         raise ValueError(f'Cannot move ticket from {ticket.status} to {normalized_status}.')
 
     return normalized_status
+
+
+def ticket_requires_inspection_visit(ticket):
+    """True when the service needs a site inspection that has not happened yet."""
+    service_type = getattr(getattr(ticket, 'request', None), 'service_type', None)
+    if not service_type or not service_type.requires_site_inspection:
+        return False
+    if ticket.ticket_type == 'inspection':
+        return False
+    if not ticket.pk:
+        return True
+    return not ServiceStatusHistory.objects.filter(ticket=ticket, status='Inspection Completed').exists()
 
 
 def ensure_ticket_checklist_completed(ticket):
