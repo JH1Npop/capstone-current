@@ -75,15 +75,50 @@ class QuotationAcceptanceTests(FlowFixture):
 
     def test_staff_recorded_acceptance_also_unblocks_service(self):
         QuotationRecord.objects.filter(pk=self.quotation.pk).update(status='Accepted')
-        response = self.as_user(self.admin).post(self.decision_url, {'decision': 'approve_service'}, format='json')
+        response = self.as_user(self.admin).post(self.decision_url, {
+            'decision': 'approve_service',
+            'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
+        }, format='json')
         self.assertEqual(response.status_code, 200, response.data)
 
     def test_setting_can_turn_the_requirement_off(self):
         settings_obj = AdminSettings.objects.first() or AdminSettings.objects.create()
         settings_obj.require_quotation_acceptance = False
         settings_obj.save(update_fields=['require_quotation_acceptance'])
-        response = self.as_user(self.admin).post(self.decision_url, {'decision': 'approve_service'}, format='json')
+        response = self.as_user(self.admin).post(self.decision_url, {
+            'decision': 'approve_service',
+            'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
+        }, format='json')
         self.assertEqual(response.status_code, 200, response.data)
+
+    def test_same_day_installation_reuses_ticket_and_requires_a_time(self):
+        QuotationRecord.objects.filter(pk=self.quotation.pk).update(status='Accepted')
+        today = timezone.localdate().isoformat()
+        installation_time = (timezone.localtime() + timedelta(hours=1)).strftime('%H:%M')
+
+        missing_date = self.as_user(self.admin).post(
+            self.decision_url, {'decision': 'approve_service'}, format='json',
+        )
+        missing_time = self.as_user(self.admin).post(
+            self.decision_url, {'decision': 'approve_service', 'scheduled_date': today}, format='json',
+        )
+        accepted = self.as_user(self.admin).post(
+            self.decision_url,
+            {'decision': 'approve_service', 'scheduled_date': today, 'scheduled_time': installation_time},
+            format='json',
+        )
+
+        self.assertEqual(missing_date.status_code, 400)
+        self.assertEqual(missing_time.status_code, 400)
+        self.assertEqual(missing_time.data['code'], 'same_day_time_required')
+        self.assertEqual(accepted.status_code, 200, accepted.data)
+        self.inspected.refresh_from_db()
+        self.assertEqual(accepted.data['ticket_id'], self.inspected.id)
+        self.assertEqual(self.inspected.status, 'Ready for Service')
+        self.assertEqual(self.inspected.ticket_type, 'installation')
+        self.assertEqual(self.inspected.scheduled_date, timezone.localdate())
+        self.assertEqual(self.inspected.scheduled_time.strftime('%H:%M'), installation_time)
+        self.assertIsNone(self.inspected.technician_id)
 
     def test_cancelling_after_inspection_needs_no_quotation(self):
         response = self.as_user(self.admin).post(self.decision_url, {'decision': 'cancel', 'notes': 'Roof unsuitable.'}, format='json')

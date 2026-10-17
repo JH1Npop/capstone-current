@@ -272,11 +272,19 @@ export const returnTicketEquipment = async (ticketId, payload) => {
   }
 };
 
-export const reviewInspectionDecision = async (ticketId, { decision, notes = '', scheduledDate = null }) => {
+export const reviewInspectionDecision = async (ticketId, {
+  decision,
+  notes = '',
+  scheduledDate = null,
+  scheduledTime = null
+}) => {
   try {
     const payload = { decision, notes };
     if (scheduledDate) {
       payload.scheduled_date = scheduledDate;
+    }
+    if (scheduledTime) {
+      payload.scheduled_time = scheduledTime;
     }
     const { data } = await api.post(`/services/service-tickets/${ticketId}/inspection_decision/`, payload);
     return data;

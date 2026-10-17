@@ -71,6 +71,19 @@ transaction `reference_number`, which preserves external or business context.
   field-inventory capability, preventing dashboard access from bypassing the
   inventory boundary.
 
+## Inspection-stage boundary
+
+- Site-inspection dispatch never reserves installation inventory. The Dispatch
+  Board sends an empty plan, and the assignment API rejects any nonempty
+  installation-equipment plan for the inspection stage.
+- If a pending reservation already exists when a ticket is dispatched as an
+  inspection visit, synchronization cancels it and restores the reserved
+  balance. Installation materials are selected and reserved only when the
+  approved same ticket is dispatched later as service work.
+- Reusable tools physically carried for assessment are operational field kit,
+  not ticket installation consumption. Any later installed material must enter
+  the service-stage reservation and completion reconciliation flow.
+
 ## Catalog identity and customization
 
 - SKU is required, trimmed, normalized to uppercase, and unique ignoring case.

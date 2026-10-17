@@ -185,7 +185,53 @@ test.describe('Technician Workspace - All Pages', () => {
   });
 
   test('4.7 - Messages / Chat interface', async ({ page }) => {
+    let participantRequests = 0;
+    let participantPhase = 'initial';
+    const draftAlpha = {
+      id: 9911,
+      username: 'draft_alpha',
+      name: 'Draft Alpha',
+      role: 'admin',
+    };
+    const draftBeta = {
+      id: 9912,
+      username: 'draft_beta',
+      name: 'Draft Beta',
+      role: 'admin',
+    };
+    await page.route(/\/api\/messages\/participants\/(?:\?.*)?$/, async (route) => {
+      participantRequests += 1;
+      const participants = participantPhase === 'removed' ? [draftBeta] : [draftAlpha, draftBeta];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(participants) });
+    });
+
     await visitWorkspacePage(page, '/technician/messages', 'test-results/screenshots/04-tech-messages.png');
+    await page.getByRole('button', { name: /Draft Alpha/ }).click();
+    const alphaDraft = 'This message belongs only to Draft Alpha.';
+    await page.getByPlaceholder('Message Draft Alpha...').fill(alphaDraft);
+
+    participantPhase = 'removed';
+    const requestsBeforeRemoval = participantRequests;
+    const removalRefresh = page.waitForResponse((response) => (
+      response.url().includes('/api/messages/participants/')
+      && participantRequests > requestsBeforeRemoval
+      && response.status() === 200
+    ));
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('afn:messages-changed')));
+    await removalRefresh;
+    await expect(page.getByPlaceholder('Message Staff Group Chat...')).toHaveValue('');
+
+    participantPhase = 'restored';
+    const requestsBeforeRestore = participantRequests;
+    const restoreRefresh = page.waitForResponse((response) => (
+      response.url().includes('/api/messages/participants/')
+      && participantRequests > requestsBeforeRestore
+      && response.status() === 200
+    ));
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('afn:messages-changed')));
+    await restoreRefresh;
+    await page.getByRole('button', { name: /Draft Alpha/ }).click();
+    await expect(page.getByPlaceholder('Message Draft Alpha...')).toHaveValue(alphaDraft);
   });
 
   test('4.8 - Job History loads', async ({ page }) => {

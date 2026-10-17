@@ -9,7 +9,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from inventory.models import InventoryCategory, InventoryItem
+from inventory.models import InventoryCategory, InventoryItem, InventoryReservation
+from inventory.automation import create_pending_reservation
 from services.maintenance import _send_client_maintenance_email
 from services.models import (
     MaintenanceSchedule,
@@ -341,6 +342,53 @@ class AuditRegressionTests(APITestCase):
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.status, 'For Inspection')
         self.assertEqual(self.ticket.ticket_type, 'inspection')
+
+    def test_inspection_dispatch_rejects_installation_equipment_plan(self):
+        ServiceType.objects.filter(pk=self.service.pk).update(requires_site_inspection=True)
+        self.client.force_authenticate(self.superadmin)
+        response = self.client.post(
+            f'/api/services/service-tickets/{self.ticket.id}/assign/',
+            {
+                'technician_id': self.technician.id,
+                'dispatch_stage': 'inspection',
+                'equipment_reservations': [{'item': self.item.id, 'quantity': 1}],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['code'], 'inspection_equipment_not_allowed')
+        self.ticket.refresh_from_db()
+        self.assertIsNone(self.ticket.technician_id)
+        self.assertFalse(InventoryReservation.objects.filter(service_ticket=self.ticket).exists())
+
+    def test_inspection_dispatch_releases_stale_pending_installation_reservation(self):
+        ServiceType.objects.filter(pk=self.service.pk).update(requires_site_inspection=True)
+        reservation = create_pending_reservation(
+            item=self.item,
+            quantity=2,
+            technician=self.technician,
+            required_date=self.ticket.scheduled_date,
+            service_ticket=self.ticket,
+            performed_by=self.superadmin,
+        )
+        self.client.force_authenticate(self.superadmin)
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{self.ticket.id}/assign/',
+            {
+                'technician_id': self.technician.id,
+                'dispatch_stage': 'inspection',
+                'equipment_reservations': [],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        reservation.refresh_from_db()
+        self.item.refresh_from_db()
+        self.assertEqual(reservation.status, 'cancelled')
+        self.assertEqual(self.item.reserved_quantity, 0)
 
     def test_approving_a_service_that_requires_inspection_starts_with_inspection(self):
         ServiceType.objects.filter(pk=self.service.pk).update(requires_site_inspection=True)

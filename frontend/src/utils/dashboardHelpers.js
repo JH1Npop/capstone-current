@@ -1,7 +1,7 @@
 // Shared admin dashboard + analytics utilities
 // Extracted to avoid duplication between AdminDashboard.jsx and AdminAnalytics.jsx
 
-export const AUTO_REFRESH_MS = 25000;
+export const AUTO_REFRESH_MS = 5000;
 
 export const formatDate = (value) => {
   if (!value) return 'No date';

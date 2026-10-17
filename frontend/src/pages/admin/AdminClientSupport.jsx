@@ -56,12 +56,13 @@ export default function AdminClientSupport() {
   const [messages, setMessages] = useState([]);
   const [selectedCaseId, setSelectedCaseId] = useState(null);
   const [statusFilter, setStatusFilter] = useState('open');
-  const [replyText, setReplyText] = useState('');
+  const [replyDrafts, setReplyDrafts] = useState({});
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState('');
 
   const selectedCase = cases.find((supportCase) => supportCase.id === selectedCaseId) || null;
+  const replyText = selectedCaseId == null ? '' : (replyDrafts[selectedCaseId] || '');
   const selectedMessages = selectedCase
     ? messages
         .filter((message) => message.roomType === 'group' && message.groupKey === selectedCase.group_key && !message.ticketId)
@@ -139,20 +140,26 @@ export default function AdminClientSupport() {
 
   const sendReply = async () => {
     if (!selectedCase || !replyText.trim()) return;
+    const targetCase = selectedCase;
+    const targetText = replyText.trim();
     setSending(true);
     try {
       const sentMessage = await sendMessage({
         roomType: 'group',
-        groupKey: selectedCase.group_key,
-        text: replyText.trim(),
+        groupKey: targetCase.group_key,
+        text: targetText,
       });
       setMessages((current) => (
         current.some((message) => String(message.id) === String(sentMessage.id))
           ? current.map((message) => (String(message.id) === String(sentMessage.id) ? sentMessage : message))
           : [...current, sentMessage]
       ));
-      setReplyText('');
-      if (selectedCase.status === 'open') {
+      setReplyDrafts((current) => {
+        const next = { ...current };
+        delete next[targetCase.id];
+        return next;
+      });
+      if (targetCase.status === 'open') {
         await updateStatus('in_review');
       }
     } catch (error) {
@@ -340,7 +347,10 @@ export default function AdminClientSupport() {
                 <div className="flex items-end gap-2 rounded-2xl bg-slate-100 p-1.5">
                   <textarea
                     value={replyText}
-                    onChange={(event) => setReplyText(event.target.value)}
+                    onChange={(event) => {
+                      const nextText = event.target.value;
+                      setReplyDrafts((current) => ({ ...current, [selectedCase.id]: nextText }));
+                    }}
                     rows={1}
                     disabled={sending}
                     placeholder={`Reply to ${selectedCase.client_name}...`}

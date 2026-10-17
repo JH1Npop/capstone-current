@@ -167,7 +167,20 @@ def sync_ticket_reservations(ticket, *, performed_by):
     }
 
     technician = ticket.technician
-    if not technician or ticket.ticket_type == 'inspection':
+    if ticket.ticket_type == 'inspection':
+        for reservation in InventoryReservation.objects.filter(
+            service_ticket=ticket,
+            status='pending',
+        ).select_related('item', 'technician'):
+            cancel_pending_reservation(
+                reservation,
+                performed_by=performed_by,
+                notes=f'Released because ticket #{ticket.id} is an inspection visit.',
+            )
+        summary['reservations'] = serialize_ticket_inventory(ticket)
+        return summary
+
+    if not technician:
         return summary
 
     requirements = list(

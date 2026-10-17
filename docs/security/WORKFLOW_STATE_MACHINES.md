@@ -59,6 +59,15 @@ selected technician is locked and the capacity, overlap, and score checks are
 repeated before assignment. A technician remains available for additional
 scheduled work while capacity permits; the derived busy state is limited to
 `Navigating`, `Arrived on Site`, and `In Progress` work.
+After an inspection reaches `Inspection Completed`, an approval continues the
+same ticket instead of creating a second ticket. The decision requires an
+installation date and, when that date is today, a later installation time. It
+changes the ticket type to `installation`, clears the inspection lead and crew,
+route/start metadata, and old time-slot value, then moves the ticket to
+`Ready for Service`. The office must dispatch the installation stage again, so
+the same technician may be selected but is not assumed to be available. When
+quotation acceptance is enabled, an accepted quotation remains a prerequisite;
+the deposit gate is enforced at installation dispatch.
 Ticket and crew-assignment model signals reconcile that derived state after
 direct model/admin changes as well as API workflow changes. The
 `reconcile_technician_availability` management command reports historical

@@ -12,7 +12,7 @@ import { startVisibleInterval } from '../utils/visibleInterval';
 import { MESSAGES_CHANGED_EVENT, setLiveUpdatesConnected } from '../utils/liveUpdates';
 
 const NotificationContext = createContext(null);
-const NOTIFICATION_REFRESH_MS = 25_000;
+const NOTIFICATION_REFRESH_MS = 5_000;
 // While the live socket is connected, polling only runs as a slow safety net.
 const LIVE_SAFETY_POLL_MS = 120_000;
 

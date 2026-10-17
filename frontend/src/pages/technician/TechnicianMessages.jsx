@@ -67,9 +67,8 @@ export default function TechnicianMessages() {
   const [messages, setMessages] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [selectedRoomKey, setSelectedRoomKey] = useState(STAFF_GROUP_ROOM.key);
-  const [newMessage, setNewMessage] = useState('');
+  const [messageDrafts, setMessageDrafts] = useState({});
   const [sending, setSending] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [previewAttachment, setPreviewAttachment] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
@@ -139,6 +138,20 @@ export default function TechnicianMessages() {
   }, [messages, participants, user?.id]);
 
   const activeRoom = rooms.find((room) => room.key === selectedRoomKey) || rooms[0] || STAFF_GROUP_ROOM;
+  const activeDraft = messageDrafts[activeRoom.key] || { text: '', image: null };
+  const newMessage = activeDraft.text;
+  const selectedImage = activeDraft.image;
+  const updateActiveDraft = (updates) => {
+    setMessageDrafts((current) => ({
+      ...current,
+      [activeRoom.key]: {
+        text: '',
+        image: null,
+        ...(current[activeRoom.key] || {}),
+        ...updates,
+      },
+    }));
+  };
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
   const visibleRooms = normalizedSearchTerm
     ? rooms.filter((room) => [
@@ -197,22 +210,28 @@ export default function TechnicianMessages() {
 
   const handleSend = async () => {
     if ((!newMessage.trim() && !selectedImage) || !activeRoom) return;
+    const targetRoom = activeRoom;
+    const targetText = newMessage;
+    const targetImage = selectedImage;
 
     try {
       setSending(true);
       const sentMessage = await sendMessage({
-        roomType: activeRoom.roomType,
-        groupKey: activeRoom.groupKey,
-        receiverId: activeRoom.participantId,
-        ticketId: activeRoom.ticketId,
-        text: newMessage,
-        image: selectedImage,
+        roomType: targetRoom.roomType,
+        groupKey: targetRoom.groupKey,
+        receiverId: targetRoom.participantId,
+        ticketId: targetRoom.ticketId,
+        text: targetText,
+        image: targetImage,
       });
       setMessages((previousMessages) => [...previousMessages, sentMessage]);
-      setNewMessage('');
-      setSelectedImage(null);
+      setMessageDrafts((current) => {
+        const next = { ...current };
+        delete next[targetRoom.key];
+        return next;
+      });
       setError('');
-      setStatusMessage(`Message sent to ${activeRoom.name}.`);
+      setStatusMessage(`Message sent to ${targetRoom.name}.`);
       window.setTimeout(() => setStatusMessage(''), 2500);
     } catch (sendError) {
       setError(sendError.message || 'Unable to send message.');
@@ -459,7 +478,7 @@ export default function TechnicianMessages() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setSelectedImage(null)}
+                    onClick={() => updateActiveDraft({ image: null })}
                     className="grid h-8 w-8 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-900"
                     aria-label="Remove image"
                   >
@@ -475,7 +494,7 @@ export default function TechnicianMessages() {
                   className="hidden"
                   onChange={(event) => {
                     const file = event.target.files?.[0] || null;
-                    setSelectedImage(file);
+                    updateActiveDraft({ image: file });
                     event.target.value = '';
                   }}
                 />
@@ -490,7 +509,7 @@ export default function TechnicianMessages() {
                 </button>
                 <textarea
                   value={newMessage}
-                  onChange={(event) => setNewMessage(event.target.value)}
+                  onChange={(event) => updateActiveDraft({ text: event.target.value })}
                   rows={1}
                   disabled={sending}
                   onKeyDown={(event) => {

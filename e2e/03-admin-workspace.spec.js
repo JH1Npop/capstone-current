@@ -56,6 +56,7 @@ test.describe('Admin Workspace - All Pages', () => {
       await route.fulfill({ response, json: payload });
     });
     await visitWorkspacePage(page, '/admin/dashboard', 'test-results/screenshots/03-admin-dashboard.png');
+    await expect(page.getByText(/refreshes every 5 seconds/i)).toBeVisible();
     await expect(page.getByText('Pending Approvals', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Active Tickets', { exact: true })).toBeVisible();
     await expect(page.getByText('Completed Today', { exact: true })).toBeVisible();
@@ -303,6 +304,35 @@ test.describe('Admin Workspace - All Pages', () => {
   });
 
   test('3.4 - Dispatch Board renders', async ({ page }) => {
+    let technicianDirectoryRequests = 0;
+    await page.route(/\/api\/admin\/technicians\/(?:\?.*)?$/, async (route) => {
+      const response = await route.fetch();
+      const payload = await response.json();
+      const technicians = Array.isArray(payload) ? payload : (payload.results || []);
+      const template = technicians[0];
+      technicianDirectoryRequests += 1;
+      const refreshSafeTechnician = template ? {
+        ...template,
+        id: 9902,
+        username: 'refresh_safe_technician',
+        first_name: 'Refresh Safe',
+        last_name: 'Technician',
+        full_name: 'Refresh Safe Technician',
+        status: 'active',
+        is_active: true,
+        is_available: true,
+        skills: ['E2E Solar Installation', 'E2E Electrical Safety Check'],
+        skill_details: [
+          { service_type: 99021, service_type_name: 'E2E Solar Installation', skill_level: 'expert' },
+          { service_type: 99022, service_type_name: 'E2E Electrical Safety Check', skill_level: 'expert' },
+        ],
+      } : null;
+      const results = refreshSafeTechnician ? [...technicians, refreshSafeTechnician] : technicians;
+      await route.fulfill({
+        response,
+        json: Array.isArray(payload) ? results : { ...payload, count: results.length, results },
+      });
+    });
     await page.route(/\/api\/inventory\/items\/(?:\?.*)?$/, async (route) => {
       await route.fulfill({
         status: 200,
@@ -323,6 +353,26 @@ test.describe('Admin Workspace - All Pages', () => {
     await page.getByRole('button', { name: 'Edit assignment' }).first().click();
     await expect(page.getByRole('heading', { name: /Assignment Review/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Update Assignment' })).toBeEnabled();
+    await page.getByRole('button', { name: 'Add crew Refresh Safe Technician' }).click();
+    await expect(page.getByRole('button', { name: 'Selected crew Refresh Safe Technician' })).toBeVisible();
+    const crewRefreshResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/admin/technicians/')
+      && technicianDirectoryRequests >= 2
+      && response.status() === 200
+    ));
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await crewRefreshResponse;
+    await expect(page.getByRole('button', { name: 'Selected crew Refresh Safe Technician' })).toBeVisible();
+    await page.getByRole('button', { name: 'Set lead Refresh Safe Technician' }).click();
+    await expect(page.getByRole('button', { name: 'Selected lead Refresh Safe Technician' })).toBeVisible();
+    const leadRefreshResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/admin/technicians/')
+      && technicianDirectoryRequests >= 3
+      && response.status() === 200
+    ));
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await leadRefreshResponse;
+    await expect(page.getByRole('button', { name: 'Selected lead Refresh Safe Technician' })).toBeVisible();
     await page.getByRole('button', { name: 'Add item' }).click();
     await expect(page.getByLabel('Inventory item')).toHaveValue('9901');
     const equipmentQuantity = page.getByLabel('Quantity');
@@ -856,6 +906,67 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.getByRole('heading', { name: linkedTicketCode })).toBeVisible();
     await page.getByRole('button', { name: 'Close ticket actions dialog' }).click();
     await expect(page).toHaveURL(/\/admin\/service-tickets$/);
+  });
+
+  test('3.18b - Client Support keeps reply drafts bound to their case during live refresh', async ({ page }) => {
+    let supportCaseRequests = 0;
+    let supportCasePhase = 'initial';
+    const firstCase = {
+      id: 9911,
+      case_code: 'SUP-9911',
+      group_key: 'customer_support_draft_case_one',
+      subject: 'Draft case one',
+      client_name: 'Draft Client One',
+      category: 'technical',
+      priority: 'normal',
+      status: 'open',
+      updated_at: '2026-10-17T01:00:00Z',
+      ticket_id: null,
+      ticket_code: null,
+    };
+    const secondCase = {
+      ...firstCase,
+      id: 9912,
+      case_code: 'SUP-9912',
+      group_key: 'customer_support_draft_case_two',
+      subject: 'Draft case two',
+      client_name: 'Draft Client Two',
+      updated_at: '2026-10-17T00:00:00Z',
+    };
+    await page.route(/\/api\/messages\/support-cases\/(?:\?.*)?$/, async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      supportCaseRequests += 1;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          supportCasePhase === 'initial' ? firstCase : { ...firstCase, status: 'resolved' },
+          secondCase,
+        ]),
+      });
+    });
+
+    await page.goto('/admin/client-support');
+    await expect(page.getByPlaceholder('Reply to Draft Client One...')).toBeVisible();
+    const firstDraft = 'This reply belongs only to the first support case.';
+    await page.getByPlaceholder('Reply to Draft Client One...').fill(firstDraft);
+
+    supportCasePhase = 'first-resolved';
+    const requestsBeforeRefresh = supportCaseRequests;
+    const refreshResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/messages/support-cases/')
+      && supportCaseRequests > requestsBeforeRefresh
+      && response.status() === 200
+    ));
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('afn:messages-changed')));
+    await refreshResponse;
+
+    const secondReply = page.getByPlaceholder('Reply to Draft Client Two...');
+    await expect(secondReply).toBeVisible();
+    await expect(secondReply).toHaveValue('');
+    await page.getByRole('button', { name: 'All', exact: true }).click();
+    await page.getByRole('button', { name: /Draft case one/ }).click();
+    await expect(page.getByPlaceholder('Reply to Draft Client One...')).toHaveValue(firstDraft);
   });
 
   test('3.19 - Admin Sales Records page', async ({ page }) => {

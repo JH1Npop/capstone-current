@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FiAlertTriangle, FiCalendar, FiCheckCircle, FiX, FiXCircle } from 'react-icons/fi';
+import { FiAlertTriangle, FiCalendar, FiCheckCircle, FiClock, FiX, FiXCircle } from 'react-icons/fi';
 import StatusBadge from '../ui/StatusBadge';
 import QuotationDepositPanel from '../sales/QuotationDepositPanel';
 import { reviewInspectionDecision } from '../../api/admin';
@@ -29,10 +29,23 @@ const DecisionCard = ({ active, accent, icon: Icon, title, description, onSelect
   </label>
 );
 
+const localDateValue = () => {
+  const now = new Date();
+  const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return localNow.toISOString().split('T')[0];
+};
+
+const localTimeValue = () => new Date().toLocaleTimeString('en-GB', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false
+});
+
 export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
   const [decision, setDecision] = useState('');
   const [notes, setNotes] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [quotation, setQuotation] = useState(undefined);
@@ -73,6 +86,11 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
       return;
     }
 
+    if (decision === 'approve_service' && scheduledDate === localDateValue() && !scheduledTime) {
+      setError('Please select an installation time for same-day service.');
+      return;
+    }
+
     if (['awaiting_materials', 'cancel'].includes(decision) && !notes.trim()) {
       setError('Add a reason for this exception decision.');
       return;
@@ -85,7 +103,8 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
       await reviewInspectionDecision(ticket.id, {
         decision,
         notes,
-        scheduledDate: decision === 'approve_service' ? scheduledDate : null
+        scheduledDate: decision === 'approve_service' ? scheduledDate : null,
+        scheduledTime: decision === 'approve_service' ? scheduledTime : null
       });
       onSuccess();
     } catch (err) {
@@ -150,7 +169,7 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
               <p className="min-w-0 flex-1">
                 <strong>Quotation: </strong>
                 {!quotation ? 'none sent yet. Create it in Documents > Quotation Proposal; the client accepts it in their portal.'
-                  : quotation.status === 'Accepted' ? `${quotation.quotation_number} accepted${quotation.client_responded_at ? ' by the client' : ''}.${Number(quotation.deposit_remaining_amount || 0) > 0 ? ' The required deposit must still be recorded before service scheduling.' : ' Service can be scheduled.'}`
+                  : quotation.status === 'Accepted' ? `${quotation.quotation_number} accepted${quotation.client_responded_at ? ' by the client' : ''}.${Number(quotation.deposit_remaining_amount || 0) > 0 ? ' The required deposit must still be recorded before service dispatch.' : ' Service can be dispatched.'}`
                     : quotation.status === 'Rejected' ? `${quotation.quotation_number} declined${quotation.client_response_note ? `: "${quotation.client_response_note}"` : ''}.`
                       : `${quotation.quotation_number} is waiting for the client's decision.`}
               </p>
@@ -194,7 +213,7 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
               accent={optionAccent.approve_service}
               icon={FiCheckCircle}
               title="Ready for Service"
-              description="The inspection passed. Approve the job and create the installation ticket."
+              description="The inspection passed. Continue this same ticket as an installation job."
               onSelect={() => setDecision('approve_service')}
             />
             <DecisionCard
@@ -217,19 +236,47 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
 
           {decision === 'approve_service' && (
             <div className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50/70 p-5">
-              <label className="mb-2 flex items-center gap-2 text-sm font-bold text-emerald-950">
-                <FiCalendar /> Schedule Installation Date
-              </label>
-              <p className="mb-3 text-xs leading-5 text-emerald-800">
-                Pick the date the installation team should be dispatched.
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm font-bold text-emerald-950">
+                  <FiCalendar /> Schedule Installation
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setScheduledDate(localDateValue())}
+                  className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
+                >
+                  Same-day installation
+                </button>
+              </div>
+              <p className="mb-3 mt-2 text-xs leading-5 text-emerald-800">
+                This keeps the same ticket. Dispatch will still select the lead, crew, and installation equipment separately.
               </p>
-              <input
-                type="date"
-                value={scheduledDate}
-                min={new Date().toISOString().split('T')[0]}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                className="w-full rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="installation-date" className="mb-1.5 block text-xs font-semibold text-emerald-950">Installation date</label>
+                  <input
+                    id="installation-date"
+                    type="date"
+                    value={scheduledDate}
+                    min={localDateValue()}
+                    onChange={(e) => setScheduledDate(e.target.value)}
+                    className="w-full rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="installation-time" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-emerald-950">
+                    <FiClock /> Installation time {scheduledDate === localDateValue() ? '(required)' : '(optional)'}
+                  </label>
+                  <input
+                    id="installation-time"
+                    type="time"
+                    value={scheduledTime}
+                    min={scheduledDate === localDateValue() ? localTimeValue() : undefined}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    className="w-full rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  />
+                </div>
+              </div>
             </div>
           )}
 

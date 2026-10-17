@@ -126,6 +126,10 @@ export default function AdminDispatchBoard() {
   const [ticketSummary, setTicketSummary] = useState(null);
   const [equipmentPlan, setEquipmentPlan] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const selectedTicketIsInspection = Boolean(
+    selectedTicket?.requiresSiteInspection
+      && !['inspection_completed', 'ready_for_service'].includes(selectedTicket.status)
+  );
 
   const loadData = async () => {
     try {
@@ -188,20 +192,23 @@ export default function AdminDispatchBoard() {
       setSelectedTech(null);
       setSelectedCrewIds([]);
       setEquipmentPlan([]);
-      return;
     }
+  }, [selectedTicket]);
 
-    const assignedLead = technicians.find((tech) => tech.id === selectedTicket.assignedTechnicianId) || null;
-    setSelectedTech(assignedLead);
-    setSelectedCrewIds(
-      Array.isArray(selectedTicket.crewMembers)
-        ? selectedTicket.crewMembers.map((member) => member.id)
-        : []
-    );
-  }, [selectedTicket, technicians]);
+  useEffect(() => {
+    setSelectedTech((currentTech) => {
+      if (!currentTech) return currentTech;
+      return technicians.find((tech) => tech.id === currentTech.id) || currentTech;
+    });
+  }, [technicians]);
 
   useEffect(() => {
     if (!selectedTicket) {
+      setEquipmentPlan([]);
+      return;
+    }
+
+    if (selectedTicketIsInspection) {
       setEquipmentPlan([]);
       return;
     }
@@ -225,11 +232,22 @@ export default function AdminDispatchBoard() {
       item: Number(requirement.item),
       quantity: String(requirement.quantity || 1)
     })).filter((reservation) => reservation.item));
-  }, [selectedTicket, materialTemplates]);
+  }, [selectedTicket, selectedTicketIsInspection, materialTemplates]);
 
   const selectLeadTechnician = (tech) => {
     setSelectedTech(tech);
     setSelectedCrewIds((currentCrewIds) => currentCrewIds.filter((crewId) => crewId !== tech.id));
+  };
+
+  const selectTicketForAssignment = (ticket) => {
+    const assignedLead = technicians.find((tech) => tech.id === ticket.assignedTechnicianId) || null;
+    setSelectedTicket(ticket);
+    setSelectedTech(assignedLead);
+    setSelectedCrewIds(
+      Array.isArray(ticket.crewMembers)
+        ? ticket.crewMembers.map((member) => member.id)
+        : []
+    );
   };
 
   const toggleCrewMember = (techId) => {
@@ -260,11 +278,8 @@ export default function AdminDispatchBoard() {
         crewIds: selectedCrewIds,
         // Services that require a site inspection are dispatched as an
         // inspection visit until the inspection has been reviewed.
-        dispatchStage: selectedTicket.requiresSiteInspection
-          && !['inspection_completed', 'ready_for_service'].includes(selectedTicket.status)
-          ? 'inspection'
-          : 'service',
-        equipmentReservations: equipmentPlan
+        dispatchStage: selectedTicketIsInspection ? 'inspection' : 'service',
+        equipmentReservations: (selectedTicketIsInspection ? [] : equipmentPlan)
           .map((entry) => ({
             ...entry,
             quantity: Number(entry.quantity || 0)
@@ -292,7 +307,7 @@ export default function AdminDispatchBoard() {
   };
 
   const editAssignment = (ticket) => {
-    setSelectedTicket(ticket);
+    selectTicketForAssignment(ticket);
     setMessage('');
     setError('');
     window.setTimeout(() => {
@@ -489,7 +504,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                     <button
                       key={ticket.id}
                       type="button"
-                      onClick={() => setSelectedTicket(ticket)}
+                      onClick={() => selectTicketForAssignment(ticket)}
                       aria-pressed={active}
                       className={`w-full rounded-xl border p-3 text-left transition ${
                         active
@@ -541,13 +556,9 @@ const paginatedAssignedTickets = assignedTickets.slice(
               {selectedTicket ? (
                 <>
                   <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Selected Ticket</p>
-                        <h3 className="mt-1 text-lg font-bold text-slate-950">{formatTicketId(selectedTicket.id)} {selectedTicket.service}</h3>
-                        <p className="mt-1 text-sm text-slate-600">{selectedTicket.clientFullname || selectedTicket.client}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <p className="pt-1 text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Selected Ticket</p>
+                      <div className="flex flex-none items-center gap-1.5">
                         <StatusBadge status={selectedTicket.status} />
                         <button
                           type="button"
@@ -559,6 +570,9 @@ const paginatedAssignedTickets = assignedTickets.slice(
                         </button>
                       </div>
                     </div>
+                    <p className="mt-2 text-sm font-bold text-brand-700">{formatTicketId(selectedTicket.id)}</p>
+                    <h3 className="mt-0.5 break-words text-lg font-bold leading-snug text-slate-950">{selectedTicket.service}</h3>
+                    <p className="mt-1 text-sm text-slate-600">{selectedTicket.clientFullname || selectedTicket.client}</p>
                     {selectedTicket.assignedTechnicianId && (
                       <p className="mt-3 rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-medium text-brand-700">
                         Editing existing assignment. Choose a new lead or adjust crew, then update.
@@ -585,20 +599,30 @@ const paginatedAssignedTickets = assignedTickets.slice(
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-semibold text-slate-900">Equipment Reservation Plan</h3>
-                        <p className="mt-1 text-xs text-slate-500">These quantities will be reserved for this ticket when the assignment is confirmed.</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {selectedTicketIsInspection
+                            ? 'Installation stock is planned only after the inspection is approved.'
+                            : 'These quantities will be reserved for this ticket when the assignment is confirmed.'}
+                        </p>
                       </div>
                       <button
                         type="button"
                         onClick={addEquipmentPlanRow}
-                        disabled={!nextEquipmentItem}
-                        title={!nextEquipmentItem ? 'No additional in-stock inventory items are available.' : undefined}
+                        disabled={selectedTicketIsInspection || !nextEquipmentItem}
+                        title={selectedTicketIsInspection
+                          ? 'Equipment is not reserved for an inspection visit.'
+                          : !nextEquipmentItem ? 'No additional in-stock inventory items are available.' : undefined}
                         className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
                       >
                         Add item
                       </button>
                     </div>
 
-                    {pendingTicketReservations.length > 0 ? (
+                    {selectedTicketIsInspection ? (
+                      <p className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                        Inspection visit: assign the lead and crew now. After approval, this same ticket returns to Dispatch Board for installation equipment and team assignment.
+                      </p>
+                    ) : pendingTicketReservations.length > 0 ? (
                       <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
                         Loaded the ticket's current reservation plan. Adjusting it will update pending reservations when you confirm.
                       </p>
@@ -619,7 +643,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                       </div>
                     )}
 
-                    {selectedEquipmentItems.length > 0 ? (
+                    {!selectedTicketIsInspection && selectedEquipmentItems.length > 0 ? (
                       <div className="mt-3 space-y-2">
                         {selectedEquipmentItems.map((entry, index) => {
                           const availableQuantity = Number(
@@ -694,10 +718,12 @@ const paginatedAssignedTickets = assignedTickets.slice(
                       </div>
                     ) : (
                       <div className="mt-3 rounded-lg border border-dashed border-surface-200 bg-white px-3 py-3 text-xs text-slate-500">
-                        No equipment in this plan. You can confirm without a reservation or add an in-stock item.
+                        {selectedTicketIsInspection
+                          ? 'No installation equipment will be reserved during this inspection assignment.'
+                          : 'No equipment in this plan. You can confirm without a reservation or add an in-stock item.'}
                       </div>
                     )}
-                    {!equipmentPlanValid && (
+                    {!selectedTicketIsInspection && !equipmentPlanValid && (
                       <p role="alert" className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
                         Every equipment row needs an inventory item and a quantity of at least 1.
                       </p>
@@ -793,6 +819,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                             type="button"
                             onClick={() => selectLeadTechnician(tech)}
                             disabled={!canSelectTechnician}
+                            aria-label={`${isLead ? 'Selected lead' : 'Set lead'} ${tech.name}`}
                             className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                               isLead
                                 ? 'bg-brand-600 text-white'
@@ -806,6 +833,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                               type="button"
                               onClick={() => toggleCrewMember(tech.id)}
                               disabled={!canSelectTechnician}
+                              aria-label={`${isCrew ? 'Selected crew' : 'Add crew'} ${tech.name}`}
                               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                                 isCrew
                                   ? 'bg-emerald-600 text-white hover:bg-emerald-700'

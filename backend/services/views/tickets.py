@@ -1029,6 +1029,15 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 {'error': 'This service does not require a site inspection.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        equipment_plan = request.data.get('equipment_reservations', None)
+        if dispatch_stage == 'inspection' and equipment_plan:
+            return Response(
+                {
+                    'error': 'Installation equipment cannot be reserved for an inspection visit.',
+                    'code': 'inspection_equipment_not_allowed',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if (
             dispatch_stage == 'service'
             and requires_inspection
@@ -1214,12 +1223,11 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                     return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
             inventory_summary = sync_ticket_reservations(ticket, performed_by=request.user)
-            equipment_plan = request.data.get('equipment_reservations', None)
             if equipment_plan is not None:
                 try:
                     inventory_summary = apply_ticket_equipment_plan(
                         ticket,
-                        equipment_plan,
+                        [] if dispatch_stage == 'inspection' else equipment_plan,
                         performed_by=request.user,
                     )
                 except (InventoryItem.DoesNotExist, TypeError, ValueError) as exc:
@@ -1301,7 +1309,8 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         ticket = self.get_locked_ticket()
         decision = str(request.data.get('decision') or '').strip().lower()
         notes = str(request.data.get('notes') or '').strip()
-        scheduled_date = str(request.data.get('scheduled_date') or '').strip()
+        scheduled_date_value = str(request.data.get('scheduled_date') or '').strip()
+        scheduled_time_value = str(request.data.get('scheduled_time') or '').strip()
 
         decision_map = {
             'approve_service': ('Ready for Service', 'Inspection approved. Ticket is ready for service.'),
@@ -1347,6 +1356,43 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_409_CONFLICT,
                 )
 
+        scheduled_date = None
+        scheduled_time = None
+        if is_approval:
+            if not scheduled_date_value:
+                return Response(
+                    {'error': 'Choose an installation date before marking the ticket ready for service.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            scheduled_date = parse_date(scheduled_date_value)
+            if scheduled_date is None:
+                return Response({'error': 'scheduled_date must be a valid date.'}, status=status.HTTP_400_BAD_REQUEST)
+            if scheduled_date < timezone.localdate():
+                return Response({'error': 'The installation date cannot be in the past.'}, status=status.HTTP_400_BAD_REQUEST)
+            if scheduled_time_value:
+                scheduled_time = parse_time(scheduled_time_value)
+                if scheduled_time is None:
+                    return Response({'error': 'scheduled_time must be a valid time.'}, status=status.HTTP_400_BAD_REQUEST)
+            if scheduled_date == timezone.localdate() and scheduled_time is None:
+                return Response(
+                    {
+                        'error': 'Choose an installation time for a same-day inspection and installation.',
+                        'code': 'same_day_time_required',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if (
+                scheduled_date == timezone.localdate()
+                and scheduled_time <= timezone.localtime().time().replace(tzinfo=None)
+            ):
+                return Response(
+                    {
+                        'error': 'Choose a later installation time for same-day service.',
+                        'code': 'same_day_time_must_be_future',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
             if target_status in ['Ready for Service', 'Awaiting Materials']:
                 ticket.technician = None
@@ -1367,6 +1413,11 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 except InspectionChecklist.DoesNotExist:
                     pass
 
+            if is_approval:
+                ticket.scheduled_date = scheduled_date
+                ticket.scheduled_time = scheduled_time
+                ticket.scheduled_time_slot = None
+
             ticket._activity_reason = notes or default_note
             resolved_status = apply_ticket_status_change(
                 ticket,
@@ -1381,20 +1432,11 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         if is_approval:
-            if scheduled_date:
-                ticket.scheduled_date = scheduled_date
-                ticket.save()
-                from datetime import datetime
-                try:
-                    dt = datetime.strptime(scheduled_date, '%Y-%m-%d')
-                    formatted_date = dt.strftime('%B %d, %Y').replace(' 0', ' ')
-                except ValueError:
-                    formatted_date = scheduled_date
-                client_title = f"Service Approved"
-                client_body = f"Inspection is complete. Your installation has been scheduled for {formatted_date}."
-            else:
-                client_title = f"Service Approved"
-                client_body = f"Inspection is complete. Ticket #{ticket.id} is ready for service."
+            formatted_date = scheduled_date.strftime('%B %d, %Y').replace(' 0', ' ')
+            formatted_time = scheduled_time.strftime('%I:%M %p').lstrip('0') if scheduled_time else ''
+            schedule_label = f'{formatted_date} at {formatted_time}' if formatted_time else formatted_date
+            client_title = "Service Approved"
+            client_body = f"Inspection is complete. Your installation has been scheduled for {schedule_label}."
             notification_type = 'success'
 
         elif target_status == 'Awaiting Materials':
@@ -1429,6 +1471,8 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             'ticket_id': ticket.id,
             'status': resolved_status,
             'message': default_note,
+            'scheduled_date': ticket.scheduled_date,
+            'scheduled_time': ticket.scheduled_time,
         })
 
     @action(detail=True, methods=['post'])
