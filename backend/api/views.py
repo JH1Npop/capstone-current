@@ -24,6 +24,7 @@ from services.views.helpers import (
     ACTIVE_TICKET_STATUSES,
     _display_name,
     get_visible_service_tickets_queryset,
+    keep_inspection_proof_media,
     normalize_proof_media_payload,
     save_uploaded_proof_media,
     sync_ticket_maintenance_schedule,
@@ -599,6 +600,11 @@ def checklist_view(request):
         )
 
     normalized_proof_media += uploaded_proof_media
+    submitted_media_count = len(normalized_proof_media)
+    existing_checklist = InspectionChecklist.objects.filter(ticket=ticket).only('proof_media').first()
+    if existing_checklist:
+        # The record may hold this ticket's earlier inspection; never drop its site photos.
+        normalized_proof_media = keep_inspection_proof_media(existing_checklist.proof_media, normalized_proof_media)
 
     checklist, _ = InspectionChecklist.objects.update_or_create(
         ticket=ticket,
@@ -632,5 +638,5 @@ def checklist_view(request):
     return Response({
         'status': 'Checklist submitted',
         'checklist_id': checklist.id,
-        'proof_media_count': len(normalized_proof_media),
+        'proof_media_count': submitted_media_count,
     })

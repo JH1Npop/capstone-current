@@ -3,7 +3,7 @@
 This is the complete readable ERD derived from `AFN_ERD.dbml`.
 
 - Entities: **52**
-- Attributes: **707**
+- Attributes: **708**
 - Relationships: **107**
 
 ## Entity and Attribute Catalog
@@ -432,6 +432,7 @@ Database table: `services_servicetype`
 | `max_daily_assignments` | `integer` | `not null` |
 | `procedures` | `text` | `not null` |
 | `required_equipment` | `text` | `not null` |
+| `inspection_procedures` | `text` | `not null` |
 | `is_active` | `boolean` | `not null` |
 | `requires_site_inspection` | `boolean` | `not null` |
 | `deposit_policy` | `varchar(20)` | `not null` |

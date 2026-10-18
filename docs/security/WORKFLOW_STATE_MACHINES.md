@@ -68,6 +68,29 @@ route/start metadata, and old time-slot value, then moves the ticket to
 the same technician may be selected but is not assumed to be available. When
 quotation acceptance is enabled, an accepted quotation remains a prerequisite;
 the deposit gate is enforced at installation dispatch.
+Inspection guards (2026-10-18): a technician may create, update, or complete an
+inspection report only while the ticket is `Arrived on Site` or `In Progress`,
+so travel and GPS arrival always precede the report; the technician page shows
+an "Arrive on site first" notice in any other state. Office staff may still
+record a report directly. An `inspection`-type ticket can never be finished as
+`Completed` (technician status action, legacy `complete_work`, or manual
+office status change); it ends with the report (`Inspection Completed`) and
+the office decision. Because the inspection report and the later service
+checklist share one per-ticket record, the approval/awaiting-materials decision
+first tags the existing site photos with `phase: inspection` and appends an
+`Inspection findings:` entry (answers, recommendation, notes, photo count) to
+the append-only status history; later service checklist saves keep tagged
+inspection photos instead of replacing them. Every inspection lead and crew
+member receives the decision notification, captured before the handoff clears
+the team.
+Every inspection asks the three built-in general checks (site access,
+electrical supply, safety equipment). Each requested service may add its own
+Yes/No checks (`ServiceType.inspection_procedures`, at most 30, edited in
+Admin Services for inspection-first services). The server requires an answer
+for every configured check of every service on the ticket and a note for each
+No, ignores unconfigured extras, and stores normalized answers
+(`service_type_id`, `service_name`, `title`, `answer`, `notes`) in the report's
+`checklist_items`; the office decision copies them into the findings history.
 Ticket and crew-assignment model signals reconcile that derived state after
 direct model/admin changes as well as API workflow changes. The
 `reconcile_technician_availability` management command reports historical
@@ -75,9 +98,26 @@ mismatches without writing by default; `--apply` repairs them after the target
 database has been reviewed.
 Assigned lead or crew technicians may request additional equipment while a
 ticket is `Not Started` or in a supported inspection, active, awaiting-materials,
-or hold state. A pre-start request creates pending inventory reservations and a
-status-history note without changing `Not Started`; travel and work states still
-advance only through their named actions. Terminal tickets reject new requests.
+or hold state. Every request creates pending inventory reservations and a
+status-history note without changing the ticket status: asking for equipment
+never pauses the job by itself (since 2026-10-18; previously an `In Progress`,
+`Inspection Completed`, or `Ready for Service` request switched the ticket to
+`Awaiting Materials` automatically, which also stranded jobs whose request was
+rejected). Travel and work states still advance only through their named
+actions. Terminal tickets reject new requests.
+The lead technician alone may put field work on hold, and only from
+`Navigating`, `Arrived on Site`, or `In Progress`: either through the
+technician status action (`on_hold`, reason of at least 5 characters required)
+or by ticking **Pause job while waiting** on an equipment request, which applies
+the same hold in the same transaction after permission and status are checked
+and before any stock is reserved. A crew member's pause request is refused
+without side effects. The hold notifies the client and office; resuming uses the
+existing `On Hold` → `In Progress` action without a new GPS arrival. A rejected
+equipment request leaves the job's status unchanged. `Awaiting Materials`
+remains an office decision from inspection review (stock unavailable, return
+trip required), whose return still travels through navigation and arrival.
+Automatic reassignment skips any ticket whose work has started, so a paused job
+stays with the crew that began it.
 Pending ticket reservations are reviewed in Admin Inventory as one grouped
 request per service ticket, while their individual `RSV-*` lines remain intact
 for stock accounting. An authorized inventory manager assigns **Approve** or

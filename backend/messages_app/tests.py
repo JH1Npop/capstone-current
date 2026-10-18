@@ -604,3 +604,128 @@ class MessageApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('receiver', response.data)
+
+    def create_client_support_case(self):
+        self.client.force_authenticate(user=self.client_user)
+        response = self.client.post(
+            '/api/messages/support-cases/',
+            {'subject': 'Inverter alarm', 'category': 'general', 'priority': 'normal'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.client.force_authenticate(user=self.admin_user)
+        return CustomerSupportCase.objects.get(id=response.data['id'])
+
+    def test_admin_support_reply_notifies_client_once_while_unread(self):
+        support_case = self.create_client_support_case()
+
+        for text in ('We are checking your inverter.', 'A technician will call you.'):
+            response = self.client.post(
+                '/api/messages/',
+                {'room_type': 'group', 'group_key': support_case.group_key, 'text': text},
+                format='json',
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        notifications = Notification.objects.filter(user=self.client_user, title__startswith='Customer support replied')
+        self.assertEqual(notifications.count(), 1)
+        self.assertEqual(notifications.get().title, f'Customer support replied to case #{support_case.id}')
+
+        notifications.update(status='read')
+        self.client.post(
+            '/api/messages/',
+            {'room_type': 'group', 'group_key': support_case.group_key, 'text': 'Any update on your side?'},
+            format='json',
+        )
+        self.assertEqual(
+            Notification.objects.filter(user=self.client_user, title__startswith='Customer support replied').count(),
+            2,
+        )
+
+    def test_client_support_message_does_not_notify_the_client(self):
+        support_case = self.create_client_support_case()
+        self.client.force_authenticate(user=self.client_user)
+
+        response = self.client.post(
+            '/api/messages/',
+            {'room_type': 'group', 'group_key': support_case.group_key, 'text': 'Still beeping.'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(Notification.objects.filter(user=self.client_user, title__startswith='Customer support replied').exists())
+
+    def test_resolving_support_case_notifies_client(self):
+        support_case = self.create_client_support_case()
+
+        response = self.client.patch(
+            f'/api/messages/support-cases/{support_case.id}/',
+            {'status': 'resolved'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        notification = Notification.objects.get(user=self.client_user, title=f'Support case #{support_case.id} resolved')
+        self.assertIn('resolved', notification.message)
+        self.assertNotIn('completed', f'{notification.title} {notification.message}'.lower())
+
+    def test_direct_message_notifies_receiver_once_while_unread(self):
+        for text in ('Please update your job status.', 'Also confirm your ETA.'):
+            response = self.client.post(
+                '/api/messages/',
+                {'room_type': 'direct', 'receiver': self.technician_user.id, 'text': text},
+                format='json',
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        notifications = Notification.objects.filter(user=self.technician_user, title='New message from Admin One')
+        self.assertEqual(notifications.count(), 1)
+        self.assertFalse(Notification.objects.filter(user=self.admin_user, title__startswith='New message from').exists())
+
+    def test_direct_message_skips_admin_receiver_without_staff_messages(self):
+        support_only_admin = self.configured_admin('message-support-only', COMMUNICATIONS_SUPPORT_VIEW)
+
+        response = self.client.post(
+            '/api/messages/',
+            {'room_type': 'direct', 'receiver': support_only_admin.id, 'text': 'Hello there.'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(Notification.objects.filter(user=support_only_admin).exists())
+
+    def test_ticket_message_notifies_lead_and_crew_but_not_sender(self):
+        crew_user = User.objects.create_user(username='message-crew-notify', password='Password123!', role='technician')
+        TicketCrewAssignment.objects.create(ticket=self.ticket, technician=crew_user)
+        self.client.force_authenticate(user=self.client_user)
+
+        response = self.client.post(
+            '/api/messages/',
+            {
+                'room_type': 'group',
+                'group_key': f'after_sales_ticket_{self.ticket.id}',
+                'ticket': self.ticket.id,
+                'text': 'The panel output dropped again.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        team_notifications = Notification.objects.filter(
+            ticket=self.ticket,
+            title=f'New after-sales message for ticket #{self.ticket.id}',
+        )
+        self.assertEqual(set(team_notifications.values_list('user_id', flat=True)), {self.technician_user.id, crew_user.id})
+
+        self.client.force_authenticate(user=self.technician_user)
+        self.client.post(
+            '/api/messages/',
+            {
+                'room_type': 'group',
+                'group_key': f'after_sales_ticket_{self.ticket.id}',
+                'ticket': self.ticket.id,
+                'text': 'I will inspect it tomorrow.',
+            },
+            format='json',
+        )
+        self.assertEqual(team_notifications.filter(user=self.technician_user).count(), 1)

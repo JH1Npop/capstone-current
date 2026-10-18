@@ -211,12 +211,13 @@ class DataPersistenceSmokeTests(APITestCase):
             description='Negative inspection findings request.',
             status='Approved',
         )
+        # Reports are accepted only once the technician is on site.
         ticket = ServiceTicket.objects.create(
             request=service_request,
             technician=self.technician,
             scheduled_date=timezone.localdate() + timedelta(days=1),
             ticket_type='inspection',
-            status='For Inspection',
+            status='Arrived on Site',
         )
         self.client.force_authenticate(user=self.technician)
         payload = {
@@ -356,8 +357,127 @@ class DataPersistenceSmokeTests(APITestCase):
             ).exists()
         )
 
+        # Asking for equipment no longer pauses the job; the technician keeps working.
         ticket.refresh_from_db()
-        self.assertEqual(ticket.status, 'Awaiting Materials')
+        self.assertEqual(ticket.status, 'In Progress')
+        self.assertEqual(response.data['ticket_status'], 'In Progress')
+
+    def _equipment_hold_fixture(self, status='In Progress', technician=None):
+        category = InventoryCategory.objects.create(name=f'Hold Equipment {status}')
+        item = InventoryItem.objects.create(
+            name='Replacement Breaker',
+            sku=f'HOLD-BREAKER-{status[:3].upper()}',
+            category=category,
+            item_type='equipment',
+            quantity=3,
+            reserved_quantity=0,
+            minimum_stock=1,
+        )
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Hold flow request.',
+            status='In Progress',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=service_request,
+            technician=technician or self.technician,
+            scheduled_date=timezone.localdate(),
+            status=status,
+            start_time=timezone.now() if status == 'In Progress' else None,
+        )
+        return item, ticket
+
+    def test_equipment_request_can_pause_job_and_resume_without_new_arrival(self):
+        item, ticket = self._equipment_hold_fixture()
+        self.client.force_authenticate(user=self.technician)
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/request_parts/',
+            {'item_id': item.id, 'quantity': 1, 'notes': 'Breaker tripped on test.', 'pause_job': True},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['ticket_status'], 'On Hold')
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'On Hold')
+        self.assertTrue(InventoryReservation.objects.filter(service_ticket=ticket, item=item, status='pending').exists())
+        self.assertTrue(ticket.status_history.filter(status='On Hold', notes__icontains='Replacement Breaker').exists())
+        self.assertTrue(ticket.request.client.notifications.filter(message__icontains='temporarily on hold').exists())
+        self.assertFalse(ticket.request.client.notifications.filter(message__icontains='paused for now').exists())
+
+        resumed = self.client.post(f'/api/technician/jobs/{ticket.id}/status/', {'status': 'in_progress'}, format='json')
+
+        self.assertEqual(resumed.status_code, 200, resumed.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'In Progress')
+
+    def test_crew_member_cannot_pause_lead_job_and_nothing_is_reserved(self):
+        from services.models import TicketCrewAssignment
+
+        crew = User.objects.create_user(username='persist-crew', password='Password123!', role='technician', status='active')
+        UserCapabilityGrant.objects.create(user=crew, capability_code=TECHNICIAN_JOBS_VIEW)
+        item, ticket = self._equipment_hold_fixture()
+        TicketCrewAssignment.objects.create(ticket=ticket, technician=crew)
+        self.client.force_authenticate(user=crew)
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/request_parts/',
+            {'item_id': item.id, 'quantity': 1, 'pause_job': True},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 403, response.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'In Progress')
+        self.assertFalse(InventoryReservation.objects.filter(service_ticket=ticket).exists())
+
+    def test_rejected_equipment_leaves_job_in_progress(self):
+        item, ticket = self._equipment_hold_fixture()
+        self.client.force_authenticate(user=self.technician)
+        self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/request_parts/',
+            {'item_id': item.id, 'quantity': 1},
+            format='json',
+        )
+        reservation = InventoryReservation.objects.get(service_ticket=ticket, item=item)
+
+        self.client.force_authenticate(user=self.superadmin)
+        rejected = self.client.post(
+            f'/api/inventory/reservations/{reservation.id}/cancel/',
+            {'reason': 'No breakers left in the warehouse.'},
+            format='json',
+        )
+
+        self.assertEqual(rejected.status_code, 200, rejected.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'In Progress')
+
+    def test_technician_hold_requires_reason_lead_and_active_field_work(self):
+        _, ticket = self._equipment_hold_fixture()
+        _, not_started = self._equipment_hold_fixture(status='Not Started')
+        self.client.force_authenticate(user=self.technician)
+
+        missing_reason = self.client.post(f'/api/technician/jobs/{ticket.id}/status/', {'status': 'on_hold'}, format='json')
+        wrong_state = self.client.post(
+            f'/api/technician/jobs/{not_started.id}/status/',
+            {'status': 'on_hold', 'reason': 'Waiting for client to arrive.'},
+            format='json',
+        )
+        held = self.client.post(
+            f'/api/technician/jobs/{ticket.id}/status/',
+            {'status': 'on_hold', 'reason': 'Waiting for the client to unlock the roof.'},
+            format='json',
+        )
+
+        self.assertEqual(missing_reason.status_code, 400)
+        self.assertEqual(wrong_state.status_code, 400)
+        self.assertEqual(held.status_code, 200, held.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'On Hold')
+        self.assertTrue(ticket.status_history.filter(status='On Hold', notes__icontains='unlock the roof').exists())
+        self.assertTrue(ticket.request.client.notifications.filter(message__icontains='paused for now').exists())
 
     def test_technician_can_request_multiple_equipment_items_before_work_starts(self):
         category = InventoryCategory.objects.create(name='Survey Equipment')

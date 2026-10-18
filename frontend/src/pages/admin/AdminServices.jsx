@@ -36,7 +36,18 @@ const DEFAULT_SERVICE_FORM = {
   deposit_value: 0,
   procedures: [],
   required_equipment: [],
+  inspection_procedures: [],
 };
+
+const normalizeInspectionChecks = (checks) => (
+  Array.isArray(checks)
+    ? checks.map((check) => (
+        typeof check === 'string'
+          ? { title: check, description: '' }
+          : { title: check?.title || '', description: check?.description || '' }
+      ))
+    : []
+);
 
 const normalizeProcedures = (procedures) => (
   Array.isArray(procedures)
@@ -89,6 +100,7 @@ const toServiceFormState = (service) => ({
   deposit_value: Number(service?.deposit_value || 0),
   procedures: normalizeProcedures(service?.procedures),
   required_equipment: normalizeEquipment(service?.required_equipment),
+  inspection_procedures: normalizeInspectionChecks(service?.inspection_procedures),
 });
 
 const formatDuration = (minutes) => {
@@ -193,6 +205,75 @@ function ProcedureEditor({ procedures, onChange }) {
               <button
                 type="button"
                 onClick={() => removeStep(i)}
+                className="mt-1.5 rounded-lg p-1 text-red-400 hover:bg-red-50 hover:text-red-600"
+              >
+                <FiTrash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Service-specific inspection checks, asked after the general site checks */
+function InspectionCheckEditor({ checks, onChange }) {
+  const addCheck = () => onChange([...checks, { title: '', description: '' }]);
+  const removeCheck = (index) => onChange(checks.filter((_, i) => i !== index));
+  const updateCheck = (index, field, value) => {
+    const updated = [...checks];
+    updated[index] = { ...updated[index], [field]: value };
+    onChange(updated);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium text-slate-700">Site Inspection Checks</label>
+        <button
+          type="button"
+          onClick={addCheck}
+          className="inline-flex items-center gap-1 rounded-lg bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100"
+        >
+          <FiPlus size={12} /> Add Check
+        </button>
+      </div>
+      <p className="text-xs text-slate-500">
+        Every inspection already asks the general checks (site access, electrical supply, safety equipment).
+        Add Yes/No checks specific to this service; a No answer needs a note from the technician.
+      </p>
+      {checks.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-400">
+          No service-specific checks. Only the general checks will be asked.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {checks.map((check, i) => (
+            <div key={i} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-500 text-xs font-bold text-white">
+                {i + 1}
+              </span>
+              <div className="flex-1 space-y-1">
+                <input
+                  className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  placeholder="Check, e.g. Roof can carry the panel array"
+                  aria-label={`Inspection check ${i + 1}`}
+                  value={check.title}
+                  onChange={(e) => updateCheck(i, 'title', e.target.value)}
+                />
+                <input
+                  className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  placeholder="What to look for (optional)"
+                  aria-label={`Inspection check ${i + 1} guidance`}
+                  value={check.description || ''}
+                  onChange={(e) => updateCheck(i, 'description', e.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => removeCheck(i)}
+                aria-label={`Remove inspection check ${i + 1}`}
                 className="mt-1.5 rounded-lg p-1 text-red-400 hover:bg-red-50 hover:text-red-600"
               >
                 <FiTrash2 size={14} />
@@ -914,6 +995,16 @@ export default function AdminServices() {
               onChange={(procedures) => setServiceFormData({ ...serviceFormData, procedures })}
             />
           </div>
+
+          {/* Inspection checks only matter when the service is dispatched as an inspection first */}
+          {serviceFormData.requires_site_inspection && (
+            <div className="px-6 pb-5">
+              <InspectionCheckEditor
+                checks={serviceFormData.inspection_procedures}
+                onChange={(inspection_procedures) => setServiceFormData({ ...serviceFormData, inspection_procedures })}
+              />
+            </div>
+          )}
 
           {/* Equipment */}
           <div className="px-6 pb-5">

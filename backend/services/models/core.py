@@ -62,6 +62,14 @@ class ServiceType(models.Model):
         default=list, blank=True,
         help_text="List of required tools/equipment, e.g. [{'name': 'Drill', 'quantity': 1}]",
     )
+    inspection_procedures = StructuredTextField(
+        structure='list',
+        default=list, blank=True,
+        help_text=(
+            "Service-specific site-inspection checks answered Yes/No after the general checks, "
+            "e.g. [{'title': 'Roof can carry the array', 'description': '...'}]"
+        ),
+    )
     is_active = models.BooleanField(default=True)
     requires_site_inspection = models.BooleanField(
         default=False,

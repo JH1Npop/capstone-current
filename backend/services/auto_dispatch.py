@@ -313,6 +313,11 @@ def reassign_if_needed(ticket: ServiceTicket) -> bool:
         )
         return False
 
+    if ticket.start_time:
+        # A held job that was already started belongs to the crew that began it.
+        logger.debug(f"Ticket {ticket.id} work has started, skipping reassignment check")
+        return False
+
     current_tech = ticket.technician
     if not current_tech or not current_tech.is_available:
         logger.info(

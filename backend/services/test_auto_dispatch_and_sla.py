@@ -359,6 +359,29 @@ class AutoDispatchTests(TestCase):
         self.assertIsNotNone(self.ticket.assigned_at)
         self.assertIsNotNone(self.ticket.smart_assignment_score)
 
+    def test_reassign_skips_started_job_on_hold(self):
+        """A paused job that was already started keeps its technician even if they become unavailable."""
+        self.ticket.technician = self.tech_busy
+        self.ticket.auto_assigned = True
+        self.ticket.status = 'On Hold'
+        self.ticket.start_time = timezone.now()
+        self.ticket.save()
+
+        self.assertFalse(reassign_if_needed(self.ticket))
+
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.technician, self.tech_busy)
+
+    def test_reassign_still_moves_unstarted_job_from_unavailable_technician(self):
+        self.ticket.technician = self.tech_busy
+        self.ticket.auto_assigned = True
+        self.ticket.save()
+
+        self.assertTrue(reassign_if_needed(self.ticket))
+
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.technician, self.tech_expert)
+
     def test_auto_assign_technician_already_assigned(self):
         """Test that auto-assignment is skipped if already assigned."""
         # Pre-assign

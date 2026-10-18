@@ -504,6 +504,25 @@ export const fetchServices = async () => {
   }
 };
 
+const toDepositPayload = (service) => {
+  const policy = ['none', 'percentage', 'fixed'].includes(service?.deposit_policy) ? service.deposit_policy : 'none';
+  return {
+    deposit_policy: policy,
+    deposit_value: policy === 'none' ? 0 : Number(service?.deposit_value || 0),
+  };
+};
+
+const toInspectionChecksPayload = (checks) => (
+  Array.isArray(checks)
+    ? checks
+        .map((check) => ({
+          title: String(check?.title || '').trim(),
+          description: String(check?.description || '').trim(),
+        }))
+        .filter((check) => check.title)
+    : []
+);
+
 export const createService = async (service) => {
   try {
     const payload = {
@@ -535,7 +554,9 @@ export const createService = async (service) => {
               quantity: Number(item?.quantity || 1)
             }))
             .filter((item) => item.name)
-        : []
+        : [],
+      inspection_procedures: toInspectionChecksPayload(service.inspection_procedures),
+      ...toDepositPayload(service)
     };
     const { data } = await api.post('/admin/services/', payload);
     return {
@@ -582,7 +603,9 @@ export const updateService = async (id, updates) => {
               quantity: Number(item?.quantity || 1)
             }))
             .filter((item) => item.name)
-        : []
+        : [],
+      inspection_procedures: toInspectionChecksPayload(updates.inspection_procedures),
+      ...toDepositPayload(updates)
     };
     const { data } = await api.put(`/admin/services/${id}/`, payload);
     return {

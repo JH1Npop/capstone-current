@@ -1,6 +1,6 @@
 Project AFN_Service_Management_Database_Schema {
   database_type: 'PostgreSQL'
-  Note: 'Generated from all 52 active AFN Django application models on 2026-10-17. Primary keys, columns, relationships, uniqueness, and nullability reflect the current model contract.'
+  Note: 'Generated from all 52 active AFN Django application models on 2026-10-18. Primary keys, columns, relationships, uniqueness, and nullability reflect the current model contract.'
 }
 
 Table inventory_equipmentreturnrequest {
@@ -653,6 +653,7 @@ Table services_servicetype {
   max_daily_assignments integer [not null]
   procedures text [not null]
   required_equipment text [not null]
+  inspection_procedures text [not null]
   is_active boolean [not null]
   requires_site_inspection boolean [not null]
   deposit_policy varchar(20) [not null]

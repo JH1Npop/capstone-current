@@ -68,10 +68,13 @@ transaction `reference_number`, which preserves external or business context.
 - The catalog remains read-only for technicians. Transaction and reservation
   querysets expose only rows assigned to the authenticated technician.
 - An assigned lead or crew technician may request additional equipment from
-  `Not Started` through the supported inspection/active/hold states. A
-  pre-start request creates pending reservations and ledger evidence but keeps
-  the ticket `Not Started`; requesting stock never falsely records travel or
-  work as begun. Completed, turned-over, and cancelled tickets reject requests.
+  `Not Started` through the supported inspection/active/hold states. Every
+  request creates pending reservations and ledger evidence without changing the
+  ticket status; requesting stock never falsely records travel or work as begun
+  and never pauses work by itself. The lead may opt in to **Pause job while
+  waiting**, which applies the guarded technician hold in the same transaction;
+  a refused pause reserves nothing. Approval or rejection does not change the
+  ticket status. Completed, turned-over, and cancelled tickets reject requests.
 - Low-stock names and quantities on the technician dashboard require the same
   field-inventory capability, preventing dashboard access from bypassing the
   inventory boundary.

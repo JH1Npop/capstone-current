@@ -9,7 +9,9 @@ from rest_framework.test import APITestCase
 
 from notifications.models import Notification
 from services.models import (
+    InspectionChecklist,
     MaintenanceSchedule,
+    QuotationRecord,
     SalesRecord,
     ServiceRequest,
     ServiceStatusHistory,
@@ -213,6 +215,163 @@ class EndToEndJourneyTests(APITestCase):
         self.travel_and_arrive(ticket)
         self.do_service_work(ticket, procedure_count=1)
         self.assertTrue(self.client_notified('inspection'))
+
+    def submit_inspection_report(self, ticket, expected=(200, 201)):
+        tech = self.as_user(self.tech)
+        return self.ok(tech.post('/api/services/inspections/', {
+            'ticket': ticket.id, 'site_accessible': True, 'electrical_adequate': True,
+            'safety_equipment_present': True, 'recommendation': 'Approved', 'checklist_items': [],
+            'additional_notes': 'Concrete roof, east-facing, clear of shade.',
+        }, format='json'), expected)
+
+    def accept_quotation(self, ticket, number):
+        QuotationRecord.objects.create(ticket=ticket, client=self.client_user, quotation_number=number, status='Accepted')
+
+    def test_inspection_report_requires_travel_and_arrival(self):
+        ticket = self.assign(self.approve(self.create_request(self.install)), 'inspection')
+
+        before_travel = self.submit_inspection_report(ticket, expected=400)
+        self.assertIn('Arrive on site', str(before_travel.data))
+        self.ok(self.as_user(self.tech).post(f'/api/technician/jobs/{ticket.id}/start-navigation/', {}, format='json'))
+        self.submit_inspection_report(ticket, expected=400)
+        self.assertFalse(InspectionChecklist.objects.filter(ticket=ticket).exists())
+
+        self.ok(self.as_user(self.tech).post(f'/api/technician/jobs/{ticket.id}/arrive/', SITE, format='json'))
+        report = self.submit_inspection_report(ticket, expected=201)
+        self.ok(self.as_user(self.tech).post(f"/api/services/inspections/{report.data['id']}/complete/", {}, format='json'))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'Inspection Completed')
+
+    def test_inspection_visit_cannot_be_finished_as_completed_job(self):
+        ticket = self.assign(self.approve(self.create_request(self.install)), 'inspection')
+        self.travel_and_arrive(ticket)
+        tech = self.as_user(self.tech)
+        self.ok(tech.post(f'/api/technician/jobs/{ticket.id}/status/', {'status': 'in_progress'}, format='json'))
+        # Simulate legacy data where the report is marked done while the ticket is still in progress.
+        InspectionChecklist.objects.create(ticket=ticket, is_completed=True, recommendation='Approved')
+
+        finish = tech.post(f'/api/technician/jobs/{ticket.id}/status/', {
+            'status': 'completed', 'completion_proof_images': ['https://example.com/proof.jpg'],
+        }, format='json')
+        legacy_finish = tech.post(f'/api/services/service-tickets/{ticket.id}/complete_work/', {
+            'completion_proof_images': ['https://example.com/proof.jpg'],
+        }, format='json')
+
+        self.assertEqual(finish.status_code, 400, finish.data)
+        self.assertIn('inspection report', finish.data['error'])
+        self.assertEqual(legacy_finish.status_code, 400, legacy_finish.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'In Progress')
+        self.assertEqual(ticket.ticket_type, 'inspection')
+
+    def test_inspection_decision_notifies_inspector_and_keeps_site_evidence(self):
+        ticket = self.assign(self.approve(self.create_request(self.install)), 'inspection')
+        self.travel_and_arrive(ticket)
+        report = self.submit_inspection_report(ticket, expected=201)
+        tech = self.as_user(self.tech)
+        self.ok(tech.post(f'/api/services/service-tickets/{ticket.id}/upload_photos/', {
+            'photos': ['https://example.com/inspection-roof.jpg'],
+        }, format='json'))
+        self.ok(tech.post(f"/api/services/inspections/{report.data['id']}/complete/", {}, format='json'))
+        self.accept_quotation(ticket, 'QUO-EVIDENCE-01')
+
+        self.ok(self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/inspection_decision/', {
+            'decision': 'approve_service', 'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
+        }, format='json'))
+
+        self.assertTrue(Notification.objects.filter(
+            user=self.tech, title=f'Inspection Decision for Ticket #{ticket.id}',
+        ).exists())
+        findings = ServiceStatusHistory.objects.get(ticket=ticket, notes__startswith='Inspection findings:')
+        self.assertIn('Concrete roof, east-facing', findings.notes)
+        self.assertIn('Recommendation: Approved', findings.notes)
+        self.assertIn('Site photos kept: 1', findings.notes)
+
+        ticket = self.assign(ticket, 'service')
+        self.travel_and_arrive(ticket)
+        self.do_service_work(ticket, procedure_count=1)
+
+        checklist = InspectionChecklist.objects.get(ticket=ticket)
+        self.assertEqual(checklist.additional_notes, 'All steps done.')
+        inspection_photos = [entry for entry in checklist.proof_media if entry.get('phase') == 'inspection']
+        self.assertEqual([entry['url'] for entry in inspection_photos], ['https://example.com/inspection-roof.jpg'])
+        self.assertTrue(checklist.site_accessible)
+        self.assertEqual(checklist.recommendation, 'Approved')
+
+    def test_service_specific_inspection_checks_are_required_and_kept(self):
+        self.install.inspection_procedures = [
+            {'title': 'Roof can carry the array', 'description': 'Check purlins.'},
+            {'title': 'Meter base accepts net metering'},
+        ]
+        self.install.save(update_fields=['inspection_procedures'])
+        ticket = self.assign(self.approve(self.create_request(self.install)), 'inspection')
+        self.travel_and_arrive(ticket)
+        tech = self.as_user(self.tech)
+
+        job = self.ok(tech.get(f'/api/technician/jobs/{ticket.id}/')).data
+        self.assertEqual(
+            [check['title'] for check in job['service_types'][0]['inspection_procedures']],
+            ['Roof can carry the array', 'Meter base accepts net metering'],
+        )
+
+        base = {
+            'ticket': ticket.id, 'site_accessible': True, 'electrical_adequate': True,
+            'safety_equipment_present': True, 'recommendation': 'Conditional',
+        }
+        missing = tech.post('/api/services/inspections/', {**base, 'checklist_items': []}, format='json')
+        self.assertEqual(missing.status_code, 400)
+        self.assertEqual(len(missing.data['checklist_items']), 2)
+
+        no_without_note = tech.post('/api/services/inspections/', {**base, 'checklist_items': [
+            {'service_type_id': self.install.id, 'title': 'Roof can carry the array', 'answer': False},
+            {'service_type_id': self.install.id, 'title': 'Meter base accepts net metering', 'answer': True},
+        ]}, format='json')
+        self.assertEqual(no_without_note.status_code, 400)
+        self.assertIn('Explain the problem', str(no_without_note.data['checklist_items']))
+
+        report = self.ok(tech.post('/api/services/inspections/', {**base, 'checklist_items': [
+            {'service_type_id': self.install.id, 'title': 'Roof can carry the array', 'answer': False, 'notes': 'Rusted purlins on the east side.'},
+            {'service_type_id': self.install.id, 'title': 'Meter base accepts net metering', 'answer': 'true'},
+            {'service_type_id': self.install.id, 'title': 'Unconfigured extra check', 'answer': True},
+        ]}, format='json'), 201)
+        self.assertEqual(report.data['checklist_items'], [
+            {'service_type_id': self.install.id, 'service_name': self.install.name, 'title': 'Roof can carry the array',
+             'answer': False, 'notes': 'Rusted purlins on the east side.'},
+            {'service_type_id': self.install.id, 'service_name': self.install.name, 'title': 'Meter base accepts net metering',
+             'answer': True, 'notes': ''},
+        ])
+        self.ok(tech.post(f"/api/services/inspections/{report.data['id']}/complete/", {}, format='json'))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'Inspection Completed')
+
+        self.accept_quotation(ticket, 'QUO-CHECKS-01')
+        self.ok(self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/inspection_decision/', {
+            'decision': 'approve_service', 'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
+        }, format='json'))
+        findings = ServiceStatusHistory.objects.get(ticket=ticket, notes__startswith='Inspection findings:').notes
+        self.assertIn('Roof can carry the array: No (Rusted purlins on the east side.)', findings)
+        self.assertIn('Meter base accepts net metering: Yes', findings)
+
+    def test_admin_service_api_saves_normalized_inspection_checks(self):
+        admin = self.as_user(self.admin)
+        response = self.ok(admin.put(f'/api/admin/services/{self.install.id}/', {
+            'inspection_procedures': [
+                {'title': '  Roof can carry the array ', 'description': 'Check purlins.'},
+                'Shade-free array area',
+                {'title': '   '},
+            ],
+        }, format='json'))
+
+        self.assertEqual(response.data['inspection_procedures'], [
+            {'title': 'Roof can carry the array', 'description': 'Check purlins.'},
+            {'title': 'Shade-free array area', 'description': ''},
+        ])
+        self.install.refresh_from_db()
+        self.assertEqual(len(self.install.inspection_procedures), 2)
+        too_many = admin.put(f'/api/admin/services/{self.install.id}/', {
+            'inspection_procedures': [{'title': f'Check {index}'} for index in range(31)],
+        }, format='json')
+        self.assertEqual(too_many.status_code, 400)
 
     # ------------------------------------------------------------------ minor flows
     def test_minor_flow_reject_and_cancel_requests(self):

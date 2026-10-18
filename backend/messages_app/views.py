@@ -17,7 +17,7 @@ from users.rbac import (
     COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES,
     user_has_any_capability,
 )
-from .serializers import CUSTOMER_SUPPORT_PREFIX
+from .serializers import CUSTOMER_SUPPORT_PREFIX, get_customer_support_client_id
 
 
 STAFF_MESSAGE_ROLES = {'superadmin', 'admin', 'technician'}
@@ -71,6 +71,85 @@ def notify_admins_of_customer_support_message(message):
             message=f'{client_name} sent a customer service message.',
             type='customer_inquiry',
         )
+
+
+def _display_name(user):
+    return user.get_full_name().strip() or user.username
+
+
+def _notify_unless_unread(user, title, message, notification_type='message', ticket=None):
+    # One unread alert per conversation is enough; a burst of replies must not flood the bell.
+    if Notification.objects.filter(user=user, title=title, status='unread').exists():
+        return
+    Notification.objects.create(
+        user=user,
+        ticket=ticket,
+        request=ticket.request if ticket else None,
+        title=title,
+        message=message,
+        type=notification_type,
+    )
+
+
+def notify_client_of_customer_support_reply(message):
+    sender = message.sender
+    if not sender or getattr(sender, 'role', None) not in ADMIN_MESSAGE_ROLES or message.ticket_id:
+        return
+    client_id = get_customer_support_client_id(message.group_key)
+    client = User.objects.filter(id=client_id, role='client', is_active=True).first() if client_id else None
+    if not client:
+        return
+    case = CustomerSupportCase.objects.filter(group_key=message.group_key, client=client).first()
+    # Sidebar routing sends client alerts containing "support" to Client Support; keep that word in.
+    title = f'Customer support replied to case #{case.id}' if case else 'Customer support replied'
+    _notify_unless_unread(
+        client,
+        title,
+        'Customer support sent you a new reply. Open Client Support to read it.',
+    )
+
+
+def notify_direct_message_receiver(message):
+    sender = message.sender
+    receiver = message.receiver
+    if message.room_type != 'direct' or not sender or not receiver or receiver.id == sender.id:
+        return
+    if not receiver.is_active or receiver.role not in STAFF_MESSAGE_ROLES:
+        return
+    if receiver.role in ADMIN_MESSAGE_ROLES and not user_has_any_capability(receiver, COMMUNICATIONS_STAFF_VIEW_CAPABILITIES):
+        return
+    _notify_unless_unread(
+        receiver,
+        f'New message from {_display_name(sender)}',
+        f'{_display_name(sender)} sent you a direct message.',
+    )
+
+
+def notify_ticket_team_of_ticket_message(message):
+    ticket = message.ticket
+    sender = message.sender
+    if not ticket or not sender:
+        return
+    team_ids = {ticket.technician_id, *ticket.crew_assignments.values_list('technician_id', flat=True)}
+    team_ids.discard(None)
+    team_ids.discard(sender.id)
+    for technician in User.objects.filter(id__in=team_ids, role='technician', is_active=True):
+        _notify_unless_unread(
+            technician,
+            f'New after-sales message for ticket #{ticket.id}',
+            f'{_display_name(sender)} posted in the after-sales thread for ticket #{ticket.id}.',
+            ticket=ticket,
+        )
+
+
+def notify_client_of_customer_support_resolution(case):
+    status_label = case.get_status_display().lower()
+    Notification.objects.create(
+        user=case.client,
+        title=f'Support case #{case.id} {status_label}',
+        message=f'Customer support marked your support case #{case.id} as {status_label}.',
+        type='info',
+    )
 
 
 def notify_admins_of_customer_support_resolution(case, actor):
@@ -185,6 +264,9 @@ class MessageViewSet(viewsets.ModelViewSet):
         message = serializer.save(sender=self.request.user)
         notify_admins_of_client_ticket_message(message)
         notify_admins_of_customer_support_message(message)
+        notify_client_of_customer_support_reply(message)
+        notify_direct_message_receiver(message)
+        notify_ticket_team_of_ticket_message(message)
 
     def update(self, request, *args, **kwargs):
         message = self.get_object()
@@ -298,3 +380,4 @@ class CustomerSupportCaseViewSet(viewsets.ModelViewSet):
         final_statuses = {'resolved', 'closed'}
         if previous_status not in final_statuses and case.status in final_statuses:
             notify_admins_of_customer_support_resolution(case, self.request.user)
+            notify_client_of_customer_support_resolution(case)

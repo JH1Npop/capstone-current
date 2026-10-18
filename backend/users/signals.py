@@ -76,7 +76,7 @@ def get_current_request_meta():
 
 # Fields to track on each model (only these will be logged on update)
 TRACKED_FIELDS = {
-    'ServiceType': ['name', 'description', 'estimated_duration', 'estimated_cost', 'max_daily_assignments', 'procedures', 'required_equipment'],
+    'ServiceType': ['name', 'description', 'estimated_duration', 'estimated_cost', 'max_daily_assignments', 'procedures', 'required_equipment', 'inspection_procedures'],
     'ServiceRequest': ['status', 'priority', 'description', 'service_type_id', 'client_id', 'preferred_date', 'preferred_time_slot', 'request_source', 'scheduling_notes'],
     'ServiceTicket': ['status', 'priority', 'technician_id', 'assigned_admin_id', 'scheduled_date', 'scheduled_time', 'scheduled_time_slot', 'auto_assigned', 'reschedule_requested', 'reschedule_reason', 'warranty_status', 'completion_notes', 'client_rating'],
     'User': ['username', 'first_name', 'last_name', 'phone', 'address', 'profile_image', 'role', 'status', 'email', 'pending_email', 'is_active'],

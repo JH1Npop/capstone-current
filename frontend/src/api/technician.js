@@ -48,6 +48,7 @@ const normalizeTechnicianJob = (job) => ({
     estimatedDurationMinutes: toNumber(serviceType?.estimated_duration_minutes ?? serviceType?.estimatedDurationMinutes, 0),
     procedures: Array.isArray(serviceType?.procedures) ? serviceType.procedures : [],
     requiredEquipment: Array.isArray(serviceType?.required_equipment) ? serviceType.required_equipment : [],
+    inspectionProcedures: Array.isArray(serviceType?.inspection_procedures) ? serviceType.inspection_procedures : [],
   })),
   ticketId: toNumericId(job.id, toNumericId(job.ticketId, toNumericId(job.ticket_id))),
   ticketType: job.ticket_type || job.ticketType || 'installation',
@@ -149,9 +150,9 @@ export const fetchTechnicianInventoryItems = async () => {
   }
 };
 
-export const requestAdditionalEquipment = async (jobId, { itemId, quantity, items, notes = '' }) => {
+export const requestAdditionalEquipment = async (jobId, { itemId, quantity, items, notes = '', pauseJob = false }) => {
   try {
-    const payload = { notes };
+    const payload = { notes, pause_job: Boolean(pauseJob) };
     if (Array.isArray(items)) {
       payload.items = items.map((item) => ({
         item_id: item.itemId ?? item.item_id ?? item.id,
@@ -245,6 +246,8 @@ export const updateJobStatus = async (jobId, status, notes = '', images = [], in
       if (inventoryUsage) {
         payload.inventory_usage = inventoryUsage;
       }
+    } else if (status === 'on_hold') {
+      payload.reason = notes;
     }
 
     const { data } = await api.post(`/technician/jobs/${jobId}/status/`, payload);
@@ -309,7 +312,15 @@ export const submitInspectionChecklist = async (ticketId, checklistData) => {
   try {
     const payload = {
       ticket: ticketId,
-      checklist_items: [],
+      // Service-specific checks; the general checks travel as their own fields below.
+      checklist_items: Array.isArray(checklistData.serviceChecks)
+        ? checklistData.serviceChecks.map((check) => ({
+            service_type_id: check.serviceTypeId,
+            title: check.title,
+            answer: check.answer,
+            notes: check.answer === false ? String(check.notes || '').trim() : '',
+          }))
+        : [],
     };
     
     // General Assessment fields

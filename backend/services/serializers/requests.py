@@ -25,6 +25,7 @@ from ..user_display import client_technician_label
 class ServiceTypeSerializer(serializers.ModelSerializer):
     procedures = serializers.JSONField(required=False)
     required_equipment = serializers.JSONField(required=False)
+    inspection_procedures = serializers.JSONField(required=False)
     inventory_requirements_count = serializers.SerializerMethodField()
     inventory_requirements = serializers.SerializerMethodField()
     request_count = serializers.SerializerMethodField()
@@ -175,6 +176,24 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Required equipment must be a list.')
         return value
 
+    def validate_inspection_procedures(self, value):
+        if value in (None, ''):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Inspection checks must be a list.')
+        checks = []
+        for entry in value:
+            title = str((entry.get('title') if isinstance(entry, dict) else entry) or '').strip()
+            if not title:
+                continue
+            if len(title) > 200:
+                raise serializers.ValidationError('Each inspection check must be 200 characters or fewer.')
+            description = str(entry.get('description') or '').strip() if isinstance(entry, dict) else ''
+            checks.append({'title': title, 'description': description[:500]})
+        if len(checks) > 30:
+            raise serializers.ValidationError('Use at most 30 inspection checks per service.')
+        return checks
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         policy = attrs.get('deposit_policy', getattr(self.instance, 'deposit_policy', 'none'))
@@ -197,7 +216,8 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
         model = ServiceType
         fields = ['id', 'name', 'description', 'category', 'color', 'icon', 'display_order',
                   'estimated_duration', 'estimated_cost', 'max_daily_assignments',
-                  'procedures', 'required_equipment', 'is_active', 'requires_site_inspection',
+                  'procedures', 'required_equipment', 'inspection_procedures',
+                  'is_active', 'requires_site_inspection',
                   'deposit_policy', 'deposit_value',
                   'request_count', 'ticket_count', 'usage_count',
                   'inventory_requirements_count', 'inventory_requirements']

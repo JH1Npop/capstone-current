@@ -26,6 +26,7 @@ def _serialize_ticket_service_checklists(ticket):
             'estimated_duration_minutes': service_type.estimated_duration or 0,
             'procedures': service_type.procedures or [],
             'required_equipment': service_type.required_equipment or [],
+            'inspection_procedures': service_type.inspection_procedures or [],
         }
         for service_type in service_types
     ]
@@ -593,11 +594,20 @@ class TechnicianJobsView(viewsets.ViewSet):
         status_map = {
             'accepted': 'Not Started',
             'in_progress': 'In Progress',
+            'on_hold': 'On Hold',
             'completed': 'Completed'
         }
         new_status = status_map.get(requested_status)
         if not new_status:
             return Response({'error': 'Unsupported status'}, status=status.HTTP_400_BAD_REQUEST)
+        if new_status == 'On Hold':
+            try:
+                resolved_status = hold_ticket_for_technician(ticket, request.user, request.data.get('reason'))
+            except PermissionDenied as exc:
+                return Response({'error': str(exc.detail), 'status': ticket.status}, status=status.HTTP_403_FORBIDDEN)
+            except ValueError as exc:
+                return Response({'error': str(exc), 'status': ticket.status}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'status': resolved_status, 'ticket_id': ticket.id})
         if new_status == 'In Progress' and ticket.status not in ['Arrived on Site', 'On Hold']:
             return Response({
                 'error': 'You must mark arrival on site before starting the job, or resume a job that is on hold.',

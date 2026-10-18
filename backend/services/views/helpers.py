@@ -91,6 +91,11 @@ __all__ = ['record_arrival_validation_log', 'compute_arrival_validation_result',
     'ensure_ticket_checklist_completed',
     'ensure_ticket_completion_proof',
     'apply_ticket_status_change',
+    'TECHNICIAN_HOLDABLE_TICKET_STATUSES',
+    'hold_ticket_for_technician',
+    'INSPECTION_EVIDENCE_PHASE',
+    'preserve_inspection_evidence',
+    'keep_inspection_proof_media',
     # Re-exported imports (models, serializers, permissions, etc.)
     'viewsets', 'permissions', 'status', 'action', 'Response', 'api_view',
     'MethodNotAllowed', 'PermissionDenied',
@@ -1260,6 +1265,12 @@ def ticket_requires_inspection_visit(ticket):
 
 
 def ensure_ticket_checklist_completed(ticket):
+    # An inspection visit ends with its report (Inspection Completed) and the office decision;
+    # finishing it as a completed job would close the work before installation.
+    if ticket.ticket_type == 'inspection':
+        raise ValueError(
+            'An inspection visit ends when the inspection report is submitted, not with Finish Job.'
+        )
     try:
         checklist = ticket.inspection
     except InspectionChecklist.DoesNotExist:
@@ -1381,6 +1392,94 @@ def apply_ticket_status_change(ticket, new_status, *, changed_by, notes='', extr
     )
 
     return normalized_status
+
+
+INSPECTION_EVIDENCE_PHASE = 'inspection'
+
+
+def preserve_inspection_evidence(checklist, *, changed_by):
+    """Tag inspection photos and record the findings before the record is reused as the service checklist.
+
+    The caller saves `proof_media`. The findings go to the append-only status history, so later service
+    checklist submissions cannot overwrite them.
+    """
+    tagged_media = []
+    for entry in checklist.proof_media or []:
+        if not isinstance(entry, dict):
+            entry = {'type': 'photo', 'name': str(entry)[:255], 'url': str(entry)}
+        tagged_media.append({**entry, 'phase': entry.get('phase') or INSPECTION_EVIDENCE_PHASE})
+    checklist.proof_media = tagged_media
+
+    def answer(label, value, detail):
+        text = f"{label}: {'Yes' if value else 'No'}"
+        return f'{text} ({detail.strip()})' if detail and detail.strip() else text
+
+    findings = [
+        answer('Site accessible', checklist.site_accessible, checklist.site_accessible_notes),
+        answer('Electrical adequate', checklist.electrical_adequate, checklist.electrical_notes),
+        answer('Safety equipment present', checklist.safety_equipment_present, checklist.safety_hazards),
+    ]
+    from services.inspection_checks import describe_inspection_answers
+
+    # Service-specific answers live in checklist_items, which the service checklist later reuses.
+    findings.extend(describe_inspection_answers(checklist.checklist_items))
+    if checklist.recommendation:
+        findings.append(f'Recommendation: {checklist.recommendation}')
+    if checklist.additional_notes and checklist.additional_notes.strip():
+        findings.append(f'Notes: {checklist.additional_notes.strip()}')
+    findings.append(f'Site photos kept: {len(tagged_media)}')
+
+    ServiceStatusHistory.objects.create(
+        ticket=checklist.ticket,
+        status=checklist.ticket.status,
+        changed_by=changed_by,
+        notes=('Inspection findings: ' + '; '.join(findings))[:4000],
+    )
+
+
+def keep_inspection_proof_media(existing_media, new_media):
+    """Service checklist saves replace their own media but never drop tagged inspection photos."""
+    kept = [
+        entry for entry in (existing_media or [])
+        if isinstance(entry, dict) and entry.get('phase') == INSPECTION_EVIDENCE_PHASE
+    ]
+    kept_urls = {entry.get('url') for entry in kept}
+    return kept + [entry for entry in new_media if entry.get('url') not in kept_urls]
+
+
+# A technician may pause field work they are travelling to or doing; office states stay with the office.
+TECHNICIAN_HOLDABLE_TICKET_STATUSES = {'Navigating', 'Arrived on Site', 'In Progress'}
+
+
+def hold_ticket_for_technician(ticket, technician, reason, *, notify_client=True):
+    """Put the lead technician's job on hold. Raises PermissionDenied or ValueError."""
+    reason = str(reason or '').strip()
+    if ticket.technician_id != technician.id:
+        raise PermissionDenied('Only the lead technician can put this job on hold.')
+    if ticket.status not in TECHNICIAN_HOLDABLE_TICKET_STATUSES:
+        raise ValueError('A job can only be put on hold while navigating, on site, or in progress.')
+    if len(reason) < 5:
+        raise ValueError('Please give a reason for putting the job on hold.')
+
+    technician_name = _display_name(technician) or technician.username
+    apply_ticket_status_change(
+        ticket,
+        'On Hold',
+        changed_by=technician,
+        notes=f'{technician_name} put the job on hold: {reason}',
+    )
+    if notify_client:
+        create_notification(
+            ticket.request.client,
+            f"Work on ticket #{ticket.id} is paused for now. We will let you know when it resumes.",
+            'info',
+        )
+    _notify_admin_superadmin(
+        message=f"{technician_name} put ticket #{ticket.id} on hold: {reason}",
+        notification_type='warning',
+        include_user=ticket.assigned_admin if ticket.assigned_admin_id else None,
+    )
+    return ticket.status
 
 
 from services.models import ArrivalValidationLog

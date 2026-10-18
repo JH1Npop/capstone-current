@@ -19,6 +19,7 @@ test.describe('Technician Workspace - All Pages', () => {
   test('4.1 - Technician Dashboard loads', async ({ page }) => {
     let notificationListRequests = 0;
     let unreadCountRequests = 0;
+    const startedAt = Date.now();
     page.on('request', (request) => {
       const url = new URL(request.url());
       if (request.method() !== 'GET') return;
@@ -59,10 +60,14 @@ test.describe('Technician Workspace - All Pages', () => {
     await expect(page.getByText('GPS Active')).toBeVisible();
     // Live tracking starts only after the explicit click; the hook uses a single watch.
     expect(await page.evaluate(() => window.__dashboardGeolocationCalls.watch)).toBe(1);
+    // One shared notification context: the first load may issue up to two of each request, and the
+    // E2E server has no WebSocket, so 5-second recovery polling may add one more per elapsed interval.
+    // Duplicate per-consumer loading would exceed this regardless of how slow the run is.
+    const allowedRequests = 2 + Math.floor((Date.now() - startedAt) / 5000);
     expect(notificationListRequests).toBeGreaterThan(0);
-    expect(notificationListRequests).toBeLessThanOrEqual(2);
+    expect(notificationListRequests).toBeLessThanOrEqual(allowedRequests);
     expect(unreadCountRequests).toBeGreaterThan(0);
-    expect(unreadCountRequests).toBeLessThanOrEqual(2);
+    expect(unreadCountRequests).toBeLessThanOrEqual(allowedRequests);
   });
 
   test('4.2 - My Jobs list loads', async ({ page }) => {
@@ -164,11 +169,37 @@ test.describe('Technician Workspace - All Pages', () => {
       return jobs.find((job) => job.ticket_type === 'inspection')?.id;
     });
     expect(ticketId).toBeTruthy();
+
+    // The report stays closed until the technician has travelled, arrived, and started the job.
+    await page.goto(`/technician/inspection-checklist?ticketId=${ticketId}`);
+    await expect(page.getByRole('heading', { name: 'Arrive on site first' })).toBeVisible();
+    const fieldSequence = await page.evaluate(async (id) => {
+      const token = sessionStorage.getItem('afn_token');
+      const post = async (path, body = {}) => {
+        const response = await fetch(path, {
+          method: 'POST',
+          headers: { Authorization: `Token ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        return response.status;
+      };
+      return [
+        await post(`/api/technician/jobs/${id}/start-navigation/`),
+        // Seeded inspection site coordinates, so GPS arrival validation passes.
+        await post(`/api/technician/jobs/${id}/arrive/`, { latitude: 14.2786, longitude: 121.125 }),
+        await post(`/api/technician/jobs/${id}/status/`, { status: 'in_progress' }),
+      ];
+    }, ticketId);
+    expect(fieldSequence).toEqual([200, 200, 200]);
+
     await visitWorkspacePage(page, `/technician/inspection-checklist?ticketId=${ticketId}`, 'test-results/screenshots/04-tech-inspection-checklist.png');
     await expect(page.getByRole('heading', { name: 'Answer every check' })).toBeVisible();
     await page.getByRole('button', { name: 'Review and complete inspection' }).click();
     await expect(page.getByText('Review the highlighted items before completing the inspection.')).toBeVisible();
-    await expect(page.getByText('Choose Yes or No.')).toHaveCount(3);
+    // Three general checks plus the two service-specific checks seeded for E2E Solar Installation.
+    await expect(page.getByText('Choose Yes or No.')).toHaveCount(5);
+    await expect(page.getByRole('heading', { name: 'Checks for the requested service' })).toBeVisible();
+    await expect(page.getByText('Roof can carry the panel array')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Review and complete inspection' })).toBeVisible();
     await page.screenshot({ path: 'test-results/screenshots/04-tech-inspection-checklist-mobile.png', fullPage: true });
     for (const yesButton of await page.getByRole('button', { name: 'Yes', exact: true }).all()) {
@@ -182,6 +213,18 @@ test.describe('Technician Workspace - All Pages', () => {
     });
     await page.getByRole('button', { name: 'Review and complete inspection' }).click();
     await expect(page.getByText('Inspection submitted successfully.')).toBeVisible();
+
+    const saved = await page.evaluate(async (id) => {
+      const token = sessionStorage.getItem('afn_token');
+      const response = await fetch(`/api/services/inspections/?ticket=${id}`, { headers: { Authorization: `Token ${token}` } });
+      const payload = await response.json();
+      const report = (Array.isArray(payload) ? payload : payload.results || [])[0];
+      return (report?.checklist_items || []).map((item) => [item.title, item.answer]);
+    }, ticketId);
+    expect(saved).toEqual([
+      ['Roof can carry the panel array', true],
+      ['Array area is free of heavy shading', true],
+    ]);
   });
 
   test('4.7 - Messages / Chat interface', async ({ page }) => {

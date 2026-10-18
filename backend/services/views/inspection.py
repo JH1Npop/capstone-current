@@ -2,6 +2,7 @@
 from decimal import Decimal, InvalidOperation
 
 from rest_framework import serializers, viewsets, permissions
+from rest_framework.exceptions import ValidationError
 from users.permissions import CanManageTechnicianSkills
 
 from services.models import SolarCommissioningChecklist, TurnoverAcceptance, TechnicalDataSheet, InstallationContract
@@ -102,10 +103,20 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
             
         return qs.order_by('-created_at', '-id')
 
+    # A technician reports on a site only after arriving; this keeps travel and GPS arrival in the record.
+    TECHNICIAN_REPORTABLE_STATUSES = {'Arrived on Site', 'In Progress'}
+
+    def _require_technician_on_site(self, ticket):
+        if self.request.user.role == 'technician' and ticket.status not in self.TECHNICIAN_REPORTABLE_STATUSES:
+            raise ValidationError({
+                'ticket': 'Arrive on site and start the job before submitting the inspection report.',
+            })
+
     def perform_create(self, serializer):
         ticket = serializer.validated_data['ticket']
         if self.request.user.role == 'technician' and not ticket_has_technician_access(ticket, self.request.user):
             raise PermissionDenied('You can only create inspection checklists for tickets assigned to you or your crew.')
+        self._require_technician_on_site(ticket)
         checklist = serializer.save(submitted_by=self.request.user, submitted_at=timezone.now())
         self._sync_inspection_completion_status(checklist)
         sync_ticket_maintenance_schedule(checklist.ticket)
@@ -118,6 +129,7 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
             )
 
     def perform_update(self, serializer):
+        self._require_technician_on_site(serializer.instance.ticket)
         checklist = serializer.save(submitted_by=self.request.user, submitted_at=timezone.now())
         self._sync_inspection_completion_status(checklist)
         sync_ticket_maintenance_schedule(checklist.ticket)
@@ -158,6 +170,7 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
         checklist = self.get_queryset().select_for_update().get(pk=pk)
         if checklist.is_completed:
             return Response({'status': 'Inspection completed'})
+        self._require_technician_on_site(checklist.ticket)
         checklist.is_completed = True
         checklist.completed_at = timezone.now()
         checklist.completed_by = request.user

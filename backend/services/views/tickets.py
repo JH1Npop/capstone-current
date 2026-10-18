@@ -23,6 +23,7 @@ from services.views.helpers import (
     IsAdminOrSupervisor,
     IsAdminOrSupervisorOrTechnician,
     PARTS_REQUEST_TICKET_STATUSES,
+    TECHNICIAN_HOLDABLE_TICKET_STATUSES,
     PermissionDenied,
     Q,
     Response,
@@ -40,6 +41,8 @@ from services.views.helpers import (
     action,
     apply_schedule_fields,
     apply_ticket_status_change,
+    hold_ticket_for_technician,
+    preserve_inspection_evidence,
     build_ticket_search_query,
     clear_reschedule_request,
     create_notification,
@@ -1393,6 +1396,9 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # Remember who did the inspection before the service handoff clears the team.
+        inspection_team = list(get_ticket_team_members(ticket))
+
         try:
             if target_status in ['Ready for Service', 'Awaiting Materials']:
                 ticket.technician = None
@@ -1406,10 +1412,13 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
 
                 try:
                     checklist = ticket.inspection
+                    # The same record becomes the service checklist; keep the inspection evidence
+                    # by tagging its photos and copying its findings into the append-only history.
+                    preserve_inspection_evidence(checklist, changed_by=request.user)
                     checklist.is_completed = False
                     checklist.completed_at = None
                     checklist.completed_by = None
-                    checklist.save(update_fields=['is_completed', 'completed_at', 'completed_by'])
+                    checklist.save(update_fields=['is_completed', 'completed_at', 'completed_by', 'proof_media'])
                 except InspectionChecklist.DoesNotExist:
                     pass
 
@@ -1456,9 +1465,9 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             ticket=ticket,
             request=ticket.request,
         )
-        if ticket.technician:
+        for inspector in inspection_team:
             send_user_notification(
-                user=ticket.technician,
+                user=inspector,
                 title=f"Inspection Decision for Ticket #{ticket.id}",
                 body=f"Admin decision: {resolved_status}.",
                 notification_type='info',
@@ -2027,6 +2036,17 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Asking for equipment never pauses the job by itself; the lead technician decides whether to wait.
+        pause_job = str(request.data.get('pause_job', '')).strip().lower() in {'1', 'true', 'yes', 'on'}
+        if pause_job:
+            if ticket.technician_id != request.user.id:
+                return Response({'error': 'Only the lead technician can put this job on hold.'}, status=status.HTTP_403_FORBIDDEN)
+            if ticket.status not in TECHNICIAN_HOLDABLE_TICKET_STATUSES:
+                return Response(
+                    {'error': 'A job can only be put on hold while navigating, on site, or in progress.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         reservations = []
         try:
             with transaction.atomic():
@@ -2051,20 +2071,25 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 status_notes = f"Additional equipment requested: {requested_parts}"
                 if notes:
                     status_notes = f'{status_notes} - {notes}'
-                if ticket.status in {'In Progress', 'Inspection Completed', 'Ready for Service'}:
-                    apply_ticket_status_change(
+                ServiceStatusHistory.objects.create(
+                    ticket=ticket,
+                    status=ticket.status,
+                    changed_by=request.user,
+                    notes=status_notes,
+                )
+                if pause_job:
+                    # Access was already checked; lock only the ticket row (PostgreSQL-safe).
+                    ticket = ServiceTicket.objects.select_for_update(of=('self',)).select_related(
+                        'request__client', 'assigned_admin',
+                    ).get(pk=ticket.pk)
+                    hold_ticket_for_technician(
                         ticket,
-                        'Awaiting Materials',
-                        changed_by=request.user,
-                        notes=status_notes,
+                        request.user,
+                        f'Waiting for requested equipment: {requested_parts}' + (f' - {notes}' if notes else ''),
+                        notify_client=False,
                     )
-                else:
-                    ServiceStatusHistory.objects.create(
-                        ticket=ticket,
-                        status=ticket.status,
-                        changed_by=request.user,
-                        notes=status_notes,
-                    )
+        except PermissionDenied as exc:
+            return Response({'error': str(exc.detail)}, status=status.HTTP_403_FORBIDDEN)
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -2093,7 +2118,11 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             request=ticket.request,
         )
 
-        response_payload = {'status': 'Additional equipment requested', 'parts': requested_parts}
+        response_payload = {
+            'status': 'Additional equipment requested',
+            'parts': requested_parts,
+            'ticket_status': ticket.status,
+        }
         if reservations:
             response_payload['reservations'] = [
                 {

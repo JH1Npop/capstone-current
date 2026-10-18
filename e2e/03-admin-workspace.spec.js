@@ -451,6 +451,50 @@ test.describe('Admin Workspace - All Pages', () => {
     await visitWorkspacePage(page, '/admin/services', 'test-results/screenshots/03-admin-services.png');
   });
 
+  test('3.7b - Admin saves service inspection checks and deposit rule', async ({ page }) => {
+    const serviceName = 'E2E Electrical Safety Check';
+    await visitWorkspacePage(page, '/admin/services');
+    await page.locator('div.rounded-xl.border.bg-white.shadow-sm')
+      .filter({ hasText: serviceName })
+      .first()
+      .getByRole('button', { name: 'Edit', exact: true })
+      .click();
+
+    await page.getByLabel('Requires site inspection first').check();
+    await expect(page.getByText('Site Inspection Checks')).toBeVisible();
+    await page.getByRole('button', { name: 'Add Check' }).click();
+    await page.getByLabel('Inspection check 1', { exact: true }).fill('Distribution board has a spare breaker slot');
+    await page.getByLabel('Inspection check 1 guidance').fill('Count free slots in the main panel.');
+    await page.getByLabel('Pre-service deposit').selectOption('percentage');
+    await page.getByLabel('Deposit percentage').fill('30');
+
+    const saveResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/admin/services/') && response.request().method() === 'PUT'
+    ));
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    expect((await saveResponse).ok()).toBeTruthy();
+
+    const saved = await page.evaluate(async (name) => {
+      const token = sessionStorage.getItem('afn_token');
+      const response = await fetch('/api/admin/services/', { headers: { Authorization: `Token ${token}` } });
+      const payload = await response.json();
+      const services = Array.isArray(payload) ? payload : payload.results || [];
+      const service = services.find((entry) => entry.name === name);
+      return {
+        requiresInspection: service?.requires_site_inspection,
+        checks: service?.inspection_procedures,
+        depositPolicy: service?.deposit_policy,
+        depositValue: Number(service?.deposit_value),
+      };
+    }, serviceName);
+    expect(saved).toEqual({
+      requiresInspection: true,
+      checks: [{ title: 'Distribution board has a spare breaker slot', description: 'Count free slots in the main panel.' }],
+      depositPolicy: 'percentage',
+      depositValue: 30,
+    });
+  });
+
   test('3.8 - Inventory Management loads', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/inventory', 'test-results/screenshots/03-admin-inventory.png');
     await expect(page.getByText('Physical units')).toBeVisible();

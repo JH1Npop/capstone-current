@@ -133,6 +133,7 @@ class AdminServicesViewSet(viewsets.ViewSet):
             max_daily_assignments=service.max_daily_assignments,
             procedures=service.procedures,
             required_equipment=service.required_equipment,
+            inspection_procedures=service.inspection_procedures,
             is_active=service.is_active,
             requires_site_inspection=service.requires_site_inspection,
         )

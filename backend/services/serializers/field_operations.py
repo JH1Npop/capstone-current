@@ -116,6 +116,15 @@ class InspectionChecklistSerializer(serializers.ModelSerializer):
                 inspection_errors['safety_hazards'] = 'Describe missing safety equipment or site hazards.'
             if recommendation and recommendation not in {'Approved', 'Conditional', 'Rejected'}:
                 inspection_errors['recommendation'] = 'Choose Approved, Conditional, or Rejected.'
+            # Service-specific checks come after the general ones; validate whenever they are (re)submitted.
+            if self.instance is None or 'checklist_items' in attrs:
+                from services.inspection_checks import normalize_inspection_answers
+
+                answers, check_errors = normalize_inspection_answers(ticket, attrs.get('checklist_items'))
+                if check_errors:
+                    inspection_errors['checklist_items'] = check_errors
+                else:
+                    attrs['checklist_items'] = answers
             if inspection_errors:
                 raise serializers.ValidationError(inspection_errors)
 

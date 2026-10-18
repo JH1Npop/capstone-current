@@ -23,7 +23,8 @@ export function useTechnicianJobs() {
   const [completionNotes, setCompletionNotes] = useState('');
   const [materialUsage, setMaterialUsage] = useState({});
   const [inventoryItems, setInventoryItems] = useState([]);
-  const [equipmentForm, setEquipmentForm] = useState({ itemIds: [], quantities: {}, notes: '' });
+  const emptyEquipmentForm = { itemIds: [], quantities: {}, notes: '', pauseJob: false };
+  const [equipmentForm, setEquipmentForm] = useState(emptyEquipmentForm);
   const [equipmentDropdownOpen, setEquipmentDropdownOpen] = useState(false);
   const [equipmentSubmitting, setEquipmentSubmitting] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -143,6 +144,30 @@ export function useTechnicianJobs() {
     }
   };
 
+  const handleHoldJob = async (jobId, reason) => {
+    const trimmedReason = String(reason || '').trim();
+    if (trimmedReason.length < 5) {
+      setError('Please give a reason for putting the job on hold.');
+      setTimeout(() => setError(''), 4000);
+      return false;
+    }
+
+    try {
+      setIsUpdatingStatus(true);
+      await updateJobStatus(jobId, 'on_hold', trimmedReason);
+      await loadJobs();
+      setActionMessage('Job put on hold. Resume it when you are ready to continue.');
+      setTimeout(() => setActionMessage(''), 4000);
+      return true;
+    } catch (holdError) {
+      setError(holdError.message || 'Unable to put the job on hold.');
+      setTimeout(() => setError(''), 5000);
+      return false;
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   const handleCompleteJob = async () => {
     if (!completionJob) {
       return;
@@ -222,15 +247,19 @@ export function useTechnicianJobs() {
 
     try {
       setEquipmentSubmitting(true);
+      const pausedJob = Boolean(equipmentForm.pauseJob);
       await requestAdditionalEquipment(selectedJob.id, {
         items: selectedItems.map((item) => ({ itemId: item.itemId, quantity: item.quantity })),
-        notes: equipmentForm.notes
+        notes: equipmentForm.notes,
+        pauseJob: pausedJob
       });
-      setEquipmentForm({ itemIds: [], quantities: {}, notes: '' });
+      setEquipmentForm(emptyEquipmentForm);
       setEquipmentDropdownOpen(false);
       await loadJobs();
       await loadInventoryItems();
-      setActionMessage('Additional equipment request saved and sent to admin.');
+      setActionMessage(pausedJob
+        ? 'Equipment requested and the job is on hold. Resume it when you are ready to continue.'
+        : 'Equipment requested. You can keep working while the admin reviews it.');
       setTimeout(() => setActionMessage(''), 4000);
     } catch (requestError) {
       setError(requestError.message || 'Unable to request additional equipment.');
@@ -282,6 +311,7 @@ export function useTechnicianJobs() {
     equipmentSubmitting,
     error,
     handleCompleteJob,
+    handleHoldJob,
     handleImageUpload,
     handleRequestEquipment,
     handleStatusUpdate,

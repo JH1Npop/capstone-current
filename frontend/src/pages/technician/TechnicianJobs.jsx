@@ -78,6 +78,7 @@ export default function TechnicianJobs() {
     equipmentSubmitting,
     error,
     handleCompleteJob,
+    handleHoldJob,
     handleImageUpload,
     handleRequestEquipment,
     handleStatusUpdate,
@@ -102,7 +103,22 @@ export default function TechnicianJobs() {
     updateEquipmentQuantity
   } = useTechnicianJobs();
 
+  const [holdJobId, setHoldJobId] = useState(null);
+  const [holdReason, setHoldReason] = useState('');
   const canRequestEquipment = ['not_started', 'navigating', 'arrived_on_site', 'in_progress', 'on_hold'].includes(selectedJob?.status);
+  // Only the lead pauses field work, and only once it is under way; the server enforces the same rule.
+  const canPauseSelectedJob = selectedJob?.assignmentRole !== 'crew'
+    && ['navigating', 'arrived_on_site', 'in_progress'].includes(selectedJob?.status);
+  const isHoldFormOpen = Boolean(selectedJob) && holdJobId === selectedJob.id;
+
+  const submitHold = async (event) => {
+    event.preventDefault();
+    const held = await handleHoldJob(selectedJob.id, holdReason);
+    if (held) {
+      setHoldJobId(null);
+      setHoldReason('');
+    }
+  };
 
   const selectedEquipmentLabel = selectedInventoryItems.length
     ? selectedInventoryItems.map((item) => item.name).join(', ')
@@ -713,6 +729,20 @@ export default function TechnicianJobs() {
                     placeholder="Reason or details for admin"
                     className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                   />
+                  {canPauseSelectedJob && (
+                    <label className="flex items-start gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(equipmentForm.pauseJob)}
+                        onChange={(event) => setEquipmentForm((prev) => ({ ...prev, pauseJob: event.target.checked }))}
+                        className="mt-0.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <span>
+                        <span className="block font-medium">Pause job while waiting</span>
+                        <span className="text-xs text-slate-500">Only if you cannot continue without it. Otherwise keep working while the admin reviews.</span>
+                      </span>
+                    </label>
+                  )}
                   <button
                     type="submit"
                     disabled={equipmentSubmitting || inventoryItems.length === 0}
@@ -737,6 +767,37 @@ export default function TechnicianJobs() {
               </div>
             )}
 
+            {isHoldFormOpen && (
+              <form onSubmit={submitHold} className="mt-3 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3 sm:mt-4 sm:p-4">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-slate-900">Why are you putting this job on hold?</span>
+                  <textarea
+                    value={holdReason}
+                    onChange={(event) => setHoldReason(event.target.value)}
+                    rows={2}
+                    placeholder="For example: waiting for a replacement breaker"
+                    className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-500 focus:outline-none"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    disabled={isUpdatingStatus}
+                    className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    {isUpdatingStatus ? 'Saving...' : 'Confirm Hold'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setHoldJobId(null); setHoldReason(''); }}
+                    className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+
             </div>
 
             <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-3 sm:flex sm:flex-wrap sm:p-4 sm:px-6">
@@ -754,6 +815,15 @@ export default function TechnicianJobs() {
                 >
                   <FiMapPin size={16} /> View Route
                 </Link>
+              )}
+              {canPauseSelectedJob && !isHoldFormOpen && (
+                <button
+                  type="button"
+                  onClick={() => { setHoldJobId(selectedJob.id); setHoldReason(''); }}
+                  className="flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2.5 text-sm text-amber-800 hover:bg-amber-50 sm:px-4"
+                >
+                  <FiClock size={16} /> Put on Hold
+                </button>
               )}
               {NAVIGATION_READY_STATUSES.has(selectedJob.status) || selectedJob.status === 'navigating' ? (
                 hasDifferentActiveJob(selectedJob) ? (

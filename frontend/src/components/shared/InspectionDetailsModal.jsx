@@ -115,26 +115,43 @@ export default function InspectionDetailsModal({ ticket, onClose }) {
                 <section className="rounded-3xl border border-surface-200 bg-surface-50/70 p-5">
                   <div className="mb-4 flex items-center gap-2">
                     <FiFileText className="text-brand-600" />
-                    <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-600">Checklist Items</h4>
+                    <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-600">
+                      {inspection.checklist_items.some((item) => typeof item?.answer === 'boolean') ? 'Service Checks' : 'Checklist Items'}
+                    </h4>
                   </div>
                   <div className="overflow-hidden rounded-2xl border border-surface-200 bg-white">
-                    {inspection.checklist_items.map((item, index) => (
-                      <div
-                        key={index}
-                        className={`flex items-start gap-3 px-4 py-3 ${index < inspection.checklist_items.length - 1 ? 'border-b border-surface-200' : ''}`}
-                      >
-                        <div className="mt-0.5">
-                          {item.completed ? (
-                            <FiCheckCircle className="text-emerald-500" size={18} />
-                          ) : (
-                            <div className="h-4 w-4 rounded border-2 border-slate-300" />
-                          )}
+                    {inspection.checklist_items.map((item, index) => {
+                      const rowClass = `flex items-start gap-3 px-4 py-3 ${index < inspection.checklist_items.length - 1 ? 'border-b border-surface-200' : ''}`;
+                      // Site-inspection answers carry a Yes/No `answer`; service checklist steps carry `completed`.
+                      if (typeof item?.answer === 'boolean') {
+                        return (
+                          <div key={index} className={rowClass}>
+                            <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${item.answer ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                              {item.answer ? 'Yes' : 'No'}
+                            </span>
+                            <div className="min-w-0">
+                              {item.service_name && <p className="text-xs font-semibold text-purple-700">{item.service_name}</p>}
+                              <p className="text-sm leading-6 text-slate-800">{item.title}</p>
+                              {item.notes && <p className="text-sm leading-6 text-rose-800">{item.notes}</p>}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={index} className={rowClass}>
+                          <div className="mt-0.5">
+                            {item.completed ? (
+                              <FiCheckCircle className="text-emerald-500" size={18} />
+                            ) : (
+                              <div className="h-4 w-4 rounded border-2 border-slate-300" />
+                            )}
+                          </div>
+                          <p className={`text-sm leading-6 ${item.completed ? 'text-slate-800' : 'text-slate-500'}`}>
+                            {item.label}
+                          </p>
                         </div>
-                        <p className={`text-sm leading-6 ${item.completed ? 'text-slate-800' : 'text-slate-500'}`}>
-                          {item.label}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
               )}

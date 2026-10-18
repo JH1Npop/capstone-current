@@ -69,6 +69,10 @@ service_type = ServiceType.objects.create(
         {'title': 'Complete installation work', 'description': 'Perform the assigned installation safely.'},
         {'title': 'Capture final installation evidence', 'requires_photo': True},
     ],
+    inspection_procedures=[
+        {'title': 'Roof can carry the panel array', 'description': 'Check rafters, purlins, and roofing sheets.'},
+        {'title': 'Array area is free of heavy shading', 'description': 'Check shade from 9 AM to 3 PM.'},
+    ],
 )
 secondary_service_type = ServiceType.objects.create(
     name='E2E Electrical Safety Check',

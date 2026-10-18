@@ -67,6 +67,20 @@ export default function TechnicianInspectionChecklist() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [activeTab, setActiveTab] = useState('inspection');
   const [draftLoaded, setDraftLoaded] = useState(false);
+  // Answers to the checks each requested service adds after the general ones, keyed by service + check.
+  const [serviceAnswers, setServiceAnswers] = useState({});
+
+  const serviceChecks = useMemo(() => (job?.serviceTypes || []).flatMap((serviceType) => (
+    (serviceType.inspectionProcedures || [])
+      .map((check) => ({
+        serviceTypeId: serviceType.id,
+        serviceName: serviceType.name,
+        title: String((typeof check === 'string' ? check : check?.title) || '').trim(),
+        description: typeof check === 'string' ? '' : String(check?.description || ''),
+      }))
+      .filter((check) => check.title)
+      .map((check) => ({ ...check, key: `${check.serviceTypeId}::${check.title}` }))
+  )), [job]);
 
   useEffect(() => {
     if (!ticketId) return;
@@ -98,6 +112,7 @@ export default function TechnicianInspectionChecklist() {
         setSafetyHazards(savedDraft.safetyHazards || '');
         setRecommendation(savedDraft.recommendation || '');
         setTechNotes(savedDraft.techNotes || '');
+        setServiceAnswers(savedDraft.serviceAnswers && typeof savedDraft.serviceAnswers === 'object' ? savedDraft.serviceAnswers : {});
       }
     } catch {
       localStorage.removeItem(draftKey(ticketId));
@@ -116,13 +131,31 @@ export default function TechnicianInspectionChecklist() {
       safetyHazards,
       recommendation,
       techNotes,
+      serviceAnswers,
     }));
-  }, [ticketId, draftLoaded, siteAccessible, siteAccessibleNotes, electricalAdequate, electricalNotes, safetyEquipment, safetyHazards, recommendation, techNotes]);
+  }, [ticketId, draftLoaded, siteAccessible, siteAccessibleNotes, electricalAdequate, electricalNotes, safetyEquipment, safetyHazards, recommendation, techNotes, serviceAnswers]);
 
   const answeredCount = [siteAccessible, electricalAdequate, safetyEquipment]
     .filter((value) => typeof value === 'boolean').length;
-  const completionCount = answeredCount + (recommendation ? 1 : 0) + (photos.length > 0 ? 1 : 0);
-  const completionPercent = (completionCount / 5) * 100;
+  const answeredServiceChecks = serviceChecks
+    .filter((check) => typeof serviceAnswers[check.key]?.answer === 'boolean').length;
+  const totalParts = 5 + serviceChecks.length;
+  const completionCount = answeredCount + answeredServiceChecks + (recommendation ? 1 : 0) + (photos.length > 0 ? 1 : 0);
+  const completionPercent = (completionCount / totalParts) * 100;
+
+  const chooseServiceAnswer = (key, answer) => {
+    setServiceAnswers((previous) => ({
+      ...previous,
+      [key]: { answer, notes: answer ? '' : previous[key]?.notes || '' },
+    }));
+    setFieldErrors((previous) => ({ ...previous, [`service:${key}`]: '', [`serviceNotes:${key}`]: '' }));
+    setMessage('');
+  };
+
+  const setServiceNotes = (key, notes) => {
+    setServiceAnswers((previous) => ({ ...previous, [key]: { ...previous[key], notes } }));
+    setFieldErrors((previous) => ({ ...previous, [`serviceNotes:${key}`]: '' }));
+  };
   const photoSummary = useMemo(
     () => photos.length === 1 ? '1 site photo selected' : `${photos.length} site photos selected`,
     [photos.length],
@@ -161,6 +194,13 @@ export default function TechnicianInspectionChecklist() {
     if (electricalAdequate === false && !electricalNotes.trim()) errors.electricalNotes = 'Describe the electrical issue.';
     if (safetyEquipment === null) errors.safetyEquipment = 'Choose Yes or No.';
     if (safetyEquipment === false && !safetyHazards.trim()) errors.safetyHazards = 'Describe the safety issue or missing equipment.';
+    serviceChecks.forEach((check) => {
+      const answer = serviceAnswers[check.key]?.answer;
+      if (typeof answer !== 'boolean') errors[`service:${check.key}`] = 'Choose Yes or No.';
+      if (answer === false && !String(serviceAnswers[check.key]?.notes || '').trim()) {
+        errors[`serviceNotes:${check.key}`] = 'Explain the problem.';
+      }
+    });
     if (!recommendation) errors.recommendation = 'Choose an overall recommendation.';
     if (photos.length === 0) errors.photos = 'Add at least one site photo.';
     setFieldErrors(errors);
@@ -187,6 +227,12 @@ export default function TechnicianInspectionChecklist() {
         safetyEquipmentPresent: safetyEquipment,
         safetyHazards: safetyEquipment ? '' : safetyHazards.trim(),
         recommendation,
+        serviceChecks: serviceChecks.map((check) => ({
+          serviceTypeId: check.serviceTypeId,
+          title: check.title,
+          answer: serviceAnswers[check.key]?.answer,
+          notes: serviceAnswers[check.key]?.notes || '',
+        })),
       });
       localStorage.removeItem(draftKey(ticketId));
       setMessage('Inspection submitted successfully.');
@@ -223,6 +269,26 @@ export default function TechnicianInspectionChecklist() {
     );
   }
 
+  // Same order as My Jobs and the server: navigate, arrive, start, then report on the site.
+  if (!['arrived_on_site', 'in_progress'].includes(job?.status)) {
+    return (
+      <Layout>
+        <div className="max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+          <h2 className="flex items-center gap-2 text-xl font-semibold"><FiCheckSquare /> Arrive on site first</h2>
+          <p className="mt-2 text-sm">
+            The inspection report opens after you navigate to the site, mark your arrival, and start the job.
+          </p>
+          <Link
+            to={`/technician/my-jobs?ticketId=${ticketId}`}
+            className="mt-4 inline-block rounded-lg bg-amber-600 px-4 py-2 font-medium text-white hover:bg-amber-700"
+          >
+            Open Job in My Jobs
+          </Link>
+        </div>
+      </Layout>
+    );
+  }
+
   const questions = [
     { key: 'siteAccessible', label: 'Is the site accessible?', hint: 'Confirm that the team and equipment can safely reach the work area.', value: siteAccessible, notes: siteAccessibleNotes, setNotes: setSiteAccessibleNotes, notesKey: 'siteAccessibleNotes', placeholder: 'Explain the access problem and what is needed...' },
     { key: 'electricalAdequate', label: 'Is the electrical supply adequate?', hint: 'Check the available supply against the expected service requirements.', value: electricalAdequate, notes: electricalNotes, setNotes: setElectricalNotes, notesKey: 'electricalNotes', placeholder: 'Describe the electrical issue and required correction...' },
@@ -254,7 +320,7 @@ export default function TechnicianInspectionChecklist() {
         {activeTab === 'tds' ? <TechnicalDataSheetForm ticketId={ticketId} userRole="technician" /> : (
           <>
             <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <div className="flex items-center justify-between gap-3 text-sm"><span className="font-semibold text-slate-700">Inspection readiness</span><span className="font-bold text-purple-700">{completionCount} of 5 required parts</span></div>
+              <div className="flex items-center justify-between gap-3 text-sm"><span className="font-semibold text-slate-700">Inspection readiness</span><span className="font-bold text-purple-700">{completionCount} of {totalParts} required parts</span></div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-purple-600 transition-all" style={{ width: `${completionPercent}%` }} /></div>
             </div>
 
@@ -280,8 +346,39 @@ export default function TechnicianInspectionChecklist() {
               ))}
             </section>
 
+            {serviceChecks.length > 0 && (
+              <section className="mt-8 space-y-4" aria-labelledby="service-checks-heading">
+                <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">2. Service checks</p><h3 id="service-checks-heading" className="mt-1 text-xl font-semibold text-slate-900">Checks for the requested service</h3><p className="mt-1 text-sm text-slate-600">Set by the office for each service. A “No” answer needs a short field note.</p></div>
+                {serviceChecks.map((check, index) => {
+                  const answer = serviceAnswers[check.key]?.answer;
+                  const answerError = fieldErrors[`service:${check.key}`];
+                  const notesError = fieldErrors[`serviceNotes:${check.key}`];
+                  return (
+                    <div key={check.key} className={`rounded-2xl border bg-white p-4 shadow-sm sm:p-5 ${answerError || notesError ? 'border-rose-300' : 'border-slate-200'}`}>
+                      <div className="grid gap-4 sm:grid-cols-[1fr_190px] sm:items-center">
+                        <div>
+                          <p className="text-xs font-semibold text-purple-700">{check.serviceName}</p>
+                          <p className="font-semibold text-slate-900">{index + 1}. {check.title}</p>
+                          {check.description && <p className="mt-1 text-sm leading-5 text-slate-500">{check.description}</p>}
+                        </div>
+                        <AnswerButtons value={typeof answer === 'boolean' ? answer : null} onChange={(value) => chooseServiceAnswer(check.key, value)} label={check.title} />
+                      </div>
+                      {answerError && <p className="mt-2 text-sm font-medium text-rose-700">{answerError}</p>}
+                      {answer === false && (
+                        <div className="mt-4">
+                          <label className="mb-2 block text-sm font-semibold text-rose-900" htmlFor={`service-notes-${index}`}>Required explanation</label>
+                          <textarea id={`service-notes-${index}`} value={serviceAnswers[check.key]?.notes || ''} onChange={(event) => setServiceNotes(check.key, event.target.value)} rows={3} placeholder="Describe the problem and what is needed..." className={`w-full rounded-xl border bg-rose-50 p-3 text-sm text-rose-950 focus:outline-none focus:ring-2 focus:ring-rose-300 ${notesError ? 'border-rose-500' : 'border-rose-200'}`} />
+                          {notesError && <p className="mt-2 text-sm font-medium text-rose-700">{notesError}</p>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </section>
+            )}
+
             <section className="mt-8" aria-labelledby="recommendation-heading">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">2. Decision</p><h3 id="recommendation-heading" className="mt-1 text-xl font-semibold text-slate-900">Overall recommendation</h3>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{serviceChecks.length > 0 ? 3 : 2}. Decision</p><h3 id="recommendation-heading" className="mt-1 text-xl font-semibold text-slate-900">Overall recommendation</h3>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {RECOMMENDATIONS.map((option) => (
                   <button key={option.value} type="button" aria-pressed={recommendation === option.value} onClick={() => { setRecommendation(option.value); setFieldErrors((previous) => ({ ...previous, recommendation: '' })); }} className={`rounded-2xl border p-4 text-left transition ${recommendation === option.value ? 'border-purple-600 bg-purple-50 ring-2 ring-purple-100' : 'border-slate-200 bg-white hover:border-slate-400'}`}>
@@ -293,7 +390,7 @@ export default function TechnicianInspectionChecklist() {
             </section>
 
             <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="evidence-heading">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">3. Findings and evidence</p><h3 id="evidence-heading" className="mt-1 text-xl font-semibold text-slate-900">Record what the next team needs</h3>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{serviceChecks.length > 0 ? 4 : 3}. Findings and evidence</p><h3 id="evidence-heading" className="mt-1 text-xl font-semibold text-slate-900">Record what the next team needs</h3>
               <label className="mt-5 block text-sm font-semibold text-slate-800" htmlFor="inspection-notes">Inspection notes</label>
               <textarea id="inspection-notes" value={techNotes} onChange={(event) => setTechNotes(event.target.value)} rows={5} className="mt-2 w-full rounded-xl border border-slate-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" placeholder="Describe site conditions, measurements, obstacles, and special requirements..." />
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
