@@ -30,6 +30,7 @@ from users.permissions import (
     IsAdminOrSupervisor, IsAdminOrSupervisorOrTechnician,
     CanManageInventory
 )
+from notifications.notification_utils import send_user_notification
 
 
 def raise_api_validation_error(exc):
@@ -241,6 +242,7 @@ class InventoryTransactionViewSet(viewsets.ModelViewSet):
 class InventoryReservationViewSet(viewsets.ModelViewSet):
     queryset = InventoryReservation.objects.select_related(
         'item', 'technician', 'service_ticket',
+        'service_ticket__request', 'service_ticket__request__service_type',
     ).order_by('-required_date', '-id')
     serializer_class = InventoryReservationSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -296,17 +298,28 @@ class InventoryReservationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def fulfill(self, request, pk=None):
-        """Mark reservation as fulfilled and issue items"""
+        """Approve a pending reservation and issue its held stock."""
         reservation = self.get_object()
 
         if reservation.status != 'pending':
             return Response({'error': 'Only pending reservations can be fulfilled.'}, status=400)
 
+        reason = str(request.data.get('reason') or '').strip()
+        if len(reason) > 2000:
+            return Response(
+                {'reason': 'Approval notes cannot exceed 2000 characters.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        issue_notes = f'Approved and issued reservation #{reservation.id}'
+        if reason:
+            issue_notes = f'{issue_notes}: {reason}'
+
         try:
             fulfilled = fulfill_pending_reservation(
                 reservation,
                 performed_by=request.user,
-                notes=f"Fulfilling reservation #{reservation.id}",
+                notes=issue_notes,
             )
         except DjangoValidationError as exc:
             raise_api_validation_error(exc)
@@ -315,21 +328,57 @@ class InventoryReservationViewSet(viewsets.ModelViewSet):
                 {'error': 'Only pending reservations can be fulfilled.'},
                 status=status.HTTP_409_CONFLICT,
             )
-        return Response({'status': 'Reservation fulfilled'})
+        ticket = reservation.service_ticket
+        send_user_notification(
+            user=reservation.technician,
+            title=(
+                f'Equipment Approved for Ticket #{ticket.id}'
+                if ticket else
+                'Equipment Request Approved'
+            ),
+            body=(
+                f'{reservation.item.name} x{reservation.quantity} was approved and issued.'
+                + (f' Note: {reason}' if reason else '')
+            ),
+            notification_type='success',
+            ticket=ticket,
+            request=ticket.request if ticket else None,
+        )
+        return Response({
+            'status': 'Reservation approved and issued',
+            'reservation': self.get_serializer(
+                InventoryReservation.objects.select_related(
+                    'item', 'technician', 'service_ticket',
+                    'service_ticket__request', 'service_ticket__request__service_type',
+                ).get(pk=reservation.pk)
+            ).data,
+        })
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
-        """Cancel reservation"""
+        """Reject a pending reservation and release its held stock."""
         reservation = self.get_object()
 
         if reservation.status != 'pending':
             return Response({'error': 'Only pending reservations can be cancelled.'}, status=400)
 
+        reason = str(request.data.get('reason') or '').strip()
+        if len(reason) < 8:
+            return Response(
+                {'reason': 'Enter a clear rejection reason of at least 8 characters.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(reason) > 2000:
+            return Response(
+                {'reason': 'The rejection reason cannot exceed 2000 characters.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             cancelled = cancel_pending_reservation(
                 reservation,
                 performed_by=request.user,
-                notes=f"Cancelled reservation #{reservation.id}",
+                notes=f'Rejected reservation #{reservation.id}: {reason}',
             )
         except DjangoValidationError as exc:
             raise_api_validation_error(exc)
@@ -338,7 +387,245 @@ class InventoryReservationViewSet(viewsets.ModelViewSet):
                 {'error': 'Only pending reservations can be cancelled.'},
                 status=status.HTTP_409_CONFLICT,
             )
-        return Response({'status': 'Reservation cancelled'})
+        ticket = reservation.service_ticket
+        send_user_notification(
+            user=reservation.technician,
+            title=(
+                f'Equipment Request Rejected for Ticket #{ticket.id}'
+                if ticket else
+                'Equipment Request Rejected'
+            ),
+            body=f'{reservation.item.name} x{reservation.quantity} was not approved. Reason: {reason}',
+            notification_type='warning',
+            ticket=ticket,
+            request=ticket.request if ticket else None,
+        )
+        return Response({
+            'status': 'Reservation rejected',
+            'reservation': self.get_serializer(
+                InventoryReservation.objects.select_related(
+                    'item', 'technician', 'service_ticket',
+                    'service_ticket__request', 'service_ticket__request__service_type',
+                ).get(pk=reservation.pk)
+            ).data,
+        })
+
+    @action(detail=False, methods=['post'], url_path='decide-ticket')
+    def decide_ticket(self, request):
+        """Apply item-level decisions to pending reservations for one ticket."""
+        try:
+            ticket_id = int(request.data.get('ticket_id'))
+        except (TypeError, ValueError):
+            return Response(
+                {'ticket_id': 'A valid service ticket ID is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_decisions = request.data.get('decisions')
+        legacy_decision = str(request.data.get('decision') or '').strip().lower()
+        legacy_reason = str(request.data.get('reason') or '').strip()
+        if raw_decisions is None:
+            if legacy_decision not in {'approve', 'reject'}:
+                return Response(
+                    {'decision': 'Decision must be either approve or reject.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            raw_decisions = None
+        elif not isinstance(raw_decisions, list) or not raw_decisions:
+            return Response(
+                {'decisions': 'Provide at least one equipment-line decision.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        parsed_decisions = {}
+        if raw_decisions is not None:
+            for index, raw_decision in enumerate(raw_decisions):
+                if not isinstance(raw_decision, dict):
+                    return Response(
+                        {'decisions': f'Decision {index + 1} must be an object.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                try:
+                    reservation_id = int(raw_decision.get('reservation_id'))
+                except (TypeError, ValueError):
+                    return Response(
+                        {'decisions': f'Decision {index + 1} requires a valid reservation ID.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                decision = str(raw_decision.get('decision') or '').strip().lower()
+                reason = str(raw_decision.get('reason') or '').strip()
+                if decision not in {'approve', 'reject'}:
+                    return Response(
+                        {'decisions': f'Decision {index + 1} must be either approve or reject.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if reservation_id in parsed_decisions:
+                    return Response(
+                        {'decisions': f'Reservation #{reservation_id} has more than one decision.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if decision == 'reject' and len(reason) < 8:
+                    return Response(
+                        {'decisions': f'Enter a rejection reason of at least 8 characters for reservation #{reservation_id}.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if len(reason) > 2000:
+                    return Response(
+                        {'decisions': f'Decision notes for reservation #{reservation_id} cannot exceed 2000 characters.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                parsed_decisions[reservation_id] = {
+                    'decision': decision,
+                    'reason': reason,
+                }
+        else:
+            if legacy_decision == 'reject' and len(legacy_reason) < 8:
+                return Response(
+                    {'reason': 'Enter a clear rejection reason of at least 8 characters.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if len(legacy_reason) > 2000:
+                return Response(
+                    {'reason': 'Decision notes cannot exceed 2000 characters.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        with transaction.atomic():
+            pending_reservations = list(
+                InventoryReservation.objects.select_for_update().select_related(
+                    'item', 'technician', 'service_ticket',
+                    'service_ticket__request', 'service_ticket__request__service_type',
+                ).filter(
+                    service_ticket_id=ticket_id,
+                    status='pending',
+                ).order_by('id')
+            )
+            if not pending_reservations:
+                return Response(
+                    {'error': 'This ticket has no pending equipment request to decide.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            ticket = pending_reservations[0].service_ticket
+            if raw_decisions is None:
+                reservations = pending_reservations
+                parsed_decisions = {
+                    reservation.id: {
+                        'decision': legacy_decision,
+                        'reason': legacy_reason,
+                    }
+                    for reservation in reservations
+                }
+            else:
+                pending_by_id = {
+                    reservation.id: reservation
+                    for reservation in pending_reservations
+                }
+                missing_ids = sorted(set(parsed_decisions) - set(pending_by_id))
+                if missing_ids:
+                    return Response(
+                        {
+                            'error': (
+                                'One or more equipment lines are no longer pending on this ticket. '
+                                'Refresh and review the request again.'
+                            ),
+                            'reservation_ids': missing_ids,
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                reservations = [
+                    pending_by_id[reservation_id]
+                    for reservation_id in parsed_decisions
+                ]
+
+            for reservation in reservations:
+                line_decision = parsed_decisions[reservation.id]
+                decision = line_decision['decision']
+                reason = line_decision['reason']
+                try:
+                    if decision == 'approve':
+                        notes = f'Approved and issued ticket equipment line for ticket #{ticket_id}'
+                        if reason:
+                            notes = f'{notes}: {reason}'
+                        changed = fulfill_pending_reservation(
+                            reservation,
+                            performed_by=request.user,
+                            notes=notes,
+                        )
+                    else:
+                        changed = cancel_pending_reservation(
+                            reservation,
+                            performed_by=request.user,
+                            notes=f'Rejected ticket equipment line for ticket #{ticket_id}: {reason}',
+                        )
+                except DjangoValidationError as exc:
+                    raise_api_validation_error(exc)
+                if not changed:
+                    raise ApiValidationError({
+                        'detail': 'The equipment request changed while it was being reviewed. Refresh and try again.',
+                    })
+
+            reservations_by_technician = {}
+            for reservation in reservations:
+                reservations_by_technician.setdefault(reservation.technician_id, []).append(reservation)
+
+            for technician_reservations in reservations_by_technician.values():
+                technician = technician_reservations[0].technician
+                approved_summary = ', '.join(
+                    f'{reservation.item.name} x{reservation.quantity}'
+                    for reservation in technician_reservations
+                    if parsed_decisions[reservation.id]['decision'] == 'approve'
+                )
+                rejected_summary = ', '.join(
+                    (
+                        f"{reservation.item.name} x{reservation.quantity} "
+                        f"({parsed_decisions[reservation.id]['reason']})"
+                    )
+                    for reservation in technician_reservations
+                    if parsed_decisions[reservation.id]['decision'] == 'reject'
+                )
+                if approved_summary and rejected_summary:
+                    title = f'Equipment Partially Approved for Ticket #{ticket_id}'
+                    body = f'Issued: {approved_summary}. Not approved: {rejected_summary}.'
+                    notification_type = 'warning'
+                elif approved_summary:
+                    title = f'Equipment Approved for Ticket #{ticket_id}'
+                    body = f'The equipment request was approved and issued: {approved_summary}.'
+                    notification_type = 'success'
+                else:
+                    title = f'Equipment Request Rejected for Ticket #{ticket_id}'
+                    body = f'The equipment request was not approved: {rejected_summary}.'
+                    notification_type = 'warning'
+                send_user_notification(
+                    user=technician,
+                    title=title,
+                    body=body,
+                    notification_type=notification_type,
+                    ticket=ticket,
+                    request=ticket.request,
+                )
+
+        updated_reservations = InventoryReservation.objects.select_related(
+            'item', 'technician', 'service_ticket',
+            'service_ticket__request', 'service_ticket__request__service_type',
+        ).filter(pk__in=[reservation.pk for reservation in reservations]).order_by('id')
+        approved_count = sum(
+            1 for reservation in reservations
+            if parsed_decisions[reservation.id]['decision'] == 'approve'
+        )
+        rejected_count = len(reservations) - approved_count
+        return Response({
+            'status': 'Ticket equipment decisions applied',
+            'ticket_id': ticket_id,
+            'reservation_count': len(reservations),
+            'approved_count': approved_count,
+            'rejected_count': rejected_count,
+            'remaining_pending_count': InventoryReservation.objects.filter(
+                service_ticket_id=ticket_id,
+                status='pending',
+            ).count(),
+            'reservations': self.get_serializer(updated_reservations, many=True).data,
+        })
 
     @action(detail=False, methods=['get'])
     def pending(self, request):

@@ -301,3 +301,143 @@ class MaintenanceWorkflowTests(APITestCase):
         self.assertEqual(row['days_until_due'], 0)
         self.assertEqual(summary_response.status_code, status.HTTP_200_OK)
         self.assertEqual(summary_response.data['due_today'], 1)
+
+    @patch('services.maintenance._send_client_maintenance_email', return_value=True)
+    def test_stopping_reminders_requires_reason_and_prevents_future_alerts(self, mock_email):
+        schedule = MaintenanceSchedule.objects.create(
+            service_ticket=self.ticket,
+            client=self.client_user,
+            service_type=self.service_type,
+            maintenance_profile='commercial_area',
+            interval_days=90,
+            last_service_date=timezone.localdate() - timedelta(days=90),
+            next_due_date=timezone.localdate(),
+            notify_on_date=timezone.localdate() - timedelta(days=7),
+            status='due',
+        )
+        case = FollowUpCase.objects.create(
+            service_ticket=self.ticket,
+            client=self.client_user,
+            case_type='maintenance',
+            status='open',
+            priority='high',
+            summary='Maintenance due',
+            due_date=timezone.localdate(),
+            creation_source='maintenance_alert',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        not_found = self.client.post(
+            '/api/services/maintenance-schedules/999999/dismiss/',
+            {'reason': 'Unknown schedule.'},
+            format='json',
+        )
+        missing_reason = self.client.post(
+            f'/api/services/maintenance-schedules/{schedule.id}/dismiss/', {}, format='json',
+        )
+        stopped = self.client.post(
+            f'/api/services/maintenance-schedules/{schedule.id}/dismiss/',
+            {'reason': 'Client declined further reminders.'},
+            format='json',
+        )
+        alert_summary = process_maintenance_alerts()
+
+        self.assertEqual(not_found.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(missing_reason.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(stopped.status_code, status.HTTP_200_OK)
+        schedule.refresh_from_db()
+        case.refresh_from_db()
+        self.assertEqual(schedule.status, 'dismissed')
+        self.assertEqual(case.status, 'closed')
+        self.assertIn('Client declined', case.resolution_notes)
+        self.assertEqual(alert_summary['client_notified'], 0)
+        self.assertEqual(mock_email.call_count, 0)
+        self.assertTrue(AfterSalesCaseEvent.objects.filter(
+            case=case,
+            event_type='status_changed',
+            to_status='closed',
+            notes__icontains='Client declined',
+        ).exists())
+        self.assertEqual(self.client.get('/api/services/maintenance-schedules/').data['count'], 0)
+        self.assertEqual(
+            self.client.get('/api/services/maintenance-schedules/?status=dismissed').data['count'],
+            1,
+        )
+
+    def test_resume_and_reschedule_restore_active_reminders_without_duplicates(self):
+        sent_at = timezone.now() - timedelta(days=1)
+        schedule = MaintenanceSchedule.objects.create(
+            service_ticket=self.ticket,
+            client=self.client_user,
+            service_type=self.service_type,
+            maintenance_profile='commercial_area',
+            interval_days=90,
+            follow_up_window_days=7,
+            last_service_date=timezone.localdate() - timedelta(days=30),
+            next_due_date=timezone.localdate() + timedelta(days=5),
+            notify_on_date=timezone.localdate() - timedelta(days=2),
+            status='dismissed',
+            due_soon_notified_at=sent_at,
+            client_notified_at=sent_at,
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        resumed = self.client.post(
+            f'/api/services/maintenance-schedules/{schedule.id}/resume/',
+            {'reason': 'Client opted back in.'},
+            format='json',
+        )
+        new_due_date = timezone.localdate() + timedelta(days=30)
+        rescheduled = self.client.post(
+            f'/api/services/maintenance-schedules/{schedule.id}/reschedule/',
+            {'next_due_date': new_due_date.isoformat(), 'reason': 'Client requested a later visit.'},
+            format='json',
+        )
+
+        self.assertEqual(resumed.status_code, status.HTTP_200_OK)
+        self.assertEqual(resumed.data['status'], 'due_soon')
+        self.assertEqual(rescheduled.status_code, status.HTTP_200_OK)
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.status, 'scheduled')
+        self.assertEqual(schedule.next_due_date, new_due_date)
+        self.assertEqual(schedule.notify_on_date, new_due_date - timedelta(days=7))
+        self.assertIsNone(schedule.due_soon_notified_at)
+        self.assertIsNone(schedule.client_notified_at)
+
+    def test_marking_maintenance_completed_resolves_linked_case(self):
+        schedule = MaintenanceSchedule.objects.create(
+            service_ticket=self.ticket,
+            client=self.client_user,
+            service_type=self.service_type,
+            maintenance_profile='commercial_area',
+            interval_days=90,
+            last_service_date=timezone.localdate() - timedelta(days=90),
+            next_due_date=timezone.localdate(),
+            notify_on_date=timezone.localdate() - timedelta(days=7),
+            status='due',
+        )
+        case = FollowUpCase.objects.create(
+            service_ticket=self.ticket,
+            client=self.client_user,
+            case_type='maintenance',
+            status='in_progress',
+            priority='high',
+            summary='Maintenance underway',
+            due_date=timezone.localdate(),
+            creation_source='maintenance_alert',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            f'/api/services/maintenance-schedules/{schedule.id}/complete/',
+            {'reason': 'Preventive maintenance performed and verified on site.'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        schedule.refresh_from_db()
+        case.refresh_from_db()
+        self.assertEqual(schedule.status, 'completed')
+        self.assertEqual(case.status, 'resolved')
+        self.assertIsNotNone(case.resolved_at)
+        self.assertIn('performed and verified', case.resolution_notes)

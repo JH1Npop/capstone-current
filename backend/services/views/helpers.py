@@ -265,7 +265,7 @@ CONTACTABLE_TICKET_STATUSES = {
     'In Progress',
     'On Hold',
 }
-PARTS_REQUEST_TICKET_STATUSES = {'For Inspection', 'Inspection Completed', 'Ready for Service', 'Awaiting Materials', 'Navigating', 'Arrived on Site', 'In Progress', 'On Hold'}
+PARTS_REQUEST_TICKET_STATUSES = {'Not Started', 'For Inspection', 'Inspection Completed', 'Ready for Service', 'Awaiting Materials', 'Navigating', 'Arrived on Site', 'In Progress', 'On Hold'}
 TIME_SLOT_TO_TIME = {
     'morning': time(hour=9, minute=0),
     'midday': time(hour=12, minute=0),

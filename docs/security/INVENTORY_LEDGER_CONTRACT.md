@@ -67,9 +67,46 @@ transaction `reference_number`, which preserves external or business context.
   scoped technicians do not retain inventory access through role alone.
 - The catalog remains read-only for technicians. Transaction and reservation
   querysets expose only rows assigned to the authenticated technician.
+- An assigned lead or crew technician may request additional equipment from
+  `Not Started` through the supported inspection/active/hold states. A
+  pre-start request creates pending reservations and ledger evidence but keeps
+  the ticket `Not Started`; requesting stock never falsely records travel or
+  work as begun. Completed, turned-over, and cancelled tickets reject requests.
 - Low-stock names and quantities on the technician dashboard require the same
   field-inventory capability, preventing dashboard access from bypassing the
   inventory boundary.
+
+## Pending-request review and issue
+
+- Admin and superadmin inventory users see pending reservations in the Inventory
+  workspace. The review queue groups every pending line for the same service
+  ticket into one request card; the individual `RSV-*` records remain the
+  stock-accounting source of truth. View-only inventory users may inspect the
+  queue, while only users with `inventory.manage` may decide a request.
+- **Approve & Issue** is deliberately one action rather than an approval-only
+  status. It releases the reservation and records the physical `issue` movement
+  atomically, so it must be used only when stock is actually handed to the
+  assigned technician.
+- **Reject** requires a normalized reason of 8 to 2,000 characters, releases the
+  reserved balance without reducing physical stock, and retains the reason on
+  the cancellation ledger movement.
+- The grouped review assigns **Approve** or **Reject** to each reservation line,
+  allowing a mixed result when only some equipment can be issued. Rejected
+  lines share the operator's required reason; an insufficient-stock line
+  defaults to rejection in the UI but may be reconsidered after stock changes.
+- A ticket-level submission row-locks and processes every submitted line in one
+  database transaction. A failure on any submitted line rolls back that entire
+  submission. A newly added or intentionally omitted pending line remains open
+  instead of inheriting a decision the operator did not review.
+- Both decisions retain the authenticated actor and timestamp through their
+  append-only inventory transactions and send each assigned technician one
+  combined outcome notification with separate issued and rejected item context.
+  A competing or repeated decision cannot apply a second stock movement because
+  every submitted line must still be `pending`.
+- The dashboard exposes the number of distinct tickets with pending equipment
+  requests (not the number of reservation lines), and ticket-linked
+  equipment-request notifications open the Inventory queue filtered to that
+  ticket. The Inventory queue remains the authoritative action surface.
 
 ## Inspection-stage boundary
 

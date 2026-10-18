@@ -3,7 +3,9 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import filters, permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -11,7 +13,7 @@ from rest_framework.response import Response
 
 from users.permissions import CanAccessAfterSales, CanManageAfterSalesCases
 
-from .maintenance import process_maintenance_alerts
+from .maintenance import ensure_maintenance_follow_up_case, evaluate_schedule_status, process_maintenance_alerts
 from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent, MaintenanceSchedule, ServiceTicket
 from .serializers import FollowUpCaseSerializer, MaintenanceScheduleSerializer
 from .views.helpers import _display_name, _notify_admin_superadmin
@@ -290,19 +292,167 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
     ordering_fields = ['next_due_date', 'last_service_date', 'status', 'risk_score', 'updated_at']
     ordering = ['next_due_date', 'id']
 
-    def get_queryset(self):
-        queryset = MaintenanceSchedule.objects.select_related(
+    def get_permissions(self):
+        if self.action in {'dismiss', 'resume', 'reschedule', 'complete'}:
+            return [permissions.IsAuthenticated(), CanManageAfterSalesCases()]
+        return [permissions.IsAuthenticated(), CanAccessAfterSales()]
+
+    @staticmethod
+    def _base_queryset():
+        return MaintenanceSchedule.objects.select_related(
             'client', 'service_type', 'service_ticket__request__location',
         )
-        status_filter = self.request.query_params.get('status')
+
+    def get_queryset(self):
+        queryset = self._base_queryset()
+        status_filter = self.request.query_params.get('status') or 'active'
         today = timezone.localdate()
-        if status_filter == 'upcoming':
+        if status_filter == 'active':
+            queryset = queryset.exclude(status__in=['completed', 'dismissed'])
+        elif status_filter == 'upcoming':
             queryset = queryset.filter(status__in=['scheduled', 'due_soon'], next_due_date__gt=today)
         elif status_filter == 'overdue':
             queryset = queryset.exclude(status__in=['completed', 'dismissed']).filter(next_due_date__lt=today)
         elif status_filter and status_filter != 'all':
             queryset = queryset.filter(status=status_filter)
         return queryset
+
+    def _get_locked_schedule(self, pk):
+        return get_object_or_404(self._base_queryset().select_for_update(), pk=pk)
+
+    @staticmethod
+    def _required_reason(request):
+        reason = str(request.data.get('reason') or '').strip()
+        if not reason:
+            raise ValidationError({'reason': 'A reason is required.'})
+        if len(reason) > 2000:
+            raise ValidationError({'reason': 'Reason must be 2,000 characters or fewer.'})
+        return reason
+
+    @staticmethod
+    def _close_linked_cases(schedule, *, actor, status_value, reason):
+        now = timezone.now()
+        for case in FollowUpCase.objects.select_for_update().filter(
+            service_ticket=schedule.service_ticket,
+            case_type='maintenance',
+            status__in=['open', 'in_progress'],
+        ):
+            previous_status = case.status
+            case.status = status_value
+            case.resolution_notes = reason
+            case.resolved_at = now
+            case._activity_reason = reason
+            case.save(update_fields=['status', 'resolution_notes', 'resolved_at', 'updated_at'])
+            AfterSalesCaseEvent.objects.create(
+                case=case,
+                actor=actor,
+                event_type='status_changed',
+                from_status=previous_status,
+                to_status=status_value,
+                notes=reason,
+            )
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def dismiss(self, request, pk=None):
+        schedule = self._get_locked_schedule(pk)
+        reason = self._required_reason(request)
+        if schedule.status == 'completed':
+            raise ValidationError({'status': 'Completed maintenance cannot be stopped.'})
+        if schedule.status == 'dismissed':
+            raise ValidationError({'status': 'Maintenance reminders are already stopped.'})
+
+        schedule._activity_reason = reason
+        schedule.status = 'dismissed'
+        schedule.save(update_fields=['status', 'updated_at'])
+        self._close_linked_cases(
+            schedule,
+            actor=request.user,
+            status_value='closed',
+            reason=f'Maintenance reminders stopped: {reason}',
+        )
+        return Response(self.get_serializer(schedule).data)
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def resume(self, request, pk=None):
+        schedule = self._get_locked_schedule(pk)
+        reason = self._required_reason(request)
+        if schedule.status != 'dismissed':
+            raise ValidationError({'status': 'Only stopped maintenance reminders can be resumed.'})
+
+        today = timezone.localdate()
+        schedule._activity_reason = reason
+        if today >= schedule.next_due_date:
+            schedule.status = 'due'
+        elif today >= schedule.notify_on_date:
+            schedule.status = 'due_soon'
+        else:
+            schedule.status = 'scheduled'
+        schedule.save(update_fields=['status', 'updated_at'])
+        if schedule.status in {'due_soon', 'due'}:
+            ensure_maintenance_follow_up_case(schedule)
+        return Response(self.get_serializer(schedule).data)
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def reschedule(self, request, pk=None):
+        schedule = self._get_locked_schedule(pk)
+        reason = self._required_reason(request)
+        if schedule.status in {'completed', 'dismissed'}:
+            raise ValidationError({'status': 'Only active maintenance can be rescheduled.'})
+
+        next_due_date = parse_date(str(request.data.get('next_due_date') or '').strip())
+        if next_due_date is None:
+            raise ValidationError({'next_due_date': 'Choose a valid maintenance date.'})
+        if next_due_date < timezone.localdate():
+            raise ValidationError({'next_due_date': 'The maintenance date cannot be in the past.'})
+
+        schedule._activity_reason = reason
+        schedule.next_due_date = next_due_date
+        schedule.notify_on_date = next_due_date - timedelta(days=schedule.follow_up_window_days)
+        schedule.status = evaluate_schedule_status(schedule, reference_date=timezone.localdate())
+        reminder_fields = [
+            'due_soon_notified_at', 'three_day_notified_at', 'due_notified_at',
+            'client_notified_at', 'client_three_day_notified_at', 'client_due_notified_at',
+        ]
+        for field_name in reminder_fields:
+            setattr(schedule, field_name, None)
+        schedule.save(update_fields=[
+            'next_due_date', 'notify_on_date', 'status', *reminder_fields, 'updated_at',
+        ])
+
+        if schedule.status == 'scheduled':
+            self._close_linked_cases(
+                schedule,
+                actor=request.user,
+                status_value='closed',
+                reason=f'Maintenance rescheduled: {reason}',
+            )
+        else:
+            ensure_maintenance_follow_up_case(schedule)
+        return Response(self.get_serializer(schedule).data)
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def complete(self, request, pk=None):
+        schedule = self._get_locked_schedule(pk)
+        reason = self._required_reason(request)
+        if schedule.status == 'dismissed':
+            raise ValidationError({'status': 'Resume stopped reminders before marking maintenance completed.'})
+        if schedule.status == 'completed':
+            raise ValidationError({'status': 'Maintenance is already completed.'})
+
+        schedule._activity_reason = reason
+        schedule.status = 'completed'
+        schedule.save(update_fields=['status', 'updated_at'])
+        self._close_linked_cases(
+            schedule,
+            actor=request.user,
+            status_value='resolved',
+            reason=f'Maintenance completed: {reason}',
+        )
+        return Response(self.get_serializer(schedule).data)
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
@@ -311,6 +461,7 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
         active = queryset.exclude(status__in=['completed', 'dismissed'])
         return Response({
             'total': queryset.count(),
+            'active': active.count(),
             'upcoming': active.filter(next_due_date__gt=today).count(),
             'due_today': active.filter(next_due_date=today).count(),
             'overdue': active.filter(next_due_date__lt=today).count(),

@@ -45,7 +45,7 @@ from services.sla import (
     serialize_sla_evaluation,
 )
 from services.user_display import client_technician_label as _client_technician_label
-from inventory.models import InventoryItem
+from inventory.models import InventoryItem, InventoryReservation
 from users.models import User
 from users.rbac import (
     INVENTORY_VIEW_CAPABILITIES,
@@ -351,6 +351,10 @@ class DashboardView(APIView):
         total_inventory = InventoryItem.objects.count()
         low_stock_items = _low_stock_inventory_items().count()
         out_of_stock = InventoryItem.objects.filter(quantity=0).count()
+        pending_equipment_requests = InventoryReservation.objects.filter(
+            status='pending',
+            service_ticket__isnull=False,
+        ).values('service_ticket_id').distinct().count()
 
         # User statistics
         total_users = User.objects.count()
@@ -450,6 +454,7 @@ class DashboardView(APIView):
                 'total_inventory': total_inventory,
                 'low_stock_items': low_stock_items,
                 'out_of_stock': out_of_stock,
+                'pending_equipment_requests': pending_equipment_requests,
                 'total_users': total_users,
                 'active_technicians': active_technicians,
                 'due_soon_maintenance': active_maintenance.filter(status='due_soon').count(),

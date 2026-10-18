@@ -8,6 +8,7 @@ import {
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { getNotificationDestination } from '../../utils/notificationNavigation';
 import usePwaInstallPrompt from '../../hooks/usePwaInstallPrompt';
 const routeMeta = [
   { prefix: '/admin/dashboard', section: 'Home', title: 'Dashboard', subtitle: '' },
@@ -132,7 +133,9 @@ export default function Topbar({
         await markNotificationRead(notification.id);
       } catch { /* keep usable */ }
     }
-    if (notificationsTarget?.path) navigate(notificationsTarget.path);
+    const directTarget = getNotificationDestination(notification, user?.role);
+    if (directTarget?.path) navigate(directTarget.path);
+    else if (notificationsTarget?.path) navigate(notificationsTarget.path);
     setNotificationsOpen(false);
   };
 

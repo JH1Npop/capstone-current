@@ -3,8 +3,9 @@ import Layout from '../../components/layout/Layout';
 import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { api, fetchAllPages, fetchInventorySummary } from '../../api/api';
-import { FiAlertCircle, FiEye, FiPlus, FiTrash2 } from 'react-icons/fi';
+import { FiAlertCircle, FiCheckCircle, FiEye, FiPlus, FiRefreshCw, FiTrash2 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { hasAnyCapability, INVENTORY_MANAGE_CAPABILITIES } from '../../rbac';
 import { formatReservationId, formatTicketId, formatTransactionId } from '../../utils/roleIds';
 import SearchFilterBar from '../../components/shared/SearchFilterBar';
@@ -99,7 +100,9 @@ const normalizeReservation = (reservation) => ({
   id: Number(reservation?.id || 0),
   item: Number(reservation?.item || 0),
   service_ticket: Number(reservation?.service_ticket || 0) || null,
-  quantity: Number(reservation?.quantity || 0)
+  quantity: Number(reservation?.quantity || 0),
+  item_available_quantity: Number(reservation?.item_available_quantity || 0),
+  item_physical_quantity: Number(reservation?.item_physical_quantity || 0)
 });
 
 const parseIntegerInput = (value, fallback = 0) => {
@@ -156,6 +159,8 @@ const getApiErrorMessage = (error, fallback) => {
 
 export default function AdminInventory() {
   const { user } = useAuth();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const canManageInventory = hasAnyCapability(user, INVENTORY_MANAGE_CAPABILITIES);
   const [inventory, setInventory] = useState([]);
   const [categoryPendingDelete, setCategoryPendingDelete] = useState(null);
@@ -183,6 +188,13 @@ export default function AdminInventory() {
   const [currentPage, setCurrentPage] = useState(1);
   const [inventorySummary, setInventorySummary] = useState(null);
   const [lowStockItems, setLowStockItems] = useState([]);
+  const [pendingReservations, setPendingReservations] = useState([]);
+  const [pendingReservationsLoading, setPendingReservationsLoading] = useState(false);
+  const [reviewingReservationGroup, setReviewingReservationGroup] = useState(null);
+  const [reservationLineDecisions, setReservationLineDecisions] = useState({});
+  const [reservationDecisionReason, setReservationDecisionReason] = useState('');
+  const [reservationDecisionLoading, setReservationDecisionLoading] = useState(false);
+  const [notice, setNotice] = useState('');
 
   const getDefaultCategoryId = (categoryList = categories) => categoryList[0]?.id || '';
 
@@ -268,6 +280,17 @@ export default function AdminInventory() {
     return extractList(data).map(normalizeInventoryItem);
   };
 
+  const loadPendingReservations = async () => {
+    setPendingReservationsLoading(true);
+    try {
+      const reservations = await fetchAllPages('/inventory/reservations/pending/');
+      setPendingReservations(reservations.map(normalizeReservation));
+      return reservations;
+    } finally {
+      setPendingReservationsLoading(false);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     setError('');
@@ -277,7 +300,8 @@ export default function AdminInventory() {
         loadCategories(),
         loadInventory(),
         fetchInventorySummary(),
-        loadLowStockItems()
+        loadLowStockItems(),
+        loadPendingReservations()
       ]);
       const defaultCategoryId = getDefaultCategoryId(categoryList);
 
@@ -301,6 +325,7 @@ export default function AdminInventory() {
       setCategories([]);
       setInventorySummary(null);
       setLowStockItems([]);
+      setPendingReservations([]);
     } finally {
       setLoading(false);
     }
@@ -505,6 +530,75 @@ export default function AdminInventory() {
     }
   };
 
+  const openReservationReview = (group) => {
+    setError('');
+    setReservationDecisionReason('');
+    setReservationLineDecisions(Object.fromEntries(
+      group.reservations.map((reservation) => [
+        reservation.id,
+        reservation.item_physical_quantity >= reservation.quantity ? 'approve' : 'reject',
+      ])
+    ));
+    setReviewingReservationGroup(group);
+  };
+
+  const closeReservationReview = () => {
+    if (reservationDecisionLoading) return;
+    setReviewingReservationGroup(null);
+    setReservationLineDecisions({});
+    setReservationDecisionReason('');
+  };
+
+  const submitReservationDecision = async () => {
+    if (!reviewingReservationGroup) return;
+    const reason = reservationDecisionReason.trim();
+    const decisions = reviewingReservationGroup.reservations.map((reservation) => ({
+      reservation_id: reservation.id,
+      decision: reservationLineDecisions[reservation.id],
+      reason: reservationLineDecisions[reservation.id] === 'reject' ? reason : '',
+    }));
+    const hasRejectedLines = decisions.some((decision) => decision.decision === 'reject');
+    if (decisions.some((decision) => !['approve', 'reject'].includes(decision.decision))) {
+      setError('Choose Approve or Reject for every item.');
+      return;
+    }
+    if (hasRejectedLines && reason.length < 8) {
+      setError('Enter a clear rejection reason of at least 8 characters.');
+      return;
+    }
+
+    setReservationDecisionLoading(true);
+    setError('');
+    setNotice('');
+    try {
+      const group = reviewingReservationGroup;
+      if (group.service_ticket) {
+        await api.post('/inventory/reservations/decide-ticket/', {
+          ticket_id: group.service_ticket,
+          decisions,
+        });
+      } else {
+        const reservation = group.reservations[0];
+        const lineDecision = decisions[0];
+        const action = lineDecision.decision === 'approve' ? 'fulfill' : 'cancel';
+        await api.post(`/inventory/reservations/${reservation.id}/${action}/`, { reason: lineDecision.reason });
+      }
+      const label = group.ticket_code || group.reservations[0]?.reservation_code
+        || formatReservationId(group.reservations[0]?.id);
+      const approvedCount = decisions.filter((decision) => decision.decision === 'approve').length;
+      const rejectedCount = decisions.length - approvedCount;
+      setNotice(`${label}: ${approvedCount} item line(s) issued, ${rejectedCount} rejected.`);
+      setReviewingReservationGroup(null);
+      setReservationLineDecisions({});
+      setReservationDecisionReason('');
+      await loadData();
+    } catch (decisionError) {
+      setError(getApiErrorMessage(decisionError, 'The equipment request could not be updated.'));
+    } finally {
+      setReservationDecisionLoading(false);
+    }
+  };
+
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
   const filteredInventory = inventory.filter((item) => {
     if (categoryFilter !== 'all' && String(item.category) !== categoryFilter) {
@@ -545,6 +639,33 @@ export default function AdminInventory() {
   const totalReservedStock = activeInventory.reduce((sum, item) => sum + Number(item.reserved_quantity || 0), 0);
   const totalAvailableStock = activeInventory.reduce((sum, item) => sum + Number(item.available_quantity || 0), 0);
   const outOfStockCount = inventorySummary?.outOfStock ?? activeInventory.filter((item) => Number(item.available_quantity || 0) <= 0).length;
+  const focusedTicketId = Number(searchParams.get('ticketId') || 0);
+  const visiblePendingReservations = focusedTicketId
+    ? pendingReservations.filter((reservation) => reservation.service_ticket === focusedTicketId)
+    : pendingReservations;
+  const pendingRequestGroups = Object.values(visiblePendingReservations.reduce((groups, reservation) => {
+    const groupKey = reservation.service_ticket
+      ? `ticket-${reservation.service_ticket}`
+      : `reservation-${reservation.id}`;
+    if (!groups[groupKey]) {
+      groups[groupKey] = {
+        key: groupKey,
+        service_ticket: reservation.service_ticket,
+        ticket_code: reservation.ticket_code || (reservation.service_ticket ? formatTicketId(reservation.service_ticket) : null),
+        service_name: reservation.service_name,
+        ticket_status: reservation.ticket_status,
+        technician_names: [],
+        required_date: reservation.required_date,
+        created_at: reservation.created_at,
+        reservations: [],
+      };
+    }
+    groups[groupKey].reservations.push(reservation);
+    if (reservation.technician_name && !groups[groupKey].technician_names.includes(reservation.technician_name)) {
+      groups[groupKey].technician_names.push(reservation.technician_name);
+    }
+    return groups;
+  }, {}));
   const itemModalOpen = adding || Boolean(editingId);
   const activeItem = adding ? newItem : editingItem;
   const updateActiveItem = (updates) => {
@@ -560,6 +681,13 @@ export default function AdminInventory() {
       setCurrentPage(safeCurrentPage);
     }
   }, [currentPage, safeCurrentPage]);
+
+  useEffect(() => {
+    if (!focusedTicketId && location.hash !== '#pending-equipment-requests') return;
+    window.requestAnimationFrame(() => {
+      document.getElementById('pending-equipment-requests')?.scrollIntoView({ block: 'start' });
+    });
+  }, [focusedTicketId, location.hash, pendingReservationsLoading]);
 
   return (
     <Layout>
@@ -863,6 +991,83 @@ export default function AdminInventory() {
           </div>
         )}
       </div>
+
+      {notice && (
+        <div role="status" className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} className="font-semibold">Dismiss</button>
+        </div>
+      )}
+
+      <section id="pending-equipment-requests" className="mt-6 scroll-mt-24 rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Pending equipment requests">
+        <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold text-slate-950">Pending Equipment Requests</h2>
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">{pendingRequestGroups.length}</span>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">Each service ticket appears once, with all of its reserved item lines reviewed together.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {focusedTicketId ? (
+              <button type="button" onClick={() => setSearchParams({})} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                Show all requests
+              </button>
+            ) : null}
+            <button type="button" onClick={() => loadPendingReservations().catch((loadError) => setError(getApiErrorMessage(loadError, 'Failed to refresh pending equipment requests.')))} disabled={pendingReservationsLoading} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+              <FiRefreshCw className={pendingReservationsLoading ? 'animate-spin' : ''} /> Refresh
+            </button>
+          </div>
+        </div>
+
+        {Boolean(focusedTicketId) && (
+          <div className="border-b border-brand-100 bg-brand-50 px-5 py-3 text-sm text-brand-800">
+            Showing pending requests for {formatTicketId(focusedTicketId)} from the selected notification.
+          </div>
+        )}
+
+        {pendingReservationsLoading && pendingReservations.length === 0 ? (
+          <div className="p-5"><TableSkeleton rows={3} columns={4} compact /></div>
+        ) : pendingRequestGroups.length === 0 ? (
+          <div className="px-5 py-8 text-center">
+            <FiCheckCircle className="mx-auto h-7 w-7 text-emerald-600" />
+            <p className="mt-2 text-sm font-semibold text-slate-900">No pending equipment requests</p>
+            <p className="mt-1 text-sm text-slate-500">{focusedTicketId ? 'This ticket has no request awaiting a decision.' : 'All reserved equipment decisions are up to date.'}</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {pendingRequestGroups.map((group) => {
+              const itemCount = group.reservations.length;
+              const unavailableCount = group.reservations.filter(
+                (reservation) => reservation.item_physical_quantity < reservation.quantity
+              ).length;
+              return (
+                <article key={group.key} className="grid gap-2 px-4 py-2.5 sm:grid-cols-[150px_minmax(0,1fr)_auto] sm:items-center">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="font-semibold text-slate-950">{group.ticket_code || 'Manual reservation'}</span>
+                    <span className="whitespace-nowrap rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">{itemCount} item{itemCount === 1 ? '' : 's'}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-800">{group.service_name || 'Service ticket'}</p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                      <span>{group.technician_names.join(', ') || 'Unassigned technician'}</span>
+                      <span>Needed {group.required_date ? new Date(`${group.required_date}T00:00:00`).toLocaleDateString() : '-'}</span>
+                      {unavailableCount ? <span className="font-semibold text-rose-700">{unavailableCount} item{unavailableCount === 1 ? '' : 's'} needs review</span> : null}
+                    </div>
+                  </div>
+                  {canManageInventory ? (
+                    <button type="button" onClick={() => openReservationReview(group)} className="justify-self-start rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 lg:justify-self-end">
+                      Review
+                    </button>
+                  ) : (
+                    <p className="text-xs text-slate-500 lg:text-right">View only</p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {selectedItem && (
         <div
@@ -1192,6 +1397,83 @@ export default function AdminInventory() {
                 className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
               >
                 Save Movement
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reviewingReservationGroup && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4" onMouseDown={(event) => event.target === event.currentTarget && closeReservationReview()}>
+          <div role="dialog" aria-modal="true" aria-label={`Equipment request for ${reviewingReservationGroup.ticket_code || 'manual reservation'}`} className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-4 py-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-600">Equipment Request</p>
+                <h2 className="mt-0.5 text-base font-semibold text-slate-950">{reviewingReservationGroup.ticket_code || 'Manual reservation'} · {reviewingReservationGroup.service_name || 'Service ticket'}</h2>
+              </div>
+              <button type="button" onClick={closeReservationReview} disabled={reservationDecisionLoading} className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Close</button>
+            </div>
+
+            <div className="px-4 py-3">
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                <div className="grid grid-cols-[minmax(0,1fr)_55px_65px_110px] gap-2 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <span>Item</span><span className="text-right">Qty</span><span className="text-right">Stock</span><span>Decision</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {reviewingReservationGroup.reservations.map((reservation) => {
+                    const enoughStock = reservation.item_physical_quantity >= reservation.quantity;
+                    return (
+                      <div key={reservation.id} className="grid grid-cols-[minmax(0,1fr)_55px_65px_110px] items-center gap-2 px-3 py-2 text-sm">
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-slate-900">{reservation.item_name}</p>
+                          <p className="truncate text-xs text-slate-500">{reservation.item_sku || reservation.reservation_code || formatReservationId(reservation.id)}</p>
+                        </div>
+                        <span className="text-right font-semibold text-slate-900">{reservation.quantity}</span>
+                        <span className={`text-right font-semibold ${enoughStock ? 'text-emerald-700' : 'text-rose-700'}`}>{reservation.item_physical_quantity}</span>
+                        <select
+                          aria-label={`Decision for ${reservation.item_name}`}
+                          value={reservationLineDecisions[reservation.id] || ''}
+                          onChange={(event) => setReservationLineDecisions((current) => ({ ...current, [reservation.id]: event.target.value }))}
+                          className={`rounded-md border px-2 py-1.5 text-xs font-semibold outline-none ${reservationLineDecisions[reservation.id] === 'reject' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
+                        >
+                          <option value="approve">Approve</option>
+                          <option value="reject">Reject</option>
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">Approved lines are issued from physical stock. Rejected lines release their reserved quantity.</p>
+
+              <div className="mt-3">
+                <label htmlFor="equipment-decision-reason" className="text-xs font-semibold text-slate-700">
+                  Rejection reason {Object.values(reservationLineDecisions).includes('reject') ? '(required)' : '(not needed)'}
+                </label>
+                {Object.values(reservationLineDecisions).includes('reject') ? (
+                  <textarea
+                    id="equipment-decision-reason"
+                    value={reservationDecisionReason}
+                    onChange={(event) => setReservationDecisionReason(event.target.value)}
+                    rows={2}
+                    maxLength={2000}
+                    placeholder="Explain why the rejected item cannot be issued."
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                  />
+                ) : null}
+                {error ? <p role="alert" className="mt-1 text-xs font-medium text-rose-700">{error}</p> : null}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3">
+              <p className="text-xs text-slate-500">One result notification will be sent to the technician.</p>
+              <button
+                type="button"
+                disabled={reservationDecisionLoading || (Object.values(reservationLineDecisions).includes('reject') && reservationDecisionReason.trim().length < 8)}
+                onClick={submitReservationDecision}
+                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FiCheckCircle /> {reservationDecisionLoading ? 'Applying...' : 'Apply Decisions'}
               </button>
             </div>
           </div>

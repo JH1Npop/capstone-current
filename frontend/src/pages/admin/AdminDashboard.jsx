@@ -227,6 +227,7 @@ export default function AdminDashboard() {
   const slaOverdueCount = Number(slaOverview.overdue_count ?? 0);
   const lowStockCount = Number(overview.low_stock_items ?? 0);
   const outOfStockCount = Number(overview.out_of_stock ?? 0);
+  const pendingEquipmentRequestsCount = Number(overview.pending_equipment_requests ?? 0);
   const dueMaintenanceCount = Number(overview.due_maintenance ?? 0);
   const overdueCasesCount = Number(overview.overdue_cases ?? 0);
   const unassignedScheduleCount = Number(overview.unassigned_scheduled_jobs ?? 0);
@@ -288,6 +289,14 @@ export default function AdminDashboard() {
         focusDashboardSection('sla-watchlist');
       },
       tone: slaOverdueCount ? 'text-rose-700 bg-rose-50 ring-rose-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
+    },
+    {
+      label: 'Equipment requests',
+      value: pendingEquipmentRequestsCount,
+      icon: FiBox,
+      actionLabel: 'Review equipment requests',
+      path: canOpenInventory ? '/admin/inventory#pending-equipment-requests' : null,
+      tone: pendingEquipmentRequestsCount ? 'text-amber-700 bg-amber-50 ring-amber-200' : 'text-slate-600 bg-slate-50 ring-slate-200',
     },
     {
       label: 'Low stock',

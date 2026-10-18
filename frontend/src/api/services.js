@@ -519,6 +519,31 @@ export const fetchMaintenanceSummary = async () => {
   }
 };
 
+const runMaintenanceAction = async (scheduleId, action, payload = {}) => {
+  try {
+    const { data } = await api.post(`/services/maintenance-schedules/${scheduleId}/${action}/`, payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, `Unable to ${action} maintenance.`));
+  }
+};
+
+export const dismissMaintenanceSchedule = (scheduleId, reason) => (
+  runMaintenanceAction(scheduleId, 'dismiss', { reason })
+);
+
+export const resumeMaintenanceSchedule = (scheduleId, reason) => (
+  runMaintenanceAction(scheduleId, 'resume', { reason })
+);
+
+export const rescheduleMaintenanceSchedule = (scheduleId, { nextDueDate, reason }) => (
+  runMaintenanceAction(scheduleId, 'reschedule', { next_due_date: nextDueDate, reason })
+);
+
+export const completeMaintenanceSchedule = (scheduleId, reason) => (
+  runMaintenanceAction(scheduleId, 'complete', { reason })
+);
+
 export const fetchFollowUpCaseSummary = async (filters = {}) => {
   try {
     const params = {};

@@ -206,14 +206,24 @@ class InventoryReservationSerializer(serializers.ModelSerializer):
     reservation_code = serializers.SerializerMethodField()
     item_name = serializers.CharField(source='item.name', read_only=True)
     item_sku = serializers.CharField(source='item.sku', read_only=True)
-    technician_name = serializers.CharField(source='technician.username', read_only=True)
+    item_available_quantity = serializers.IntegerField(source='item.available_quantity', read_only=True)
+    item_physical_quantity = serializers.IntegerField(source='item.quantity', read_only=True)
+    technician_name = serializers.SerializerMethodField()
     ticket_code = serializers.SerializerMethodField()
+    ticket_status = serializers.CharField(source='service_ticket.status', read_only=True)
+    service_name = serializers.CharField(source='service_ticket.request.service_type.name', read_only=True)
 
     def get_reservation_code(self, obj):
         return f'RSV-{obj.id:06d}'
 
     def get_ticket_code(self, obj):
         return f'TKT-{obj.service_ticket_id:04d}' if obj.service_ticket_id else None
+
+    def get_technician_name(self, obj):
+        if not obj.technician:
+            return ''
+        full_name = obj.technician.get_full_name().strip()
+        return full_name or obj.technician.username
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

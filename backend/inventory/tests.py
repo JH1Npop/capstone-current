@@ -13,6 +13,7 @@ from inventory.models import (
     InventoryTransaction,
     ServiceTypeInventoryRequirement,
 )
+from inventory.automation import create_pending_reservation
 from services.models import (
     InspectionChecklist,
     ServiceLocation,
@@ -22,6 +23,7 @@ from services.models import (
     TechnicianSkill,
 )
 from users.models import User, UserCapabilityGrant
+from notifications.models import Notification
 from users.rbac import (
     INVENTORY_MANAGE,
     INVENTORY_VIEW,
@@ -373,6 +375,235 @@ class AutoInventoryWorkflowTests(APITestCase):
             ).count(),
             1,
         )
+
+    def test_admin_can_approve_and_issue_pending_equipment_request(self):
+        self.assertEqual(self.assign_ticket().status_code, status.HTTP_200_OK)
+        reservation = InventoryReservation.objects.get(service_ticket=self.ticket)
+        extra_item = InventoryItem.objects.create(
+            name='Connector Kit',
+            sku='CONNECTOR-KIT-01',
+            category=self.category,
+            item_type='part',
+            quantity=5,
+            minimum_stock=1,
+            status='available',
+        )
+        extra_reservation = create_pending_reservation(
+            item=extra_item,
+            quantity=1,
+            technician=self.technician_user,
+            required_date=timezone.localdate(),
+            service_ticket=self.ticket,
+            performed_by=self.technician_user,
+            notes='Additional connector needed',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            '/api/inventory/reservations/decide-ticket/',
+            {
+                'ticket_id': self.ticket.id,
+                'decision': 'approve',
+                'reason': 'Released to the assigned technician at the warehouse.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        reservation.refresh_from_db()
+        extra_reservation.refresh_from_db()
+        self.inventory_item.refresh_from_db()
+        extra_item.refresh_from_db()
+        self.assertEqual(reservation.status, 'fulfilled')
+        self.assertEqual(extra_reservation.status, 'fulfilled')
+        self.assertEqual(self.inventory_item.quantity, 8)
+        self.assertEqual(self.inventory_item.reserved_quantity, 0)
+        self.assertEqual(extra_item.quantity, 4)
+        self.assertEqual(extra_item.reserved_quantity, 0)
+        issues = InventoryTransaction.objects.filter(
+            service_ticket=self.ticket,
+            transaction_type='issue',
+        )
+        self.assertEqual(issues.count(), 2)
+        self.assertTrue(all(issue.performed_by == self.admin_user for issue in issues))
+        self.assertTrue(all('Released to the assigned technician' in issue.notes for issue in issues))
+        notification = Notification.objects.get(
+            user=self.technician_user,
+            title=f'Equipment Approved for Ticket #{self.ticket.id}',
+        )
+        self.assertEqual(notification.ticket, self.ticket)
+        self.assertIn('Replacement Sensor x2', notification.message)
+        self.assertIn('Connector Kit x1', notification.message)
+        self.assertEqual(response.data['reservation_count'], 2)
+
+    def test_admin_can_partially_approve_ticket_equipment_lines(self):
+        self.assertEqual(self.assign_ticket().status_code, status.HTTP_200_OK)
+        approved_reservation = InventoryReservation.objects.get(service_ticket=self.ticket)
+        rejected_item = InventoryItem.objects.create(
+            name='Unsupported Adapter',
+            sku='UNSUPPORTED-ADAPTER-01',
+            category=self.category,
+            item_type='part',
+            quantity=3,
+            minimum_stock=1,
+            status='available',
+        )
+        rejected_reservation = create_pending_reservation(
+            item=rejected_item,
+            quantity=1,
+            technician=self.technician_user,
+            required_date=timezone.localdate(),
+            service_ticket=self.ticket,
+            performed_by=self.technician_user,
+            notes='Adapter requested in the field',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            '/api/inventory/reservations/decide-ticket/',
+            {
+                'ticket_id': self.ticket.id,
+                'decisions': [
+                    {
+                        'reservation_id': approved_reservation.id,
+                        'decision': 'approve',
+                        'reason': '',
+                    },
+                    {
+                        'reservation_id': rejected_reservation.id,
+                        'decision': 'reject',
+                        'reason': 'This adapter is not approved for the installation.',
+                    },
+                ],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        approved_reservation.refresh_from_db()
+        rejected_reservation.refresh_from_db()
+        self.inventory_item.refresh_from_db()
+        rejected_item.refresh_from_db()
+        self.assertEqual(approved_reservation.status, 'fulfilled')
+        self.assertEqual(rejected_reservation.status, 'cancelled')
+        self.assertEqual(self.inventory_item.quantity, 8)
+        self.assertEqual(self.inventory_item.reserved_quantity, 0)
+        self.assertEqual(rejected_item.quantity, 3)
+        self.assertEqual(rejected_item.reserved_quantity, 0)
+        self.assertEqual(response.data['approved_count'], 1)
+        self.assertEqual(response.data['rejected_count'], 1)
+        self.assertEqual(response.data['remaining_pending_count'], 0)
+        notification = Notification.objects.get(
+            user=self.technician_user,
+            title=f'Equipment Partially Approved for Ticket #{self.ticket.id}',
+        )
+        self.assertIn('Issued: Replacement Sensor x2', notification.message)
+        self.assertIn('Not approved: Unsupported Adapter x1', notification.message)
+
+    def test_partial_ticket_decision_reject_reason_failure_changes_no_lines(self):
+        self.assertEqual(self.assign_ticket().status_code, status.HTTP_200_OK)
+        first_reservation = InventoryReservation.objects.get(service_ticket=self.ticket)
+        extra_reservation = create_pending_reservation(
+            item=self.inventory_item,
+            quantity=1,
+            technician=self.technician_user,
+            required_date=timezone.localdate(),
+            service_ticket=self.ticket,
+            performed_by=self.technician_user,
+            notes='Second line for validation rollback coverage',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            '/api/inventory/reservations/decide-ticket/',
+            {
+                'ticket_id': self.ticket.id,
+                'decisions': [
+                    {
+                        'reservation_id': first_reservation.id,
+                        'decision': 'approve',
+                        'reason': '',
+                    },
+                    {
+                        'reservation_id': extra_reservation.id,
+                        'decision': 'reject',
+                        'reason': 'short',
+                    },
+                ],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        first_reservation.refresh_from_db()
+        extra_reservation.refresh_from_db()
+        self.inventory_item.refresh_from_db()
+        self.assertEqual(first_reservation.status, 'pending')
+        self.assertEqual(extra_reservation.status, 'pending')
+        self.assertEqual(self.inventory_item.quantity, 10)
+        self.assertEqual(self.inventory_item.reserved_quantity, 3)
+
+    def test_admin_rejection_requires_reason_and_releases_pending_stock(self):
+        self.assertEqual(self.assign_ticket().status_code, status.HTTP_200_OK)
+        reservation = InventoryReservation.objects.get(service_ticket=self.ticket)
+        self.client.force_authenticate(user=self.admin_user)
+
+        missing_reason = self.client.post(
+            '/api/inventory/reservations/decide-ticket/',
+            {'ticket_id': self.ticket.id, 'decision': 'reject', 'reason': 'short'},
+            format='json',
+        )
+        self.assertEqual(missing_reason.status_code, status.HTTP_400_BAD_REQUEST)
+        reservation.refresh_from_db()
+        self.inventory_item.refresh_from_db()
+        self.assertEqual(reservation.status, 'pending')
+        self.assertEqual(self.inventory_item.reserved_quantity, 2)
+
+        response = self.client.post(
+            '/api/inventory/reservations/decide-ticket/',
+            {
+                'ticket_id': self.ticket.id,
+                'decision': 'reject',
+                'reason': 'The requested model is not authorized for this service.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        reservation.refresh_from_db()
+        self.inventory_item.refresh_from_db()
+        self.assertEqual(reservation.status, 'cancelled')
+        self.assertEqual(self.inventory_item.quantity, 10)
+        self.assertEqual(self.inventory_item.reserved_quantity, 0)
+        cancellation = InventoryTransaction.objects.filter(
+            service_ticket=self.ticket,
+            transaction_type='cancellation',
+        ).latest('id')
+        self.assertEqual(cancellation.performed_by, self.admin_user)
+        self.assertIn('not authorized', cancellation.notes)
+        notification = Notification.objects.get(
+            user=self.technician_user,
+            title=f'Equipment Request Rejected for Ticket #{self.ticket.id}',
+        )
+        self.assertIn('not authorized', notification.message)
+
+    def test_admin_dashboard_counts_pending_ticket_equipment_requests(self):
+        self.assertEqual(self.assign_ticket().status_code, status.HTTP_200_OK)
+        create_pending_reservation(
+            item=self.inventory_item,
+            quantity=1,
+            technician=self.technician_user,
+            required_date=timezone.localdate(),
+            service_ticket=self.ticket,
+            performed_by=self.technician_user,
+            notes='Second item line on the same ticket request',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.get('/api/dashboard/stats/', {'role': 'admin'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data['overview']['pending_equipment_requests'], 1)
 
     def test_assigning_ticket_can_use_custom_dispatch_equipment_plan(self):
         extra_item = InventoryItem.objects.create(

@@ -6,6 +6,8 @@ import { EmptyState, ErrorState } from '../../components/ui/StateDisplay';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import { FiAlertCircle, FiBell, FiCheckCircle, FiInfo, FiTrash2 } from 'react-icons/fi';
 import { api, fetchAllPages } from '../../api/api';
+import { useNavigate } from 'react-router-dom';
+import { getNotificationDestination } from '../../utils/notificationNavigation';
 
 const ITEMS_PER_PAGE = 10;
 const announceNotificationsUpdated = () => window.dispatchEvent(new Event('afn:notifications-updated'));
@@ -25,6 +27,7 @@ const extractNotifications = (data) => {
 
 export default function ClientNotifications() {
   const { user, token } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [filter, setFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -234,7 +237,9 @@ export default function ClientNotifications() {
                 actionLabel={filter !== 'all' ? "View all notifications" : undefined}
               />
             ) : (
-              paginatedNotifications.map((notification) => (
+              paginatedNotifications.map((notification) => {
+                const destination = getNotificationDestination(notification, user?.role);
+                return (
                 <div
                   key={notification.id}
                   className={`flex items-start gap-4 rounded-lg p-4 transition-shadow hover:shadow-md ${
@@ -269,9 +274,22 @@ export default function ClientNotifications() {
                         Mark as read
                       </button>
                     )}
+                    {destination && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (notification.status === 'unread') await handleMarkAsRead(notification.id);
+                          navigate(destination.path);
+                        }}
+                        className="mt-3 ml-4 text-sm font-semibold text-brand-600 hover:text-brand-700"
+                      >
+                        {destination.label}
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
 

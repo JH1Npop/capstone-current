@@ -34,6 +34,7 @@ test.describe('Admin Workspace - All Pages', () => {
         payload.overview = { ...payload.overview, pending_approvals: 1 };
         payload.list_counts = { ...payload.list_counts, pending_requests: 1 };
       }
+      payload.overview = { ...payload.overview, pending_equipment_requests: 2 };
       const activeJobs = payload.operations?.active_technician_jobs || [];
       payload.operations = {
         ...payload.operations,
@@ -61,6 +62,7 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.getByText('Active Tickets', { exact: true })).toBeVisible();
     await expect(page.getByText('Completed Today', { exact: true })).toBeVisible();
     await expect(page.getByText('Active Technician Accounts', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Equipment requests: 2. Review equipment requests' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Upcoming Schedule' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Dispatch board' })).toBeVisible();
     await expect(page.getByText(/Showing \d+ of \d+/).first()).toBeVisible();
@@ -533,6 +535,238 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
   });
 
+  test('3.8d - Admin approves and rejects pending equipment requests', async ({ page }) => {
+    let pendingReservations = [
+      {
+        id: 99001,
+        reservation_code: 'RSV-099001',
+        item: 501,
+        item_name: 'E2E Hybrid Inverter',
+        item_sku: 'E2E-INV-01',
+        item_available_quantity: 6,
+        item_physical_quantity: 10,
+        technician: 42,
+        technician_name: 'E2E Technician',
+        service_ticket: 622,
+        ticket_code: 'TKT-0622',
+        ticket_status: 'Not Started',
+        service_name: 'Solar Panel Installation',
+        quantity: 1,
+        required_date: '2026-10-26',
+        status: 'pending',
+        notes: 'Needed after site inspection',
+        created_at: '2026-10-18T03:35:19Z',
+      },
+      {
+        id: 99002,
+        reservation_code: 'RSV-099002',
+        item: 502,
+        item_name: 'E2E Connector Set',
+        item_sku: 'E2E-CONN-01',
+        item_available_quantity: 0,
+        item_physical_quantity: 1,
+        technician: 42,
+        technician_name: 'E2E Technician',
+        service_ticket: 622,
+        ticket_code: 'TKT-0622',
+        ticket_status: 'Not Started',
+        service_name: 'Solar Panel Installation',
+        quantity: 2,
+        required_date: '2026-10-26',
+        status: 'pending',
+        notes: 'Additional connectors requested',
+        created_at: '2026-10-18T03:36:19Z',
+      },
+      {
+        id: 99003,
+        reservation_code: 'RSV-099003',
+        item: 503,
+        item_name: 'E2E Smoke Detector',
+        item_sku: 'E2E-SMOKE-01',
+        item_available_quantity: 8,
+        item_physical_quantity: 12,
+        technician: 42,
+        technician_name: 'E2E Technician',
+        service_ticket: 623,
+        ticket_code: 'TKT-0623',
+        ticket_status: 'Not Started',
+        service_name: 'Fire Detection Installation',
+        quantity: 3,
+        required_date: '2026-10-27',
+        status: 'pending',
+        notes: 'Additional detector request',
+        created_at: '2026-10-18T03:37:19Z',
+      },
+    ];
+    const decisions = [];
+
+    await page.route(/\/api\/inventory\/reservations\/(?:pending\/|decide-ticket\/)(?:\?.*)?$/, async (route) => {
+      const request = route.request();
+      if (request.method() === 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pendingReservations) });
+        return;
+      }
+
+      const body = request.postDataJSON();
+      decisions.push(body);
+      const decidedIds = new Set(body.decisions.map((decision) => decision.reservation_id));
+      pendingReservations = pendingReservations.filter((reservation) => !decidedIds.has(reservation.id));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'Ticket equipment decisions applied' }),
+      });
+    });
+
+    await visitWorkspacePage(page, '/admin/inventory?ticketId=622');
+    const queue = page.getByRole('region', { name: 'Pending equipment requests' });
+    await expect(queue).toContainText('Showing pending requests for TKT-0622');
+    const directQueueText = await queue.evaluate((element) => Array.from(element.childNodes)
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .map((node) => node.textContent.trim())
+      .filter(Boolean));
+    expect(directQueueText).not.toContain('0');
+    const queueFollowsStock = await page.getByRole('heading', { name: /Stock Overview/ }).evaluate((stockHeading) => {
+      const queueElement = document.getElementById('pending-equipment-requests');
+      return Boolean(queueElement && (stockHeading.compareDocumentPosition(queueElement) & Node.DOCUMENT_POSITION_FOLLOWING));
+    });
+    expect(queueFollowsStock).toBeTruthy();
+
+    const groupedRequest = queue.locator('article').filter({ hasText: 'TKT-0622' });
+    await expect(groupedRequest).toContainText('2 items');
+    await expect(groupedRequest).toContainText('Solar Panel Installation');
+    await expect(groupedRequest).toContainText('E2E Technician');
+    await expect(groupedRequest).toContainText('1 item needs review');
+    await groupedRequest.getByRole('button', { name: 'Review' }).click();
+    const groupedReview = page.getByRole('dialog', { name: 'Equipment request for TKT-0622' });
+    await expect(groupedReview).toContainText('E2E Hybrid Inverter');
+    await expect(groupedReview).toContainText('E2E Connector Set');
+    await expect(groupedReview.getByLabel('Decision for E2E Hybrid Inverter')).toHaveValue('approve');
+    await expect(groupedReview.getByLabel('Decision for E2E Connector Set')).toHaveValue('reject');
+    await groupedReview.getByLabel('Rejection reason (required)').fill('The requested connector quantity is not currently available.');
+    await groupedReview.getByRole('button', { name: 'Apply Decisions' }).click();
+    await expect(page.getByRole('status')).toContainText('1 item line(s) issued, 1 rejected');
+
+    await queue.getByRole('button', { name: 'Show all requests' }).click();
+    const detectorRequest = queue.locator('article').filter({ hasText: 'TKT-0623' });
+    await detectorRequest.getByRole('button', { name: 'Review' }).click();
+    const detectorReview = page.getByRole('dialog', { name: 'Equipment request for TKT-0623' });
+    await detectorReview.getByLabel('Decision for E2E Smoke Detector').selectOption('reject');
+    await detectorReview.getByLabel('Rejection reason (required)').fill('short');
+    await expect(detectorReview.getByRole('button', { name: 'Apply Decisions' })).toBeDisabled();
+    await detectorReview.getByLabel('Rejection reason (required)').fill('Requested detector model does not match the approved plan.');
+    await detectorReview.getByRole('button', { name: 'Apply Decisions' }).click();
+
+    await expect(queue.getByText('No pending equipment requests')).toBeVisible();
+    expect(decisions).toEqual([
+      {
+        ticket_id: 622,
+        decisions: [
+          { reservation_id: 99001, decision: 'approve', reason: '' },
+          { reservation_id: 99002, decision: 'reject', reason: 'The requested connector quantity is not currently available.' },
+        ],
+      },
+      {
+        ticket_id: 623,
+        decisions: [
+          { reservation_id: 99003, decision: 'reject', reason: 'Requested detector model does not match the approved plan.' },
+        ],
+      },
+    ]);
+  });
+
+  test('3.8e - Real backend applies mixed equipment decisions end to end', async ({ page, request }) => {
+    const headers = { Authorization: `Token ${adminAuthState.token}` };
+    const listFrom = (payload) => (Array.isArray(payload) ? payload : (payload.results || []));
+    const technicianAuthState = loadAuthStateFromBackend('tech_test');
+
+    const [itemsResponse, ticketsResponse] = await Promise.all([
+      request.get('/api/inventory/items/', { headers }),
+      request.get('/api/services/service-tickets/', { headers }),
+    ]);
+    expect(itemsResponse.ok()).toBeTruthy();
+    expect(ticketsResponse.ok()).toBeTruthy();
+
+    const existingItems = listFrom(await itemsResponse.json());
+    const tickets = listFrom(await ticketsResponse.json());
+    const issuedItem = existingItems.find((item) => item.name === 'E2E Safety Kit');
+    const ticket = tickets.find((candidate) => candidate.status === 'Ready for Service');
+    expect(issuedItem?.id).toBeTruthy();
+    expect(ticket?.id).toBeTruthy();
+
+    const rejectedItemResponse = await request.post('/api/inventory/items/', {
+      headers,
+      data: {
+        name: 'E2E Unsupported Adapter',
+        sku: 'E2E-MIXED-DECISION-01',
+        category: issuedItem.category,
+        item_type: 'part',
+        quantity: 4,
+        minimum_stock: 0,
+        unit_of_measurement: 'piece',
+        low_stock_threshold: 40,
+        unit_price: '0.00',
+        status: 'available',
+      },
+    });
+    expect(rejectedItemResponse.status()).toBe(201);
+    const rejectedItem = await rejectedItemResponse.json();
+
+    const reservationPayload = {
+      technician: technicianAuthState.user.id,
+      quantity: 1,
+      required_date: '2026-10-26',
+      service_ticket: ticket.id,
+    };
+    const approvedReservationResponse = await request.post('/api/inventory/reservations/', {
+      headers,
+      data: { ...reservationPayload, item: issuedItem.id, notes: 'Real E2E line to approve.' },
+    });
+    const rejectedReservationResponse = await request.post('/api/inventory/reservations/', {
+      headers,
+      data: { ...reservationPayload, item: rejectedItem.id, notes: 'Real E2E line to reject.' },
+    });
+    expect(approvedReservationResponse.status()).toBe(201);
+    expect(rejectedReservationResponse.status()).toBe(201);
+    const approvedReservation = await approvedReservationResponse.json();
+    const rejectedReservation = await rejectedReservationResponse.json();
+
+    await visitWorkspacePage(page, `/admin/inventory?ticketId=${ticket.id}#pending-equipment-requests`);
+    const queue = page.getByRole('region', { name: 'Pending equipment requests' });
+    const requestRow = queue.locator('article').filter({ hasText: ticket.ticket_code });
+    await expect(requestRow).toContainText('2 items');
+    await requestRow.getByRole('button', { name: 'Review' }).click();
+
+    const review = page.getByRole('dialog', { name: `Equipment request for ${ticket.ticket_code}` });
+    await expect(review.getByLabel('Decision for E2E Safety Kit')).toHaveValue('approve');
+    await review.getByLabel('Decision for E2E Unsupported Adapter').selectOption('reject');
+    await review.getByLabel('Rejection reason (required)').fill('This adapter is not approved for the assigned installation.');
+    await review.getByRole('button', { name: 'Apply Decisions' }).click();
+    await expect(page.getByRole('status')).toContainText('1 item line(s) issued, 1 rejected');
+    await expect(queue.getByText('No pending equipment requests')).toBeVisible();
+
+    const [approvedStateResponse, rejectedStateResponse, updatedItemsResponse] = await Promise.all([
+      request.get(`/api/inventory/reservations/${approvedReservation.id}/`, { headers }),
+      request.get(`/api/inventory/reservations/${rejectedReservation.id}/`, { headers }),
+      request.get('/api/inventory/items/', { headers }),
+    ]);
+    expect(approvedStateResponse.ok()).toBeTruthy();
+    expect(rejectedStateResponse.ok()).toBeTruthy();
+    expect(updatedItemsResponse.ok()).toBeTruthy();
+    const approvedState = await approvedStateResponse.json();
+    const rejectedState = await rejectedStateResponse.json();
+    const updatedItems = listFrom(await updatedItemsResponse.json());
+    const issuedItemAfter = updatedItems.find((item) => item.id === issuedItem.id);
+    const rejectedItemAfter = updatedItems.find((item) => item.id === rejectedItem.id);
+
+    expect(approvedState.status).toBe('fulfilled');
+    expect(rejectedState.status).toBe('cancelled');
+    expect(issuedItemAfter.quantity).toBe(issuedItem.quantity - 1);
+    expect(issuedItemAfter.reserved_quantity).toBe(0);
+    expect(rejectedItemAfter.quantity).toBe(rejectedItem.quantity);
+    expect(rejectedItemAfter.reserved_quantity).toBe(0);
+  });
+
   test('3.9 - Document draft saves and reloads end to end', async ({ page }) => {
     page.on('pageerror', (error) => console.error('Documents page error:', error.message));
     await visitWorkspacePage(page, '/admin/documents', 'test-results/screenshots/03-admin-documents.png');
@@ -759,6 +993,93 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(
       page.getByRole('list').getByText('Confirmed the client concern was addressed and verified the result.'),
     ).toBeVisible();
+  });
+
+  test('3.13c - Maintenance reminders can be stopped without deleting history', async ({ page }) => {
+    let remindersStopped = false;
+    let dismissPayload = null;
+    const schedule = {
+      id: 901,
+      ticket_code: 'TKT-0901',
+      client_name: 'Maintenance Opt-out Client',
+      client_email: 'maintenance-optout@example.test',
+      client_phone: '09170000901',
+      service_type_name: 'Solar Preventive Maintenance',
+      location: 'Malolos, Bulacan',
+      maintenance_profile: 'residential_solar',
+      interval_days: 180,
+      last_service_date: '2026-04-17',
+      next_due_date: '2026-10-17',
+      notify_on_date: '2026-10-10',
+      status: 'due',
+      days_until_due: 0,
+      risk_score: 70,
+      risk_level: 'high',
+      maintenance_notes: 'Inspect inverter and clean the panel array.',
+      due_soon_notified_at: '2026-10-10T08:00:00Z',
+      three_day_notified_at: null,
+      due_notified_at: null,
+      client_notified_at: '2026-10-10T08:00:00Z',
+      client_three_day_notified_at: null,
+      client_due_notified_at: null,
+    };
+
+    await page.route('**/api/services/maintenance-schedules/**', async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (url.pathname.endsWith('/summary/')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            total: 1,
+            active: remindersStopped ? 0 : 1,
+            upcoming: 0,
+            due_today: remindersStopped ? 0 : 1,
+            overdue: 0,
+            completed: 0,
+            dismissed: remindersStopped ? 1 : 0,
+          }),
+        });
+      }
+      if (url.pathname.endsWith('/901/dismiss/') && request.method() === 'POST') {
+        dismissPayload = request.postDataJSON();
+        remindersStopped = true;
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ ...schedule, status: 'dismissed' }),
+        });
+      }
+      if (request.method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            count: remindersStopped ? 0 : 1,
+            next: null,
+            previous: null,
+            results: remindersStopped ? [] : [schedule],
+          }),
+        });
+      }
+      return route.continue();
+    });
+
+    await visitWorkspacePage(page, '/admin/maintenance');
+    await expect(page.getByRole('heading', { name: 'Maintenance schedules' })).toBeVisible();
+    await page.getByRole('button', { name: /Maintenance Opt-out Client/ }).click();
+    await page.getByRole('button', { name: 'Stop reminders' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Stop maintenance reminders?' });
+    await expect(dialog).toContainText('without deleting its history');
+    await expect(dialog.getByRole('button', { name: 'Stop reminders' })).toBeDisabled();
+    await dialog.getByLabel('Reason').fill('Client declined future preventive maintenance reminders.');
+    await dialog.getByRole('button', { name: 'Stop reminders' }).click();
+
+    await expect(page.getByRole('status')).toContainText('Maintenance reminders stopped');
+    await expect(page.getByText('Maintenance Opt-out Client')).toHaveCount(0);
+    expect(dismissPayload).toEqual({ reason: 'Client declined future preventive maintenance reminders.' });
   });
 
   test('3.14 - Admin Settings form loads', async ({ page }) => {

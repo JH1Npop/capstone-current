@@ -73,6 +73,24 @@ direct model/admin changes as well as API workflow changes. The
 `reconcile_technician_availability` management command reports historical
 mismatches without writing by default; `--apply` repairs them after the target
 database has been reviewed.
+Assigned lead or crew technicians may request additional equipment while a
+ticket is `Not Started` or in a supported inspection, active, awaiting-materials,
+or hold state. A pre-start request creates pending inventory reservations and a
+status-history note without changing `Not Started`; travel and work states still
+advance only through their named actions. Terminal tickets reject new requests.
+Pending ticket reservations are reviewed in Admin Inventory as one grouped
+request per service ticket, while their individual `RSV-*` lines remain intact
+for stock accounting. An authorized inventory manager assigns **Approve** or
+**Reject** to each line in the grouped review. Approved lines release their hold
+and deduct issued physical stock; rejected lines require a meaningful shared
+reason and release their hold without reducing physical stock. Mixed results
+are allowed when only some items can be issued. Every submitted line is
+row-locked and applied in one transaction, so a failure rolls back that complete
+submission; unseen new pending lines remain open. Each assigned technician
+receives one combined result notification with separate issued and rejected
+items. Repeated or competing decisions are rejected. The dashboard counts
+distinct pending ticket requests, and equipment-request notifications route
+operators to this Inventory queue, optionally focused on the related ticket.
 Every call to the central status-change helper must provide a nonblank note of
 at most 2,000 characters. Routine named actions provide deterministic event
 evidence; the generic administrator status action requires an operator-entered
@@ -94,3 +112,25 @@ evidence is written to the ticket activity log and `ServiceStatusHistory`.
   remains auditable.
 
 These rules are enforced by direct API tests in `backend/progress/tests.py`.
+
+## Maintenance schedules
+
+Maintenance schedules preserve their history; administrators do not delete a
+schedule when a client no longer wants reminders. Read access requires an
+after-sales view capability. The named lifecycle actions require
+`after_sales.cases.manage`, acquire a row lock, and require a nonblank reason
+of at most 2,000 characters.
+
+| Current state | Allowed transition | Named action and effect |
+| --- | --- | --- |
+| `scheduled`, `due_soon`, `due` | `dismissed` | `dismiss`; stops future automation and closes any active linked maintenance case |
+| `dismissed` | Date-derived `scheduled`, `due_soon`, or `due` | `resume`; keeps already-sent reminder timestamps so the same stage is not duplicated |
+| `scheduled`, `due_soon`, `due` | Date-derived active state | `reschedule`; changes the due/notification dates and resets delivery timestamps for the new reminder cycle |
+| `scheduled`, `due_soon`, `due` | `completed` | `complete`; only for work actually performed and resolves any active linked maintenance case |
+| `completed` | none | Terminal |
+
+Rescheduling cannot use a past date. A future reschedule closes the obsolete
+active maintenance case; a due or due-soon schedule ensures a current linked
+case exists. `dismissed` means reminders stopped, not record deleted, and the
+schedule remains visible through the **Stopped** filter. The default list is
+the active queue and excludes both completed and stopped schedules.

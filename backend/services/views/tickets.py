@@ -2023,7 +2023,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Requested equipment must be provided'}, status=status.HTTP_400_BAD_REQUEST)
         if ticket.status not in PARTS_REQUEST_TICKET_STATUSES:
             return Response(
-                {'error': 'Additional equipment can only be requested for active or inspected tickets.'},
+                {'error': 'Additional equipment can only be requested for assigned, inspection, or active tickets.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

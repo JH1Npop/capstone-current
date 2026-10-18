@@ -1,6 +1,7 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
+from inventory.models import InventoryCategory, InventoryItem, InventoryReservation
 from services.models import QuotationRecord
 from django.db import transaction
 from services.views.technician import TechnicianJobsView
@@ -2153,11 +2154,21 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertIn('lead technician', str(response.data.get('error', '')).lower())
 
-    def test_parts_request_requires_started_work(self):
+    def test_assigned_technician_can_request_equipment_before_work_starts(self):
+        category = InventoryCategory.objects.create(name='Pre-start Equipment')
+        item = InventoryItem.objects.create(
+            name='Replacement Sensor',
+            sku='PRESTART-SENSOR',
+            category=category,
+            item_type='spare_part',
+            quantity=3,
+            reserved_quantity=0,
+            minimum_stock=1,
+        )
         request_obj = ServiceRequest.objects.create(
             client=self.client_user,
             service_type=self.service_type,
-            description='Parts guard',
+            description='Pre-start equipment request',
             priority='Normal',
             status='Approved',
         )
@@ -2172,12 +2183,24 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         self.client.force_authenticate(user=self.technician_user)
         response = self.client.post(
             f'/api/services/service-tickets/{ticket.id}/request_parts/',
-            {'parts': 'Replacement sensor'},
+            {
+                'items': [{'item_id': item.id, 'quantity': 1}],
+                'notes': 'Required after reviewing the assigned work scope.',
+            },
             format='json',
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('only be requested for active or inspected tickets', response.data['error'])
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'Not Started')
+        reservation = InventoryReservation.objects.get(
+            service_ticket=ticket,
+            item=item,
+            status='pending',
+        )
+        self.assertEqual(reservation.technician, self.technician_user)
+        self.assertEqual(reservation.quantity, 1)
+        self.assertIn('reviewing the assigned work scope', reservation.notes)
 
     def test_cancel_request_cascades_to_open_ticket(self):
         request_obj = ServiceRequest.objects.create(
