@@ -17,9 +17,14 @@ except ImportError:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
-# create ORS client only if available and key provided
+# create ORS client only if available and key provided. The library defaults (60-second timeout and
+# up to 60 seconds of rate-limit retries) would keep a technician waiting; fail fast and fall back.
 if openrouteservice and settings.ORS_API_KEY:
-    client = openrouteservice.Client(key=settings.ORS_API_KEY)
+    client = openrouteservice.Client(
+        key=settings.ORS_API_KEY,
+        timeout=getattr(settings, 'ROUTING_HTTP_TIMEOUT_SECONDS', 8),
+        retry_over_query_limit=False,
+    )
 else:
     client = None  # will use OSRM fallback
 

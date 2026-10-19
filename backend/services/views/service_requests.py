@@ -189,7 +189,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
             service_request = self.get_locked_request()
             require_inspection = (
                 str(request.data.get('require_inspection', '')).lower() == 'true'
-                or bool(service_request.service_type.requires_site_inspection)
+                or service_request.requires_site_inspection
             )
 
             if service_request.status != 'Pending':
@@ -289,6 +289,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                 )
             service_request.status = 'Cancelled'
             service_request._activity_reason = reason
+            service_request._activity_closure = 'rejected'
             service_request.save(update_fields=['status', 'updated_at'])
 
             send_user_notification(
@@ -352,6 +353,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
 
         service_request.status = 'Cancelled'
         service_request._activity_reason = reason
+        service_request._activity_closure = 'cancelled_by_client' if request.user.role == 'client' else 'cancelled_by_office'
         service_request.save(update_fields=['status', 'updated_at'])
 
         if related_ticket and related_ticket.status != 'Cancelled':

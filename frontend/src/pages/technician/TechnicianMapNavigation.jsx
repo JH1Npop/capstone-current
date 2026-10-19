@@ -136,6 +136,7 @@ export default function TechnicianMapNavigation() {
   const [navigationStarted, setNavigationStarted] = useState(false);
   const [jobLoading, setJobLoading] = useState(Boolean(ticketId));
   const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState('');
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [trackingConfig, setTrackingConfig] = useState(null);
   const [liveTravelSpeedKph, setLiveTravelSpeedKph] = useState(null);
@@ -143,6 +144,7 @@ export default function TechnicianMapNavigation() {
   const lastRouteRequestRef = useRef({ at: 0, lat: null, lng: null });
   const lastLocationUpdateRef = useRef({ at: 0, lat: null, lng: null });
   const routeRequestSeqRef = useRef(0);
+  const navigationStartingRef = useRef(false);
   const previousSpeedLocationRef = useRef(null);
   const speedSamplesRef = useRef([]);
 
@@ -204,19 +206,11 @@ export default function TechnicianMapNavigation() {
       const data = await fetchNavigationRoute(techLat, techLng, jobLoc[0], jobLoc[1]);
       if (routeRequestSeqRef.current !== requestSeq) return;
       setRoute(data);
-      setError('');
-      if (ticketId && !navigationStarted) {
-        try {
-          await startJobNavigation(ticketId);
-          setNavigationStarted(true);
-        } catch (navigationError) {
-          setError(navigationError.message || 'Unable to start navigation for this job.');
-        }
-      }
+      setRouteError('');
     } catch (routeError) {
       if (routeRequestSeqRef.current !== requestSeq) return;
       setRoute(EMPTY_ROUTE);
-      setError(routeError.message || 'Unable to calculate the route for this ticket.');
+      setRouteError(`${routeError.message || 'Unable to calculate the route for this ticket.'} You can still travel to the site and mark arrival.`);
     } finally {
       if (routeRequestSeqRef.current === requestSeq) {
         setRouteLoading(false);
@@ -225,6 +219,11 @@ export default function TechnicianMapNavigation() {
   };
 
   useEffect(() => {
+    let active = true;
+    routeRequestSeqRef.current += 1;
+    lastRouteRequestRef.current = { at: 0, lat: null, lng: null };
+    setRouteError('');
+    setRouteLoading(false);
     if (!ticketId) {
       setJob(null);
       setJobLoading(false);
@@ -247,19 +246,27 @@ export default function TechnicianMapNavigation() {
 
       try {
         const jobData = await fetchTechnicianJob(ticketId);
+        if (!active) return;
         setJob(jobData);
         const statusLower = String(jobData.status || '').toLowerCase().replace(/\s+/g, '_');
         setArrived(['arrived_on_site', 'in_progress', 'completed'].includes(statusLower));
+        // Reopening the page mid-trip must not ask the technician to start navigation again.
+        setNavigationStarted(statusLower === 'navigating');
         setError('');
       } catch (loadError) {
+        if (!active) return;
         setJob(null);
         setError(loadError.message || 'Unable to load job details.');
       } finally {
-        setJobLoading(false);
+        if (active) setJobLoading(false);
       }
     };
 
     loadJob();
+    return () => {
+      active = false;
+      routeRequestSeqRef.current += 1;
+    };
   }, [ticketId]);
 
   useEffect(() => {
@@ -284,6 +291,19 @@ export default function TechnicianMapNavigation() {
   const stopLocationSharing = () => {
     stopWatching();
   };
+
+  // Starting navigation is a status change, not a routing result: begin as soon as GPS is shared so
+  // a slow or failed directions lookup can never block travel or arrival.
+  useEffect(() => {
+    if (!ticketId || !job || !gpsLocation || arrived || navigationStarted || navigationStartingRef.current) {
+      return;
+    }
+    navigationStartingRef.current = true;
+    startJobNavigation(ticketId)
+      .then(() => setNavigationStarted(true))
+      .catch((navigationError) => setError(navigationError.message || 'Unable to start navigation for this job.'))
+      .finally(() => { navigationStartingRef.current = false; });
+  }, [ticketId, job, gpsLocation, arrived, navigationStarted]);
 
   useEffect(() => {
     if (!jobLoc || arrived || !gpsLocation) {
@@ -494,6 +514,9 @@ export default function TechnicianMapNavigation() {
         )}
         {error && !loading && (
           <p className="mt-2 text-sm text-red-600">{error}</p>
+        )}
+        {routeError && !loading && (
+          <p role="status" className="mt-2 text-sm text-amber-700">{routeError}</p>
         )}
         {currentStep && (
           <div className="mt-3 rounded-lg border-l-4 border-blue-500 bg-blue-50 p-3">

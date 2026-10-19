@@ -279,7 +279,7 @@ export default function ClientRequestDetail() {
               <h1 className="text-2xl font-bold text-slate-900">
                 Service Request {formatRequestId(request.request_id || request.id)}
               </h1>
-              <StatusBadge status={request.status} size="lg" />
+              <StatusBadge status={request.rejected ? 'rejected' : request.status} size="lg" />
               <span className="rounded-full bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">
                 {request.request_source_label}
               </span>
@@ -302,7 +302,7 @@ export default function ClientRequestDetail() {
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Status</p>
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={request.status} size="lg" />
+                <StatusBadge status={request.rejected ? 'rejected' : request.status} size="lg" />
                 <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${
                   request.priority?.toLowerCase() === 'urgent'
                     ? 'bg-red-100 text-red-700'
@@ -320,6 +320,11 @@ export default function ClientRequestDetail() {
                   <span className="font-medium text-slate-500">Stage:</span>
                   <StatusBadge status={request.operational_status} size="sm" />
                 </div>
+              )}
+              {request.rejected && (
+                <p className="mt-3 text-sm text-rose-700">
+                  Not accepted by our office{request.closure_reason ? `: ${request.closure_reason}` : '.'}
+                </p>
               )}
             </div>
             <div>

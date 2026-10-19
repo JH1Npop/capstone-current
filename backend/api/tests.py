@@ -1,6 +1,10 @@
 from datetime import timedelta
 
 from django.utils import timezone
+from django.test import override_settings
+from django.core.files.storage import default_storage
+from unittest.mock import patch
+from services.tests.proof_fixtures import completion_photo
 from rest_framework.test import APITestCase
 
 from inventory.models import InventoryCategory, InventoryItem, InventoryReservation, InventoryTransaction
@@ -477,7 +481,122 @@ class DataPersistenceSmokeTests(APITestCase):
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'On Hold')
         self.assertTrue(ticket.status_history.filter(status='On Hold', notes__icontains='unlock the roof').exists())
-        self.assertTrue(ticket.request.client.notifications.filter(message__icontains='paused for now').exists())
+        # Titled and linked so the badge and click route by title, never by the free-text reason.
+        client_alert = ticket.request.client.notifications.get(message__icontains='paused for now')
+        self.assertEqual((client_alert.title, client_alert.ticket_id), (f'Ticket #{ticket.id} Paused', ticket.id))
+        admin_alert = self.superadmin.notifications.get(message__icontains='unlock the roof')
+        self.assertEqual((admin_alert.title, admin_alert.ticket_id), (f'Ticket #{ticket.id} On Hold', ticket.id))
+
+    def test_finish_job_accepts_phone_sized_photo_file_and_refuses_base64(self):
+        import os as _os
+        import struct
+        import zlib
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        def png_chunk(kind, body):
+            return struct.pack('>I', len(body)) + kind + body + struct.pack('>I', zlib.crc32(kind + body))
+
+        _, ticket = self._equipment_hold_fixture()
+        InspectionChecklist.objects.create(ticket=ticket, is_completed=True)
+        self.client.force_authenticate(user=self.technician)
+
+        refused = self.client.post(f'/api/technician/jobs/{ticket.id}/status/', {
+            'status': 'completed', 'completion_proof_images': ['data:image/jpeg;base64,AAAA'],
+        }, format='json')
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn('image files', refused.data['error'])
+
+        # Random pixels keep the PNG above 3 MB, beyond the 2.5 MB body limit that broke base64 photos.
+        width = height = 1100
+        rows = b''.join(b'\x00' + _os.urandom(width * 3) for _ in range(height))
+        png = (
+            b'\x89PNG\r\n\x1a\n'
+            + png_chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0))
+            + png_chunk(b'IDAT', zlib.compress(rows))
+            + png_chunk(b'IEND', b'')
+        )
+        self.assertGreater(len(png), 3 * 1024 * 1024)
+        photo = SimpleUploadedFile('finished.png', png, content_type='image/png')
+
+        response = self.client.post(f'/api/technician/jobs/{ticket.id}/status/', {
+            'status': 'completed',
+            'completion_notes': 'Installed and tested.',
+            'completion_photo_files': photo,
+            'inventory_usage': '[]',
+        }, format='multipart')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'Completed')
+        self.assertEqual(len(ticket.completion_proof_images), 1)
+        self.assertTrue(ticket.completion_proof_images[0].startswith('http'))
+        self.assertNotIn('base64', ticket.completion_proof_images[0])
+
+    @override_settings(STORAGES={'default': {'BACKEND': 'django.core.files.storage.InMemoryStorage'}})
+    def test_completion_rejects_untrusted_references_on_both_endpoints(self):
+        _, ticket = self._equipment_hold_fixture()
+        InspectionChecklist.objects.create(ticket=ticket, is_completed=True)
+        self.client.force_authenticate(user=self.technician)
+        for endpoint in (f'/api/technician/jobs/{ticket.id}/status/',
+                         f'/api/services/service-tickets/{ticket.id}/complete_work/'):
+            for reference in ('https://example.com/not-a-photo', '/media/checklists/other-ticket.png',
+                              {'url': 'https://example.com/fake.png'}, True):
+                with self.subTest(endpoint=endpoint, reference=reference):
+                    response = self.client.post(endpoint, {
+                        'status': 'completed', 'completion_proof_images': [reference],
+                    }, format='json')
+                    self.assertEqual(response.status_code, 400, response.data)
+                    ticket.refresh_from_db()
+                    self.assertEqual(ticket.status, 'In Progress')
+                    self.assertFalse(ticket.completion_proof_images)
+        self.assertEqual(default_storage.listdir(''), ([], []))
+
+    @override_settings(STORAGES={'default': {'BACKEND': 'django.core.files.storage.InMemoryStorage'}})
+    def test_failed_completion_cleans_uploads_and_rolls_back_both_endpoints(self):
+        _, ticket = self._equipment_hold_fixture()
+        InspectionChecklist.objects.create(ticket=ticket, is_completed=True)
+        self.client.force_authenticate(user=self.technician)
+        directory = f'checklists/ticket-{ticket.id}'
+        for endpoint in (f'/api/technician/jobs/{ticket.id}/status/',
+                         f'/api/services/service-tickets/{ticket.id}/complete_work/'):
+            with self.subTest(endpoint=endpoint):
+                response = self.client.post(endpoint, {
+                    'status': 'completed', 'completion_photo_files': completion_photo(),
+                    'inventory_usage': '[{"reservation_id": 999999, "quantity_used": 1}]',
+                }, format='multipart')
+                self.assertEqual(response.status_code, 400, response.data)
+                ticket.refresh_from_db()
+                self.assertEqual(ticket.status, 'In Progress')
+                self.assertFalse(ticket.completion_proof_images)
+                self.assertFalse(ticket.status_history.filter(status='Completed').exists())
+                self.assertEqual(default_storage.listdir(directory)[1], [])
+
+    @override_settings(STORAGES={'default': {'BACKEND': 'django.core.files.storage.InMemoryStorage'}})
+    def test_storage_failure_cleans_previously_saved_completion_files(self):
+        _, ticket = self._equipment_hold_fixture()
+        InspectionChecklist.objects.create(ticket=ticket, is_completed=True)
+        self.client.force_authenticate(user=self.technician)
+        real_save = default_storage.save
+        saved_names = []
+
+        def fail_second_save(*args, **kwargs):
+            if saved_names:
+                raise OSError('Simulated storage failure')
+            name = real_save(*args, **kwargs)
+            saved_names.append(name)
+            return name
+
+        with patch.object(default_storage, 'save', side_effect=fail_second_save):
+            with self.assertRaises(OSError):
+                self.client.post(f'/api/technician/jobs/{ticket.id}/status/', {
+                    'status': 'completed',
+                    'completion_photo_files': [completion_photo(), completion_photo()],
+                }, format='multipart')
+        self.assertEqual(len(saved_names), 1)
+        self.assertFalse(default_storage.exists(saved_names[0]))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'In Progress')
 
     def test_technician_can_request_multiple_equipment_items_before_work_starts(self):
         category = InventoryCategory.objects.create(name='Survey Equipment')

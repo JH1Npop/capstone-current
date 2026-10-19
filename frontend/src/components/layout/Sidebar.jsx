@@ -34,6 +34,7 @@ import {
 } from 'react-icons/fi';
 import { fetchDashboardStats } from '../../api/api';
 import ConfirmationDialog from '../shared/ConfirmationDialog';
+import { getNotificationSection } from '../../utils/notificationNavigation';
 import {
   ADMIN_JOB_HISTORY_CAPABILITIES,
   COMMUNICATIONS_STAFF_VIEW_CAPABILITIES,
@@ -233,57 +234,8 @@ let cachedAfterSalesStats = null;
 let cachedAfterSalesStatsAt = 0;
 const AFTER_SALES_STATS_TTL_MS = 60000;
 
-const normalizeText = (value) => String(value || '').toLowerCase();
-
-const notificationText = (notification) => normalizeText([
-  notification?.title,
-  notification?.message,
-  notification?.type
-].filter(Boolean).join(' '));
-
-const routeForUnreadNotification = (notification, role) => {
-  const text = notificationText(notification);
-
-  if (role === 'client') {
-    if (text.includes('completed')) return '/client/service-history';
-    if (text.includes('support')) return '/client/support';
-    return '/client/requests';
-  }
-
-  if (role === 'technician') {
-    if (text.includes('message')) return '/technician/messages';
-    if (text.includes('rescheduled') || text.includes('schedule')) return '/technician/schedule';
-    return '/technician/my-jobs';
-  }
-
-  if (role === 'admin' || role === 'superadmin') {
-    if (text.includes('message')) return '/admin/messages';
-    if (text.includes('support')) return '/admin/client-support';
-    if (text.includes('completed') || text.includes('job completed')) return '/admin/job-history';
-    if (
-      text.includes('dispatch') ||
-      text.includes('assignment') ||
-      text.includes('assign technician') ||
-      text.includes('ready for service') ||
-      text.includes('ready for assignment')
-    ) {
-      return '/admin/dispatch-board';
-    }
-    if (
-      text.includes('pending review') ||
-      text.includes('new service request') ||
-      text.includes('reschedule') ||
-      text.includes('equipment') ||
-      text.includes('awaiting materials') ||
-      text.includes('status updated') ||
-      text.includes('in progress')
-    ) {
-      return '/admin/service-tickets';
-    }
-  }
-
-  return null;
-};
+// Badge sections come from the shared notification routing contract so badges and clicks agree.
+const routeForUnreadNotification = getNotificationSection;
 
 const notificationPathForRole = (role) => {
   if (role === 'client') return '/client/notifications';

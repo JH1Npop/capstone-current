@@ -257,6 +257,13 @@ class SolarEstimateSerializer(serializers.ModelSerializer):
     estimate_code = serializers.SerializerMethodField()
     client_name = serializers.SerializerMethodField()
     service_request_status = serializers.CharField(source='service_request.status', read_only=True)
+    # Savings-model inputs kept in result_snapshot (no extra columns); read back from there.
+    daytime_usage_percent = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=0, max_value=100, required=False, allow_null=True, write_only=True
+    )
+    export_credit_rate = serializers.DecimalField(
+        max_digits=8, decimal_places=2, min_value=0, max_value=1000, required=False, allow_null=True, write_only=True
+    )
 
     class Meta:
         model = SolarEstimate
@@ -265,6 +272,7 @@ class SolarEstimateSerializer(serializers.ModelSerializer):
             'calculation_mode', 'monthly_consumption', 'appliances', 'peak_sun_hours',
             'system_loss_percent', 'panel_wattage', 'electricity_rate',
             'desired_offset_percent', 'available_roof_area', 'selected_promotion',
+            'daytime_usage_percent', 'export_credit_rate',
             'result_snapshot', 'calculation_version', 'status', 'submitted_at',
             'converted_at', 'created_at', 'updated_at',
         ]
@@ -302,6 +310,11 @@ class SolarEstimateSerializer(serializers.ModelSerializer):
                 'desired_offset_percent', 'available_roof_area',
             ]
         }
+        previous = getattr(current, 'result_snapshot', None) or {}
+        calculation_inputs['daytime_usage_percent'] = attrs.pop(
+            'daytime_usage_percent', previous.get('daytimeUsagePercent')
+        )
+        calculation_inputs['export_credit_rate'] = attrs.pop('export_credit_rate', previous.get('exportCreditRate'))
         try:
             attrs['result_snapshot'] = calculate_solar_estimate(calculation_inputs)
         except SolarCalculationError as exc:
@@ -323,7 +336,7 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
     client_email = serializers.SerializerMethodField()
     client_address = serializers.SerializerMethodField()
     service_type_name = serializers.CharField(source='service_type.name', read_only=True)
-    service_requires_site_inspection = serializers.BooleanField(source='service_type.requires_site_inspection', read_only=True)
+    service_requires_site_inspection = serializers.BooleanField(source='requires_site_inspection', read_only=True)
     service_summary = serializers.SerializerMethodField()
     request_source_label = serializers.CharField(source='get_request_source_display', read_only=True)
     service_items = serializers.SerializerMethodField()
@@ -335,6 +348,7 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
         allow_empty=False,
     )
     sla = serializers.SerializerMethodField()
+    closure = serializers.SerializerMethodField()
     service = serializers.CharField(write_only=True, required=False, allow_blank=True)
     notes = serializers.CharField(write_only=True, required=False, allow_blank=True)
     lat = serializers.CharField(write_only=True, required=False, allow_blank=False)
@@ -617,6 +631,31 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
     def get_service_items(self, obj):
         return self._get_service_item_data(obj)
 
+    def get_closure(self, obj):
+        """For a cancelled request: whether the office rejected it, the office cancelled it, or the
+        client withdrew it, with the recorded reason. Read from the status change in the activity log."""
+        if obj.status != 'Cancelled':
+            return None
+        from users.models import ActivityLog
+
+        entries = ActivityLog.objects.filter(
+            target_app_label='services', target_model='servicerequest', target_id=obj.id,
+        ).order_by('-id')[:20]
+        for entry in entries:
+            metadata = entry.metadata or {}
+            if metadata.get('field_name') != 'status' or str(metadata.get('new_value')) != 'Cancelled':
+                continue
+            kind = metadata.get('closure')
+            if kind not in {'rejected', 'cancelled_by_office', 'cancelled_by_client'}:
+                # Older entries predate the explicit marker; infer from who made the change.
+                by_office = entry.actor_role not in {'', 'client'}
+                if by_office and str(metadata.get('old_value')) == 'Pending':
+                    kind = 'rejected'
+                else:
+                    kind = 'cancelled_by_office' if by_office else 'cancelled_by_client'
+            return {'kind': kind, 'reason': str(metadata.get('reason') or '')}
+        return {'kind': 'cancelled', 'reason': ''}
+
     def get_service_summary(self, obj):
         names = [
             item['service_type_name']
@@ -642,7 +681,7 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
             'description', 'priority', 'status', 'preferred_date',
             'preferred_time_slot', 'request_source', 'request_source_label',
             'scheduling_notes', 'request_date', 'updated_at',
-            'auto_ticket_created', 'location', 'sla', 'service', 'notes', 'lat', 'lng',
+            'auto_ticket_created', 'location', 'sla', 'closure', 'service', 'notes', 'lat', 'lng',
             'locationDesc', 'location_address', 'location_city',
             'location_province', 'latitude', 'longitude'
         ]

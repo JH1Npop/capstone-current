@@ -181,7 +181,9 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
         create_notification(
             checklist.ticket.request.client,
             f"Inspection completed for ticket #{checklist.ticket.id}",
-            'info'
+            'info',
+            title='Inspection Completed',
+            ticket=checklist.ticket,
         )
         technician_name = _display_name(request.user) or 'Technician'
         service_name = (
@@ -197,6 +199,8 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
             ),
             notification_type='success',
             include_user=checklist.ticket.assigned_admin if checklist.ticket.assigned_admin_id else None,
+            title=f'Inspection Report Submitted for Ticket #{checklist.ticket.id}',
+            ticket=checklist.ticket,
         )
 
         return Response({'status': 'Inspection completed'})

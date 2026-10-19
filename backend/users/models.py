@@ -9,23 +9,27 @@ from afn_service_management.fields import StructuredTextField
 
 
 def default_landing_page_content():
+    # Mirrors DEFAULT_LANDING_CONTENT in frontend/src/utils/landingSettings.js (the public page merges
+    # missing keys from there, including the default FAQ list).
     return {
-        'eyebrow': 'Your Partner In',
-        'headline': 'Solar, CCTV & Aircon',
-        'highlight': 'Smart Solutions.',
-        'description': 'We provide reliable, high-quality, and energy-efficient solutions for your home and business.',
-        'primaryCtaLabel': 'Get Started',
-        'secondaryCtaLabel': 'Our Services',
-        'solarTitle': 'Solar Solutions',
-        'solarDescription': 'High-quality solar systems for homes and businesses.',
-        'cctvTitle': 'CCTV Systems',
-        'cctvDescription': 'Advanced surveillance solutions for security.',
-        'airconTitle': 'Aircon Solutions',
-        'airconDescription': 'Energy-efficient cooling systems for comfort.',
-        'whyTitle': 'Why Choose Us',
-        'whySubtitle': 'Quality You Can Trust, Service You Can Rely On',
-        'footerTitle': 'Ready to Upgrade Your Home or Business?',
-        'footerDescription': 'Get a free consultation and discover the best solution.',
+        'eyebrow': 'Based in Pagbilao, Quezon',
+        'headline': 'Solar, aircon, CCTV, and fire safety',
+        'highlight': 'done right, from inspection to turnover.',
+        'description': (
+            'AFN Solar Power Engineering Services installs and services solar, air-conditioning, refrigeration, '
+            'CCTV, and fire detection systems for homes and businesses in Quezon Province.'
+        ),
+        'primaryCtaLabel': 'Get a free solar estimate',
+        'secondaryCtaLabel': 'Book a site inspection',
+        'contactPhone': '0917 146 0224',
+        'contactPhoneAlt': '0938 241 1075',
+        'contactLandline': '(042) 911 1107',
+        'contactEmail': 'afnsunenergyserv@gmail.com',
+        'contactAddress': 'Brgy. Bigo, Pagbilao, Quezon 4302',
+        'facebookUrl': 'https://www.facebook.com/people/AFN-Solar-Power-Engineering-Services/100088800159579/',
+        'mapUrl': 'https://maps.app.goo.gl/5kZAKifwoJzRFkEg8',
+        'mapLatitude': '13.9908957',
+        'mapLongitude': '121.6553907',
     }
 
 
@@ -34,11 +38,15 @@ def default_solar_calculator_settings():
         'enabled': True,
         'title': 'Estimate Your Solar System',
         'description': 'Get a preliminary panel and savings estimate based on your monthly electricity use.',
-        'defaultPeakSunHours': 5,
+        # About 3.6 kWh per kW of panels per day: a conservative Quezon figure (DOE cites
+        # roughly 3.8 for Metro Manila); check Global Solar Atlas for the exact site.
+        'defaultPeakSunHours': 4.5,
         'defaultPerformanceRatio': 0.80,
         'defaultPanelWattage': 550,
         'defaultElectricityRate': 12,
         'defaultDesiredOffset': 100,
+        'defaultDaytimeUsage': 40,
+        'defaultExportCredit': 5.5,
     }
 
 

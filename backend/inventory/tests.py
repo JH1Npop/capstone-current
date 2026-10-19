@@ -1,4 +1,6 @@
 from decimal import Decimal
+import json
+from services.tests.proof_fixtures import completion_photo
 
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -708,11 +710,9 @@ class AutoInventoryWorkflowTests(APITestCase):
         complete_response = self.client.post(
             f'/api/services/service-tickets/{self.ticket.id}/complete_work/',
             {
-                'completion_proof_images': [
-                    'data:image/jpeg;base64,inventory-completion-proof',
-                ],
+                'completion_photo_files': completion_photo(),
             },
-            format='json',
+            format='multipart',
         )
 
         self.assertEqual(complete_response.status_code, status.HTTP_200_OK)
@@ -753,14 +753,12 @@ class AutoInventoryWorkflowTests(APITestCase):
         complete_response = self.client.post(
             f'/api/services/service-tickets/{self.ticket.id}/complete_work/',
             {
-                'completion_proof_images': [
-                    'data:image/jpeg;base64,partial-inventory-completion-proof',
-                ],
-                'inventory_usage': [
+                'completion_photo_files': completion_photo(),
+                'inventory_usage': json.dumps([
                     {'reservation_id': reservation.id, 'quantity_used': 1},
-                ],
+                ]),
             },
-            format='json',
+            format='multipart',
         )
 
         self.assertEqual(complete_response.status_code, status.HTTP_200_OK)
@@ -799,12 +797,12 @@ class AutoInventoryWorkflowTests(APITestCase):
         response = self.client.post(
             f'/api/services/service-tickets/{self.ticket.id}/complete_work/',
             {
-                'completion_proof_images': ['data:image/jpeg;base64,rejected-usage-proof'],
-                'inventory_usage': [
+                'completion_photo_files': completion_photo(),
+                'inventory_usage': json.dumps([
                     {'reservation_id': reservation.id, 'quantity_used': reservation.quantity + 1},
-                ],
+                ]),
             },
-            format='json',
+            format='multipart',
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

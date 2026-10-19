@@ -238,15 +238,23 @@ export const fetchTechnicianHistory = async (techName, filters = {}) => {
 
 export const updateJobStatus = async (jobId, status, notes = '', images = [], inventoryUsage = null) => {
   try {
-    const payload = { status };
-
     if (status === 'completed') {
-      payload.completion_notes = notes;
-      payload.completion_proof_images = images;
-      if (inventoryUsage) {
-        payload.inventory_usage = inventoryUsage;
-      }
-    } else if (status === 'on_hold') {
+      // Completion photos travel as real files so the server validates and stores them, instead of
+      // embedding megabytes of base64 text that exceed the request limit for normal phone photos.
+      const form = new FormData();
+      form.append('status', status);
+      form.append('completion_notes', notes || '');
+      images.forEach((image) => {
+        if (image instanceof File) form.append('completion_photo_files', image);
+        else if (image) form.append('completion_proof_images', String(image));
+      });
+      if (inventoryUsage) form.append('inventory_usage', JSON.stringify(inventoryUsage));
+      const { data } = await api.post(`/technician/jobs/${jobId}/status/`, form);
+      return data;
+    }
+
+    const payload = { status };
+    if (status === 'on_hold') {
       payload.reason = notes;
     }
 

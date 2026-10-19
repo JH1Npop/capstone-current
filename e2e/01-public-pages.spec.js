@@ -10,6 +10,37 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Public Pages', () => {
 
+  test('1.1d - Published zero savings settings and empty directions are respected', async ({ page }) => {
+    await page.route('**/api/public/landing-page/', (route) => route.fulfill({ json: {
+      solarCalculatorSettings: { defaultDaytimeUsage: 0, defaultExportCredit: 0 },
+      landingPageContent: { contactAddress: '', mapLatitude: '', mapLongitude: '', mapUrl: '' },
+    } }));
+    await page.goto('/');
+    const savings = page.locator('dl > div').filter({ has: page.getByText('Save / mo', { exact: true }) });
+    await expect(savings.locator('dd')).toHaveText('₱0–0');
+    await expect(page.getByRole('link', { name: 'Get directions' })).toHaveCount(0);
+    await expect(page.getByText('Map location coming soon.')).toBeAttached();
+  });
+
+  test('1.1e - Contact map recenters when published coordinates arrive', async ({ page }) => {
+    let releaseSettings;
+    const settingsReady = new Promise((resolve) => { releaseSettings = resolve; });
+    await page.route('**/api/public/landing-page/', async (route) => {
+      await settingsReady;
+      await route.fulfill({ json: { landingPageContent: {
+        mapLatitude: '10.3157', mapLongitude: '123.8854', contactAddress: '', mapUrl: '',
+      } } });
+    });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const map = page.locator('.leaflet-container');
+    await expect(map.locator('.leaflet-tooltip')).toBeAttached();
+    releaseSettings();
+    await expect(page.getByRole('link', { name: 'Get directions' })).toHaveAttribute('href', /10\.3157%2C123\.8854/);
+    await map.scrollIntoViewIfNeeded();
+    // A marker still centered at the old location would be far outside this viewport.
+    await expect(map.locator('.leaflet-tooltip')).toBeInViewport();
+  });
+
   test('1.1 — Landing page loads with hero and navigation', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -54,19 +85,39 @@ test.describe('Public Pages', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    const primaryAction = page.getByRole('link', { name: /get started/i });
+    const primaryAction = page.getByRole('link', { name: /get a free solar estimate/i });
     await expect(primaryAction).toBeVisible();
-    await expect(primaryAction).toHaveCSS('background-color', 'rgb(37, 99, 235)');
+    await expect(primaryAction).toHaveCSS('background-color', 'rgb(13, 99, 199)');
 
-    await page.getByRole('link', { name: /our services/i }).click();
-    await expect(page).toHaveURL(/#services$/);
-    await expect(page.getByRole('heading', { name: /solutions for energy, security, and comfort/i })).toBeInViewport();
+    // The hero quick check uses the published defaults (PHP 12/kWh) and prefills the full calculator.
+    await page.getByLabel('Your average monthly electric bill').fill('6000');
+    await page.getByRole('button', { name: /see my full estimate/i }).click();
+    await expect(page.getByRole('heading', { name: /estimate your solar system/i })).toBeInViewport();
+    await expect(page.getByLabel('Monthly consumption')).toHaveValue('500');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(page.getByRole('link', { name: /book a site inspection/i }).first()).toHaveAttribute('href', '/register');
+    // Real contact details are tap-to-call links, never a 24/7 claim.
+    await expect(page.locator('a[href="tel:09171460224"]').first()).toBeVisible();
+    await expect(page.getByText(/24\/7/)).toHaveCount(0);
 
-    await page.getByRole('link', { name: 'About Us', exact: true }).click();
+    await primaryAction.click();
+    await expect(page).toHaveURL(/#solar-calculator$/);
+    await expect(page.getByRole('heading', { name: /estimate your solar system/i })).toBeInViewport();
+
+    await page.getByRole('link', { name: 'How It Works', exact: true }).first().click();
+    await expect(page.getByRole('heading', { name: /from request to turnover/i })).toBeInViewport();
+
+    await page.getByRole('link', { name: 'Contact', exact: true }).first().click();
+    await expect(page).toHaveURL(/#contact$/);
+    await expect(page.getByRole('heading', { name: /visit, call, or message us/i })).toBeInViewport();
+    await expect(page.locator('.leaflet-container')).toBeVisible();
+    await expect(page.getByRole('link', { name: /get directions/i })).toHaveAttribute('href', /maps\.app\.goo\.gl|google\.com\/maps/);
+
+    await page.getByRole('link', { name: 'About', exact: true }).first().click();
     await expect(page).toHaveURL(/\/about-us$/);
-    await page.getByRole('link', { name: 'Services', exact: true }).click();
+    await page.getByRole('link', { name: 'Services', exact: true }).first().click();
     await expect(page).toHaveURL(/\/#services$/);
-    await expect(page.getByRole('heading', { name: /solutions for energy, security, and comfort/i })).toBeInViewport();
+    await expect(page.getByRole('heading', { name: /seven services, one team/i })).toBeInViewport();
   });
 
   test('1.1c - Mobile landing navigation exposes every public destination', async ({ page }) => {
@@ -75,9 +126,9 @@ test.describe('Public Pages', () => {
     await page.waitForLoadState('networkidle');
 
     await page.getByRole('button', { name: /open navigation menu/i }).click();
-    await expect(page.getByRole('link', { name: 'Solar Calculator', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Free Estimate', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: /create an account/i })).toBeVisible();
-    await page.getByRole('link', { name: 'Solar Calculator', exact: true }).click();
+    await page.getByRole('link', { name: 'Free Estimate', exact: true }).click();
     await expect(page).toHaveURL(/#solar-calculator$/);
     await expect(page.getByRole('heading', { name: /estimate your solar system/i })).toBeInViewport();
 

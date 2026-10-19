@@ -28,6 +28,69 @@ class SolarCalculatorTests(APITestCase):
         self.assertEqual(result['installedCapacity'], 3.85)
         self.assertEqual(result['monthlyGeneration'], 462.0)
 
+    def test_savings_value_daytime_use_at_retail_and_exports_at_credit(self):
+        result = calculate_solar_estimate({
+            'calculation_mode': 'monthly',
+            'monthly_consumption': 450,
+            'peak_sun_hours': 5,
+            'system_loss_percent': 20,
+            'panel_wattage': 550,
+            'electricity_rate': 12,
+            'desired_offset_percent': 100,
+            'available_roof_area': None,
+            'daytime_usage_percent': 40,
+            'export_credit_rate': 5.5,
+        })
+
+        # 462 kWh generated; 180 kWh (40% of 450) used in the daytime at PHP 12.
+        self.assertEqual(result['selfConsumedEnergy'], 180.0)
+        self.assertEqual(result['exportedEnergy'], 282.0)
+        self.assertEqual(result['monthlySavingsWithoutNetMetering'], 2160.0)
+        # Only the 270 kWh still bought from the grid can be offset by export credits.
+        self.assertEqual(result['monthlySavings'], 3645.0)
+        self.assertLess(result['monthlySavings'], 450 * 12)
+
+    def test_savings_defaults_apply_and_export_credit_is_capped_at_retail_rate(self):
+        base = {
+            'calculation_mode': 'monthly', 'monthly_consumption': 450, 'peak_sun_hours': 5,
+            'system_loss_percent': 20, 'panel_wattage': 550, 'electricity_rate': 4,
+            'desired_offset_percent': 100, 'available_roof_area': None,
+        }
+        defaults = calculate_solar_estimate(base)
+        self.assertEqual(defaults['daytimeUsagePercent'], 40.0)
+        self.assertEqual(defaults['exportCreditRate'], 4.0)
+
+        capped = calculate_solar_estimate({**base, 'export_credit_rate': 9})
+        self.assertEqual(capped['exportCreditRate'], 4.0)
+        self.assertEqual(capped['monthlySavings'], 450 * 4)
+
+    def test_appliance_duty_cycle_reduces_energy_and_sets_daytime_share(self):
+        result = calculate_solar_estimate({
+            'calculation_mode': 'appliances',
+            'appliances': [
+                {'name': 'Refrigerator', 'quantity': 1, 'wattage': 150, 'dayHours': 12, 'nightHours': 12,
+                 'surgeFactor': 3, 'dutyCycle': 35},
+                {'name': 'Electric fan', 'quantity': 1, 'wattage': 100, 'nightHours': 10},
+            ],
+            'peak_sun_hours': 4.5,
+            'system_loss_percent': 20,
+            'panel_wattage': 550,
+            'electricity_rate': 12,
+            'desired_offset_percent': 100,
+            'available_roof_area': None,
+            'daytime_usage_percent': 95,
+        })
+
+        # Refrigerator: 150 W x 12 h x 35% = 0.63 kWh each half-day; fan runs 1 kWh at night.
+        self.assertEqual(result['dayEnergy'], 0.63)
+        self.assertEqual(result['nightEnergy'], 1.63)
+        # The appliance schedule decides the daytime share; a posted percentage is ignored.
+        self.assertEqual(result['daytimeUsagePercent'], 27.88)
+        self.assertEqual(result['normalizedAppliances'][0]['dutyCycle'], 35.0)
+        self.assertEqual(result['normalizedAppliances'][1]['dutyCycle'], 100.0)
+        # Inverter sizing still uses full connected watts plus the compressor surge.
+        self.assertEqual(result['inverterCapacity'], 0.66)
+
     def test_appliance_hours_cannot_exceed_one_day(self):
         with self.assertRaises(SolarCalculationError) as context:
             calculate_solar_estimate({
@@ -82,8 +145,29 @@ class SolarEstimateApiTests(APITestCase):
 
         self.assertEqual(estimate.client, self.client_user)
         self.assertEqual(estimate.result_snapshot['panelCount'], 7)
-        self.assertEqual(estimate.calculation_version, '1.0')
+        self.assertEqual(estimate.calculation_version, '1.1')
         self.assertEqual(estimate.status, 'draft')
+
+    def test_estimate_keeps_savings_inputs_in_snapshot_across_updates(self):
+        self.client.force_authenticate(self.client_user)
+        response = self.client.post(
+            self.list_url,
+            {**self.payload, 'daytime_usage_percent': '70.00', 'export_credit_rate': '0.00'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertNotIn('daytime_usage_percent', response.data)
+        snapshot = response.data['result_snapshot']
+        self.assertEqual(snapshot['daytimeUsagePercent'], 70.0)
+        self.assertEqual(snapshot['monthlySavings'], snapshot['monthlySavingsWithoutNetMetering'])
+
+        estimate = SolarEstimate.objects.get(pk=response.data['id'])
+        detail_url = reverse('solar-estimate-detail', args=[estimate.pk])
+        update = self.client.patch(detail_url, {'monthly_consumption': '600.00'}, format='json')
+        self.assertEqual(update.status_code, status.HTTP_200_OK, update.data)
+        estimate.refresh_from_db()
+        self.assertEqual(estimate.result_snapshot['daytimeUsagePercent'], 70.0)
+        self.assertEqual(estimate.result_snapshot['exportCreditRate'], 0.0)
 
     def test_appliance_mode_ignores_client_derived_monthly_total(self):
         self.client.force_authenticate(self.client_user)

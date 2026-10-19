@@ -682,6 +682,24 @@ class MessageApiTests(APITestCase):
         self.assertEqual(notifications.count(), 1)
         self.assertFalse(Notification.objects.filter(user=self.admin_user, title__startswith='New message from').exists())
 
+    def test_message_alerts_honour_global_switch_and_inactive_accounts(self):
+        from users.models import AdminSettings
+
+        support_case = self.create_client_support_case()
+        AdminSettings.objects.create(enable_notifications=False)
+        self.client.post('/api/messages/', {'room_type': 'direct', 'receiver': self.technician_user.id, 'text': 'Muted?'}, format='json')
+        self.client.post('/api/messages/', {'room_type': 'group', 'group_key': support_case.group_key, 'text': 'Muted reply'}, format='json')
+        self.client.patch(f'/api/messages/support-cases/{support_case.id}/', {'status': 'resolved'}, format='json')
+
+        self.assertFalse(Notification.objects.filter(user=self.technician_user).exists())
+        self.assertFalse(Notification.objects.filter(user=self.client_user).exists())
+
+        AdminSettings.objects.update(enable_notifications=True)
+        self.technician_user.status = 'inactive'
+        self.technician_user.save(update_fields=['status'])
+        self.client.post('/api/messages/', {'room_type': 'direct', 'receiver': self.technician_user.id, 'text': 'Anyone?'}, format='json')
+        self.assertFalse(Notification.objects.filter(user=self.technician_user).exists())
+
     def test_direct_message_skips_admin_receiver_without_staff_messages(self):
         support_only_admin = self.configured_admin('message-support-only', COMMUNICATIONS_SUPPORT_VIEW)
 

@@ -581,6 +581,7 @@ class TechnicianJobsView(viewsets.ViewSet):
             'radius_meters': radius_meters,
         })
 
+    @cleanup_failed_completion_uploads
     @transaction.atomic
     def update_status(self, request, pk=None):
         """Update a technician job status using the ticket workflow"""
@@ -648,14 +649,11 @@ class TechnicianJobsView(viewsets.ViewSet):
 
         extra_update_fields = None
         status_notes = f'Technician updated job status to {new_status}'
+        inventory_usage = None
         if new_status == 'Completed':
-            proof_images = request.data.get('completion_proof_images', [])
-            if proof_images is None:
-                proof_images = []
-            elif not isinstance(proof_images, list):
-                proof_images = [proof_images]
-
             try:
+                inventory_usage = parse_inventory_usage(request.data.get('inventory_usage'))
+                proof_images = collect_completion_proof(request, ticket)
                 ensure_ticket_completion_proof(ticket, proof_images)
             except ValueError as exc:
                 return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -673,7 +671,7 @@ class TechnicianJobsView(viewsets.ViewSet):
                 changed_by=request.user,
                 notes=status_notes,
                 extra_update_fields=extra_update_fields,
-                inventory_usage=request.data.get('inventory_usage') if new_status == 'Completed' else None,
+                inventory_usage=inventory_usage,
             )
         except ValueError as exc:
             transaction.set_rollback(True)

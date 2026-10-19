@@ -12,9 +12,11 @@ from django.db.models import Q, Count, Sum, Avg, F
 from django.core.mail import send_mail
 from django.conf import settings
 from datetime import datetime, time, timedelta
+import json
 import math
 import logging
 from pathlib import Path
+from functools import wraps
 from urllib.parse import urlsplit
 import uuid
 from threading import Thread
@@ -78,6 +80,9 @@ __all__ = ['record_arrival_validation_log', 'compute_arrival_validation_result',
     'build_initial_ticket_payload',
     'normalize_proof_media_payload',
     'save_uploaded_proof_media',
+    'collect_completion_proof',
+    'cleanup_failed_completion_uploads',
+    'parse_inventory_usage',
     'score_technician_fit',
     'get_visible_service_requests_queryset',
     'get_visible_service_tickets_queryset',
@@ -317,8 +322,12 @@ def send_notification_email(user, subject, message):
     transaction.on_commit(deliver, robust=True)
 
 
-def create_notification(user, message, notification_type='info'):
-    """Helper to create in-app notifications"""
+def create_notification(user, message, notification_type='info', *, title='', ticket=None):
+    """Helper to create in-app notifications.
+
+    A title and ticket are optional; when given, the notification opens its record and its
+    sidebar badge is routed by the system-written title instead of the free-text message.
+    """
     from notifications.notification_utils import notifications_enabled
     from notifications.models import Notification
 
@@ -328,11 +337,14 @@ def create_notification(user, message, notification_type='info'):
     return Notification.objects.create(
         user=user,
         message=message,
-        type=notification_type
+        type=notification_type,
+        title=title or '',
+        ticket=ticket,
+        request=ticket.request if ticket is not None else None,
     )
 
 
-def _notify_admin_superadmin(*, message, notification_type='info', include_user=None, exclude_user=None):
+def _notify_admin_superadmin(*, message, notification_type='info', include_user=None, exclude_user=None, title='', ticket=None):
     recipients = User.objects.filter(role__in=['admin', 'superadmin'], is_active=True)
     if include_user is not None:
         recipients = recipients | User.objects.filter(pk=include_user.pk)
@@ -340,7 +352,7 @@ def _notify_admin_superadmin(*, message, notification_type='info', include_user=
         recipients = recipients.exclude(pk=exclude_user.pk)
 
     for recipient in recipients.distinct():
-        create_notification(recipient, message, notification_type)
+        create_notification(recipient, message, notification_type, title=title, ticket=ticket)
 
 
 def _notify_ticket_completion_recipients(*, ticket, technician):
@@ -751,7 +763,7 @@ def normalize_proof_media_payload(*, photos=None, videos=None, media=None):
     return normalized_media
 
 
-def save_uploaded_proof_media(*, ticket, uploaded_files, request=None, media_type='photo'):
+def save_uploaded_proof_media(*, ticket, uploaded_files, request=None, media_type='photo', saved_names=None):
     from afn_service_management.upload_validation import validate_image_upload, validate_video_upload
 
     normalized_media = []
@@ -800,6 +812,8 @@ def save_uploaded_proof_media(*, ticket, uploaded_files, request=None, media_typ
             f'{upload_directory}/{uuid.uuid4().hex}-{stem}{safe_extension}',
             uploaded_file,
         )
+        if saved_names is not None:
+            saved_names.append(stored_name)
         file_url = default_storage.url(stored_name)
         if request is not None:
             file_url = request.build_absolute_uri(file_url)
@@ -811,6 +825,61 @@ def save_uploaded_proof_media(*, ticket, uploaded_files, request=None, media_typ
         })
 
     return normalized_media
+
+
+def cleanup_failed_completion_uploads(view):
+    """Wrap the transaction so failed completions also undo their nontransactional file writes."""
+    @wraps(view)
+    def wrapped(self, request, *args, **kwargs):
+        request._completion_upload_names = []
+        succeeded = False
+        try:
+            response = view(self, request, *args, **kwargs)
+            succeeded = response.status_code < 400
+            return response
+        finally:
+            if not succeeded:
+                for name in request._completion_upload_names:
+                    try:
+                        default_storage.delete(name)
+                    except Exception:
+                        logger.exception('Unable to remove failed completion upload %s', name)
+    return wrapped
+
+
+def collect_completion_proof(request, ticket):
+    """New completion evidence must be signature-validated uploads, never caller-supplied URLs."""
+    data = request.data
+    references = data.getlist('completion_proof_images') if hasattr(data, 'getlist') else data.get('completion_proof_images', [])
+    if references is None:
+        references = []
+    elif not isinstance(references, list):
+        references = [references]
+
+    for reference in references:
+        if isinstance(reference, str) and not reference.strip():
+            continue
+        raise ValueError('Upload completion photos as image files. Refresh the app and attach the photo again.')
+
+    files = request.FILES.getlist('completion_photo_files') if hasattr(request.FILES, 'getlist') else []
+    uploaded = save_uploaded_proof_media(
+        ticket=ticket, uploaded_files=files, request=request, media_type='photo',
+        saved_names=request._completion_upload_names,
+    )
+    return [entry['url'] for entry in uploaded]
+
+
+def parse_inventory_usage(value):
+    """Inventory usage arrives as a list in JSON requests and as a JSON string in multipart uploads."""
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+        try:
+            return json.loads(value)
+        except ValueError as exc:
+            raise ValueError('Material usage must be valid JSON.') from exc
+    return value
 
 
 def build_ticket_daily_duration_allocations(ticket, *, limit_minutes=None, scheduled_date=None):
@@ -1254,8 +1323,8 @@ def validate_ticket_transition(ticket, new_status, *, allow_same=False):
 
 def ticket_requires_inspection_visit(ticket):
     """True when the service needs a site inspection that has not happened yet."""
-    service_type = getattr(getattr(ticket, 'request', None), 'service_type', None)
-    if not service_type or not service_type.requires_site_inspection:
+    service_request = getattr(ticket, 'request', None)
+    if not service_request or not service_request.requires_site_inspection:
         return False
     if ticket.ticket_type == 'inspection':
         return False
@@ -1473,11 +1542,15 @@ def hold_ticket_for_technician(ticket, technician, reason, *, notify_client=True
             ticket.request.client,
             f"Work on ticket #{ticket.id} is paused for now. We will let you know when it resumes.",
             'info',
+            title=f'Ticket #{ticket.id} Paused',
+            ticket=ticket,
         )
     _notify_admin_superadmin(
         message=f"{technician_name} put ticket #{ticket.id} on hold: {reason}",
         notification_type='warning',
         include_user=ticket.assigned_admin if ticket.assigned_admin_id else None,
+        title=f'Ticket #{ticket.id} On Hold',
+        ticket=ticket,
     )
     return ticket.status
 

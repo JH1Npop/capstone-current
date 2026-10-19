@@ -11,7 +11,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.e2e.sqlite3',
-        'OPTIONS': {'timeout': 20},
+        # IMMEDIATE takes the write lock when a transaction begins, so concurrent writers wait for the
+        # timeout instead of failing at once with "database is locked" on a read-to-write upgrade.
+        'OPTIONS': {'timeout': 20, 'transaction_mode': 'IMMEDIATE'},
     },
 }
 
@@ -32,3 +34,7 @@ STORAGES = {
     },
 }
 MEDIA_ROOT = Path(tempfile.gettempdir()) / 'afn-service-management-e2e-media'
+
+# Likewise, never call the live routing providers from browser tests: a slow or rate-limited
+# provider would stall navigation, and real API keys must not be spent by automation.
+DISABLE_EXTERNAL_ROUTING = True

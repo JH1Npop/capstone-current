@@ -358,6 +358,9 @@ elif DATABASE_ENGINE == 'sqlite3':
             'NAME': BASE_DIR / os.environ.get('SQLITE_DB_PATH', 'db.sqlite3'),
             'OPTIONS': {
                 'timeout': 20,
+                # Writers queue for the lock at BEGIN instead of failing with "database is locked"
+                # when several portals (client, office, technician) poll and write at once.
+                'transaction_mode': 'IMMEDIATE',
             }
         }
     }

@@ -48,6 +48,9 @@ from services.views.helpers import (
     create_notification,
     ensure_ticket_checklist_completed,
     ensure_ticket_completion_proof,
+    collect_completion_proof,
+    cleanup_failed_completion_uploads,
+    parse_inventory_usage,
     get_eligible_technician_ids_for_service,
     get_technician_service_skill,
     get_technician_ticket_queryset,
@@ -1026,7 +1029,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        requires_inspection = bool(ticket.request.service_type.requires_site_inspection)
+        requires_inspection = ticket.request.requires_site_inspection
         if dispatch_stage == 'inspection' and not requires_inspection:
             return Response(
                 {'error': 'This service does not require a site inspection.'},
@@ -1806,22 +1809,22 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         return Response({'status': resolved_status, 'start_time': ticket.start_time})
 
     @action(detail=True, methods=['post'])
+    @cleanup_failed_completion_uploads
     @transaction.atomic
     def complete_work(self, request, pk=None):
-        """Mark ticket as completed with optional proof images"""
+        """Mark ticket as completed with validated completion photo uploads."""
         ticket = self.get_locked_ticket()
         if not ticket_has_technician_access(ticket, request.user):
             raise PermissionDenied('You can only complete tickets assigned to you or your crew.')
         if ticket.technician_id != request.user.id:
             raise PermissionDenied('Only the lead technician can complete this ticket.')
 
-        proof_images = request.data.get('completion_proof_images', [])
-        if proof_images is None:
-            proof_images = []
-        elif not isinstance(proof_images, list):
-            proof_images = [proof_images]
-
+        # Check the job can close before storing any uploaded evidence.
         try:
+            validate_ticket_transition(ticket, 'Completed')
+            ensure_ticket_checklist_completed(ticket)
+            inventory_usage = parse_inventory_usage(request.data.get('inventory_usage'))
+            proof_images = collect_completion_proof(request, ticket)
             ensure_ticket_completion_proof(ticket, proof_images)
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1833,15 +1836,13 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         status_notes = completion_notes or 'Completed via complete_work.'
 
         try:
-            validate_ticket_transition(ticket, 'Completed')
-            ensure_ticket_checklist_completed(ticket)
             resolved_status = apply_ticket_status_change(
                 ticket,
                 'Completed',
                 changed_by=request.user,
                 notes=status_notes,
                 extra_update_fields=extra_update_fields,
-                inventory_usage=request.data.get('inventory_usage'),
+                inventory_usage=inventory_usage,
             )
         except ValueError as exc:
             # The status save precedes stock issuing; undo it so a rejected request leaves no partial completion.

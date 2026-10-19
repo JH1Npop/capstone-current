@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   fetchTechnicianInventoryItems,
@@ -20,6 +20,18 @@ export function useTechnicianJobs() {
   const [actionMessage, setActionMessage] = useState('');
   const [error, setError] = useState('');
   const [proofImages, setProofImages] = useState([]);
+  const proofPreviews = useRef(new Set());
+  useEffect(() => {
+    const currentPreviews = new Set(proofImages.map((image) => image.preview));
+    for (const preview of proofPreviews.current) {
+      if (!currentPreviews.has(preview)) URL.revokeObjectURL(preview);
+    }
+    proofPreviews.current = currentPreviews;
+  }, [proofImages]);
+  useEffect(() => () => {
+    for (const preview of proofPreviews.current) URL.revokeObjectURL(preview);
+    proofPreviews.current.clear();
+  }, []);
   const [completionNotes, setCompletionNotes] = useState('');
   const [materialUsage, setMaterialUsage] = useState({});
   const [inventoryItems, setInventoryItems] = useState([]);
@@ -102,19 +114,19 @@ export function useTechnicianJobs() {
     setSearchParams(nextSearchParams, { replace: true });
   };
 
+  // Keep the selected files themselves (uploaded on Finish Job) with lightweight local previews.
   const handleImageUpload = (event) => {
-    const files = Array.from(event.target.files || []);
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (readerEvent) => {
-        setProofImages((currentImages) => [...currentImages, readerEvent.target.result]);
-      };
-      reader.readAsDataURL(file);
-    });
+    const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith('image/'));
+    const images = files.map((file) => ({ file, preview: URL.createObjectURL(file) }));
+    setProofImages((currentImages) => [
+      ...currentImages,
+      ...images,
+    ]);
+    event.target.value = '';
   };
 
   const removeImage = (index) => {
-    setProofImages((currentImages) => currentImages.filter((_, imageIndex) => imageIndex !== index));
+    setProofImages((currentImages) => currentImages.filter((image, imageIndex) => imageIndex !== index));
   };
 
   const handleStatusUpdate = async (jobId, newStatus) => {
@@ -199,7 +211,7 @@ export function useTechnicianJobs() {
           quantity_used: Number(materialUsage[String(reservation.id)] || 0)
         }));
 
-      await updateJobStatus(completionJob.id, 'completed', completionNotes, proofImages, inventoryUsage);
+      await updateJobStatus(completionJob.id, 'completed', completionNotes, proofImages.map((image) => image.file), inventoryUsage);
       await loadJobs();
       setCompletionJob(null);
       setProofImages([]);

@@ -199,7 +199,8 @@ export default function TechnicianChecklist() {
   const [photos, setPhotos] = useState([]);
   const [stepPhotos, setStepPhotos] = useState({});
   const [videos, setVideos] = useState([]);
-  const [maintenanceRequired, setMaintenanceRequired] = useState(true);
+  // null until the technician answers; a reminder is a decision, not a default.
+  const [maintenanceRequired, setMaintenanceRequired] = useState(null);
   const [maintenanceProfile, setMaintenanceProfile] = useState('');
   const [maintenanceIntervalDays, setMaintenanceIntervalDays] = useState('');
   const [maintenanceNotes, setMaintenanceNotes] = useState('');
@@ -241,7 +242,9 @@ export default function TechnicianChecklist() {
   const automaticWarrantyDueDate = warrantyProvided ? addDaysToLocalDate(warrantyPeriodDays) : '';
   const isWarrantyFollowUp = followUpRequired && followUpCaseType === 'warranty';
   const selectedFollowUpCase = followUpCaseOptions.find((item) => item.value === followUpCaseType);
-  const maintenancePreview = maintenanceRequired
+  const maintenancePreview = maintenanceRequired === null
+    ? 'Not answered yet'
+    : maintenanceRequired
     ? (resolvedIntervalDays > 0
       ? `${selectedMaintenanceProfile?.label || 'Selected profile'} reminder, due about ${resolvedIntervalDays} days after completion`
       : 'Maintenance reminder will be created after a profile or interval is selected')
@@ -374,7 +377,7 @@ export default function TechnicianChecklist() {
       if (savedDraft) {
         setCompleted(savedDraft.completed || {});
         setTechNotes(savedDraft.techNotes || '');
-        setMaintenanceRequired(savedDraft.maintenanceRequired ?? true);
+        setMaintenanceRequired(typeof savedDraft.maintenanceRequired === 'boolean' ? savedDraft.maintenanceRequired : null);
         setMaintenanceProfile(savedDraft.maintenanceProfile || '');
         setMaintenanceIntervalDays(savedDraft.maintenanceIntervalDays || '');
         setMaintenanceNotes(savedDraft.maintenanceNotes || '');
@@ -515,6 +518,10 @@ export default function TechnicianChecklist() {
         return false;
       }
     }
+    if (currentWizardStep === maintenanceWizardStep && maintenanceRequired === null) {
+      setMessage('Choose whether this site needs a future maintenance reminder.');
+      return false;
+    }
     if (currentWizardStep === maintenanceWizardStep && maintenanceRequired && !maintenanceProfile) {
       setMessage('Select a maintenance profile before continuing.');
       return false;
@@ -571,6 +578,10 @@ export default function TechnicianChecklist() {
       setMessage(`Upload a photo for procedure ${missingPhotoStepIndex + 1} before submitting.`);
       return;
     }
+    if (maintenanceRequired === null) {
+      setMessage('Choose whether this site needs a future maintenance reminder.');
+      return;
+    }
     if (maintenanceRequired && !maintenanceProfile) {
       setMessage('Select a maintenance profile so management can schedule the next service.');
       return;
@@ -617,7 +628,7 @@ export default function TechnicianChecklist() {
         notes: techNotes,
         photos,
         videos,
-        maintenance_required: maintenanceRequired,
+        maintenance_required: Boolean(maintenanceRequired),
         maintenance_profile: maintenanceRequired ? maintenanceProfile : null,
         maintenance_interval_days: maintenanceRequired ? resolvedIntervalDays : null,
         maintenance_notes: maintenanceNotes,
@@ -977,14 +988,25 @@ export default function TechnicianChecklist() {
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Future Maintenance Reminder</p>
               <h3 className="mt-2 text-lg font-semibold text-slate-900">Should this site be checked again later?</h3>
             </div>
-            <label className="inline-flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
-              <input
-                type="checkbox"
-                checked={maintenanceRequired}
-                onChange={(event) => setMaintenanceRequired(event.target.checked)}
-              />
-              Create future maintenance reminder
-            </label>
+            <div className="grid grid-cols-2 gap-2 sm:w-72" role="group" aria-label="Create future maintenance reminder">
+              {[
+                { answer: true, text: 'Yes, remind us' },
+                { answer: false, text: 'No reminder' },
+              ].map(({ answer, text }) => (
+                <button
+                  key={text}
+                  type="button"
+                  aria-pressed={maintenanceRequired === answer}
+                  onClick={() => { setMaintenanceRequired(answer); setMessage(''); }}
+                  className={`min-h-11 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${maintenanceRequired === answer
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className={`mt-5 ${maintenanceRequired ? 'opacity-100' : 'pointer-events-none opacity-50'}`}>
@@ -1327,6 +1349,17 @@ export default function TechnicianChecklist() {
         </div>
       )}
 
+      {message && (
+        <div
+          role="alert"
+          className={`mb-4 rounded-xl p-4 text-sm font-medium ${message.toLowerCase().includes('success') || message.toLowerCase().includes('submitted')
+              ? 'border border-emerald-300 bg-emerald-100 text-emerald-800'
+              : 'border border-red-300 bg-red-100 text-red-800'
+            }`}
+        >
+          {message}
+        </div>
+      )}
       <div className="flex flex-col gap-4 border-t border-slate-200 pt-6 sm:flex-row">
         <button
           type="button"
@@ -1364,16 +1397,6 @@ export default function TechnicianChecklist() {
               </>
             )}
           </button>
-        )}
-        {message && (
-          <div
-            className={`flex flex-1 items-center justify-center rounded-xl p-4 text-sm font-medium ${message.toLowerCase().includes('success') || message.toLowerCase().includes('submitted')
-                ? 'border border-emerald-300 bg-emerald-100 text-emerald-800'
-                : 'border border-red-300 bg-red-100 text-red-800'
-              }`}
-          >
-            {message}
-          </div>
         )}
       </div>
           </>

@@ -227,6 +227,81 @@ test.describe('Technician Workspace - All Pages', () => {
     ]);
   });
 
+  test('4.6b - Message notification badge and click open Messages', async ({ page }) => {
+    const adminAuthState = loadAuthStateFromBackend('superadmin_test');
+    await visitWorkspacePage(page, '/technician/dashboard');
+    const sent = await page.evaluate(async ({ adminToken, technicianId }) => {
+      const response = await fetch('/api/messages/', {
+        method: 'POST',
+        headers: { Authorization: `Token ${adminToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room_type: 'direct', receiver: technicianId, text: 'Please confirm your ETA.' }),
+      });
+      return response.status;
+    }, { adminToken: adminAuthState.token, technicianId: technicianAuthState.user.id });
+    expect(sent).toBe(201);
+
+    await page.reload();
+    // The sidebar badge and the bell click come from the same routing contract.
+    await expect(page.getByRole('link', { name: /Messages\s*\d+/ })).toBeVisible();
+    await page.getByRole('button', { name: 'Open notifications' }).click();
+    await page.getByRole('button', { name: /New message from/ }).first().click();
+    await expect(page).toHaveURL(/\/technician\/messages/);
+  });
+
+  test('4.6c - Navigation starts and arrival unlocks even when directions fail', async ({ page }) => {
+    await visitWorkspacePage(page, '/technician/my-jobs');
+    const ticketId = await page.evaluate(async () => {
+      const token = sessionStorage.getItem('afn_token');
+      const response = await fetch('/api/technician/jobs/', { headers: { Authorization: `Token ${token}` } });
+      const payload = await response.json();
+      const jobs = Array.isArray(payload) ? payload : payload.results || [];
+      return jobs.find((job) => job.status === 'Ready for Service' && job.latitude != null)?.id;
+    });
+    expect(ticketId).toBeTruthy();
+
+    // Directions are down, and the status call is intercepted so the seeded ticket is left untouched.
+    let navigationStarts = 0;
+    let routeRequests = 0;
+    let routingRecovered = false;
+    await page.route('**/api/services/ors/route/**', (route) => {
+      routeRequests += 1;
+      return route.fulfill(routingRecovered ? { json: { features: [{
+        geometry: { coordinates: [[121.11, 14.3122], [121.12, 14.32]] },
+        properties: { segments: [{ distance: 1200, steps: [{ instruction: 'Continue to the site', distance: 1200 }] }] },
+      }] } } : { status: 503, json: { error: 'Routing unavailable' } });
+    });
+    await page.route(`**/api/technician/jobs/${ticketId}/start-navigation/`, (route) => {
+      navigationStarts += 1;
+      return route.fulfill({ status: 200, json: { status: 'notified', ticket_id: ticketId } });
+    });
+    await page.addInitScript(() => {
+      const position = () => ({
+        coords: { latitude: 14.3122, longitude: 121.11, accuracy: 10, altitude: null, altitudeAccuracy: null, heading: null, speed: null },
+        timestamp: Date.now(),
+      });
+      Object.defineProperty(navigator, 'geolocation', {
+        configurable: true,
+        value: {
+          getCurrentPosition: (success) => success(position()),
+          watchPosition: (success) => { success(position()); return 1; },
+          clearWatch: () => {},
+        },
+      });
+    });
+
+    await page.goto(`/technician/map-navigation?ticketId=${ticketId}`);
+    await page.getByRole('button', { name: 'Start location sharing', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Mark Arrived' })).toBeEnabled();
+    expect(navigationStarts).toBeGreaterThan(0);
+    await expect(page.getByText(/You can still travel to the site and mark arrival/)).toBeVisible();
+    expect(routeRequests).toBeGreaterThan(0);
+    routingRecovered = true;
+    await page.getByRole('button', { name: 'Recalculate Route' }).click();
+    await expect(page.getByText(/You can still travel to the site and mark arrival/)).toHaveCount(0);
+    await expect(page.getByText('Continue to the site', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Mark Arrived' })).toBeEnabled();
+  });
+
   test('4.7 - Messages / Chat interface', async ({ page }) => {
     let participantRequests = 0;
     let participantPhase = 'initial';

@@ -1,6 +1,7 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
+from .proof_fixtures import completion_photo
 from unittest.mock import sentinel
 from types import SimpleNamespace
 
@@ -441,10 +442,10 @@ class ServiceRequestTicketLifecycleTests(APITestCase):
         complete_response = self.client.post(
             f'/api/services/service-tickets/{ticket.id}/complete_work/',
             {
-                'completion_proof_images': ['https://example.com/proof/job-complete.jpg'],
+                'completion_photo_files': completion_photo(),
                 'completion_notes': 'All work completed successfully.',
             },
-            format='json',
+            format='multipart',
         )
 
         self.assertEqual(complete_response.status_code, status.HTTP_200_OK)
@@ -453,7 +454,8 @@ class ServiceRequestTicketLifecycleTests(APITestCase):
         self.assertEqual(ticket.status, 'Completed')
         self.assertIsNotNone(ticket.completed_date)
         self.assertEqual(request_obj.status, 'Completed')
-        self.assertEqual(ticket.completion_proof_images, ['https://example.com/proof/job-complete.jpg'])
+        self.assertEqual(len(ticket.completion_proof_images), 1)
+        self.assertIn(f'checklists/ticket-{ticket.id}/', ticket.completion_proof_images[0])
         self.assertEqual(ticket.completion_notes, 'All work completed successfully.')
 
         self.client.force_authenticate(user=self.admin_user)

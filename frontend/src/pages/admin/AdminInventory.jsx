@@ -710,7 +710,7 @@ export default function AdminInventory() {
         </div>
       </section>
 
-      <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Inventory summary">
+      <section className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-5" aria-label="Inventory summary">
         {[
           { label: 'Active items', value: totalInventoryCount, tone: 'text-slate-950' },
           { label: 'Physical units', value: totalPhysicalStock, tone: 'text-slate-950' },

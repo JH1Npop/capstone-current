@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import LandingNavbar from "../components/LandingNavbar";
 import Footer from "../components/LandingFooter";
 
@@ -11,13 +12,13 @@ export default function AboutPage() {
           <div className="bg-white rounded-xl shadow overflow-hidden">
             <div className="grid lg:grid-cols-2 items-center">
               <div className="p-10 lg:p-14">
-                <span className="text-xs font-semibold text-blue-600 uppercase">
+                <span className="text-xs font-semibold text-brand-600 uppercase">
                   About AFN
                 </span>
 
                 <h1 className="mt-3 text-4xl lg:text-5xl font-bold leading-tight">
                   Powering Homes.
-                  <span className="block text-blue-600">
+                  <span className="block text-brand-600">
                     Protecting Businesses.
                   </span>
                 </h1>
@@ -62,7 +63,7 @@ export default function AboutPage() {
         <section className="max-w-7xl mx-auto px-6">
           <div className="grid md:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl shadow p-8">
-              <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xl">
+              <div className="h-12 w-12 rounded-lg bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-xl">
                 M
               </div>
 
@@ -76,7 +77,7 @@ export default function AboutPage() {
             </div>
 
             <div className="bg-white rounded-xl shadow p-8">
-              <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xl">
+              <div className="h-12 w-12 rounded-lg bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-xl">
                 V
               </div>
 
@@ -106,27 +107,27 @@ export default function AboutPage() {
               ["T", "Trusted Support"],
             ].map(([initial, label]) => (
               <div className="bg-white rounded-xl shadow p-6 text-center" key={label}>
-                <div className="text-4xl font-bold text-blue-600">{initial}</div>
+                <div className="text-4xl font-bold text-brand-600">{initial}</div>
                 <h3 className="font-semibold mt-4">{label}</h3>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="bg-blue-900 text-white mt-10">
+        <section className="mt-10 border-y border-brand-200/70 bg-gradient-to-br from-brand-100 via-slate-50 to-brand-200">
           <div className="max-w-7xl mx-auto px-6 py-12 text-center">
-            <h2 className="text-4xl font-bold">
+            <h2 className="text-4xl font-bold text-slate-950">
               Let's Build a Smarter Future Together
             </h2>
 
-            <p className="mt-4 text-blue-100 max-w-3xl mx-auto">
+            <p className="mt-4 text-slate-600 max-w-3xl mx-auto">
               Whether you need solar installation, CCTV monitoring, or air
               conditioning solutions, AFN is ready to help.
             </p>
 
-            <button className="mt-8 bg-white text-blue-900 px-8 py-3 rounded-lg font-semibold hover:bg-blue-50 transition">
+            <Link to="/#contact" className="mt-8 inline-flex rounded-lg bg-brand-600 px-8 py-3 font-semibold text-white shadow-sm transition hover:bg-brand-700">
               Contact Us
-            </button>
+            </Link>
           </div>
         </section>
       </main>

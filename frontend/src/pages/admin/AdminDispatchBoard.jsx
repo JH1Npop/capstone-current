@@ -445,7 +445,8 @@ const paginatedAssignedTickets = assignedTickets.slice(
           </div>
         )}
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Two summary cards per row on phones so the dispatch work stays near the top of the screen. */}
+        <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           {[
             { label: 'All Active Tickets', value: activeQueueCount, tone: 'text-brand-600', helper: `${unassignedActiveCount} unassigned` },
             { label: 'Ready to Assign', value: dispatchableCount, tone: 'text-amber-600', helper: 'Eligible unassigned work' },
@@ -854,6 +855,11 @@ const paginatedAssignedTickets = assignedTickets.slice(
               ) : (
                 <div className="rounded-xl border border-dashed border-surface-200 bg-surface-50 p-8 text-center text-sm text-slate-500">
                   {selectedTicket ? 'No technicians match this service.' : 'No matching technicians.'}
+                  {selectedTicket && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Only active technicians with this service as a skill appear here. Add the skill in User Management.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

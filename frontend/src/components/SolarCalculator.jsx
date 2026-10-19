@@ -5,23 +5,26 @@ import { createSolarEstimate } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_SOLAR_CALCULATOR_SETTINGS } from '../utils/landingSettings';
 import { formatEstimateId } from '../utils/roleIds';
+import { estimateSolarSavings } from '../utils/solarSavings';
 
+// [name, rated watts, starting surge ×, % of scheduled hours actually running].
+// Compressors cycle on and off, and motors draw several times their rating when starting.
 const APPLIANCE_PRESETS = [
-  ['Air conditioner', 1200, 1.5],
-  ['Refrigerator', 150, 1.5],
-  ['Electric fan', 75, 1],
-  ['LED light', 10, 1],
-  ['Television', 100, 1],
-  ['Desktop computer', 250, 1],
-  ['Water pump', 750, 2],
-  ['Rice cooker', 700, 1],
-  ['Washing machine', 500, 1.5],
+  ['Air conditioner', 1200, 3, 70],
+  ['Refrigerator', 150, 3, 35],
+  ['Electric fan', 75, 1.5, 100],
+  ['LED light', 10, 1, 100],
+  ['Television', 100, 1, 100],
+  ['Desktop computer', 250, 1, 100],
+  ['Water pump', 750, 3, 100],
+  ['Rice cooker', 700, 1, 100],
+  ['Washing machine', 500, 2, 100],
 ];
 
 let applianceSequence = 1;
 const createAppliance = () => ({
   id: `appliance-${applianceSequence++}`,
-  name: '', quantity: 1, wattage: '', dayHours: '', nightHours: '', surgeFactor: 1,
+  name: '', quantity: 1, wattage: '', dayHours: '', nightHours: '', surgeFactor: 1, dutyCycle: 100,
 });
 
 const numberValue = (value, fallback = 0) => {
@@ -38,7 +41,7 @@ const InputField = ({ label, suffix, ...inputProps }) => (
   <label className="block">
     <span className="mb-1.5 block text-sm font-medium text-slate-700">{label}</span>
     <div className="relative">
-      <input {...inputProps} type="number" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-14 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+      <input {...inputProps} type="number" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-14 text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
       <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-slate-400">{suffix}</span>
     </div>
   </label>
@@ -49,6 +52,8 @@ const PENDING_ESTIMATE_KEY = 'afn_pending_solar_estimate';
 export default function SolarCalculator({
   settings = DEFAULT_SOLAR_CALCULATOR_SETTINGS,
   presetPanelWattage = null,
+  // { monthlyConsumption, nonce } from the landing hero's quick check; the nonce re-applies repeats.
+  presetUsage = null,
   selectedPromotion = null,
   embedded = false,
   onEstimateSaved = null,
@@ -65,6 +70,8 @@ export default function SolarCalculator({
     panelWattage: configured.defaultPanelWattage,
     electricityRate: configured.defaultElectricityRate,
     desiredOffset: configured.defaultDesiredOffset,
+    daytimeUsage: configured.defaultDaytimeUsage,
+    exportCredit: configured.defaultExportCredit,
     availableRoofArea: '',
   });
   const [saveState, setSaveState] = useState({ loading: false, error: '', message: '', estimateId: null });
@@ -77,8 +84,10 @@ export default function SolarCalculator({
       panelWattage: configured.defaultPanelWattage,
       electricityRate: configured.defaultElectricityRate,
       desiredOffset: configured.defaultDesiredOffset,
+      daytimeUsage: configured.defaultDaytimeUsage,
+      exportCredit: configured.defaultExportCredit,
     }));
-  }, [configured.defaultPeakSunHours, configured.defaultPerformanceRatio, configured.defaultPanelWattage, configured.defaultElectricityRate, configured.defaultDesiredOffset]);
+  }, [configured.defaultPeakSunHours, configured.defaultPerformanceRatio, configured.defaultPanelWattage, configured.defaultElectricityRate, configured.defaultDesiredOffset, configured.defaultDaytimeUsage, configured.defaultExportCredit]);
 
   useEffect(() => {
     try {
@@ -103,6 +112,13 @@ export default function SolarCalculator({
     }
   }, [presetPanelWattage]);
 
+  useEffect(() => {
+    if (numberValue(presetUsage?.monthlyConsumption) > 0) {
+      setMode('monthly');
+      setForm((current) => ({ ...current, monthlyConsumption: Math.round(numberValue(presetUsage.monthlyConsumption)) }));
+    }
+  }, [presetUsage?.nonce]);
+
   const applianceTotals = useMemo(() => appliances.reduce((totals, appliance) => {
     const quantity = Math.max(0, numberValue(appliance.quantity));
     const watts = Math.max(0, numberValue(appliance.wattage));
@@ -110,9 +126,10 @@ export default function SolarCalculator({
     const nightHours = Math.min(24 - dayHours, Math.max(0, numberValue(appliance.nightHours)));
     const connectedWatts = quantity * watts;
     const surgeWatts = connectedWatts * Math.max(1, numberValue(appliance.surgeFactor, 1));
+    const runningShare = Math.min(100, Math.max(1, numberValue(appliance.dutyCycle, 100))) / 100;
     return {
-      dayEnergy: totals.dayEnergy + (connectedWatts * dayHours) / 1000,
-      nightEnergy: totals.nightEnergy + (connectedWatts * nightHours) / 1000,
+      dayEnergy: totals.dayEnergy + (connectedWatts * dayHours * runningShare) / 1000,
+      nightEnergy: totals.nightEnergy + (connectedWatts * nightHours * runningShare) / 1000,
       connectedWatts: totals.connectedWatts + connectedWatts,
       largestSurgeExtra: Math.max(totals.largestSurgeExtra, surgeWatts - connectedWatts),
     };
@@ -133,8 +150,17 @@ export default function SolarCalculator({
     const installedCapacity = (panelCount * panelWattage) / 1000;
     const dailyGeneration = installedCapacity * peakSunHours * performanceRatio;
     const monthlyGeneration = dailyGeneration * 30;
-    const usableEnergy = Math.min(monthlyGeneration, monthlyConsumption);
-    const monthlySavings = usableEnergy * Math.max(0, numberValue(form.electricityRate));
+    // In appliance mode the schedule itself says how much is used while the sun is up.
+    const daytimeUsagePercent = mode === 'appliances'
+      ? (applianceDailyConsumption > 0 ? (applianceTotals.dayEnergy / applianceDailyConsumption) * 100 : 0)
+      : numberValue(form.daytimeUsage, 40);
+    const savings = estimateSolarSavings({
+      monthlyConsumption,
+      monthlyGeneration,
+      electricityRate: numberValue(form.electricityRate),
+      daytimeUsagePercent,
+      exportCreditRate: numberValue(form.exportCredit, 5.5),
+    });
     const roofAreaRequired = panelCount * 2.6;
     const availableRoofArea = numberValue(form.availableRoofArea, 0);
     const inverterCapacity = ((applianceTotals.connectedWatts + applianceTotals.largestSurgeExtra) / 1000) * 1.2;
@@ -142,7 +168,9 @@ export default function SolarCalculator({
 
     return {
       monthlyConsumption, dailyConsumption, requiredCapacity, panelCount, installedCapacity,
-      dailyGeneration, monthlyGeneration, monthlySavings, roofAreaRequired, inverterCapacity,
+      dailyGeneration, monthlyGeneration, roofAreaRequired, inverterCapacity, daytimeUsagePercent,
+      monthlySavings: savings.withNetMetering, monthlySavingsWithoutNetMetering: savings.withoutNetMetering,
+      selfConsumedEnergy: savings.selfConsumed, exportedEnergy: savings.exported,
       batteryCapacity, roofFits: availableRoofArea > 0 ? availableRoofArea >= roofAreaRequired : null,
     };
   }, [applianceTotals, form, mode]);
@@ -154,7 +182,7 @@ export default function SolarCalculator({
     setAppliances((rows) => rows.map((row) => row.id === id ? {
       ...row,
       name,
-      ...(preset ? { wattage: preset[1], surgeFactor: preset[2] } : {}),
+      ...(preset ? { wattage: preset[1], surgeFactor: preset[2], dutyCycle: preset[3] } : {}),
     } : row));
   };
 
@@ -167,6 +195,8 @@ export default function SolarCalculator({
     panel_wattage: numberValue(form.panelWattage),
     electricity_rate: numberValue(form.electricityRate),
     desired_offset_percent: numberValue(form.desiredOffset),
+    daytime_usage_percent: mode === 'monthly' ? numberValue(form.daytimeUsage) : null,
+    export_credit_rate: numberValue(form.exportCredit),
     available_roof_area: form.availableRoofArea === '' ? null : numberValue(form.availableRoofArea),
     selected_promotion: selectedPromotion ? {
       id: selectedPromotion.id || '',
@@ -220,12 +250,12 @@ export default function SolarCalculator({
         {mode === 'appliances' ? (
           <div className="mb-6 rounded-2xl border border-brand-100 bg-white p-5 text-slate-900 shadow-card sm:p-7">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-              <div><h3 className="font-bold">Appliance load schedule</h3><p className="text-sm text-slate-500">Day and night hours are calculated separately for solar and battery estimates.</p></div>
+              <div><h3 className="font-bold">Appliance load schedule</h3><p className="text-sm text-slate-500">Day and night hours are calculated separately for solar and battery estimates. "Runs %" is how much of those hours the appliance actually draws power — compressors in aircons and refrigerators cycle on and off.</p></div>
               <button type="button" onClick={() => setAppliances((rows) => [...rows, createAppliance()])} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"><Plus className="h-4 w-4" /> Add appliance</button>
             </div>
             <div className="mt-4 space-y-3">
               {appliances.map((appliance) => (
-                <div key={appliance.id} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[1.4fr_.55fr_.7fr_.7fr_.7fr_.65fr_auto] md:items-end">
+                <div key={appliance.id} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[1.4fr_.55fr_.7fr_.7fr_.7fr_.65fr_.65fr_auto] md:items-end">
                   <ApplianceNameInput
                     appliance={appliance}
                     onChange={(name) => selectPreset(appliance.id, name)}
@@ -234,15 +264,17 @@ export default function SolarCalculator({
                   <ApplianceInput label="Wattage" value={appliance.wattage} min="1" max="100000" onChange={(value) => updateAppliance(appliance.id, 'wattage', value)} />
                   <ApplianceInput label="Day hours" value={appliance.dayHours} min="0" max="24" step="0.5" onChange={(value) => updateAppliance(appliance.id, 'dayHours', value)} />
                   <ApplianceInput label="Night hours" value={appliance.nightHours} min="0" max="24" step="0.5" onChange={(value) => updateAppliance(appliance.id, 'nightHours', value)} />
+                  <ApplianceInput label="Runs %" value={appliance.dutyCycle} min="1" max="100" step="5" onChange={(value) => updateAppliance(appliance.id, 'dutyCycle', value)} />
                   <ApplianceInput label="Surge ×" value={appliance.surgeFactor} min="1" max="10" step="0.1" onChange={(value) => updateAppliance(appliance.id, 'surgeFactor', value)} />
                   <button type="button" title="Remove appliance" disabled={appliances.length === 1} onClick={() => setAppliances((rows) => rows.filter((row) => row.id !== appliance.id))} className="rounded-lg p-2.5 text-rose-600 hover:bg-rose-50 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
                 </div>
               ))}
             </div>
-            <div className="mt-4 grid gap-3 rounded-xl bg-blue-50 p-4 text-sm sm:grid-cols-3">
+            <div className="mt-4 grid gap-3 rounded-xl bg-brand-50 p-4 text-sm sm:grid-cols-3">
               <LoadSummary label="Calculated monthly use" value={`${formatNumber(results.monthlyConsumption)} kWh`} />
               <LoadSummary label="Daytime energy" value={`${formatNumber(applianceTotals.dayEnergy)} kWh/day`} />
               <LoadSummary label="Nighttime energy" value={`${formatNumber(applianceTotals.nightEnergy)} kWh/day`} />
+              <p className="text-xs text-slate-500 sm:col-span-3">Daytime share used for savings: <strong>{formatNumber(results.daytimeUsagePercent, 0)}%</strong> of your energy.</p>
             </div>
           </div>
         ) : null}
@@ -256,34 +288,53 @@ export default function SolarCalculator({
               <InputField label="System loss" suffix="%" min="0" max="60" step="1" value={form.systemLoss} onChange={updateForm('systemLoss')} />
               <InputField label="Panel wattage" suffix="W" min="100" max="1000" step="5" value={form.panelWattage} onChange={updateForm('panelWattage')} />
               <InputField label="Desired bill offset" suffix="%" min="10" max="100" step="5" value={form.desiredOffset} onChange={updateForm('desiredOffset')} />
+              {mode === 'monthly' ? <InputField label="Used in daytime (6am–6pm)" suffix="%" min="0" max="100" step="5" value={form.daytimeUsage} onChange={updateForm('daytimeUsage')} /> : null}
+              <InputField label="Net-metering export credit" suffix="PHP/kWh" min="0" max="1000" step="0.1" value={form.exportCredit} onChange={updateForm('exportCredit')} />
               <InputField label="Available roof area (optional)" suffix="m²" min="0" max="1000000" step="1" value={form.availableRoofArea} onChange={updateForm('availableRoofArea')} />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-brand-700 bg-gradient-to-br from-brand-800 to-brand-900 p-5 text-white shadow-elevated sm:p-7">
+          <div id="solar-estimate-results" className="scroll-mt-24 rounded-2xl border border-brand-100 bg-white p-5 text-slate-900 shadow-elevated sm:p-7">
             <div className="grid gap-3 sm:grid-cols-2">
               <ResultCard icon={PanelsTopLeft} label="Recommended panels" value={`${results.panelCount} panels`} detail={`${formatNumber(results.installedCapacity, 2)} kWp installed`} />
               <ResultCard icon={Zap} label="Required PV size" value={`${formatNumber(results.requiredCapacity, 2)} kWp`} detail={`${formatNumber(results.dailyConsumption)} kWh daily use`} />
               <ResultCard icon={Leaf} label="Estimated generation" value={`${formatNumber(results.monthlyGeneration, 0)} kWh/mo`} detail={`${formatNumber(results.dailyGeneration)} kWh per day`} />
-              <ResultCard icon={PhilippinePeso} label="Estimated savings" value={`PHP ${formatNumber(results.monthlySavings, 0)}/mo`} detail="Before fixed charges and export adjustments" />
+              <ResultCard
+                icon={PhilippinePeso}
+                label="Estimated savings"
+                value={`PHP ${formatNumber(results.monthlySavingsWithoutNetMetering, 0)}–${formatNumber(results.monthlySavings, 0)}/mo`}
+                detail={`Lower: daytime use only. Higher: with net metering at PHP ${formatNumber(Math.min(numberValue(form.exportCredit), numberValue(form.electricityRate)), 2)}/kWh. Fixed charges still apply.`}
+              />
             </div>
             {mode === 'appliances' ? <div className="mt-4 grid gap-3 sm:grid-cols-2"><LoadEstimate label="Preliminary inverter size" value={`${formatNumber(results.inverterCapacity, 2)} kW`} /><LoadEstimate label="Preliminary battery size" value={`${formatNumber(results.batteryCapacity, 2)} kWh`} /></div> : null}
-            <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${results.roofFits === false ? 'border-amber-300/30 bg-amber-300/10 text-amber-100' : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'}`}>
+            <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${results.roofFits === false ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
               Approximate roof area required: <strong>{formatNumber(results.roofAreaRequired)} m²</strong>.{results.roofFits === false ? ' The entered roof area may not fit this estimate.' : ''}
             </div>
-            <p className="mt-5 text-xs leading-5 text-brand-100/80">This is a preliminary estimate, not a final engineering design. Appliance duty cycles, motor starting current, shading, roof orientation, weather, equipment compatibility, and net-metering arrangements can change the final design.</p>
+            <p className="mt-5 text-xs leading-5 text-slate-500">This is a preliminary estimate, not a final engineering design. About {formatNumber(results.selfConsumedEnergy, 0)} kWh/mo of the solar output is used directly and {formatNumber(results.exportedEnergy, 0)} kWh/mo goes to the grid; batteries can shift more of it to the evening. Actual appliance use, shading, roof orientation, weather, equipment compatibility, your utility's monthly rates, and net-metering approval can change the final design and savings.</p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <button type="button" disabled={saveState.loading} onClick={saveEstimate} className="rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-amber-300 disabled:opacity-60">
-                {saveState.loading ? 'Saving…' : isAuthenticated ? 'Save estimate' : 'Sign in to save'}
+              <button type="button" disabled={saveState.loading} onClick={saveEstimate} className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60">
+                {saveState.loading ? 'Saving…' : isAuthenticated ? 'Save estimate' : 'Save & book a site inspection'}
               </button>
               {saveState.estimateId ? (
-                <button type="button" onClick={() => navigate(`/client/service-requests?solarEstimate=${saveState.estimateId}`)} className="rounded-xl border border-white/20 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-white/10">
+                <button type="button" onClick={() => navigate(`/client/service-requests?solarEstimate=${saveState.estimateId}`)} className="rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-800 transition hover:bg-brand-50">
                   Request site assessment
                 </button>
               ) : null}
             </div>
-            {saveState.message ? <p className="mt-3 text-sm font-medium text-emerald-300">{saveState.message}</p> : null}
-            {saveState.error ? <p className="mt-3 text-sm font-medium text-rose-300">{saveState.error}</p> : null}
+            {!isAuthenticated ? <p className="mt-3 text-xs text-slate-500">A free account is needed to book. Your estimate is kept while you sign in or register.</p> : null}
+            {saveState.message ? <p className="mt-3 text-sm font-medium text-emerald-700">{saveState.message}</p> : null}
+            {saveState.error ? <p className="mt-3 text-sm font-medium text-rose-700">{saveState.error}</p> : null}
+          </div>
+        </div>
+
+        {/* On phones the result sits below the inputs; keep the headline numbers in view while typing. */}
+        <div className="sticky bottom-3 z-20 mt-4 lg:hidden">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-white/95 px-4 py-3 text-slate-900 shadow-elevated backdrop-blur">
+            <div className="min-w-0 text-sm">
+              <p className="font-bold">{results.panelCount} panels · {formatNumber(results.installedCapacity, 2)} kWp</p>
+              <p className="text-xs text-slate-500">Saves about PHP {formatNumber(results.monthlySavingsWithoutNetMetering, 0)}–{formatNumber(results.monthlySavings, 0)}/mo</p>
+            </div>
+            <a href="#solar-estimate-results" className="shrink-0 rounded-xl bg-brand-600 px-3 py-2 text-xs font-bold text-white hover:bg-brand-700">See estimate</a>
           </div>
         </div>
       </div>
@@ -291,7 +342,7 @@ export default function SolarCalculator({
   );
 }
 
-const compactInputClass = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-500';
+const compactInputClass = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm font-normal text-slate-900 outline-none focus:border-brand-500';
 
 function ApplianceNameInput({ appliance, onChange }) {
   const [open, setOpen] = useState(false);
@@ -402,13 +453,13 @@ function ModeButton({ active, children, onClick }) {
 }
 
 function LoadSummary({ label, value }) {
-  return <div><p className="text-xs font-semibold uppercase tracking-wide text-blue-700">{label}</p><p className="mt-1 font-bold text-slate-900">{value}</p></div>;
+  return <div><p className="text-xs font-semibold uppercase tracking-wide text-brand-700">{label}</p><p className="mt-1 font-bold text-slate-900">{value}</p></div>;
 }
 
 function LoadEstimate({ label, value }) {
-  return <div className="rounded-xl border border-blue-300/20 bg-blue-300/10 p-3"><p className="text-xs text-blue-100">{label}</p><p className="mt-1 font-bold">{value}</p></div>;
+  return <div className="rounded-xl border border-brand-100 bg-brand-50 p-3"><p className="text-xs text-brand-700">{label}</p><p className="mt-1 font-bold text-brand-900">{value}</p></div>;
 }
 
 function ResultCard({ icon: Icon, label, value, detail }) {
-  return <div className="rounded-xl border border-white/15 bg-white/10 p-4"><Icon className="h-5 w-5 text-amber-300" /><p className="mt-3 text-xs font-semibold uppercase tracking-wide text-brand-100/75">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p><p className="mt-1 text-xs text-brand-100/75">{detail}</p></div>;
+  return <div className="rounded-xl border border-brand-100 bg-brand-50 p-4"><Icon className="h-5 w-5 text-brand-600" /><p className="mt-3 text-xs font-semibold uppercase tracking-wide text-brand-700">{label}</p><p className="mt-1 text-xl font-bold text-brand-900">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>;
 }

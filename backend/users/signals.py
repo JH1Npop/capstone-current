@@ -481,6 +481,12 @@ def _write_activity_from_change(instance, action, *, field_name='', old_value=No
                     if str(getattr(instance, '_activity_reason', '') or '').strip()
                     else {}
                 ),
+                # Set by the reject/cancel actions so clients can tell a rejection from a withdrawal.
+                **(
+                    {'closure': instance._activity_closure}
+                    if getattr(instance, '_activity_closure', None)
+                    else {}
+                ),
             },
         )
     except Exception as e:

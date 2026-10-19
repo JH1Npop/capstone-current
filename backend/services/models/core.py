@@ -164,6 +164,15 @@ class ServiceRequest(models.Model):
         ]
         ordering = ['-request_date']
 
+    @property
+    def requires_site_inspection(self):
+        if self.service_type.requires_site_inspection:
+            return True
+        items = getattr(self, '_prefetched_objects_cache', {}).get('service_items')
+        if items is not None:
+            return any(item.service_type.requires_site_inspection for item in items)
+        return self.service_items.filter(service_type__requires_site_inspection=True).exists()
+
     def __str__(self):
         client_name = self.client.get_full_name().strip() or self.client.username
         return f"{self.service_type.name} request by {client_name}"

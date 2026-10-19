@@ -69,6 +69,11 @@ export const STATUS_META = {
     tone: 'bg-zinc-100 text-zinc-700 ring-zinc-200',
     dot: 'bg-zinc-400'
   },
+  rejected: {
+    label: 'Rejected',
+    tone: 'bg-rose-50 text-rose-800 ring-rose-200',
+    dot: 'bg-rose-500'
+  },
   for_inspection: {
     label: 'For Inspection',
     tone: 'bg-fuchsia-50 text-fuchsia-800 ring-fuchsia-200',

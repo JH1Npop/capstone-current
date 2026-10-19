@@ -4,7 +4,7 @@ import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import { EmptyState, ErrorState } from '../../components/ui/StateDisplay';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
-import StatusBadge from '../../components/ui/StatusBadge';
+import StatusBadge, { formatStatusLabel } from '../../components/ui/StatusBadge';
 import { FiCalendar, FiEye, FiMapPin, FiPlus, FiSearch, FiUser, FiX } from 'react-icons/fi';
 import { cancelServiceRequest, fetchClientRequests } from '../../api/api';
 import { clientTechnicianDisplayString } from '../../utils/clientTechnicianDisplay';
@@ -232,7 +232,7 @@ export default function ClientRequestTracking() {
                         </p>
                       </div>
                       <div className="shrink-0">
-                        <StatusBadge status={request.status} size="sm" />
+                        <StatusBadge status={request.rejected ? 'rejected' : request.status} size="sm" />
                       </div>
                     </div>
 
@@ -249,7 +249,10 @@ export default function ClientRequestTracking() {
                           </span>
                         )}
                         {request.operational_status && request.operational_status !== request.status && (
-                          <StatusBadge status={request.operational_status} size="sm" />
+                          // One status badge per card; the job's progress reads as a labeled stage.
+                          <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
+                            Stage: {formatStatusLabel(request.operational_status)}
+                          </span>
                         )}
                       </div>
 
@@ -291,7 +294,11 @@ export default function ClientRequestTracking() {
                         <span className="line-clamp-2">{request.address || 'No service address set'}</span>
                       </div>
 
-                      {request.workflow_label && (
+                      {request.rejected ? (
+                        <p className="text-xs font-medium text-rose-700">
+                          Not accepted by our office{request.closure_reason ? `: ${request.closure_reason}` : '.'}
+                        </p>
+                      ) : request.workflow_label && (
                         <p className="text-xs font-medium text-slate-500">Current step: {request.workflow_label}</p>
                       )}
                     </div>
@@ -366,11 +373,14 @@ export default function ClientRequestTracking() {
                           {request.description && <p className="mt-1 line-clamp-1 text-xs text-slate-400">{request.description}</p>}
                         </td>
                         <td className="px-4 py-4 align-top">
-                          <StatusBadge status={request.status} size="sm" />
+                          <StatusBadge status={request.rejected ? 'rejected' : request.status} size="sm" />
                           {request.operational_status && request.operational_status !== request.status && (
-                            <div className="mt-2">
-                              <StatusBadge status={request.operational_status} size="sm" />
-                            </div>
+                            <p className="mt-2 text-xs font-semibold text-slate-500">
+                              Stage: {formatStatusLabel(request.operational_status)}
+                            </p>
+                          )}
+                          {request.rejected && request.closure_reason && (
+                            <p className="mt-2 max-w-[14rem] text-xs text-rose-700">{request.closure_reason}</p>
                           )}
                         </td>
                         <td className="px-4 py-4 align-top text-slate-600">

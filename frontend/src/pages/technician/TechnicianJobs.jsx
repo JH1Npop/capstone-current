@@ -959,14 +959,15 @@ export default function TechnicianJobs() {
                     </p>
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                       {proofImages.map((img, idx) => (
-                        <div key={idx} className="relative">
+                        <div key={img.preview} className="relative">
                           <img
-                            src={img}
+                            src={img.preview}
                             alt={`Proof ${idx + 1}`}
                             className="h-24 w-full rounded-lg border border-slate-200 object-cover"
                           />
                           <button
                             type="button"
+                            aria-label={`Remove proof photo ${idx + 1}`}
                             onClick={() => removeImage(idx)}
                             className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
                           >
@@ -1089,7 +1090,8 @@ export default function TechnicianJobs() {
                       Completing...
                     </>
                   ) : (
-                    completionJob.ticketType !== 'inspection' ? 'Finish Job' : 'Finish Inspection'
+                    // Inspections end with their report (the server refuses Finish Job for them).
+                    'Finish Job'
                   )}
                 </button>
                 <button

@@ -9,6 +9,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from .models import CustomerSupportCase, Message
 from .serializers import CustomerSupportCaseSerializer, MessageSerializer
 from notifications.models import Notification
+from notifications.notification_utils import notifications_enabled
 from users.models import User
 from users.permissions import CanAccessClientSupport, CanAccessMessages
 from users.rbac import (
@@ -32,6 +33,23 @@ def active_admins_with_capability(capability_codes):
     ]
 
 
+def _create_notification(user, *, title, message, notification_type, ticket=None, unless_unread=False):
+    """Every messaging alert honours the global notification switch and skips inactive accounts."""
+    if not notifications_enabled() or not user.is_active or getattr(user, 'status', 'active') != 'active':
+        return None
+    # One unread alert per conversation is enough; a burst of replies must not flood the bell.
+    if unless_unread and Notification.objects.filter(user=user, title=title, status='unread').exists():
+        return None
+    return Notification.objects.create(
+        user=user,
+        ticket=ticket,
+        request=ticket.request if ticket else None,
+        title=title,
+        message=message,
+        type=notification_type,
+    )
+
+
 def notify_admins_of_client_ticket_message(message):
     ticket = message.ticket
     sender = message.sender
@@ -43,13 +61,12 @@ def notify_admins_of_client_ticket_message(message):
     for recipient in recipients:
         if recipient.id == sender.id:
             continue
-        Notification.objects.create(
-            user=recipient,
+        _create_notification(
+            recipient,
             ticket=ticket,
-            request=ticket.request,
             title='New after-sales message',
             message=f'{client_name} sent an after-sales message for ticket #{ticket.id}.',
-            type='customer_inquiry',
+            notification_type='customer_inquiry',
         )
 
 
@@ -65,11 +82,11 @@ def notify_admins_of_customer_support_message(message):
     for recipient in recipients:
         if recipient.id == sender.id:
             continue
-        Notification.objects.create(
-            user=recipient,
+        _create_notification(
+            recipient,
             title='New customer service message',
             message=f'{client_name} sent a customer service message.',
-            type='customer_inquiry',
+            notification_type='customer_inquiry',
         )
 
 
@@ -78,16 +95,13 @@ def _display_name(user):
 
 
 def _notify_unless_unread(user, title, message, notification_type='message', ticket=None):
-    # One unread alert per conversation is enough; a burst of replies must not flood the bell.
-    if Notification.objects.filter(user=user, title=title, status='unread').exists():
-        return
-    Notification.objects.create(
-        user=user,
-        ticket=ticket,
-        request=ticket.request if ticket else None,
+    _create_notification(
+        user,
         title=title,
         message=message,
-        type=notification_type,
+        notification_type=notification_type,
+        ticket=ticket,
+        unless_unread=True,
     )
 
 
@@ -144,11 +158,11 @@ def notify_ticket_team_of_ticket_message(message):
 
 def notify_client_of_customer_support_resolution(case):
     status_label = case.get_status_display().lower()
-    Notification.objects.create(
-        user=case.client,
+    _create_notification(
+        case.client,
         title=f'Support case #{case.id} {status_label}',
         message=f'Customer support marked your support case #{case.id} as {status_label}.',
-        type='info',
+        notification_type='info',
     )
 
 
@@ -158,14 +172,14 @@ def notify_admins_of_customer_support_resolution(case, actor):
     status_label = case.get_status_display().lower()
     recipients = active_admins_with_capability(COMMUNICATIONS_SUPPORT_VIEW_CAPABILITIES)
     for recipient in recipients:
-        Notification.objects.create(
-            user=recipient,
+        _create_notification(
+            recipient,
             title='Customer support case updated',
             message=(
                 f'{actor_name} marked customer support case #{case.id} as {status_label}: '
                 f'{case.subject} for {client_name}.'
             ),
-            type='success',
+            notification_type='success',
         )
 
 class MessageViewSet(viewsets.ModelViewSet):
@@ -362,11 +376,11 @@ class CustomerSupportCaseViewSet(viewsets.ModelViewSet):
             for recipient in recipients:
                 if recipient.id == self.request.user.id:
                     continue
-                Notification.objects.create(
-                    user=recipient,
+                _create_notification(
+                    recipient,
                     title='New customer service case',
                     message=f'{client_name} opened a {case.get_priority_display().lower()} priority support case: {case.subject}.',
-                    type='customer_inquiry',
+                    notification_type='customer_inquiry',
                 )
 
     def perform_update(self, serializer):

@@ -5,6 +5,12 @@ import { loadAuthStateFromBackend, seedAuthState, visitWorkspacePage } from './h
 let adminAuthState;
 let inventoryViewerAuthState;
 
+// The assistant button is movable and remembers where a user drags it. Park it top-left, as an
+// operator would, before clicking row actions that sit under its default bottom-right spot.
+const parkAssistantButton = (page) => page.addInitScript(() => {
+  window.localStorage.setItem('afn:analytics-assistant-position', JSON.stringify({ x: 12, y: 12 }));
+});
+
 test.describe('Admin Workspace - All Pages', () => {
   test.describe.configure({ timeout: 180000 });
 
@@ -580,6 +586,7 @@ test.describe('Admin Workspace - All Pages', () => {
   });
 
   test('3.8d - Admin approves and rejects pending equipment requests', async ({ page }) => {
+    await parkAssistantButton(page);
     let pendingReservations = [
       {
         id: 99001,
@@ -720,6 +727,7 @@ test.describe('Admin Workspace - All Pages', () => {
   });
 
   test('3.8e - Real backend applies mixed equipment decisions end to end', async ({ page, request }) => {
+    await parkAssistantButton(page);
     const headers = { Authorization: `Token ${adminAuthState.token}` };
     const listFrom = (payload) => (Array.isArray(payload) ? payload : (payload.results || []));
     const technicianAuthState = loadAuthStateFromBackend('tech_test');
@@ -1133,8 +1141,15 @@ test.describe('Admin Workspace - All Pages', () => {
 
   test('3.14b - Admin publishes a permitted completed project to the public landing page', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/landing-page', 'test-results/screenshots/03-admin-landing-editor.png');
+    // The editor opens on the hero tab with nothing to publish until something changes.
+    await expect(page.getByText('Everything here is published.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Publish changes' })).toBeDisabled();
+    await page.getByRole('navigation', { name: 'Landing page sections' }).getByRole('button', { name: 'Projects' }).click();
+    await expect(page).toHaveURL(/tab=projects/);
+    await expect(page.getByRole('link', { name: /view on the published page/i })).toHaveAttribute('href', '/admin/landing-page/preview#our-work');
     await expect(page.getByRole('heading', { name: 'Our Work' })).toBeVisible();
     await page.getByRole('button', { name: 'Add completed project' }).click();
+    await expect(page.getByText(/Unsaved changes/)).toBeVisible();
 
     const project = page.locator('article').filter({ has: page.getByRole('heading', { name: /^Project \d+/ }) }).last();
     await project.getByLabel('Project title').fill('E2E Residential Solar Installation');
@@ -1150,6 +1165,7 @@ test.describe('Admin Workspace - All Pages', () => {
     await page.getByRole('button', { name: 'Publish changes' }).click();
     expect((await publishResponse).status()).toBe(200);
     await expect(page.getByText('Landing page published successfully.')).toBeVisible();
+    await expect(page.getByText('Everything here is published.')).toBeVisible();
 
     await page.evaluate(() => {
       sessionStorage.removeItem('afn_token');

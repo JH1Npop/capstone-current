@@ -120,7 +120,7 @@ export default function ClientSolarEstimates() {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">{estimate.estimate_code || formatEstimateId(estimate.id)}</p>
                     <h2 className="mt-1 text-lg font-bold text-slate-900">{result.panelCount || 0} panels · {number(result.installedCapacity, 2)} kWp</h2>
-                    <p className="mt-1 text-sm text-slate-500">{number(result.monthlyConsumption)} kWh/month · PHP {number(result.monthlySavings, 0)} estimated savings</p>
+                    <p className="mt-1 text-sm text-slate-500">{number(result.monthlyConsumption)} kWh/month · PHP {result.monthlySavingsWithoutNetMetering !== undefined ? `${number(result.monthlySavingsWithoutNetMetering, 0)}–` : ''}{number(result.monthlySavings, 0)} estimated savings</p>
                   </div>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold capitalize text-slate-700">{estimate.status}</span>
                 </div>

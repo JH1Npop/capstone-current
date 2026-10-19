@@ -39,7 +39,7 @@ import {
   formatDateTime,
   getDisplayText
 } from '../../utils/dashboardHelpers';
-import { formatClientId } from '../../utils/roleIds';
+import { formatClientId, formatRequestId } from '../../utils/roleIds';
 import { startVisibleInterval } from '../../utils/visibleInterval';
 
 export default function AdminDashboard() {
@@ -725,7 +725,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
               <div>
                 <h3 id="dashboard-request-details-title" className="text-lg font-semibold text-slate-900">Service Request Details</h3>
-                <p className="text-sm text-slate-500">#{viewingRequestDetails.id} • Submitted {formatDateTime(viewingRequestDetails.request_date)}</p>
+                <p className="text-sm text-slate-500">{formatRequestId(viewingRequestDetails.id)} • Submitted {formatDateTime(viewingRequestDetails.request_date)}</p>
               </div>
               <button
                 type="button"
@@ -816,24 +816,39 @@ export default function AdminDashboard() {
                 Reject Request
               </button>
               
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setRequestDecision({ type: 'approve_inspection', id: viewingRequestDetails.id, label: viewingRequestDetails.service_summary || viewingRequestDetails.service_type_name || 'this request' })}
-                  disabled={approvingRequests.has(viewingRequestDetails.id)}
-                  className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 hover:border-brand-300 disabled:opacity-60"
-                >
-                  {approvingRequests.has(viewingRequestDetails.id) ? 'Processing...' : 'Require Inspection'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRequestDecision({ type: 'approve', id: viewingRequestDetails.id, label: viewingRequestDetails.service_summary || viewingRequestDetails.service_type_name || 'this request' })}
-                  disabled={approvingRequests.has(viewingRequestDetails.id)}
-                  className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60 shadow-sm"
-                >
-                  {approvingRequests.has(viewingRequestDetails.id) ? 'Approving...' : 'Approve for Service'}
-                </button>
-              </div>
+              {viewingRequestDetails.service_requires_site_inspection ? (
+                // The server always opens an inspection for these services, so offer only that path.
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-xs text-slate-500">This service requires a site inspection before work.</p>
+                  <button
+                    type="button"
+                    onClick={() => setRequestDecision({ type: 'approve_inspection', id: viewingRequestDetails.id, label: viewingRequestDetails.service_summary || viewingRequestDetails.service_type_name || 'this request' })}
+                    disabled={approvingRequests.has(viewingRequestDetails.id)}
+                    className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60 shadow-sm"
+                  >
+                    {approvingRequests.has(viewingRequestDetails.id) ? 'Processing...' : 'Approve for Inspection'}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRequestDecision({ type: 'approve_inspection', id: viewingRequestDetails.id, label: viewingRequestDetails.service_summary || viewingRequestDetails.service_type_name || 'this request' })}
+                    disabled={approvingRequests.has(viewingRequestDetails.id)}
+                    className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 hover:border-brand-300 disabled:opacity-60"
+                  >
+                    {approvingRequests.has(viewingRequestDetails.id) ? 'Processing...' : 'Require Inspection'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRequestDecision({ type: 'approve', id: viewingRequestDetails.id, label: viewingRequestDetails.service_summary || viewingRequestDetails.service_type_name || 'this request' })}
+                    disabled={approvingRequests.has(viewingRequestDetails.id)}
+                    className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60 shadow-sm"
+                  >
+                    {approvingRequests.has(viewingRequestDetails.id) ? 'Approving...' : 'Approve for Service'}
+                  </button>
+                </div>
+              )}
             </div>}
           </div>
         </div>

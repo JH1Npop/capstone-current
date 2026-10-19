@@ -141,4 +141,32 @@ test.describe('Client Workspace - All Pages', () => {
     await expect(page.getByRole('link', { name: 'Solar Estimates', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save estimate' })).toBeVisible();
   });
+
+  test('5.11b - Calculator savings range matches the saved server estimate', async ({ page }) => {
+    await visitWorkspacePage(page, '/client/solar-estimates');
+    await page.getByRole('button', { name: 'New calculation' }).click();
+
+    await page.getByLabel('Monthly consumption').fill('450');
+    await page.getByLabel('Electricity rate').fill('12');
+    await page.getByLabel('Peak sun hours').fill('5');
+    await page.getByLabel('Used in daytime').fill('40');
+    await page.getByLabel('Net-metering export credit').fill('5.5');
+    // 462 kWh/mo generated: 180 kWh used in daytime at PHP 12, 270 kWh offset at the PHP 5.50 credit.
+    await expect(page.getByText('PHP 2,160–3,645/mo', { exact: true })).toBeVisible();
+
+    const saved = page.waitForResponse((response) => response.url().includes('/api/services/solar-estimates/') && response.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Save estimate' }).click();
+    const response = await saved;
+    expect(response.status()).toBe(201);
+    const snapshot = (await response.json()).result_snapshot;
+    expect(snapshot.monthlySavingsWithoutNetMetering).toBe(2160);
+    expect(snapshot.monthlySavings).toBe(3645);
+    expect(snapshot.daytimeUsagePercent).toBe(40);
+
+    // Appliance presets carry a running share and a motor starting surge.
+    await page.getByRole('button', { name: 'Per appliance' }).click();
+    await page.getByRole('combobox', { name: 'Appliance' }).fill('Refrigerator');
+    await expect(page.getByLabel('Runs %')).toHaveValue('35');
+    await expect(page.getByLabel('Surge ×')).toHaveValue('3');
+  });
 });

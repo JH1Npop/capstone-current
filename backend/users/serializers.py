@@ -851,15 +851,51 @@ class AdminSettingsSerializer(serializers.ModelSerializer):
                 })
         return attrs
 
+    # Structured landing lists: allowed item fields and the most entries shown publicly.
+    LANDING_CONTENT_LISTS = {
+        'highlights': (('value', 'label'), 8),
+        'testimonials': (('quote', 'name', 'location'), 12),
+        'faqs': (('question', 'answer'), 15),
+    }
+
     def validate_landingPageContent(self, value):
         if not isinstance(value, dict):
             raise serializers.ValidationError('Landing page content must be an object.')
+        cleaned = {}
         for key, field_value in value.items():
+            if key in self.LANDING_CONTENT_LISTS:
+                fields, max_items = self.LANDING_CONTENT_LISTS[key]
+                if not isinstance(field_value, list):
+                    raise serializers.ValidationError(f'{key} must be a list.')
+                items = []
+                for entry in field_value:
+                    if not isinstance(entry, dict):
+                        raise serializers.ValidationError(f'Each {key} entry must be an object.')
+                    item = {field: str(entry.get(field) or '').strip() for field in fields}
+                    if any(len(text) > 500 for text in item.values()):
+                        raise serializers.ValidationError(f'{key} entries must be 500 characters or fewer per field.')
+                    if any(item.values()):
+                        items.append(item)
+                if len(items) > max_items:
+                    raise serializers.ValidationError(f'Use at most {max_items} {key} entries.')
+                cleaned[key] = items
+                continue
             if not isinstance(field_value, str):
                 raise serializers.ValidationError(f'{key} must be text.')
             if len(field_value) > 500:
                 raise serializers.ValidationError(f'{key} must be 500 characters or fewer.')
-        return value
+            cleaned[key] = field_value
+        for key, (minimum, maximum) in {'mapLatitude': (-90, 90), 'mapLongitude': (-180, 180)}.items():
+            raw = str(cleaned.get(key) or '').strip()
+            if not raw:
+                continue
+            try:
+                number = float(raw)
+            except ValueError:
+                raise serializers.ValidationError({key: 'Enter a decimal coordinate, e.g. 13.9717.'})
+            if not minimum <= number <= maximum:
+                raise serializers.ValidationError({key: f'Enter a value from {minimum} to {maximum}.'})
+        return cleaned
 
     def validate_solarCalculatorSettings(self, value):
         if not isinstance(value, dict):
@@ -870,6 +906,8 @@ class AdminSettingsSerializer(serializers.ModelSerializer):
             'defaultPanelWattage': (100, 1000),
             'defaultElectricityRate': (0.01, 100),
             'defaultDesiredOffset': (10, 100),
+            'defaultDaytimeUsage': (0, 100),
+            'defaultExportCredit': (0, 100),
         }
         for key, (minimum, maximum) in numeric_ranges.items():
             if key not in value:

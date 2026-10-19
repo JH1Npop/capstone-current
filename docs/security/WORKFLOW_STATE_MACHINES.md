@@ -22,6 +22,12 @@ decisions acquire a database row lock, so Aiven PostgreSQL serializes competing
 approval, rejection, and cancellation calls. Generic request updates cannot
 change status and must use the named workflow actions.
 
+Inspection requirements are evaluated across the primary service and every
+requested service item. A secondary inspection-first service forces inspection
+approval and inspection dispatch too; the request serializer exposes the same
+aggregate flag to the office screens. The shared pre-service transition guard
+uses that rule so a direct API call cannot skip the inspection visit.
+
 ## Service tickets
 
 The authoritative transition map is `ALLOWED_TICKET_TRANSITIONS` in
@@ -96,6 +102,23 @@ direct model/admin changes as well as API workflow changes. The
 `reconcile_technician_availability` management command reports historical
 mismatches without writing by default; `--apply` repairs them after the target
 database has been reviewed.
+Field-sequence robustness (2026-10-19): the map page records `Navigating` as
+soon as the technician shares GPS; directions are optional and loaded
+separately, so a slow or failed routing provider never blocks travel or GPS
+arrival (the ORS client times out after `ROUTING_HTTP_TIMEOUT_SECONDS` without
+rate-limit retries and the synthetic fallback route is used). Finish Job
+evidence is uploaded as image files (`completion_photo_files`, JPG/PNG/WebP up
+to 10 MB, signature-checked) and stored as media URLs; `data:` images are
+refused, as are arbitrary URL/string/object references submitted as new
+completion evidence. Both completion endpoints require fresh validated file
+uploads; previously saved historical evidence stays readable. Failed completion
+transactions remove the files saved by that attempt, including partial storage
+failures, without touching older evidence. Storage cleanup failures are logged.
+A technician who still leads or crews a non-closed ticket cannot be
+deactivated or changed to another role (HTTP 409 listing the tickets to reassign,
+on both the user and technician update endpoints). A request rejected by
+the office is stored as `Cancelled` with an explicit `rejected` closure in its
+activity metadata, which the client sees as "Rejected" with the reason.
 Assigned lead or crew technicians may request additional equipment while a
 ticket is `Not Started` or in a supported inspection, active, awaiting-materials,
 or hold state. Every request creates pending inventory reservations and a

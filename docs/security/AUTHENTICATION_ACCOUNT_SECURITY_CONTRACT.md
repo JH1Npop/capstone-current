@@ -17,6 +17,11 @@ password recovery, and account-management authority.
   available for safe fields.
 - User deletion endpoints perform reversible deactivation rather than deleting
   business history.
+- A technician who leads or crews open work must have those tickets reassigned
+  before deactivation or a role change. Both user and technician update routes
+  return HTTP 409 with the open ticket codes; their update transactions lock the
+  account row, also used by dispatch. Closed assignments preserve their history
+  and do not prevent a role change.
 - Django's built-in administration surface requires an application role of
   `admin` or `superadmin` in addition to Django's normal staff checks. A stale
   or inconsistent `is_staff`/`is_superuser` flag must never authenticate a

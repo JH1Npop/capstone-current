@@ -18,6 +18,40 @@ def _extract_skills_payload(request_data):
     return data, skills_payload
 
 
+def _requests_deactivation(data):
+    status_value = str(data.get('status') or '').strip().lower()
+    active_value = str(data.get('is_active', '')).strip().lower()
+    return status_value == 'inactive' or active_value in {'false', '0'}
+
+
+def _open_assignment_conflict(user):
+    """Refuse to deactivate a technician who still leads or crews open work; say what to reassign."""
+    from django.db.models import Q
+
+    from services.models import ServiceTicket
+    from services.ticket_status import CLOSED_TICKET_STATUSES
+
+    if getattr(user, 'role', None) != 'technician':
+        return None
+    open_ids = list(
+        ServiceTicket.objects.filter(Q(technician=user) | Q(crew_assignments__technician=user))
+        .exclude(status__in=CLOSED_TICKET_STATUSES)
+        .values_list('id', flat=True)
+        .distinct()
+        .order_by('id')
+    )
+    if not open_ids:
+        return None
+    codes = [f'TKT-{ticket_id:04d}' for ticket_id in open_ids]
+    return Response(
+        {
+            'error': f"Reassign {', '.join(codes)} before deactivating this technician or changing their role.",
+            'open_tickets': codes,
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
 def _normalize_skill_payload(skills_payload):
     if skills_payload is None:
         return None
@@ -191,10 +225,11 @@ class AdminTechniciansViewSet(viewsets.ViewSet):
         except User.DoesNotExist:
             return Response({'error': 'Technician not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    @transaction.atomic
     def update(self, request, pk=None):
         """Update a technician"""
         try:
-            technician = User.objects.get(id=pk, role='technician')
+            technician = User.objects.select_for_update().get(id=pk, role='technician')
             payload, skills_payload = _extract_skills_payload(request.data)
             can_manage_profile = (
                 is_superadmin_role(request.user.role) or
@@ -214,6 +249,10 @@ class AdminTechniciansViewSet(viewsets.ViewSet):
                 raise PermissionDenied('You may manage technician skills, but not technician profile fields.')
             if skills_payload is not None and not can_manage_skills:
                 raise PermissionDenied('You do not have permission to manage technician skills.')
+            if payload and (_requests_deactivation(payload) or payload.get('role', 'technician') != 'technician'):
+                conflict = _open_assignment_conflict(technician)
+                if conflict:
+                    return conflict
             serializer = UserUpdateSerializer(technician, data=payload, partial=True, context={'request': request})
             if serializer.is_valid():
                 with transaction.atomic():
@@ -229,6 +268,9 @@ class AdminTechniciansViewSet(viewsets.ViewSet):
         """Delete a technician"""
         try:
             technician = User.objects.get(id=pk, role='technician')
+            conflict = _open_assignment_conflict(technician)
+            if conflict:
+                return conflict
             technician.status = 'inactive'
             technician.is_active = False
             technician.save(update_fields=['status', 'is_active'])
@@ -349,14 +391,20 @@ class AdminUsersViewSet(viewsets.ViewSet):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    @transaction.atomic
     def update(self, request, pk=None):
         """Update a user"""
         try:
-            user = User.objects.get(id=pk)
+            user = User.objects.select_for_update().get(id=pk)
             try:
                 ensure_actor_can_manage_account(request.user, user)
             except PermissionError as exc:
                 raise PermissionDenied(str(exc))
+            removing_technician_role = user.role == 'technician' and request.data.get('role', user.role) != 'technician'
+            if _requests_deactivation(request.data) or removing_technician_role:
+                conflict = _open_assignment_conflict(user)
+                if conflict:
+                    return conflict
             serializer = UserUpdateSerializer(user, data=request.data, partial=True, context={'request': request})
             if serializer.is_valid():
                 serializer.save()
@@ -373,6 +421,9 @@ class AdminUsersViewSet(viewsets.ViewSet):
                 ensure_actor_can_manage_account(request.user, user)
             except PermissionError as exc:
                 raise PermissionDenied(str(exc))
+            conflict = _open_assignment_conflict(user)
+            if conflict:
+                return conflict
             user.status = 'inactive'
             user.is_active = False
             user.save(update_fields=['status', 'is_active'])

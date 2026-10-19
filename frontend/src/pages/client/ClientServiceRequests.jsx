@@ -552,15 +552,15 @@ const selectSearchResult = async (result) => {
           <div className="space-y-5 p-5">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className={labelClass}>Client</label>
+                <p className={labelClass}>Client</p>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   {[user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || user?.username || 'Signed-in client'}
                 </div>
               </div>
             </div>
             <div>
-              <label className={labelClass}>Service Types</label>
-              <div className="rounded-xl border border-slate-300 bg-white p-2">
+              <p id="request-service-types" className={labelClass}>Service Types</p>
+              <div role="group" aria-labelledby="request-service-types" className="rounded-xl border border-slate-300 bg-white p-2">
                 {serviceTypes.length > 0 ? (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {serviceTypes.map((serviceType) => {
@@ -606,23 +606,24 @@ const selectSearchResult = async (result) => {
               )}
             </div>
             <div>
-              <label className={labelClass}>Address / Landmark *</label>
-              <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="E.g., near SM Mall of Asia" required />
+              <label htmlFor="request-address" className={labelClass}>Address / Landmark *</label>
+              <input id="request-address" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="E.g., near SM Mall of Asia" required />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>City *</label>
-              <input value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} placeholder="Enter city name" required />
+              <label htmlFor="request-city" className={labelClass}>City *</label>
+              <input id="request-city" value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} placeholder="Enter city name" required />
             </div>
             <div>
-              <label className={labelClass}>Province *</label>
-              <input value={province} onChange={(e) => setProvince(e.target.value)} className={inputClass} placeholder="Enter province name" required />
+              <label htmlFor="request-province" className={labelClass}>Province *</label>
+              <input id="request-province" value={province} onChange={(e) => setProvince(e.target.value)} className={inputClass} placeholder="Enter province name" required />
             </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className={labelClass}>Preferred Appointment Date *</label>
+                <label htmlFor="request-preferred-date" className={labelClass}>Preferred Appointment Date *</label>
                 <input
+                  id="request-preferred-date"
                   type="date"
                   value={preferredDate}
                   onChange={(e) => setPreferredDate(e.target.value)}
@@ -632,8 +633,9 @@ const selectSearchResult = async (result) => {
                 />
               </div>
               <div>
-                <label className={labelClass}>Preferred Time Slot</label>
+                <label htmlFor="request-time-slot" className={labelClass}>Preferred Time Slot</label>
                 <select
+                  id="request-time-slot"
                   value={preferredTimeSlot}
                   onChange={(e) => setPreferredTimeSlot(e.target.value)}
                   className={inputClass}
@@ -647,10 +649,10 @@ const selectSearchResult = async (result) => {
               </div>
             </div>
             <div>
-              <label className={labelClass}>
+              <label htmlFor="request-details" className={labelClass}>
                 Request Details <span className="text-slate-400">(Optional)</span>
               </label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} rows="3" placeholder="Describe your request"  />
+              <textarea id="request-details" value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} rows="3" placeholder="Describe your request"  />
             </div>
             {submitError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{submitError}</p>}
             {message && <p className={`rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm ${messageToneClassName}`}>{message}</p>}

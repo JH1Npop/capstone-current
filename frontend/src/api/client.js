@@ -52,7 +52,8 @@ const deriveClientStatus = (requestStatus, ticketStatus) => {
   }
 };
 
-const formatWorkflowLabel = (hasTicket) => (hasTicket ? 'Ticket Active' : 'Request Review');
+// Client-facing wording for where the request is; avoids internal terms such as "ticket".
+const formatWorkflowLabel = (hasTicket) => (hasTicket ? 'Being handled by our team' : 'Waiting for office review');
 
 const normalizeServiceRequest = (request) => {
   const requestStatus = normalizeStatus(request.status);
@@ -67,6 +68,9 @@ const normalizeServiceRequest = (request) => {
     has_ticket: false,
     workflow_stage: 'request',
     workflow_label: formatWorkflowLabel(false),
+    // An office rejection is stored as Cancelled; keep the status for filtering but show it truthfully.
+    rejected: request.closure?.kind === 'rejected',
+    closure_reason: request.closure?.reason || '',
     request_source: request.request_source || 'client_portal',
     request_source_label: request.request_source_label || 'Client Portal',
     status: requestStatus,

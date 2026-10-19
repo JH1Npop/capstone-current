@@ -1,6 +1,7 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
+from .proof_fixtures import completion_photo
 from inventory.models import InventoryCategory, InventoryItem, InventoryReservation
 from services.models import QuotationRecord
 from django.db import transaction
@@ -754,9 +755,9 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             f'/api/technician/jobs/{ticket.id}/status/',
             {
                 'status': 'completed',
-                'completion_proof_images': ['data:image/jpeg;base64,warranty-proof'],
+                'completion_photo_files': completion_photo(),
             },
-            format='json',
+            format='multipart',
         )
         self.assertEqual(complete_response.status_code, status.HTTP_200_OK)
         ticket.refresh_from_db()
@@ -1140,9 +1141,9 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             f'/api/technician/jobs/{ticket.id}/status/',
             {
                 'status': 'completed',
-                'completion_proof_images': ['data:image/jpeg;base64,follow-up-proof'],
+                'completion_photo_files': completion_photo(),
             },
-            format='json',
+            format='multipart',
         )
         self.assertEqual(complete_response.status_code, status.HTTP_200_OK)
         ticket.refresh_from_db()
@@ -1240,9 +1241,9 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             f'/api/services/service-tickets/{ticket.id}/complete_work/',
             {
                 'completion_notes': 'Completed with after-sales handoff.',
-                'completion_proof_images': ['data:image/jpeg;base64,after-sales-proof'],
+                'completion_photo_files': completion_photo(),
             },
-            format='json',
+            format='multipart',
         )
         self.assertEqual(complete_response.status_code, status.HTTP_200_OK)
 
@@ -1964,9 +1965,9 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             f'/api/technician/jobs/{ticket.id}/status/',
             {
                 'status': 'completed',
-                'completion_proof_images': ['data:image/jpeg;base64,checklist-proof'],
+                'completion_photo_files': completion_photo(),
             },
-            format='json',
+            format='multipart',
         )
 
         self.assertEqual(completed_response.status_code, status.HTTP_200_OK)
@@ -1996,7 +1997,6 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             completed_by=self.technician_user,
         )
 
-        proof_images = ['data:image/jpeg;base64,finished-work-proof']
         self.client.force_authenticate(user=self.technician_user)
         ticket.status = 'In Progress'
         ticket.save(update_fields=['status'])
@@ -2005,17 +2005,18 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             {
                 'status': 'completed',
                 'completion_notes': 'Finished and tested with the client.',
-                'completion_proof_images': proof_images,
+                'completion_photo_files': completion_photo(),
             },
-            format='json',
+            format='multipart',
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'Completed')
         self.assertEqual(ticket.completion_notes, 'Finished and tested with the client.')
-        self.assertEqual(ticket.completion_proof_images, proof_images)
-        self.assertEqual(response.data['completion_proof_images'], proof_images)
+        self.assertEqual(len(ticket.completion_proof_images), 1)
+        self.assertIn(f'checklists/ticket-{ticket.id}/', ticket.completion_proof_images[0])
+        self.assertEqual(response.data['completion_proof_images'], ticket.completion_proof_images)
 
     def test_complete_work_requires_completed_checklist(self):
         request_obj = ServiceRequest.objects.create(

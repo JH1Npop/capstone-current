@@ -1,11 +1,15 @@
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 
-CALCULATION_VERSION = '1.0'
+# 1.1: savings split into daytime self-use (full retail rate) and exported energy
+# (net-metering credit), and appliances can run for part of their scheduled hours.
+CALCULATION_VERSION = '1.1'
 PANEL_AREA_SQUARE_METERS = Decimal('2.6')
 BATTERY_DEPTH_OF_DISCHARGE = Decimal('0.8')
 BATTERY_EFFICIENCY = Decimal('0.92')
 INVERTER_HEADROOM = Decimal('1.2')
+DEFAULT_DAYTIME_USAGE_PERCENT = Decimal('40')
+DEFAULT_EXPORT_CREDIT_RATE = Decimal('5.5')
 
 
 class SolarCalculationError(ValueError):
@@ -57,6 +61,8 @@ def _appliance_totals(appliances):
             day_hours = _decimal(item.get('dayHours', 0), 'dayHours', minimum=0, maximum=24)
             night_hours = _decimal(item.get('nightHours', 0), 'nightHours', minimum=0, maximum=24)
             surge_factor = _decimal(item.get('surgeFactor', 1), 'surgeFactor', minimum=1, maximum=10)
+            # Share of the scheduled hours the appliance actually draws power (compressors cycle).
+            duty_cycle = _decimal(item.get('dutyCycle', 100), 'dutyCycle', minimum=1, maximum=100)
             if day_hours + night_hours > 24:
                 raise SolarCalculationError({'hours': 'Day and night hours cannot exceed 24 in total.'})
         except SolarCalculationError as exc:
@@ -65,8 +71,9 @@ def _appliance_totals(appliances):
 
         watts = quantity * wattage
         surge_extra = (watts * surge_factor) - watts
-        day_energy += watts * day_hours / Decimal('1000')
-        night_energy += watts * night_hours / Decimal('1000')
+        running_share = duty_cycle / Decimal('100')
+        day_energy += watts * day_hours * running_share / Decimal('1000')
+        night_energy += watts * night_hours * running_share / Decimal('1000')
         connected_watts += watts
         largest_surge_extra = max(largest_surge_extra, surge_extra)
         normalized.append({
@@ -76,6 +83,7 @@ def _appliance_totals(appliances):
             'dayHours': _rounded(day_hours),
             'nightHours': _rounded(night_hours),
             'surgeFactor': _rounded(surge_factor),
+            'dutyCycle': _rounded(duty_cycle),
         })
 
     if row_errors:
@@ -113,6 +121,20 @@ def calculate_solar_estimate(inputs):
     roof_area = _decimal(
         inputs.get('available_roof_area'), 'available_roof_area', minimum=0, maximum=1000000, required=False
     )
+    export_credit = _decimal(
+        inputs.get('export_credit_rate'), 'export_credit_rate', minimum=0, maximum=1000, required=False
+    )
+    export_credit = DEFAULT_EXPORT_CREDIT_RATE if export_credit is None else export_credit
+    # An export credit never exceeds the retail rate it offsets.
+    export_credit = min(export_credit, electricity_rate)
+    if mode == 'appliances':
+        total_energy = day_energy + night_energy
+        daytime_usage = day_energy / total_energy * Decimal('100')
+    else:
+        daytime_usage = _decimal(
+            inputs.get('daytime_usage_percent'), 'daytime_usage_percent', minimum=0, maximum=100, required=False
+        )
+        daytime_usage = DEFAULT_DAYTIME_USAGE_PERCENT if daytime_usage is None else daytime_usage
 
     performance_ratio = Decimal('1') - (system_loss / Decimal('100'))
     offset_ratio = desired_offset / Decimal('100')
@@ -123,8 +145,14 @@ def calculate_solar_estimate(inputs):
     installed_capacity = Decimal(panel_count) * panel_wattage / Decimal('1000')
     daily_generation = installed_capacity * peak_sun_hours * performance_ratio
     monthly_generation = daily_generation * Decimal('30')
-    usable_energy = min(monthly_generation, monthly_consumption)
-    monthly_savings = usable_energy * electricity_rate
+    # Solar used while the sun is up replaces power bought at the full rate. The rest is
+    # exported; with net metering it earns only the export credit, and only up to the
+    # energy still bought from the grid. Without net metering, exports earn nothing.
+    self_consumed = min(monthly_generation, monthly_consumption * daytime_usage / Decimal('100'))
+    exported = monthly_generation - self_consumed
+    credited_export = min(exported, monthly_consumption - self_consumed)
+    savings_without_net_metering = self_consumed * electricity_rate
+    monthly_savings = savings_without_net_metering + credited_export * export_credit
     roof_required = Decimal(panel_count) * PANEL_AREA_SQUARE_METERS
     inverter_capacity = (connected_watts + largest_surge_extra) / Decimal('1000') * INVERTER_HEADROOM
     battery_capacity = night_energy / BATTERY_DEPTH_OF_DISCHARGE / BATTERY_EFFICIENCY
@@ -139,6 +167,11 @@ def calculate_solar_estimate(inputs):
         'dailyGeneration': _rounded(daily_generation),
         'monthlyGeneration': _rounded(monthly_generation),
         'monthlySavings': _rounded(monthly_savings),
+        'monthlySavingsWithoutNetMetering': _rounded(savings_without_net_metering),
+        'selfConsumedEnergy': _rounded(self_consumed),
+        'exportedEnergy': _rounded(exported),
+        'daytimeUsagePercent': _rounded(daytime_usage),
+        'exportCreditRate': _rounded(export_credit),
         'roofAreaRequired': _rounded(roof_required),
         'roofFits': None if roof_area in (None, 0) else roof_area >= roof_required,
         'inverterCapacity': _rounded(inverter_capacity),

@@ -1,6 +1,7 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
+from .proof_fixtures import completion_photo
 from services.maintenance import process_maintenance_alerts
 
 
@@ -92,9 +93,9 @@ class MaintenanceWorkflowTests(APITestCase):
             f'/api/technician/jobs/{self.ticket.id}/status/',
             {
                 'status': 'completed',
-                'completion_proof_images': ['data:image/jpeg;base64,maintenance-proof'],
+                'completion_photo_files': completion_photo(),
             },
-            format='json',
+            format='multipart',
         )
 
         self.assertEqual(complete_response.status_code, status.HTTP_200_OK)

@@ -21,6 +21,7 @@ from services.models import (
     TurnoverAcceptance,
 )
 from users.models import User
+from .proof_fixtures import completion_photo
 
 SITE = {'latitude': '14.576400', 'longitude': '121.085100'}
 
@@ -96,9 +97,9 @@ class EndToEndJourneyTests(APITestCase):
             'maintenance_required': True, 'maintenance_profile': 'standard_area', 'maintenance_notes': 'Routine follow-up.',
         }, format='json'))
         self.ok(tech.post(f'/api/services/service-tickets/{ticket.id}/complete_work/', {
-            'completion_proof_images': ['https://example.com/proof/journey.jpg'],
+            'completion_photo_files': completion_photo(),
             'completion_notes': 'Work finished and tested.',
-        }, format='json'))
+        }, format='multipart'))
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'Completed')
         self.assertIsNotNone(ticket.completed_date)
@@ -241,6 +242,11 @@ class EndToEndJourneyTests(APITestCase):
         self.ok(self.as_user(self.tech).post(f"/api/services/inspections/{report.data['id']}/complete/", {}, format='json'))
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'Inspection Completed')
+        # Titled, ticket-linked alerts route the client to the request and the office to the review.
+        self.assertTrue(Notification.objects.filter(user=self.client_user, title='Inspection Completed', ticket=ticket).exists())
+        self.assertTrue(Notification.objects.filter(
+            user=self.admin, title=f'Inspection Report Submitted for Ticket #{ticket.id}', ticket=ticket,
+        ).exists())
 
     def test_inspection_visit_cannot_be_finished_as_completed_job(self):
         ticket = self.assign(self.approve(self.create_request(self.install)), 'inspection')
@@ -387,6 +393,76 @@ class EndToEndJourneyTests(APITestCase):
         self.ok(self.as_user(self.client_user).post(f'/api/services/service-requests/{cancelled.id}/cancel/', {'reason': 'No longer needed.'}, format='json'))
         cancelled.refresh_from_db()
         self.assertEqual(cancelled.status, 'Cancelled')
+
+        # Both are stored as Cancelled; the client can still tell an office rejection from a withdrawal.
+        client = self.as_user(self.client_user)
+        self.assertEqual(
+            self.ok(client.get(f'/api/services/service-requests/{rejected.id}/')).data['closure'],
+            {'kind': 'rejected', 'reason': 'Outside service area.'},
+        )
+        self.assertEqual(
+            self.ok(client.get(f'/api/services/service-requests/{cancelled.id}/')).data['closure']['kind'],
+            'cancelled_by_client',
+        )
+
+    def test_technician_with_open_work_cannot_be_deactivated(self):
+        ticket = self.assign(self.approve(self.create_request(self.cleaning)), 'service')
+        # Account management belongs to a superadmin (or an admin granted user management).
+        admin = self.as_user(User.objects.create_user(username='journey-superadmin', password='pass', role='superadmin'))
+
+        for response in (
+            admin.delete(f'/api/admin/technicians/{self.tech.id}/'),
+            admin.put(f'/api/admin/technicians/{self.tech.id}/', {'status': 'inactive'}, format='json'),
+            admin.put(f'/api/admin/technicians/{self.tech.id}/', {'role': 'client'}, format='json'),
+            admin.put(f'/api/admin/users/{self.tech.id}/', {'status': 'inactive'}, format='json'),
+            admin.put(f'/api/admin/users/{self.tech.id}/', {'role': 'client'}, format='json'),
+            admin.put(f'/api/admin/users/{self.tech.id}/', {'role': 'admin'}, format='json'),
+            admin.delete(f'/api/admin/users/{self.tech.id}/'),
+        ):
+            self.assertEqual(response.status_code, 409, response.data)
+            self.assertEqual(response.data['open_tickets'], [f'TKT-{ticket.id:04d}'])
+        self.tech.refresh_from_db()
+        self.assertEqual((self.tech.status, self.tech.is_active), ('active', True))
+        self.assertEqual(self.tech.role, 'technician')
+
+        ServiceTicket.objects.filter(pk=ticket.pk).update(status='Cancelled')
+        self.ok(admin.delete(f'/api/admin/technicians/{self.tech.id}/'))
+        self.tech.refresh_from_db()
+        self.assertEqual(self.tech.status, 'inactive')
+
+    def test_request_exposes_whether_its_service_requires_inspection(self):
+        request_obj = self.create_request(self.install)
+        data = self.ok(self.as_user(self.admin).get(f'/api/services/service-requests/{request_obj.id}/')).data
+        self.assertTrue(data['service_requires_site_inspection'])
+        self.assertIsNone(data['closure'])
+
+    def test_secondary_service_requires_inspection_for_approval_and_dispatch(self):
+        from services.models import ServiceRequestService
+
+        request_obj = self.create_request(self.cleaning)
+        ServiceRequestService.objects.create(request=request_obj, service_type=self.install, sort_order=1)
+        admin = self.as_user(self.admin)
+        data = self.ok(admin.get(f'/api/services/service-requests/{request_obj.id}/')).data
+        self.assertTrue(data['service_requires_site_inspection'])
+        self.ok(admin.post(f'/api/services/service-requests/{request_obj.id}/approve/', {
+            'require_inspection': False,
+        }, format='json'))
+        ticket = ServiceTicket.objects.get(request=request_obj)
+        self.assertEqual((ticket.status, ticket.ticket_type), ('For Inspection', 'inspection'))
+        refused = admin.post(f'/api/services/service-tickets/{ticket.id}/assign/', {
+            'technician_id': self.tech.id, 'dispatch_stage': 'service',
+            'scheduled_date': timezone.localdate().isoformat(),
+        }, format='json')
+        self.assertEqual(refused.status_code, 400, refused.data)
+        self.assign(ticket, 'inspection')
+
+    def test_technician_role_can_change_after_open_assignments_are_reassigned(self):
+        ticket = self.assign(self.approve(self.create_request(self.cleaning)), 'service')
+        ServiceTicket.objects.filter(pk=ticket.pk).update(technician=self.other_tech)
+        admin = self.as_user(User.objects.create_user(username='role-superadmin', password='pass', role='superadmin'))
+        self.ok(admin.put(f'/api/admin/users/{self.tech.id}/', {'role': 'client'}, format='json'))
+        self.tech.refresh_from_db()
+        self.assertEqual(self.tech.role, 'client')
 
     def test_minor_flow_reschedule_request_and_admin_reschedule(self):
         ticket = self.assign(self.approve(self.create_request(self.cleaning)), 'service')

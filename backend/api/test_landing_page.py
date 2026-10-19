@@ -63,6 +63,56 @@ class LandingPageSettingsTests(APITestCase):
         public_response = self.client.get('/api/public/landing-page/')
         self.assertEqual(public_response.data['landingPageContent']['headline'], 'Power your future')
 
+    def test_calculator_savings_defaults_are_validated(self):
+        UserCapabilityGrant.objects.create(user=self.admin, capability_code=PUBLIC_SITE_MANAGE)
+        self.client.force_authenticate(user=self.admin)
+
+        rejected = self.client.put(
+            '/api/admin/settings/', {'solarCalculatorSettings': {'defaultDaytimeUsage': 120}}, format='json'
+        )
+        self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST)
+
+        accepted = self.client.put(
+            '/api/admin/settings/',
+            {'solarCalculatorSettings': {'enabled': True, 'defaultDaytimeUsage': 55, 'defaultExportCredit': 6}},
+            format='json',
+        )
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK, accepted.data)
+        self.assertEqual(AdminSettings.objects.get().solar_calculator_settings['defaultExportCredit'], 6)
+
+    def test_landing_lists_and_map_pin_are_validated_and_published(self):
+        UserCapabilityGrant.objects.create(user=self.admin, capability_code=PUBLIC_SITE_MANAGE)
+        self.client.force_authenticate(user=self.admin)
+        content = {
+            'headline': 'Solar for Quezon',
+            'mapLatitude': '13.9717',
+            'mapLongitude': '121.6871',
+            'highlights': [{'value': ' 120+ ', 'label': 'Systems installed'}, {'value': '', 'label': ''}],
+            'testimonials': [{'quote': 'Great work.', 'name': 'J. Cruz', 'location': 'Lucena'}],
+            'faqs': [{'question': 'Do you inspect first?', 'answer': 'Yes.'}],
+        }
+        saved = self.client.put('/api/admin/settings/', {'landingPageContent': content}, format='json')
+        self.assertEqual(saved.status_code, status.HTTP_200_OK, saved.data)
+
+        stored = AdminSettings.objects.get().landing_page_content
+        # Blank entries are dropped and values trimmed.
+        self.assertEqual(stored['highlights'], [{'value': '120+', 'label': 'Systems installed'}])
+        self.client.force_authenticate(user=None)
+        public = self.client.get('/api/public/landing-page/').data['landingPageContent']
+        self.assertEqual(public['testimonials'][0]['name'], 'J. Cruz')
+        self.assertEqual(public['mapLongitude'], '121.6871')
+
+        self.client.force_authenticate(user=self.admin)
+        for bad_content in (
+            {'mapLatitude': 'Pagbilao'},
+            {'mapLongitude': '200'},
+            {'faqs': 'not a list'},
+            {'faqs': [{'question': 'x' * 501, 'answer': 'y'}]},
+            {'highlights': [{'value': str(index), 'label': 'n'} for index in range(9)]},
+        ):
+            response = self.client.put('/api/admin/settings/', {'landingPageContent': bad_content}, format='json')
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad_content)
+
     def test_client_cannot_update_landing_content(self):
         self.client.force_authenticate(user=self.client_user)
         response = self.client.put(
