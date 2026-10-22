@@ -495,10 +495,11 @@ verify the code, then update this file in the same change.
 
 ### Latest pass-on checkpoint (2026-10-22)
 
-- **Git:** runtime HEAD `72cc922` is the 2026-10-22 documentation commit "Refresh handoff and record full browser verification", above
+- **Git:** deployed runtime commit `72cc922` is the 2026-10-22 documentation commit "Refresh handoff and record full browser verification", above
   `ae4ab8d` (handoff closure), `09fe7cb` (application, tests, contracts), and
-  `56ff158`. It was pushed to `origin/staging-deploy`; this deployment-evidence
-  update is the only subsequent repository change before its own commit.
+  `56ff158`. It was pushed to `origin/staging-deploy`; the branch and local HEAD
+  now also contain later documentation-only deployment-record commits with no
+  application diff.
 - **Most recent completed work:** solar calculator 1.1, the page-ordered Landing
   Page Editor, the light-palette landing redesign, and the post-review defect
   remediation, all in `09fe7cb`.
@@ -540,10 +541,10 @@ other repository path must include this living handoff file.
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
 | Branch | `feature/analytics-decision-workspace`; no same-named remote branch was present at this checkpoint |
-| HEAD | 2026-10-22 documentation commit "Refresh handoff and record full browser verification" (handoff and diagram README only), above `ae4ab8d Update handoff after workflow release commit` (2026-10-19 20:54, documentation only), above `09fe7cb Harden service workflows and landing experience` (2026-10-19 20:50) and `56ff158`; the deposit runtime commit `1159b9a` and readiness record `4cd8311` are older ancestors |
+| HEAD | Documentation-only deployment record above `aa896bd Record verified staging deployment`, above deployed runtime commit `72cc922`, `ae4ab8d`, `09fe7cb`, and `56ff158`; there is no application diff after `72cc922` |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | Rechecked on 2026-10-22: `origin/staging-deploy` advanced from `6c14694` to `72cc922`; Render checked out and activated that exact commit for both staging services |
-| Worktree | The application release is committed through `72cc922`. This living-document deployment record is the only later change before its own documentation commit. |
+| Remote comparison | Rechecked on 2026-10-22: `origin/staging-deploy` advanced from `6c14694` through runtime `72cc922` and later documentation-only deployment records; Render checked out and activated `72cc922` for both staging services, and the documentation-only push did not trigger an unnecessary application rebuild |
+| Worktree | No application changes exist after deployed runtime commit `72cc922`; only the committed living-document deployment records follow it. |
 | Tracked deletions | None |
 | Commit/push status | The complete release through `72cc922` is pushed to `origin/staging-deploy` and verified live on both Render staging services. Production was not accessed or changed. |
 
@@ -2059,7 +2060,7 @@ All paths below are preserved work, not cleanup candidates.
 
 ## 13. Change ledger
 
-2026-10-22 (Render staging publication and verification): with explicit user authorization, pushed the complete release through `72cc922` to `origin/staging-deploy`. Both Render services reported that exact commit live. Backend startup connected to PostgreSQL, reported no pending migrations, and passed readiness plus the guarded read-only perimeter; the exact environment-specific frontend artifacts from the successful 2,540-module Render build returned HTTP 200. Updated current objective, checkpoint, Git/deployment/schema state, validation evidence, worktree manifest, and superseded staging risks. Production was not accessed or changed; no destructive staging test, staging business-record mutation, or production migration was performed. Affected repository path: this living handoff only.
+2026-10-22 (Render staging publication and verification): with explicit user authorization, pushed the complete release through `72cc922` to `origin/staging-deploy`. Both Render services reported that exact commit live. Backend startup connected to PostgreSQL, reported no pending migrations, and passed readiness plus the guarded read-only perimeter; the exact environment-specific frontend artifacts from the successful 2,540-module Render build returned HTTP 200. Updated current objective, checkpoint, Git/deployment/schema state, validation evidence, worktree manifest, and superseded staging risks. The first deployment-record update was committed as `aa896bd` and pushed; Render retained runtime `72cc922` because the successor changed documentation only. Production was not accessed or changed; no destructive staging test, staging business-record mutation, or production migration was performed. Affected repository path: this living handoff only.
 
 2026-10-22 (documentation commit): at the user's request, committed the 2026-10-22 handoff cleanup, scope decision, full-browser evidence, and the diagram README count fix as "Refresh handoff and record full browser verification". It was local-only at that checkpoint and was later published to staging as `72cc922`, as recorded above.
 
