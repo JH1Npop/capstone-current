@@ -44,7 +44,7 @@ records.
 - Underlined attributes in the Chen ERD are primary identifiers. `1`, `0..1`,
   and `N` labels state cardinality.
 - The ERD is one exhaustive editable canvas generated directly from the DBML
-  physical-schema contract. It contains all 52 entities, all 707 local
+  physical-schema contract. It contains all 52 entities, all 708 local
   attributes, and all 107 in-scope relationships. Every relationship line
   connects an actual canonical entity box to a Chen diamond. Clear entity exits,
   shared domain gutters, dedicated relationship rails, and bridge arcs organize
