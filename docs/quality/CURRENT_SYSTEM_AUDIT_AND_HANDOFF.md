@@ -2,7 +2,7 @@
 
 Status: **Current contract / living document**
 Last updated: **2026-10-22 Asia/Singapore**
-Current objective (latest): **No work is in progress. The 2026-10-19 workflow, landing, Landing Page Editor, and solar-calculator work is committed locally (`56ff158`, `09fe7cb`, handoff closure `ae4ab8d`, then the 2026-10-22 documentation commit "Refresh handoff and record full browser verification" = HEAD) on `feature/analytics-decision-workspace`. Nothing after the `4cd8311` staging deployment has been pushed or deployed. Open follow-ups are listed in section 9 (diagram pack, staging gate, calculator defaults in the development database).**
+Current objective (latest): **No implementation work is in progress. The complete release through `72cc922` was pushed to `origin/staging-deploy` on 2026-10-22 and both Render staging services report that exact commit live. Backend startup used PostgreSQL, reported no unapplied migrations, and passed readiness/perimeter checks; the exact frontend build artifacts from the Render log are publicly served. Production was not accessed or changed. Remaining production-readiness and optional documentation follow-ups are listed in section 9.**
 Current focused objective: **None open. Most recent completed themes (2026-10-18 to 2026-10-19, all committed): cross-role notifications and routing, technician-chosen holds, inspection-path integrity and service-specific inspection checks (`services.0062`), the whole-system audit fixes and post-review remediation, the light-palette landing redesign with map/contact, the page-ordered Landing Page Editor, and solar calculator 1.1 (savings range). Details are in the change ledger; residual risks are in section 9.**
 Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the inspection-first path, allow guarded same-day continuation on the same ticket with a fresh service dispatch, keep installation inventory out of inspection assignments, and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
@@ -495,10 +495,10 @@ verify the code, then update this file in the same change.
 
 ### Latest pass-on checkpoint (2026-10-22)
 
-- **Git:** HEAD is the 2026-10-22 documentation commit "Refresh handoff and record full browser verification", above
+- **Git:** runtime HEAD `72cc922` is the 2026-10-22 documentation commit "Refresh handoff and record full browser verification", above
   `ae4ab8d` (handoff closure), `09fe7cb` (application, tests, contracts), and
-  `56ff158`; worktree clean after that commit; nothing after `4cd8311` pushed or
-  deployed.
+  `56ff158`. It was pushed to `origin/staging-deploy`; this deployment-evidence
+  update is the only subsequent repository change before its own commit.
 - **Most recent completed work:** solar calculator 1.1, the page-ordered Landing
   Page Editor, the light-palette landing redesign, and the post-review defect
   remediation, all in `09fe7cb`.
@@ -507,10 +507,16 @@ verify the code, then update this file in the same change.
   backend tests with 3 expected skips, the 2,540-module build, and 18/18 browser
   smoke scenarios. On 2026-10-22 the complete Playwright suite passed 213/213
   against committed HEAD `ae4ab8d` plus documentation-only edits.
-- **Deployment status:** verified local release candidate only. `services.0062`
-  is applied to local SQLite but not to staging; the production-shaped staging
-  gate, remote migration review/backups, scheduler configuration, external
-  security review, and production secret/provider checks remain open.
+- **Deployment status:** Render frontend deploy `dep-dbd27rlg1s2s738l80j0` and
+  backend deploy `dep-dbd27rdg1s2s738l7vug` both report commit `72cc922` live.
+  Backend startup connected to PostgreSQL and reported `No migrations to apply`;
+  readiness and the guarded staging perimeter passed. The frontend build log
+  produced `index-ej1EOWHh.js`, `AdminServices-DroY0RWu.js`, and
+  `TechnicianInspectionChecklist-DpZSpd5q.js`, and each exact deployed artifact
+  returned HTTP 200. Production was not touched. The destructive/concurrency
+  portion of `quality:staging`, scheduler configuration, external security
+  review, production backup/restore, and production secret/provider checks
+  remain open.
 - **Next-agent boundary:** do not migrate, push, or deploy without explicit
   approval. The previous checkpoint (2026-09-08, Sales Record value source) is
   preserved in the change ledger.
@@ -536,10 +542,10 @@ other repository path must include this living handoff file.
 | Branch | `feature/analytics-decision-workspace`; no same-named remote branch was present at this checkpoint |
 | HEAD | 2026-10-22 documentation commit "Refresh handoff and record full browser verification" (handoff and diagram README only), above `ae4ab8d Update handoff after workflow release commit` (2026-10-19 20:54, documentation only), above `09fe7cb Harden service workflows and landing experience` (2026-10-19 20:50) and `56ff158`; the deposit runtime commit `1159b9a` and readiness record `4cd8311` are older ancestors |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | Not rechecked on 2026-10-18 20:35; the last verified staging deployment was `4cd8311`, so later local commits must not be assumed deployed |
-| Worktree | Clean after the 2026-10-22 documentation commit. Application, test, contract, and validation changes are in `09fe7cb` on top of `56ff158`; the handoff closure is `ae4ab8d`. None of these local commits has been pushed or deployed. |
+| Remote comparison | Rechecked on 2026-10-22: `origin/staging-deploy` advanced from `6c14694` to `72cc922`; Render checked out and activated that exact commit for both staging services |
+| Worktree | The application release is committed through `72cc922`. This living-document deployment record is the only later change before its own documentation commit. |
 | Tracked deletions | None |
-| Commit/push status | Latest local release-candidate commit `09fe7cb` and preceding workflow commit `56ff158` are not pushed or deployed. Older runtime commit `1159b9a` and readiness record `4cd8311` were pushed to `origin/staging-deploy`; production was not accessed or changed. |
+| Commit/push status | The complete release through `72cc922` is pushed to `origin/staging-deploy` and verified live on both Render staging services. Production was not accessed or changed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -800,8 +806,9 @@ workflows. Documents has a real E2E save/reload path for quotation drafts.
 ## 7. Schema state
 
 The table below distinguishes migrations already applied to the user's local
-development SQLite database (`backend/db.sqlite3`). As of 2026-09-25, every
-application migration is also applied to the current staging Aiven database.
+development SQLite database (`backend/db.sqlite3`). The 2026-10-22 Render
+staging startup for commit `72cc922` reported `No migrations to apply`, so every
+repository migration through `services.0062` is current on staging Aiven.
 That staging state does not authorize migration of any future separate
 production database:
 
@@ -825,8 +832,8 @@ production database:
 | `notifications.0009_remove_notificationlog_notification_and_more` | Guarded removal of unused notification template/delivery-log models; applied locally and to staging Aiven |
 | `users.0038_adminsettings_landing_page_projects` | Admin-managed completed-project portfolio with consent-gated public publication; applied locally, to fresh test/E2E databases, and to staging Aiven |
 | `users.0039_user_mfa_fields` | Administrator MFA enabled state, encrypted TOTP secret, hashed one-time recovery codes, and confirmation timestamp; applied to fresh isolated test databases, staging by the successful `fa121a2` startup, and the explicitly authorized local development SQLite migration on 2026-10-08 |
-| `users.0040_technicianprofile_last_seen_at` | Technician portal heartbeat timestamp used for expiring Online/Offline presence; applied to local development SQLite on 2026-10-13 after isolated tests; pending staging deployment |
-| `services.0062_servicetype_inspection_procedures` | Additive `ServiceType.inspection_procedures` list (default empty) holding service-specific Yes/No site-inspection checks; created 2026-10-18; applied to disposable test and isolated E2E databases and, with the user's explicit approval, to local development SQLite on 2026-10-18 after a transaction-consistent backup (`backend/local_backups/db-consistent-before-services-0062-20261018-225502.sqlite3`, integrity check `ok`); pending staging/production deployment |
+| `users.0040_technicianprofile_last_seen_at` | Technician portal heartbeat timestamp used for expiring Online/Offline presence; applied to local development SQLite on 2026-10-13 after isolated tests and current on staging by the 2026-10-22 Render startup; production remains untouched |
+| `services.0062_servicetype_inspection_procedures` | Additive `ServiceType.inspection_procedures` list (default empty) holding service-specific Yes/No site-inspection checks; applied to disposable test/E2E databases and, with explicit approval, local development SQLite after a transaction-consistent backup; current on staging by the 2026-10-22 Render startup; production remains untouched |
 
 Playwright applies migrations only to ignored `backend/db.e2e.sqlite3`, then
 flushes and seeds that isolated database. Any migration of a future separate
@@ -834,6 +841,8 @@ production database still requires backup, release review, and explicit
 deployment authorization.
 
 ## 8. Validation ledger
+
+2026-10-22 (authorized Render staging deployment): fetched `origin`, verified `origin/staging-deploy` was an ancestor of clean local HEAD `72cc922`, and pushed `HEAD:staging-deploy` (`6c14694..72cc922`). Render reported frontend deploy `dep-dbd27rlg1s2s738l80j0` and backend deploy `dep-dbd27rdg1s2s738l7vug` live on exact commit `72cc922`. Backend logs showed successful dependency installation/static collection, PostgreSQL startup, `No migrations to apply`, Daphne listening, and HTTP 200 liveness/readiness. The repository's guarded read-only staging perimeter check passed HTTPS, dependency readiness, security headers, exact-origin CORS, anonymous denial, and TRACE controls. The frontend build log transformed 2,540 modules and emitted `index-ej1EOWHh.js`; cache-bypassed probes returned HTTP 200 for that exact asset plus `AdminServices-DroY0RWu.js` and `TechnicianInspectionChecklist-DpZSpd5q.js`; backend readiness returned HTTP 200. The earlier local hash `index-DsaZ1elZ.js` was not expected on staging because the staging environment changes the production bundle. No production system was accessed or changed, and the destructive `quality:staging` concurrency phase was not run because no separately scoped disposable `test_...` PostgreSQL database exists.
 
 2026-10-22 (complete browser suite): `npx playwright test --reporter=line` passed all 213 scenarios in 21.6 minutes. That covers public, authentication, admin, technician, and client workspaces, main and side flows, responsive/accessibility checks, the all-pages quality pass, and major-flow journey 10.1. It ran against the code committed at `ae4ab8d`; the only uncommitted edits were documentation. The suite used the isolated E2E database; no persistent database was migrated or modified. This closes the full-browser gap left after the 2026-10-19 landing work.
 
@@ -1271,7 +1280,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 - **2026-10-19 solar calculator assumptions:** the defaults are planning figures, not site data. 4.5 peak sun hours × 0.8 ≈ 3.6 kWh/kWp/day, a conservative Quezon value against the DOE's ~1,402 kWh/kWp/yr Metro Manila example. The PHP 5.50 export credit comes from vendor-reported Meralco blended generation charges of about PHP 5–6.50 (not confirmed against ERC). PHP 12/kWh retail was kept, though 2026 reports vary. 40% daytime use is a residential guess. All of these are editable in the Calculator tab and should be refreshed from the utility's monthly advisory and Global Solar Atlas for the site. Estimates saved before calculation 1.1 keep their old single-figure `monthlySavings`; the client list shows a range only when `monthlySavingsWithoutNetMetering` exists. The development database still stores 5 sun hours until an administrator changes it.
 
-- **2026-10-19 landing editor:** "Preview" and "View on the published page" open the published page, not unsaved edits; only the Hero tab has a live draft preview, and the Contact tab previews the map pin. The user dropped light/dark mode for the public site on 2026-10-22; it is not planned. The landing work after `56ff158` is committed locally in `09fe7cb` and is not pushed or deployed.
+- **2026-10-19 landing editor:** "Preview" and "View on the published page" open the published page, not unsaved edits; only the Hero tab has a live draft preview, and the Contact tab previews the map pin. The user dropped light/dark mode for the public site on 2026-10-22; it is not planned. The landing work in `09fe7cb` is deployed to Render staging as part of `72cc922`.
 
 - **2026-10-19 audit follow-up:** every finding below except the floating assistant button was fixed later on 2026-10-19 (see the change ledger). The user decided the assistant button stays as is because it is movable; browser tests 3.8d/3.8e now park it the way a user would. Remaining residual risks: completion photos are limited to 10 MB JPG/PNG/WebP files (larger originals are refused with a clear message, not resized); the SQLite `IMMEDIATE` transaction mode reduces but cannot remove write contention for heavy local multi-user demos; and the technician still needs GPS permission to start navigation and to mark arrival, which is the intended arrival-evidence policy.
 
@@ -1287,7 +1296,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 - Inspection evidence is preserved without a schema change: site photos stay in the shared per-ticket checklist record tagged `phase: inspection`, and the inspection notes/answers live in an append-only `Inspection findings:` history entry rather than a dedicated field. Evidence viewers currently show tagged inspection photos alongside installation photos without a separate label; add a visible "Inspection" badge if reviewers find the mix confusing. Tickets already converted before 2026-10-18 22:30 were not backfilled, so any inspection notes/photos their installation checklist already overwrote cannot be recovered. A dedicated installation-notes field would require a migration and explicit approval.
 
-- **High before deploying the 2026-10-18 commit:** `services.0062_servicetype_inspection_procedures` is applied locally but not on staging or production. The staging startup command applies migrations; back up first, as for earlier releases, and verify an inspection-first service saves checks after deployment.
+- **Post-deployment inspection verification:** `services.0062_servicetype_inspection_procedures` is current locally and on staging; the 2026-10-22 backend startup reported no unapplied migrations. Production remains untouched. Before production, retain the normal backup/restore and migration review. A short authenticated staging check that saves a service-specific inspection check and reads it back remains useful UAT, but the local browser/API regression already passed before deployment.
 
 - Service-specific inspection checks are matched by service and title. Renaming or removing a check after an inspection was dispatched means that open inspection must answer the new list; submitted answers keep the wording they were given in. The Chen draw.io diagrams were regenerated by script for the new attribute and still need the existing rendered-inspection step before academic use.
 
@@ -1309,7 +1318,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 - The improved Reports visual hierarchy has production-build evidence but still needs authenticated desktop/phone review with both dense and sparse filtered datasets. Its visuals summarize the rows returned by the existing report endpoint and do not replace Analytics forecasting or historical-period comparisons.
 
-- The ticket row-lock correction is local only. Deployed staging will continue returning database-derived HTTP 503 for affected `auto_assign` requests until the fix is committed, pushed to `staging-deploy`, and Render completes deployment; ticket 10 must then be retried.
+- The ticket row-lock correction is deployed to staging in `72cc922`; the guarded readiness/perimeter checks passed without database errors. A one-time authenticated staging assignment/approval remains useful UAT for the original PostgreSQL-specific path before production.
 
 - Client My Requests mobile cards have production-build evidence but still need an authenticated 390x844 browser review with long service, address, technician, and workflow values.
 
@@ -1317,7 +1326,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 - “Terminate” is deliberate operator wording for a client backout, but the persisted canonical lifecycle state remains `Cancelled`; records are retained rather than deleted. The UI permits the action only from statuses already accepted by the server transition map.
 
-- Reducing visible dashboard and disconnected-notification recovery polling from 25 to 5 seconds makes each active loop run five times as often (up to 12 polls per minute). Hidden tabs remain paused and a connected notification WebSocket still suppresses recovery requests until its 120-second safety boundary, but role-dashboard API/database load can rise materially with concurrent users; monitor latency, database utilization, and 429/5xx rates after deployment and restore a 15-25-second cadence if capacity is insufficient.
+- Reducing visible dashboard and disconnected-notification recovery polling from 25 to 5 seconds makes each active loop run five times as often (up to 12 polls per minute). This cadence is now deployed to staging. Hidden tabs remain paused and a connected notification WebSocket still suppresses recovery requests until its 120-second safety boundary, but role-dashboard API/database load can rise materially with concurrent users; monitor latency, database utilization, and 429/5xx rates and restore a 15-25-second cadence if capacity is insufficient.
 
 - The compact User Management profile editor and opaque notification-card correction have production-build evidence but have not yet received an authenticated browser screenshot review at desktop and phone widths.
 
@@ -1329,11 +1338,11 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 | Priority | Item | Safest next action |
 | --- | --- | --- |
-| High before technician-presence deployment | `users.0040` adds the heartbeat timestamp required by the new endpoint and technician serializer. It is applied locally but remains pending on staging PostgreSQL. | Back up the staging database, apply `users.0040` during deployment, then sign into one technician session and verify Online becomes Offline within two minutes after the session stops heartbeating. |
+| Medium technician-presence UAT | `users.0040` is current on staging and the heartbeat endpoint is deployed; the Online-to-Offline expiry has automated coverage but has not been timed manually on the deployed browser in this release. | Sign into one staging technician session, verify Online, stop the session heartbeat, and verify Offline within two minutes. |
 | Medium analytics deployment verification | The Analytics Assistant now consumes the page's session-scoped date range, dimensions, and workspace, and the AI endpoint receives the selected unified contract, but this has not yet been verified in the deployed browser. | After deployment, select a non-default workspace and filter, ask a matching specific question, and compare the cited answer with the visible workspace values. |
-| High staging verification | PostgreSQL rejected the deployed approval lock because the request query joined nullable `location` data. Commit `683dfbb` now locks only the service-request row and was pushed to `staging-deploy`, but a successful deployed approval has not yet been recorded. | After Render finishes the backend deployment, approve one pending staging request once and confirm HTTP 200 plus ticket creation. |
+| Medium staging workflow UAT | The PostgreSQL approval row-lock correction and later workflow changes are deployed in `72cc922`; automated local/API/browser coverage and live readiness pass, but this release did not mutate staging business records to prove an authenticated approval. | Approve one disposable pending staging request and confirm HTTP 200 plus ticket creation before production sign-off. |
 | High before accepting the email deployment | The first `8502f25` Blueprint and auto-deploy attempts failed because the existing Blueprint ignored newly added `sync: false` values; the previous console-email backend remained live and a successful registration therefore produced no Brevo event. The user has now created `afn-staging-email` with the provider key and verified sender, and the Blueprint link is pending deployment. Render will use different outbound IPs, so local Brevo acceptance still does not prove deployed delivery. | Deploy the environment-group link, confirm the backend becomes live on the successor commit, authorize Render outbound IPs in Brevo if required, then use resend verification and verify Brevo request/delivery plus verification/login/password-reset end to end. |
-| High before deploying this phase | The current MFA/observability/schema/UI changes pass all 453 backend tests, production build, browser smoke, and every maintained browser scenario (200/201 exhaustive plus the sole setup-timeout scenario 1/1 focused), but the phase has not been migrated on staging, committed, pushed, or deployed | Review the diff and secret scan, then explicitly authorize commit/push/deployment; configure a stable MFA encryption key, back up, and approve the staging migration separately |
+| High before production MFA rollout | The MFA/observability/schema/UI phase is committed and deployed to staging, but administrator enrollment still requires a stable provider-managed MFA encryption key and an owner-approved recovery process. | Configure the stable key in the production secret store, back up the production target, enroll administrators individually, and verify recovery/disable ownership procedures. |
 | High operations evidence | Backup and guarded restore tooling now exists, but no real PostgreSQL backup or disposable `test_...` restore drill has been performed | Configure encrypted off-host retention, create a backup, restore it only to a disposable guarded database, validate representative data and recovery time, and record the evidence |
 | High account rollout | Administrator MFA is optional and existing admin accounts remain unenrolled; a stable `MFA_ENCRYPTION_KEY` is not yet provider-configured | Configure a stable key in the secret store before enrollment, deploy the migration, enroll each administrator individually, store recovery codes securely, and verify recovery/disable ownership procedures |
 | High monitoring rollout | Structured correlated logs exist, but no external log retention, uptime check, alert recipient, or escalation route is configured | Connect stdout to the selected provider, create readiness/5xx/auth/latency/database/email alerts, name on-call recipients, and exercise one alert before production |
@@ -1381,14 +1390,14 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Low | The client support assistant is deterministic guidance, not a generative support agent, and reads a snapshot when opened/refreshed | Keep answers curated as workflows change; direct account-specific or unresolved concerns to the existing human support case flow |
 | Low availability boundary | The public and authenticated solar calculators intentionally share published public settings and bundled defaults; during a settings-endpoint outage, either calculator can still operate with defaults that may be older than the latest published configuration | Preserve the resilient fallback, but consider displaying a settings freshness warning before estimates become contractual rather than preliminary |
 | Low inventory handoff boundary | The current decision is intentionally **Approve & Issue**: approval records the physical issue immediately. The system does not have a separate approved-but-not-yet-handed-over state. | Train inventory managers to confirm physical handover before approving. Add distinct `approved` and `issued` states only if the company later requires a separate warehouse pickup/receiving step. |
-| Deployment gate | `services.0060`, `services.0061`, and `users.0041` are applied locally and on staging but remain unapplied to production. Staging has a validated pre-migration Django logical snapshot, but this machine lacks `pg_dump`, the snapshot has not been restore-tested, and the Render CLI token is expired. | Before production, require a PostgreSQL-native backup plus restore drill, renewed provider access, role-based manual UAT, and the guarded disposable-PostgreSQL concurrency gate; do not treat the logical staging snapshot as production-grade evidence. |
+| Deployment gate | All repository migrations through `services.0062` are current locally and on staging but remain unapplied to a separate production target. Staging has a validated earlier Django logical snapshot, but this machine lacks `pg_dump` and the snapshot has not been restore-tested; Render CLI access was renewed for the 2026-10-22 verification. | Before production, require a PostgreSQL-native backup plus restore drill, role-based manual UAT, and the guarded disposable-PostgreSQL concurrency gate; do not treat the logical staging snapshot as production-grade evidence. |
 | Medium commercial boundary | Deposit collection is recorded after money is received outside the portal; there is no payment gateway, receipt issuance, reconciliation import, refund processor, or independent payment approval | Keep references/notes and reasoned void history accurate; add gateway/accounting/reconciliation integration only through a separate approved financial contract |
 | Low product decision | A quotation covers the whole multi-service job, so when selected services have different deposit settings the rule producing the highest job-level amount wins and is snapshotted; configured rules are not summed | Confirm this strictest-rule policy with the business before launch; if additive per-line deposits are desired, first add quotation lines tied to service types and migrate the calculation contract |
 | Medium product decision | Sales Records use a read-only accepted-quotation or signed-contract value when available. A reasoned manual reference value remains available for legacy completed work with neither source; it is not independently approved and is not payment evidence | Periodically review manual-value records and decide whether future exports need tax/accounting integration; keep payment collection and accounting state outside this service-management system |
 
 ## 10. Current worktree manifest
 
-- No application work remains uncommitted after local commit `09fe7cb`; the handoff closure was committed separately immediately afterward. The paths below describe the committed release candidate and are retained as its manifest. Each entry now names the commit that contains it: the changes through the 2026-10-19 quality gate are committed locally in `09fe7cb` (latest fixes and landing work) or `56ff158` (preceding cross-role workflow work).
+- No application work remains uncommitted. The paths below describe the release now deployed through `72cc922` and are retained as its manifest. This deployment-evidence update to the living handoff is the only subsequent path before its own documentation commit.
 
 - Post-review defect remediation (committed in `09fe7cb`) touches `backend/services/{models/core.py,serializers/requests.py,views/{helpers.py,service_requests.py,technician.py,tickets.py},tests/{proof_fixtures.py (new),test_end_to_end_journeys.py,test_maintenance_workflow.py,test_scheduling_warranty_and_assignment.py,test_service_request_ticket_lifecycle.py}}`, `backend/{api/tests.py,inventory/tests.py}`, `backend/users/views/admin_users.py`, `frontend/src/{components/LandingLocationMap.jsx,hooks/useTechnicianJobs.js,pages/{LandingPage.jsx,technician/TechnicianMapNavigation.jsx}}`, `e2e/{01-public-pages.spec.js,04-technician-workspace.spec.js}`, `docs/security/{AUTHENTICATION_ACCOUNT_SECURITY_CONTRACT.md,WORKFLOW_STATE_MACHINES.md}`, and this handoff. This entry supersedes the older Audit fixes description below where it says completion URL references are kept: new completion submissions now reject every caller-supplied reference. It adds no model field, migration, route, dependency, or environment variable.
 
@@ -2050,7 +2059,9 @@ All paths below are preserved work, not cleanup candidates.
 
 ## 13. Change ledger
 
-2026-10-22 (documentation commit): at the user's request, committed the 2026-10-22 handoff cleanup, scope decision, full-browser evidence, and the diagram README count fix as "Refresh handoff and record full browser verification". Not pushed or deployed.
+2026-10-22 (Render staging publication and verification): with explicit user authorization, pushed the complete release through `72cc922` to `origin/staging-deploy`. Both Render services reported that exact commit live. Backend startup connected to PostgreSQL, reported no pending migrations, and passed readiness plus the guarded read-only perimeter; the exact environment-specific frontend artifacts from the successful 2,540-module Render build returned HTTP 200. Updated current objective, checkpoint, Git/deployment/schema state, validation evidence, worktree manifest, and superseded staging risks. Production was not accessed or changed; no destructive staging test, staging business-record mutation, or production migration was performed. Affected repository path: this living handoff only.
+
+2026-10-22 (documentation commit): at the user's request, committed the 2026-10-22 handoff cleanup, scope decision, full-browser evidence, and the diagram README count fix as "Refresh handoff and record full browser verification". It was local-only at that checkpoint and was later published to staging as `72cc922`, as recorded above.
 
 2026-10-22 (full browser verification): ran and recorded the complete Playwright suite (213/213). Updated the checkpoint and section 9 accordingly. Documentation only.
 
