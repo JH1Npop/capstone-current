@@ -2,7 +2,7 @@
 
 Status: **Current contract / living document**
 Last updated: **2026-10-23 Asia/Singapore**
-Current objective (latest): **Publish the validated Admin Documents job-workspace redesign to Render staging. The exact uncommitted candidate passed the canonical release gate on 2026-10-23: 608 backend tests with 3 expected skips, the 2,541-module production build, and 18/18 browser smoke scenarios; its complete browser evidence is 222/222. The change is frontend/E2E/documentation only with no migration, dependency, environment, or database change. Production is outside this deployment. Remaining production gates and dependency-advisory follow-up are recorded in section 9.**
+Current objective (latest): **No implementation work is in progress. Admin Documents job-workspace runtime `d3ed6ac` is pushed to `origin/staging-deploy` and verified live on Render frontend deploy `dep-dbddjmp5efls73ao0qbg`; the backend correctly remains on compatible runtime `5f1fcd9` because this release has no backend change. The canonical release gate passed 608 backend tests with 3 expected skips, the 2,541-module production build, and 18/18 browser smoke scenarios; complete browser evidence is 222/222. Production was not accessed or changed. Remaining production gates and dependency-advisory follow-up are recorded in section 9.**
 Current focused objective: **None open. Most recent completed themes (2026-10-18 to 2026-10-19, all committed): cross-role notifications and routing, technician-chosen holds, inspection-path integrity and service-specific inspection checks (`services.0062`), the whole-system audit fixes and post-review remediation, the light-palette landing redesign with map/contact, the page-ordered Landing Page Editor, and solar calculator 1.1 (savings range). Details are in the change ledger; residual risks are in section 9.**
 Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the inspection-first path, allow guarded same-day continuation on the same ticket with a fresh service dispatch, keep installation inventory out of inspection assignments, and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
@@ -495,19 +495,21 @@ verify the code, then update this file in the same change.
 
 ### Latest pass-on checkpoint (2026-10-23)
 
-- **Staging runtime (2026-10-23):** `5f1fcd9` ("Speed up dashboards and fix
-  minor-flow defects found by UI journeys") is live on both Render services.
-  The frontend serves the new dashboard refresh and Admin Documents chunks; the
-  backend exposes the new protected change-token route, connected to PostgreSQL,
-  and reported no pending migrations.
+- **Staging runtime (2026-10-23):** frontend runtime `d3ed6ac` ("Redesign
+  Documents as a job workspace") and backend runtime `5f1fcd9` are live on
+  their respective Render services. The split is intentional: the new release
+  changes only frontend, E2E tests, and documentation, so the backend path filter
+  correctly did not rebuild. The backend remains compatible and ready.
 - **Fresh release evidence:** the canonical local release gate passed 608/608
   backend tests with 3 expected skips, the 2,541-module production build, and
   18/18 browser smoke scenarios. The complete committed browser run remains
   222/222, including inspection-first journey 10.2 and minor flows 11.1–11.8.
-- **Deployment evidence:** frontend deploy `dep-dbdc9em417fc738f67a0` and backend
-  deploy `dep-dbdc9em417fc738f66mg` report exact commit `5f1fcd9` live. The
-  guarded staging perimeter passed, readiness returned HTTP 200, and the new
-  protected endpoint returned the expected anonymous HTTP 401 rather than 404.
+- **Deployment evidence:** frontend deploy `dep-dbddjmp5efls73ao0qbg` reports
+  exact commit `d3ed6ac` live and serves `index-FbmGTrMl.js` plus
+  `AdminDocuments-HYsr2NDt.js`; the Documents chunk contains the new send action
+  and fill-help contract. Backend deploy `dep-dbdc9em417fc738f66mg` remains live
+  on `5f1fcd9`. Readiness returned HTTP 200 with database, cache, realtime, and
+  storage ready, and the guarded staging perimeter passed.
 
 ### Previous checkpoint (2026-10-22)
 
@@ -557,12 +559,12 @@ other repository path must include this living handoff file.
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
 | Branch | `feature/analytics-decision-workspace`; no same-named remote branch was present at this checkpoint |
-| HEAD | Application runtime commit `5f1fcd9 Speed up dashboards and fix minor-flow defects found by UI journeys`; the local branch may contain only the required documentation successor that records this deployment |
+| HEAD | Application runtime commit `d3ed6ac Redesign Documents as a job workspace`; the local branch may contain only the required documentation successor that records this deployment |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | Rechecked on 2026-10-23: local `5f1fcd9` was one fast-forward-safe application commit ahead, then `origin/staging-deploy` advanced from `9005acc` through runtime `5f1fcd9`; both Render services checked out and activated that exact runtime, while any later successor is this deployment record only |
-| Worktree | Clean before this required deployment-evidence handoff update; all application work is committed in deployed runtime `5f1fcd9` |
+| Remote comparison | Rechecked on 2026-10-23: local `d3ed6ac` was one fast-forward-safe commit ahead of `origin/staging-deploy`, then the remote advanced from `3099f49` to `d3ed6ac`; Render activated that exact frontend runtime while the unchanged backend correctly stayed on `5f1fcd9` |
+| Worktree | Clean before this required deployment-evidence handoff update; all application work is committed in deployed frontend runtime `d3ed6ac` |
 | Tracked deletions | None |
-| Commit/push status | The complete release through `5f1fcd9` is pushed to `origin/staging-deploy` and verified live on both Render staging services. Production was not accessed or changed. |
+| Commit/push status | The complete release through `d3ed6ac` is pushed to `origin/staging-deploy` and verified live on Render staging. Production was not accessed or changed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -858,6 +860,8 @@ production database still requires backup, release review, and explicit
 deployment authorization.
 
 ## 8. Validation ledger
+
+2026-10-23 (authorized Documents redesign staging deployment): after the fresh release gate, `git fetch origin staging-deploy` showed the candidate 0 behind and 1 ahead with `origin/staging-deploy` as an ancestor. Commit `d3ed6ac` was pushed as the fast-forward `3099f49..d3ed6ac`. Render frontend deploy `dep-dbddjmp5efls73ao0qbg` reported exact commit `d3ed6ac957abc8617d4c7d49e3518bc88fbbc39c` live. The unchanged backend correctly retained live deploy `dep-dbdc9em417fc738f66mg` on compatible runtime `5f1fcd9`. Cache-controlled HTTPS probes returned HTTP 200 for `index-FbmGTrMl.js` and `AdminDocuments-HYsr2NDt.js`; the exact Documents chunk contains `Send quotation to client` and `How this document is filled`. Backend readiness returned HTTP 200 with database, cache, realtime, and storage ready. The guarded read-only staging perimeter passed HTTPS, dependency readiness, security headers, CORS, anonymous access, and TRACE controls. No migration or staging business-data mutation occurred, and production was not accessed or changed.
 
 2026-10-23 (fresh Documents redesign release gate): the exact five-path uncommitted candidate passed `npm.cmd run quality`: Django system check, Python dependency integrity, migration drift (`No changes detected`), all 608 backend tests with 3 expected skips, the 2,541-module Vite production build, and all 18 public/authentication browser smoke scenarios in 2.3 minutes. Expected negative-path HTTP logs and page-close Vite WebSocket proxy `ECONNABORTED` messages did not fail the suite. The first `npm run quality` attempt was blocked before project execution by the workstation PowerShell `npm.ps1` policy and was immediately rerun through `npm.cmd`. `git diff --check` passed before the gate. The prior complete Playwright evidence for the same candidate remains 222/222.
 
@@ -1458,11 +1462,11 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
-- 2026-10-23 (uncommitted, after `5f1fcd9`): `frontend/src/pages/admin/AdminDocuments.jsx` (job-workspace redesign), `e2e/03-admin-workspace.spec.js` (3.9 wording and ticket-loaded signal), `e2e/10-major-flow-journey.spec.js` and `e2e/11-minor-flow-journeys.spec.js` (new quotation action name), and this handoff (UI-to-backend audit and redesign records).
+- 2026-10-23 (committed and deployed in `d3ed6ac`): `frontend/src/pages/admin/AdminDocuments.jsx` (job-workspace redesign), `e2e/03-admin-workspace.spec.js` (3.9 wording and ticket-loaded signal), `e2e/10-major-flow-journey.spec.js` and `e2e/11-minor-flow-journeys.spec.js` (new quotation action name), and this handoff (UI-to-backend audit, redesign, and validation records).
 - 2026-10-23 (committed in "Speed up dashboards and fix minor-flow defects found by UI journeys"), minor flows: `backend/services/serializers/commercial_records.py` (declined-quotation revision), `backend/services/views/tickets.py` (service dispatch after a completed inspection), `backend/afn_service_management/settings_e2e.py` (E2E-only request throttle), new `backend/services/business_time.py`, `backend/users/serializers.py` (project date), new `backend/services/tests/test_business_day.py`, `backend/services/tests/test_business_flow_controls.py` (future date on the business day), new `backend/services/tests/test_quotation_revision.py`, `backend/services/tests/test_end_to_end_journeys.py` (awaiting-materials dispatch), `frontend/src/api/core.js` (`ticketType`, `inspectionCompleted`), `frontend/src/pages/admin/AdminDispatchBoard.jsx` (stage decision, alert role, 8-second refusal), `frontend/src/components/ui/StatusBadge.jsx`, `frontend/src/components/sales/QuotationDepositPanel.jsx`, `frontend/src/components/shared/RescheduleTicketModal.jsx`, `frontend/src/pages/technician/TechnicianJobs.jsx` (equipment list closes), `frontend/src/pages/client/ClientRequestDetail.jsx` (named rating stars; reloads keep unsaved rating/reschedule input), `frontend/src/pages/admin/AdminServiceTickets.jsx` (linked ticket opens once), `e2e/04-technician-workspace.spec.js` (4.5 selects the seeded ticket), new `e2e/11-minor-flow-journeys.spec.js`.
 - 2026-10-23 (committed in "Speed up dashboards and fix minor-flow defects found by UI journeys"): `backend/services/views_dashboard.py` (`DashboardChangesView`), `backend/api/urls.py` (`dashboard/changes/`), new `backend/services/tests/test_dashboard_changes.py`, new `frontend/src/utils/dashboardRefresh.js`, `frontend/src/api/services.js` (`fetchDashboardChanges`), `frontend/src/pages/{admin/AdminDashboard.jsx,client/ClientDashboard.jsx,technician/TechnicianDashboard.jsx}`, `frontend/src/pages/admin/AdminDocuments.jsx` (`resolveSelectedClientId`), `e2e/03-admin-workspace.spec.js` (3.1 change-token reload), `e2e/10-major-flow-journey.spec.js` (10.2), and this handoff.
 
-- No application work remains uncommitted. The paths below describe the release now deployed through `5f1fcd9` and are retained as its manifest. This deployment-evidence update to the living handoff is the only subsequent path before its own documentation commit.
+- No application work remains uncommitted. The paths below describe the release now deployed through frontend runtime `d3ed6ac` and backend runtime `5f1fcd9` and are retained as its manifest. This deployment-evidence update to the living handoff is the only subsequent path before its own documentation commit.
 
 - Post-review defect remediation (committed in `09fe7cb`) touches `backend/services/{models/core.py,serializers/requests.py,views/{helpers.py,service_requests.py,technician.py,tickets.py},tests/{proof_fixtures.py (new),test_end_to_end_journeys.py,test_maintenance_workflow.py,test_scheduling_warranty_and_assignment.py,test_service_request_ticket_lifecycle.py}}`, `backend/{api/tests.py,inventory/tests.py}`, `backend/users/views/admin_users.py`, `frontend/src/{components/LandingLocationMap.jsx,hooks/useTechnicianJobs.js,pages/{LandingPage.jsx,technician/TechnicianMapNavigation.jsx}}`, `e2e/{01-public-pages.spec.js,04-technician-workspace.spec.js}`, `docs/security/{AUTHENTICATION_ACCOUNT_SECURITY_CONTRACT.md,WORKFLOW_STATE_MACHINES.md}`, and this handoff. This entry supersedes the older Audit fixes description below where it says completion URL references are kept: new completion submissions now reject every caller-supplied reference. It adds no model field, migration, route, dependency, or environment variable.
 
@@ -2123,6 +2127,8 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-23 (Documents redesign staging deployment): with explicit user authorization, committed the validated five-path batch as `d3ed6ac` ("Redesign Documents as a job workspace"), pushed it fast-forward to `origin/staging-deploy`, and verified Render frontend deploy `dep-dbddjmp5efls73ao0qbg` live on the exact commit. The deployed Documents chunk fingerprint, new action/help strings, backend readiness dependencies, and guarded staging perimeter all passed. Backend runtime `5f1fcd9` did not rebuild because no backend path changed. No migration, staging business-data mutation, or production access occurred. Affected path after deployment: this living handoff only.
 
 2026-10-23 (Documents page redesign, user-chosen "job workspace" layout): `AdminDocuments.jsx` render restructured.
 - Problems fixed:
