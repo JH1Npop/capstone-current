@@ -97,6 +97,12 @@ export const fetchDashboardStats = async (role) => {
   }
 };
 
+// Opaque token that changes whenever dashboard data may have changed (and once a minute).
+export const fetchDashboardChanges = async (role) => {
+  const { data } = await api.get('/dashboard/changes/', { params: { role } });
+  return data?.token || '';
+};
+
 export const updateTechnicianLocation = async ({ techName, lat, lng, accuracy }) => {
   try {
     const { data } = await api.post('/services/technician/location/', {

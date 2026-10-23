@@ -29,7 +29,7 @@ import {
   hasAnyCapability
 } from '../../rbac';
 import { formatTicketId } from '../../utils/roleIds';
-import { startVisibleInterval } from '../../utils/visibleInterval';
+import { startDashboardRefresh } from '../../utils/dashboardRefresh';
 
 const EMPTY_DASHBOARD = {
   technician: { is_available: false, current_location: null },
@@ -157,7 +157,7 @@ export default function TechnicianDashboard() {
 
   useEffect(() => {
     loadData();
-    return startVisibleInterval(() => loadData({ silent: true }), AUTO_REFRESH_MS);
+    return startDashboardRefresh(() => loadData({ silent: true }), 'technician', AUTO_REFRESH_MS);
   }, [techName]);
 
   const rawTodaysSchedule = Array.isArray(dashboard.todays_schedule) ? dashboard.todays_schedule : [];

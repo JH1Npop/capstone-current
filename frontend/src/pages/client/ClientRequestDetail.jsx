@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton, PanelSkeleton } from '../../components/ui/LoadingSkeleton';
@@ -49,6 +49,13 @@ export default function ClientRequestDetail() {
     loadRequest();
   }, [requestId, entityType]);
 
+  // A reload (initial load finishing late, or after a decision) must not wipe a rating or
+  // reschedule the client is still filling in.
+  const ratingFormOpenRef = useRef(false);
+  const rescheduleFormOpenRef = useRef(false);
+  useEffect(() => { ratingFormOpenRef.current = showRatingForm; }, [showRatingForm]);
+  useEffect(() => { rescheduleFormOpenRef.current = showRescheduleForm; }, [showRescheduleForm]);
+
   // Handle ESC key to close modal
   useEffect(() => {
     const handleEscKey = (e) => {
@@ -69,11 +76,15 @@ export default function ClientRequestDetail() {
       const data = await fetchRequestDetail(requestId, { entityType });
       setRequest(data);
       setRatingSubmitted(data.client_rating ? true : false);
-      setRating(data.client_rating || 0);
-      setFeedback(data.client_feedback || '');
-      setRescheduleDate(data.preferred_date || data.scheduled_date || '');
-      setRescheduleTimeSlot(data.preferred_time_slot || data.scheduled_time_slot || '');
-      setRescheduleReason(data.reschedule_reason || data.scheduling_notes || '');
+      if (!ratingFormOpenRef.current) {
+        setRating(data.client_rating || 0);
+        setFeedback(data.client_feedback || '');
+      }
+      if (!rescheduleFormOpenRef.current) {
+        setRescheduleDate(data.preferred_date || data.scheduled_date || '');
+        setRescheduleTimeSlot(data.preferred_time_slot || data.scheduled_time_slot || '');
+        setRescheduleReason(data.reschedule_reason || data.scheduling_notes || '');
+      }
       setError(null);
 
       // Load proof images if ticket is completed
@@ -740,7 +751,10 @@ export default function ClientRequestDetail() {
                             {[1, 2, 3, 4, 5].map((star) => (
                               <button
                                 key={star}
+                                type="button"
                                 onClick={() => setRating(star)}
+                                aria-label={`Rate ${star} out of 5`}
+                                aria-pressed={star === rating}
                                 className="transition"
                               >
                                 <FiStar

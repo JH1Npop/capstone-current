@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.utils import timezone
@@ -20,6 +21,7 @@ from ..sla import (
     get_ticket_dispatch_state,
     serialize_sla_evaluation,
 )
+from ..business_time import business_today
 from ..user_display import client_technician_label
 from ..deposits import (
     calculate_required_deposit,
@@ -124,12 +126,47 @@ class QuotationRecordSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         return super().create(self._apply_deposit_snapshot(validated_data))
 
+    @staticmethod
+    def _next_revision_number(number):
+        # QUO-0005 -> QUO-0005-R2 -> QUO-0005-R3: each revision after a decline is traceable.
+        match = re.match(r'^(.*?)-R(\d+)$', number or '')
+        base, revision = (match.group(1), int(match.group(2))) if match else (number, 1)
+        return f'{base}-R{revision + 1}'
+
     def update(self, instance, validated_data):
-        return super().update(instance, self._apply_deposit_snapshot(validated_data, instance))
+        revising = instance.status == 'Rejected'
+        previous_number = instance.quotation_number
+        previous_note = instance.client_response_note
+        quotation = super().update(instance, self._apply_deposit_snapshot(validated_data, instance))
+        if revising:
+            # The revised offer awaits a fresh client decision; the decline stays in the audit log.
+            quotation.client_responded_at = None
+            quotation.client_response_note = ''
+            quotation.save(update_fields=['client_responded_at', 'client_response_note', 'updated_at'])
+            from users.signals import log_activity
+            log_activity(
+                category='tickets',
+                action='update',
+                target=quotation,
+                message=f'Quotation {previous_number} was revised as {quotation.quotation_number} after the client declined it.',
+                metadata={
+                    'previous_quotation_number': previous_number,
+                    'client_decline_note': previous_note,
+                    'revised_total_amount': quotation.total_amount,
+                },
+            )
+        return quotation
 
     def validate(self, attrs):
-        if self.instance and self.instance.status in ['Accepted', 'Rejected']:
-            raise serializers.ValidationError("Cannot update a Quotation Record that has already been accepted or rejected.")
+        if self.instance and self.instance.status == 'Accepted':
+            raise serializers.ValidationError("Cannot update a Quotation Record that has already been accepted.")
+        if self.instance and self.instance.status == 'Rejected':
+            # A declined quotation can only be revised into a new offer for the client.
+            if attrs.get('status') not in ('Draft', 'Sent'):
+                raise serializers.ValidationError(
+                    "This quotation was declined. Revise it and send it again, or keep it as declined."
+                )
+            attrs['quotation_number'] = self._next_revision_number(self.instance.quotation_number)
         ticket = attrs.get('ticket', getattr(self.instance, 'ticket', None))
         client = attrs.get('client', getattr(self.instance, 'client', None))
         if ticket and client and ticket.request.client_id != client.id:
@@ -197,7 +234,8 @@ class SalesPaymentSerializer(serializers.ModelSerializer):
         return value
 
     def validate_paid_on(self, value):
-        if value and value > timezone.localdate():
+        # Compare with the business (UTC+8) day: before 08:00 local the UTC date is still yesterday.
+        if value and value > business_today():
             raise serializers.ValidationError('The payment date cannot be in the future.')
         return value
 

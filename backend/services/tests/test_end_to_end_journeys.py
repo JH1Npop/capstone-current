@@ -380,6 +380,31 @@ class EndToEndJourneyTests(APITestCase):
         self.assertEqual(too_many.status_code, 400)
 
     # ------------------------------------------------------------------ minor flows
+    def test_awaiting_materials_ticket_can_be_dispatched_for_service(self):
+        ticket = self.assign(self.approve(self.create_request(self.install)), 'inspection')
+        # An inspection visit that has not reported yet cannot be sent as service work.
+        early = self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/assign/', {
+            'technician_id': self.tech.id, 'dispatch_stage': 'service',
+        }, format='json')
+        self.assertEqual(early.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.travel_and_arrive(ticket)
+        self.submit_inspection_report(ticket)
+        report = InspectionChecklist.objects.get(ticket=ticket)
+        self.ok(self.as_user(self.tech).post(f'/api/services/inspections/{report.id}/complete/', {}, format='json'))
+        self.accept_quotation(ticket, 'QUO-AWAIT-1')
+        self.ok(self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/inspection_decision/', {
+            'decision': 'awaiting_materials', 'notes': 'Inverter arrives next week.',
+        }, format='json'))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'Awaiting Materials')
+
+        # Materials arrived: the office dispatches the installation directly.
+        ticket = self.assign(ticket, 'service')
+        self.assertEqual(ticket.status, 'Ready for Service')
+        self.assertEqual(ticket.ticket_type, 'installation')
+        self.assertEqual(ticket.technician_id, self.tech.id)
+
     def test_minor_flow_reject_and_cancel_requests(self):
         rejected = self.create_request(self.cleaning, 'Out of area')
         missing_reason = self.as_user(self.admin).post(f'/api/services/service-requests/{rejected.id}/reject/', {}, format='json')

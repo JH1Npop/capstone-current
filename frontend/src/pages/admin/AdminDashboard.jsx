@@ -40,7 +40,7 @@ import {
   getDisplayText
 } from '../../utils/dashboardHelpers';
 import { formatClientId, formatRequestId } from '../../utils/roleIds';
-import { startVisibleInterval } from '../../utils/visibleInterval';
+import { startDashboardRefresh } from '../../utils/dashboardRefresh';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -174,7 +174,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadDashboard();
-    return startVisibleInterval(() => loadDashboard({ silent: true }), AUTO_REFRESH_MS);
+    return startDashboardRefresh(() => loadDashboard({ silent: true }), 'admin', AUTO_REFRESH_MS);
   }, []);
 
   useEffect(() => {
@@ -354,7 +354,7 @@ export default function AdminDashboard() {
             <div>
               <p className="text-sm font-semibold text-slate-900">Live operations snapshot</p>
               <p className="mt-0.5 text-xs text-slate-500">
-                Updated <span className="font-medium text-slate-700">{formatDateTime(lastUpdated)}</span> · refreshes every {AUTO_REFRESH_MS / 1000} seconds
+                Updated <span className="font-medium text-slate-700">{formatDateTime(lastUpdated)}</span> · checks for updates every {AUTO_REFRESH_MS / 1000} seconds
               </p>
             </div>
           </div>

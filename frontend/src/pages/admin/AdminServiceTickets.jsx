@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import { FiCalendar, FiCheck, FiClipboard, FiClock, FiDownload, FiMap, FiPlus, FiRefreshCw, FiX, FiMoreVertical, FiCheckCircle, FiXCircle, FiCheckSquare } from 'react-icons/fi';
@@ -216,14 +216,19 @@ export default function AdminServiceTickets() {
 
   useEffect(() => { loadData(true); }, [canReviewRequests]);
 
+  // A ?ticketId= link opens that ticket's actions once. Background ticket refreshes must not
+  // reopen the menu over a dialog (such as Reschedule) the operator opened from it.
+  const openedLinkedTicketRef = useRef(null);
   useEffect(() => {
     if (!requestedTicketId || loading) {
       if (!requestedTicketId) {
+        openedLinkedTicketRef.current = null;
         setLinkedTicketLoading(false);
         setLinkedTicketError('');
       }
       return undefined;
     }
+    if (openedLinkedTicketRef.current === requestedTicketId) return undefined;
 
     const numericTicketId = Number(String(requestedTicketId).replace(/^TKT-/i, ''));
     if (!Number.isInteger(numericTicketId) || numericTicketId <= 0) {
@@ -234,6 +239,7 @@ export default function AdminServiceTickets() {
 
     const queuedTicket = tickets.find((ticket) => Number(ticket.id) === numericTicketId);
     if (queuedTicket) {
+      openedLinkedTicketRef.current = requestedTicketId;
       setActionModalTicket(queuedTicket);
       setLinkedTicketLoading(false);
       setLinkedTicketError('');
@@ -245,7 +251,10 @@ export default function AdminServiceTickets() {
     setLinkedTicketError('');
     fetchServiceTicket(numericTicketId)
       .then((ticket) => {
-        if (!cancelled) setActionModalTicket(ticket);
+        if (!cancelled) {
+          openedLinkedTicketRef.current = requestedTicketId;
+          setActionModalTicket(ticket);
+        }
       })
       .catch((ticketError) => {
         if (!cancelled) {

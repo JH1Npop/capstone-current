@@ -6,7 +6,10 @@ from django.db.models import Count, Sum, Q, Avg, F
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from datetime import timedelta
+import hashlib
+import hmac
 import logging
+import time
 import zoneinfo
 from django.conf import settings as django_settings
 
@@ -46,7 +49,8 @@ from services.sla import (
 )
 from services.user_display import client_technician_label as _client_technician_label
 from inventory.models import InventoryItem, InventoryReservation
-from users.models import User
+from django.db.models import Max
+from users.models import ChangeLog, User
 from users.rbac import (
     INVENTORY_VIEW_CAPABILITIES,
     SUPERVISOR_DASHBOARD_CAPABILITIES,
@@ -825,6 +829,37 @@ class DashboardView(APIView):
                 'alerts': [],
                 'recommendations': []
             }, status=200)  # Return 200 not 500 to show partial data is better than nothing
+
+
+class DashboardChangesView(DashboardView):
+    """Cheap "has anything changed?" check for polling dashboards.
+
+    Every create, and every change to the status, assignment, schedule, stock,
+    reservation, after-sales, maintenance, and user fields the dashboards show,
+    writes a ChangeLog row (users/signals.py), so the newest ChangeLog id moves
+    whenever dashboard data can move. The token also rolls over each minute so
+    time-based states (SLA warnings, due dates) refresh. It is an opaque HMAC, so
+    it reveals neither record ids nor activity volume. Access follows the same
+    workspace checks as the full dashboard.
+    """
+
+    REFRESH_WINDOW_SECONDS = 60
+
+    def _change_token(self, workspace):
+        latest_change = ChangeLog.objects.aggregate(latest=Max('id'))['latest'] or 0
+        window = int(time.time() // self.REFRESH_WINDOW_SECONDS)
+        message = f'{workspace}:{self.request.user.pk}:{latest_change}:{window}'.encode()
+        digest = hmac.new(django_settings.SECRET_KEY.encode(), message, hashlib.sha256).hexdigest()
+        return Response({'token': digest[:24]})
+
+    def get_admin_dashboard(self):
+        return self._change_token('admin')
+
+    def get_technician_dashboard(self):
+        return self._change_token('technician')
+
+    def get_client_dashboard(self):
+        return self._change_token('client')
 
 
 class AdminCalendarView(APIView):

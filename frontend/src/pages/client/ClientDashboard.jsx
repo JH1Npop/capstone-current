@@ -18,7 +18,7 @@ import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import { fetchDashboardStats } from '../../api/api';
 import { AUTO_REFRESH_MS, formatDate, formatDateTime } from '../../utils/dashboardHelpers';
 import { clientTechnicianDisplayOrDash } from '../../utils/clientTechnicianDisplay';
-import { startVisibleInterval } from '../../utils/visibleInterval';
+import { startDashboardRefresh } from '../../utils/dashboardRefresh';
 
 export default function ClientDashboard() {
   const navigate = useNavigate();
@@ -47,7 +47,7 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     loadDashboard();
-    return startVisibleInterval(() => loadDashboard({ silent: true }), AUTO_REFRESH_MS);
+    return startDashboardRefresh(() => loadDashboard({ silent: true }), 'client', AUTO_REFRESH_MS);
   }, []);
 
   const overview = stats?.overview || {};

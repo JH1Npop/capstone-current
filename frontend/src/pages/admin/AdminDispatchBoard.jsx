@@ -126,9 +126,18 @@ export default function AdminDispatchBoard() {
   const [ticketSummary, setTicketSummary] = useState(null);
   const [equipmentPlan, setEquipmentPlan] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // An inspection-first ticket is an inspection visit before its inspection (or while a held
+  // inspection visit waits). After the office decision the ticket becomes an installation, so
+  // Ready for Service, Awaiting Materials, and a held installation are dispatched as service work.
   const selectedTicketIsInspection = Boolean(
     selectedTicket?.requiresSiteInspection
-      && !['inspection_completed', 'ready_for_service'].includes(selectedTicket.status)
+      && (
+        ['not_started', 'for_inspection'].includes(selectedTicket.status)
+        || (
+          selectedTicket.ticketType === 'inspection'
+          && !['inspection_completed', 'ready_for_service', 'awaiting_materials'].includes(selectedTicket.status)
+        )
+      )
   );
 
   const loadData = async () => {
@@ -300,7 +309,8 @@ export default function AdminDispatchBoard() {
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setError(err.message || 'Assignment failed.');
-      setTimeout(() => setError(''), 4000);
+      // Refusals (deposit, skills, conflicts) need time to read.
+      setTimeout(() => setError(''), 8000);
     } finally {
       setIsSubmitting(false);
     }
@@ -1134,7 +1144,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
           </div>
         )}
         {error && (
-          <div className="pointer-events-auto rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-xl flex items-start gap-3 text-rose-800 animate-in slide-in-from-bottom-5 duration-300">
+          <div role="alert" className="pointer-events-auto rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-xl flex items-start gap-3 text-rose-800 animate-in slide-in-from-bottom-5 duration-300">
             <FiAlertCircle className="mt-0.5 shrink-0 text-rose-600" />
             <div className="text-sm font-medium">{error}</div>
           </div>

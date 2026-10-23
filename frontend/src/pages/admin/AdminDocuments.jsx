@@ -3222,6 +3222,20 @@ export default function AdminDocuments() {
     }
   };
 
+  // The ticket list's `client` is the client's display name, but the quotation and
+  // installed-equipment APIs need the client's numeric ID; resolve it like the prefill does.
+  const resolveSelectedClientId = () => {
+    const selectedTicket = tickets.find((ticket) => String(ticket.id) === String(selectedTicketId));
+    return pickNumericId(
+      documentPrefill?.client?.id,
+      selectedTicket?.clientId,
+      selectedTicket?.client_id,
+      selectedTicket?.request_details?.client_id,
+      selectedTicket?.request_details?.client,
+      selectedTicket?.request?.client
+    );
+  };
+
   const [quotationSaving, setQuotationSaving] = useState(false);
 
   const handleSaveQuotation = async () => {
@@ -3234,8 +3248,7 @@ export default function AdminDocuments() {
     setDocumentDraftMessage('');
 
     try {
-      const selectedTicket = tickets.find((ticket) => String(ticket.id) === String(selectedTicketId));
-      const clientId = selectedTicket?.request?.client || selectedTicket?.client;
+      const clientId = resolveSelectedClientId();
 
       if (!clientId) {
         throw new Error('No client found for this ticket.');
@@ -3310,8 +3323,7 @@ export default function AdminDocuments() {
     setDocumentDraftMessage('');
 
     try {
-      const selectedTicket = tickets.find((ticket) => String(ticket.id) === String(selectedTicketId));
-      const clientId = selectedTicket?.request?.client || selectedTicket?.client;
+      const clientId = resolveSelectedClientId();
 
       if (!clientId) {
         throw new Error('No client found for this ticket.');

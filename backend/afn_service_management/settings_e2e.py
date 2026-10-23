@@ -38,3 +38,10 @@ MEDIA_ROOT = Path(tempfile.gettempdir()) / 'afn-service-management-e2e-media'
 # Likewise, never call the live routing providers from browser tests: a slow or rate-limited
 # provider would stall navigation, and real API keys must not be spent by automation.
 DISABLE_EXTERNAL_ROUTING = True
+
+# Browser journeys create many requests for the one seeded client account; the real limit
+# (5 per client per hour) stays in force in development, staging, and production.
+REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
+    **REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'],
+    'service_request_create': '1000/hour',
+}

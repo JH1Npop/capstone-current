@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from services.business_time import business_today
 from services.models import (
     QuotationRecord,
     SalesPayment,
@@ -194,7 +195,8 @@ class PaymentTrackingTests(FlowFixture):
         self.assertEqual(self.pay('10000.01').status_code, 400)
         self.assertEqual(self.pay('0').status_code, 400)
         future = self.as_user(self.admin).post(self.url, {
-            'amount': '100.00', 'paid_on': (timezone.localdate() + timedelta(days=1)).isoformat(), 'method': 'cash',
+            # "Future" is judged on the business (UTC+8) day, not the UTC server date.
+            'amount': '100.00', 'paid_on': (business_today() + timedelta(days=1)).isoformat(), 'method': 'cash',
         }, format='json')
         self.assertEqual(future.status_code, 400)
 

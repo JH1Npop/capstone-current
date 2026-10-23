@@ -992,7 +992,8 @@ class AdminSettingsSerializer(serializers.ModelSerializer):
                     parsed_date = serializers.DateField().run_validation(completed_date)
                 except serializers.ValidationError:
                     raise serializers.ValidationError(f'Project {index + 1} has an invalid completion date.')
-                if parsed_date > timezone.localdate():
+                from services.business_time import business_today
+                if parsed_date > business_today():
                     raise serializers.ValidationError(f'Project {index + 1} completion date cannot be in the future.')
 
             required_values = (title, service_type, location, completed_date, description, image_url)

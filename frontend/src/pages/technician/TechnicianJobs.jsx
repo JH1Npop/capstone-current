@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import TicketTimelineModal from '../../components/shared/TicketTimelineModal';
@@ -102,6 +102,25 @@ export default function TechnicianJobs() {
     toggleEquipmentItem,
     updateEquipmentQuantity
   } = useTechnicianJobs();
+  const equipmentPickerRef = useRef(null);
+
+  // Close the equipment list on an outside click or Escape so it never hides the pause
+  // option and Request button beneath it.
+  useEffect(() => {
+    if (!equipmentDropdownOpen) return undefined;
+    const closeOnOutside = (event) => {
+      if (!equipmentPickerRef.current?.contains(event.target)) setEquipmentDropdownOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setEquipmentDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [equipmentDropdownOpen, setEquipmentDropdownOpen]);
 
   const [holdJobId, setHoldJobId] = useState(null);
   const [holdReason, setHoldReason] = useState('');
@@ -637,10 +656,11 @@ export default function TechnicianJobs() {
               {canRequestEquipment ? (
                 <form onSubmit={handleRequestEquipment} className="mt-4 space-y-3 border-t border-slate-200 pt-4">
                   <div className="space-y-3">
-                    <div className="relative">
+                    <div className="relative" ref={equipmentPickerRef}>
                       <span className="mb-1 block text-xs font-medium text-slate-500">Additional equipment</span>
                       <button
                         type="button"
+                        aria-expanded={equipmentDropdownOpen}
                         onClick={() => setEquipmentDropdownOpen((isOpen) => !isOpen)}
                         className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                       >

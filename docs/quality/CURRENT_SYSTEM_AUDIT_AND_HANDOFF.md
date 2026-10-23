@@ -1,8 +1,8 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-22 Asia/Singapore**
-Current objective (latest): **No implementation work is in progress. The complete release through `72cc922` was pushed to `origin/staging-deploy` on 2026-10-22 and both Render staging services report that exact commit live. Backend startup used PostgreSQL, reported no unapplied migrations, and passed readiness/perimeter checks; the exact frontend build artifacts from the Render log are publicly served. Production was not accessed or changed. Remaining production-readiness and optional documentation follow-ups are listed in section 9.**
+Last updated: **2026-10-23 Asia/Singapore**
+Current objective (latest): **Committed locally as "Speed up dashboards and fix minor-flow defects found by UI journeys" on top of deployed runtime `72cc922` (not yet pushed or deployed): (1) dashboard polling now checks a cheap `/api/dashboard/changes/` token every 5 seconds and reloads the full dashboard only when it changes or once a minute; (2) Admin Documents "Save Quotation Data" and "Register Equipment to Client" sent the client's display name instead of its ID and always failed; both now resolve the numeric client ID; (3) new browser journey 10.2 drives the inspection-first path (inspection, quotation, deposit, service, turnover, sale) through the real screens; (4) new `e2e/11-minor-flow-journeys.spec.js` drives every minor flow on screen and its fixes: declined quotations can be revised (QUO-…-R2), Awaiting Materials and held installations can be dispatched for service, future-date checks use the UTC+8 business day, status badges for sales records, local-date defaults, and visible dispatch refusals. Not pushed or deployed; staging still runs `72cc922`, which has these bugs.**
 Current focused objective: **None open. Most recent completed themes (2026-10-18 to 2026-10-19, all committed): cross-role notifications and routing, technician-chosen holds, inspection-path integrity and service-specific inspection checks (`services.0062`), the whole-system audit fixes and post-review remediation, the light-palette landing redesign with map/contact, the page-ordered Landing Page Editor, and solar calculator 1.1 (savings range). Details are in the change ledger; residual risks are in section 9.**
 Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the inspection-first path, allow guarded same-day continuation on the same ticket with a fresh service dispatch, keep installation inventory out of inspection assignments, and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
@@ -493,7 +493,14 @@ scan. Read the linked specialist contract only when changing that area. If code
 or configuration disagrees with this file, treat that as documentation drift:
 verify the code, then update this file in the same change.
 
-### Latest pass-on checkpoint (2026-10-22)
+### Latest pass-on checkpoint (2026-10-23)
+
+- **Latest local commit (2026-10-23):** "Speed up dashboards and fix minor-flow defects found by UI journeys" contains dashboard change-token polling, the Admin
+  Documents client-ID fix, and journey 10.2; see the change ledger. Staging
+  still runs `72cc922` and needs these changes deployed before an
+  inspection-first survey or staging journey can send a quotation from Documents.
+
+### Previous checkpoint (2026-10-22)
 
 - **Git:** deployed runtime commit `72cc922` is the 2026-10-22 documentation commit "Refresh handoff and record full browser verification", above
   `ae4ab8d` (handoff closure), `09fe7cb` (application, tests, contracts), and
@@ -842,6 +849,19 @@ production database still requires backup, release review, and explicit
 deployment authorization.
 
 ## 8. Validation ledger
+
+2026-10-23 (final pre-commit evidence for the speed, journey, and minor-flow work):
+- Complete Playwright suite: 222/222 in 22.4 minutes, including 10.2 and 11.1–11.8.
+- Backend: the full suite passed 608 tests with 3 expected skips after the business-day change. The only later backend edit was an import reorder, and `services.tests.test_business_flow_controls` then passed 21/21. `makemigrations --check --dry-run` reported no changes.
+- The production build passed after the last frontend edit.
+- Repeat runs: 11.7 passed 3/3 and 11.5 passed 3/3 after their fixes.
+- Superseded attempts, recorded honestly:
+  - An earlier complete run passed 221/222; 11.7 exposed the rating-reset defect, since fixed.
+  - Another complete run passed 218/219; 11.1 exposed the equipment-list overlap, since fixed.
+  - One combined run took 7.0 hours because the workstation slept, giving `ERR_NETWORK_IO_SUSPENDED` and timeouts; it is not evidence of app defects.
+  - A global `TIME_ZONE` change made 3 backend tests fail and was reverted.
+- Measured endpoint costs (throwaway probe, deleted): admin dashboard 41 queries, about 200 ms, 30 KB; change token 2 queries, about 3 ms, 36 bytes.
+- All browser tests used the isolated E2E database. No persistent development, staging, or production database was migrated or modified.
 
 2026-10-22 (authorized Render staging deployment): fetched `origin`, verified `origin/staging-deploy` was an ancestor of clean local HEAD `72cc922`, and pushed `HEAD:staging-deploy` (`6c14694..72cc922`). Render reported frontend deploy `dep-dbd27rlg1s2s738l80j0` and backend deploy `dep-dbd27rdg1s2s738l7vug` live on exact commit `72cc922`. Backend logs showed successful dependency installation/static collection, PostgreSQL startup, `No migrations to apply`, Daphne listening, and HTTP 200 liveness/readiness. The repository's guarded read-only staging perimeter check passed HTTPS, dependency readiness, security headers, exact-origin CORS, anonymous denial, and TRACE controls. The frontend build log transformed 2,540 modules and emitted `index-ej1EOWHh.js`; cache-bypassed probes returned HTTP 200 for that exact asset plus `AdminServices-DroY0RWu.js` and `TechnicianInspectionChecklist-DpZSpd5q.js`; backend readiness returned HTTP 200. The earlier local hash `index-DsaZ1elZ.js` was not expected on staging because the staging environment changes the production bundle. No production system was accessed or changed, and the destructive `quality:staging` concurrency phase was not run because no separately scoped disposable `test_...` PostgreSQL database exists.
 
@@ -1275,6 +1295,12 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
 
+- **2026-10-23 survey operations:** the real `service_request_create` throttle is 5 requests per client account per hour (`settings.py`); survey respondents sharing one client account will be blocked, so give each respondent their own account. Browser tests raise it only in `settings_e2e.py`. The server keeps `TIME_ZONE=UTC` by design (pinned by `test_business_display_normalization_uses_singapore_time`), with business dates in `BUSINESS_DISPLAY_TIMEZONE`. A global UTC+8 default was tried and reverted because it changes analytics/report day bucketing. Only the blocking "cannot be in the future" checks (sales/deposit `paid_on`, landing project completion date) now use `services.business_time.business_today()`. Other `timezone.localdate()` "not in the past" checks stay on the UTC date; between 00:00 and 08:00 local time they are one day lenient, which does not block anyone.
+- **2026-10-23 quotation revisions:** a quotation stays one-to-one with its ticket (no migration). A declined quotation is revised in place: the number gains `-R2`, `-R3`, …, the client response is cleared, and the decline note is kept in the ActivityLog metadata, not on the quotation row. A full multi-version quotation history would need a schema change.
+
+- **2026-10-23 dashboard change token:** freshness relies on `users/signals.py` writing a ChangeLog row for every create and for each tracked field change. A dashboard value derived from an untracked field, or a bulk `QuerySet.update()` (which skips signals), shows up within the one-minute token rollover rather than within 5 seconds. Notification freshness is unchanged (its own WebSocket/poll). The token is global per workspace, so any tracked change anywhere triggers one reload for every open dashboard, which is still far below the previous constant reloads.
+- **2026-10-23 Documents UX notes (not changed):** "Save Quotation Data" actually sends the quotation to the client (status Sent); its label understates that. The quotation price cells and the Sales Records ticket picker have no accessible labels, and the Inspection Review modal has no dialog role or Escape handling. None blocks the flow; consider them before the survey if office staff will be evaluated.
+
 - **2026-10-22 documentation follow-ups:** the academic DFD (`docs/models/AFN_DETAILED_DFD_STRUCTURED.drawio`, last changed in `8370ded`) shows inspection and completion only at process level ("approve, inspect" in 3.0; "checklist, proof" in 4.0, stores D4/D5). It does not show the technician site-inspection report and findings, the service-specific inspection checks read from the service catalog, the office inspection decision, or technician holds. Updating it is optional for a Level 1 DFD and has not been requested. The Context Diagram and ERD remain accurate (no new actor; the ERD already has 708 attributes, including `services.0062`). The full Playwright suite passed 213/213 on 2026-10-22. The development database still stores 5 peak sun hours until an administrator saves the Calculator tab.
 
 - **2026-10-19 post-review residuals:** the nine code defects found in the uncommitted review are fixed and covered proportionately. Completion evidence created after this change must be a new validated upload; historical URL evidence already stored on completed tickets remains readable and is not rewritten. A failed storage delete is logged because external object storage cannot participate in the database transaction. Deployment is still gated by the previously recorded staging/production migrations and release checks; this repair did not touch either environment.
@@ -1327,7 +1353,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 - “Terminate” is deliberate operator wording for a client backout, but the persisted canonical lifecycle state remains `Cancelled`; records are retained rather than deleted. The UI permits the action only from statuses already accepted by the server transition map.
 
-- Reducing visible dashboard and disconnected-notification recovery polling from 25 to 5 seconds makes each active loop run five times as often (up to 12 polls per minute). This cadence is now deployed to staging. Hidden tabs remain paused and a connected notification WebSocket still suppresses recovery requests until its 120-second safety boundary, but role-dashboard API/database load can rise materially with concurrent users; monitor latency, database utilization, and 429/5xx rates and restore a 15-25-second cadence if capacity is insufficient.
+- **Mitigated 2026-10-23 (committed locally, not yet deployed):** role dashboards keep the visible 5-second cadence but now poll `/api/dashboard/changes/` (2 queries, about 3 ms, 36 bytes measured) and reload the full dashboard (admin: 41 queries, about 200 ms, 30 KB) only when the change token moves, at most about once a minute when idle. The original risk text follows. Reducing visible dashboard and disconnected-notification recovery polling from 25 to 5 seconds makes each active loop run five times as often (up to 12 polls per minute). This cadence is now deployed to staging. Hidden tabs remain paused and a connected notification WebSocket still suppresses recovery requests until its 120-second safety boundary, but role-dashboard API/database load can rise materially with concurrent users; monitor latency, database utilization, and 429/5xx rates and restore a 15-25-second cadence if capacity is insufficient.
 
 - The compact User Management profile editor and opaque notification-card correction have production-build evidence but have not yet received an authenticated browser screenshot review at desktop and phone widths.
 
@@ -1397,6 +1423,9 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Medium product decision | Sales Records use a read-only accepted-quotation or signed-contract value when available. A reasoned manual reference value remains available for legacy completed work with neither source; it is not independently approved and is not payment evidence | Periodically review manual-value records and decide whether future exports need tax/accounting integration; keep payment collection and accounting state outside this service-management system |
 
 ## 10. Current worktree manifest
+
+- 2026-10-23 (committed in "Speed up dashboards and fix minor-flow defects found by UI journeys"), minor flows: `backend/services/serializers/commercial_records.py` (declined-quotation revision), `backend/services/views/tickets.py` (service dispatch after a completed inspection), `backend/afn_service_management/settings_e2e.py` (E2E-only request throttle), new `backend/services/business_time.py`, `backend/users/serializers.py` (project date), new `backend/services/tests/test_business_day.py`, `backend/services/tests/test_business_flow_controls.py` (future date on the business day), new `backend/services/tests/test_quotation_revision.py`, `backend/services/tests/test_end_to_end_journeys.py` (awaiting-materials dispatch), `frontend/src/api/core.js` (`ticketType`, `inspectionCompleted`), `frontend/src/pages/admin/AdminDispatchBoard.jsx` (stage decision, alert role, 8-second refusal), `frontend/src/components/ui/StatusBadge.jsx`, `frontend/src/components/sales/QuotationDepositPanel.jsx`, `frontend/src/components/shared/RescheduleTicketModal.jsx`, `frontend/src/pages/technician/TechnicianJobs.jsx` (equipment list closes), `frontend/src/pages/client/ClientRequestDetail.jsx` (named rating stars; reloads keep unsaved rating/reschedule input), `frontend/src/pages/admin/AdminServiceTickets.jsx` (linked ticket opens once), `e2e/04-technician-workspace.spec.js` (4.5 selects the seeded ticket), new `e2e/11-minor-flow-journeys.spec.js`.
+- 2026-10-23 (committed in "Speed up dashboards and fix minor-flow defects found by UI journeys"): `backend/services/views_dashboard.py` (`DashboardChangesView`), `backend/api/urls.py` (`dashboard/changes/`), new `backend/services/tests/test_dashboard_changes.py`, new `frontend/src/utils/dashboardRefresh.js`, `frontend/src/api/services.js` (`fetchDashboardChanges`), `frontend/src/pages/{admin/AdminDashboard.jsx,client/ClientDashboard.jsx,technician/TechnicianDashboard.jsx}`, `frontend/src/pages/admin/AdminDocuments.jsx` (`resolveSelectedClientId`), `e2e/03-admin-workspace.spec.js` (3.1 change-token reload), `e2e/10-major-flow-journey.spec.js` (10.2), and this handoff.
 
 - No application work remains uncommitted. The paths below describe the release now deployed through `72cc922` and are retained as its manifest. This deployment-evidence update to the living handoff is the only subsequent path before its own documentation commit.
 
@@ -2059,6 +2088,38 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-23 (local commit): at the user's request, committed the dashboard change token, the Admin Documents client-ID fix, journey 10.2, the minor-flow journeys 11.1–11.8, and their defect fixes as "Speed up dashboards and fix minor-flow defects found by UI journeys". Not pushed or deployed; staging still runs `72cc922`.
+
+2026-10-23 (minor flows through the real UI): At the user's insistence every minor flow was walked on screen in new `e2e/11-minor-flow-journeys.spec.js`. Setup to each starting point uses the APIs already proven on screen by 10.1/10.2; each branch is then driven in the browser:
+- 11.1: technician equipment request with pause, Inventory approval, resume, finish, technician return declaration, and warehouse verification restoring stock.
+- 11.2: quotation declined, revised and resent, then accepted; deposit recorded, voided (prompt reason), and re-recorded; Awaiting Materials; dispatch refused for a partial deposit, then allowed after the remainder.
+- 11.3: inspection Cancel Service.
+- 11.4: sales record with a manual value, a payment then a void, and void-and-replace.
+- 11.5: client reschedule handled by the office, client cancel, and office rejection shown to the client as "Not accepted by our office".
+
+Real defects found and fixed:
+1. A declined quotation was locked ("Cannot update a Quotation Record that has already been accepted or rejected"), so no revised offer could ever be sent. It is now revised in place as `-R2`… with the decline logged.
+2. Service dispatch of an inspection-first ticket in Awaiting Materials (or a held installation) was refused with "This service requires a site inspection before service dispatch". The guard now accepts tickets whose status history includes Inspection Completed. The Dispatch Board also mislabelled those tickets as inspection visits; it now uses the ticket type and status.
+3. Between 00:00 and 08:00 local time a payment dated today was rejected as "in the future" because the check used the UTC date. The future-date checks now use the new `services/business_time.py` `business_today()`. Changing the global `TIME_ZONE` default was tried; it broke 3 tests that pin the UTC-server/UTC+8-business design, so it was reverted with `settings.py` restored exactly.
+4. Sales-record statuses rendered as "Unknown"; added draft/confirmed/voided/sent, and unknown statuses now show their own words.
+5. The deposit "Date received" and the reschedule minimum date used UTC days; both now use the local day.
+6. Dispatch refusals now use `role="alert"` and stay for 8 seconds instead of 4.
+7. The technician "Choose equipment" list stayed open and, with many inventory items, covered the pause option and the Request Equipment button. It now closes on an outside click or Escape and exposes `aria-expanded`.
+8. The client rating stars were unnamed icon buttons. Each is now "Rate N out of 5" with `aria-pressed`.
+9. Client request page reloads (the initial load finishing late, or a reload after a quotation or handover decision) overwrote an unsaved star rating or reschedule form. Server values now sync only while those forms are closed.
+10. Admin Service Tickets re-opened a `?ticketId=` actions menu on every background ticket refresh, so it could cover the Reschedule dialog it had launched. The link now opens once per ticket, and the reschedule dialog stacks above the menu (z-70).
+
+Added 2026-10-23 at the user's request ("fix the other minor flow that is important"):
+- 11.6: technician Put on Hold with a required reason, client sees On Hold, resume.
+- 11.7: client rating with the labelled stars.
+- 11.8: Dispatch Board crew assignment with a real second technician created through the admin API; the crew member sees the job but not the lead-only Put on Hold.
+
+Test hardening: 11.x setup assignments use distinct future days, because the seeded technician is fully booked today and the 8-hour daily capacity rule (correct behaviour) refused more work. 4.5 now selects the seeded two-service ticket instead of the technician's first open job.
+
+Test-only fixes: the E2E request throttle was raised to 1000/hour. No schema change.
+
+2026-10-23 (staging speed and inspection-first journey): The user asked to optimize staging speed and to walk the full flow locally, then on staging. A throwaway probe on the Django test database measured the polled endpoints: the admin dashboard took 41 queries, about 140–200 ms, and 28–30 KB per reload; the technician dashboard took 17 queries and grew from 12 KB to 40 KB with data; there were no N+1 queries. Each open dashboard reloaded fully every 5 seconds. Added `DashboardChangesView` at `/api/dashboard/changes/?role=`. It subclasses `DashboardView`, so workspace access checks are identical, and returns a 24-hex HMAC of the workspace, user, newest ChangeLog id, and current minute. `updated_at` was rejected as the signal because 62 production `save(update_fields=...)` calls skip it. The new `startDashboardRefresh` helper checks the token every 5 seconds and reloads only on change, or reloads anyway if the check fails. The admin dashboard label now reads "checks for updates every 5 seconds". New journey 10.2 found a real defect: Admin Documents sent `selectedTicket.client` (the display name) as `client`, so "Save Quotation Data" returned 400 "Incorrect type. Expected pk value, received str." and no quotation could be sent from the UI; "Register Equipment to Client" had the same bug. Both now use `resolveSelectedClientId()`, which applies the same `pickNumericId` fallbacks as the prefill. Not pushed or deployed.
 
 2026-10-22 (Render staging publication and verification): with explicit user authorization, pushed the complete release through `72cc922` to `origin/staging-deploy`. Both Render services reported that exact commit live. Backend startup connected to PostgreSQL, reported no pending migrations, and passed readiness plus the guarded read-only perimeter; the exact environment-specific frontend artifacts from the successful 2,540-module Render build returned HTTP 200. Updated current objective, checkpoint, Git/deployment/schema state, validation evidence, worktree manifest, and superseded staging risks. The first deployment-record update was committed as `aa896bd` and pushed; Render retained runtime `72cc922` because the successor changed documentation only. Production was not accessed or changed; no destructive staging test, staging business-record mutation, or production migration was performed. Affected repository path: this living handoff only.
 

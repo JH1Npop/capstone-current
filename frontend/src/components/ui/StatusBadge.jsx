@@ -233,6 +233,27 @@ export const STATUS_META = {
     label: 'Retired',
     tone: 'bg-slate-100 text-slate-700 ring-slate-200',
     dot: 'bg-slate-400'
+  },
+  // Sales records and quotations.
+  draft: {
+    label: 'Draft',
+    tone: 'bg-amber-50 text-amber-800 ring-amber-200',
+    dot: 'bg-amber-500'
+  },
+  confirmed: {
+    label: 'Confirmed',
+    tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+    dot: 'bg-emerald-500'
+  },
+  voided: {
+    label: 'Voided',
+    tone: 'bg-zinc-100 text-zinc-700 ring-zinc-200',
+    dot: 'bg-zinc-400'
+  },
+  sent: {
+    label: 'Sent',
+    tone: 'bg-sky-50 text-sky-800 ring-sky-200',
+    dot: 'bg-sky-500'
   }
 };
 
@@ -270,7 +291,8 @@ export default function StatusBadge({ status, size = 'md', className = '' }) {
       } ${className}`.trim()}
     >
       <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
-      <span className="whitespace-nowrap font-semibold tracking-[0.02em]">{meta.label}</span>
+      {/* Unlisted statuses show their own words instead of a misleading "Unknown". */}
+      <span className="whitespace-nowrap font-semibold tracking-[0.02em]">{STATUS_META[normalizedStatus] ? meta.label : formatStatusLabel(status)}</span>
     </span>
   );
 }

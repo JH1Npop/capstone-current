@@ -1044,10 +1044,14 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Service dispatch needs a completed inspection. Awaiting Materials and a held installation
+        # are past it, which the append-only status history proves even after the office decision
+        # has moved the ticket on.
         if (
             dispatch_stage == 'service'
             and requires_inspection
             and ticket.status not in {'Inspection Completed', 'Ready for Service'}
+            and not ServiceStatusHistory.objects.filter(ticket=ticket, status='Inspection Completed').exists()
         ):
             return Response(
                 {'error': 'This service requires a site inspection before service dispatch.'},

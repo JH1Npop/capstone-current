@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FiCalendar, FiClock, FiInfo, FiMapPin, FiX } from 'react-icons/fi';
 import StatusBadge from '../ui/StatusBadge';
 import { formatTicketId } from '../../utils/roleIds';
+import { getLocalDateInputValue } from '../../utils/date';
 
 const timeSlotOptions = [
   { value: '', label: 'Time to be confirmed' },
@@ -11,7 +12,7 @@ const timeSlotOptions = [
   { value: 'evening', label: 'Evening' }
 ];
 
-const getTodayKey = () => new Date().toISOString().slice(0, 10);
+const getTodayKey = () => getLocalDateInputValue();
 
 const normalizeTimeInput = (value) => {
   if (!value) return '';
@@ -83,7 +84,7 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-3 sm:p-4">
       <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl sm:max-h-[calc(100dvh-2rem)]">
         <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
           <div className="min-w-0">

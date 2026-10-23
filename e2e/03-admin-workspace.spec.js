@@ -63,7 +63,7 @@ test.describe('Admin Workspace - All Pages', () => {
       await route.fulfill({ response, json: payload });
     });
     await visitWorkspacePage(page, '/admin/dashboard', 'test-results/screenshots/03-admin-dashboard.png');
-    await expect(page.getByText(/refreshes every 5 seconds/i)).toBeVisible();
+    await expect(page.getByText(/checks for updates every 5 seconds/i)).toBeVisible();
     await expect(page.getByText('Pending Approvals', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Active Tickets', { exact: true })).toBeVisible();
     await expect(page.getByText('Completed Today', { exact: true })).toBeVisible();
@@ -107,6 +107,33 @@ test.describe('Admin Workspace - All Pages', () => {
     const refreshResponse = page.waitForResponse((response) => response.url().includes('/api/dashboard/stats/') && response.status() === 200);
     await page.getByRole('button', { name: 'Refresh dashboard' }).click();
     await refreshResponse;
+
+    // Background refresh polls only the cheap change token, and reloads the full
+    // dashboard by itself once data changes.
+    await page.waitForResponse((response) => response.url().includes('/api/dashboard/changes/') && response.status() === 200);
+    let fullReloads = 0;
+    page.on('request', (outgoing) => { if (outgoing.url().includes('/api/dashboard/stats/')) fullReloads += 1; });
+    await page.waitForTimeout(11_000);
+    expect(fullReloads).toBeLessThanOrEqual(1);
+
+    const headers = { Authorization: `Token ${adminAuthState.token}` };
+    const items = await (await page.request.get('/api/inventory/items/', { headers })).json();
+    const existingItem = (Array.isArray(items) ? items : items.results || [])[0];
+    const autoReload = page.waitForResponse((response) => response.url().includes('/api/dashboard/stats/') && response.status() === 200, { timeout: 15_000 });
+    const created = await page.request.post('/api/inventory/items/', {
+      headers,
+      data: {
+        name: `E2E Dashboard Change ${Date.now()}`,
+        sku: `E2E-DASH-${Date.now()}`,
+        category: existingItem.category,
+        item_type: 'part',
+        quantity: 1,
+        minimum_stock: 0,
+        unit: 'pcs',
+      },
+    });
+    expect(created.ok(), await created.text()).toBeTruthy();
+    await autoReload;
 
     const requestDetailsButton = page.getByRole('button', { name: 'View Details' }).first();
     if (await requestDetailsButton.isVisible().catch(() => false)) {

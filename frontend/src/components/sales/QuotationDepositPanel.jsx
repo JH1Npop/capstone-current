@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { recordQuotationDeposit, voidQuotationDepositPayment } from '../../api/services';
+import { getLocalDateInputValue } from '../../utils/date';
 
 const METHODS = [
   ['cash', 'Cash'],
@@ -11,7 +12,8 @@ const METHODS = [
   ['other', 'Other'],
 ];
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Local calendar day (UTC would give yesterday before 8 AM in UTC+8).
+const today = () => getLocalDateInputValue();
 const money = (value) => Number(value || 0).toLocaleString('en-PH', {
   style: 'currency',
   currency: 'PHP',

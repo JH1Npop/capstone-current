@@ -148,7 +148,10 @@ test.describe('Technician Workspace - All Pages', () => {
       const response = await fetch('/api/technician/jobs/', { headers: { Authorization: `Token ${token}` } });
       const payload = await response.json();
       const jobs = Array.isArray(payload) ? payload : payload.results || [];
-      return jobs.find((job) => (job.ticket_type || 'installation') !== 'inspection' && job.status !== 'Completed')?.id;
+      // The seeded two-service ticket; other specs may leave earlier open jobs for this technician.
+      return jobs.find((job) => (job.ticket_type || 'installation') !== 'inspection'
+        && !['Completed', 'Cancelled'].includes(job.status)
+        && JSON.stringify(job).includes('E2E Electrical Safety Check'))?.id;
     });
     expect(ticketId).toBeTruthy();
     await visitWorkspacePage(page, `/technician/checklist?ticketId=${ticketId}`, 'test-results/screenshots/04-tech-checklist.png');
