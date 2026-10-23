@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { FiFileText, FiPlus, FiPrinter, FiRefreshCw, FiSave, FiTrash2, FiSearch, FiChevronDown, FiX } from 'react-icons/fi';
-import { useSearchParams } from 'react-router-dom';
+import { FiCheckCircle, FiExternalLink, FiInfo, FiMinus, FiPlus, FiPrinter, FiRefreshCw, FiSave, FiSend, FiTrash2, FiChevronDown, FiX } from 'react-icons/fi';
+import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import QuotationDepositPanel from '../../components/sales/QuotationDepositPanel';
+import StatusBadge from '../../components/ui/StatusBadge';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENTS_MANAGE_CAPABILITIES, hasAnyCapability } from '../../rbac';
 import { formatTicketId } from '../../utils/roleIds';
@@ -2464,6 +2465,47 @@ function DocumentPreview({
   return <SimpleTemplatePreview activeTemplate={activeTemplate} form={form} />;
 }
 
+// Documents in the order a solar job produces them.
+const JOB_STEPS = [
+  { id: 'technical_data_sheet', short: 'Technical Data Sheet', hint: 'Site and electrical survey' },
+  { id: 'quotation_proposal', short: 'Quotation', hint: 'Price, terms, deposit' },
+  { id: 'installation_contract', short: 'Contract', hint: 'Agreed scope' },
+  { id: 'commissioning_checklist', short: 'Commissioning', hint: 'System tests' },
+  { id: 'turnover_acceptance', short: 'Turnover', hint: 'Handover and warranty' },
+  { id: 'field_service_report', short: 'Service Report', hint: 'Visits and repairs' },
+];
+
+const STATUS_TONES = {
+  none: 'bg-slate-300',
+  progress: 'bg-amber-500',
+  done: 'bg-emerald-500',
+  alert: 'bg-rose-500',
+};
+
+const humanizeFieldName = (key) => String(key || '')
+  .replace(/_/g, ' ')
+  .replace(/^\w/, (letter) => letter.toUpperCase());
+
+function ActionButton({ action, variant = 'secondary', className = '' }) {
+  if (!action) return null;
+  const Icon = action.icon || FiSave;
+  const styles = variant === 'primary'
+    ? 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-slate-300 disabled:text-white'
+    : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-60';
+  return (
+    <button
+      type="button"
+      onClick={action.onClick}
+      disabled={action.disabled || action.busy}
+      title={action.title}
+      className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed ${styles} ${className}`}
+    >
+      <Icon size={15} aria-hidden="true" />
+      {action.busy ? action.busyLabel || 'Saving...' : action.label}
+    </button>
+  );
+}
+
 function TextField({ label, value, onChange, type = 'text' }) {
   const sharedClasses = 'w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
 
@@ -2580,6 +2622,24 @@ export default function AdminDocuments() {
 
   const paper = getPaperConfig(paperSize);
   const printCss = useMemo(() => buildPrintCss(paperSize), [paperSize]);
+  const previewViewportRef = useRef(null);
+  const [previewFitScale, setPreviewFitScale] = useState(1);
+  const [zoomChoice, setZoomChoice] = useState('fit');
+  const paperWidthPx = parseFloat(paper.previewWidth) || 925;
+  useEffect(() => {
+    const viewport = previewViewportRef.current;
+    if (!viewport || typeof ResizeObserver === 'undefined') return undefined;
+    const fit = () => {
+      const style = window.getComputedStyle(viewport);
+      const available = viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      setPreviewFitScale(Math.max(0.35, Math.min(1, available / paperWidthPx)));
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [paperWidthPx]);
+  const previewScale = zoomChoice === 'fit' ? previewFitScale : zoomChoice;
   const currentMissingFields = documentPrefill?.missing_fields?.[activeTemplate] || [];
   const activeTemplateLabel = TEMPLATE_OPTIONS.find((template) => template.id === activeTemplate)?.label || 'AFN Document';
 
@@ -3484,6 +3544,164 @@ export default function AdminDocuments() {
     };
   };
 
+  const selectedTicketSummary = tickets.find((ticket) => String(ticket.id) === String(selectedTicketId)) || null;
+  const latestQuotation = quotationRecords[0] || documentPrefill?.quotation_record || null;
+
+  // Per-document state for the selected ticket, shown on each job tab.
+  const documentStatus = (templateId) => {
+    if (!selectedTicketId) return null;
+    if (templateId === 'technical_data_sheet') {
+      return documentPrefill?.technical_data_sheet ? { tone: 'done', label: 'Saved' } : { tone: 'none', label: 'Not started' };
+    }
+    if (templateId === 'quotation_proposal') {
+      const status = latestQuotation?.status;
+      if (!status) return { tone: 'none', label: 'Not sent' };
+      if (status === 'Accepted') return { tone: 'done', label: 'Accepted' };
+      if (status === 'Rejected') return { tone: 'alert', label: 'Declined' };
+      if (status === 'Sent') return { tone: 'progress', label: 'Waiting for client' };
+      return { tone: 'progress', label: 'Draft' };
+    }
+    if (templateId === 'installation_contract') {
+      return documentPrefill?.installation_contract ? { tone: 'done', label: 'Saved' } : { tone: 'none', label: 'Not started' };
+    }
+    if (templateId === 'commissioning_checklist') {
+      const status = commissioningForm?.id ? commissioningForm.status : documentPrefill?.solar_commissioning?.status;
+      if (!status) return { tone: 'none', label: 'Not started' };
+      if (['completed', 'finalized'].includes(status)) return { tone: 'done', label: humanizeFieldName(status) };
+      return { tone: 'progress', label: 'Draft' };
+    }
+    if (templateId === 'turnover_acceptance') {
+      const status = turnoverForm?.id ? turnoverForm.status : documentPrefill?.turnover_acceptance?.status;
+      if (status === 'accepted') return { tone: 'done', label: 'Client confirmed' };
+      if (status === 'finalized') return { tone: 'done', label: 'Finalized' };
+      if (status) return { tone: 'progress', label: 'Draft' };
+      return { tone: 'none', label: 'Not started' };
+    }
+    const reports = documentPrefill?.field_service_reports?.length || 0;
+    return reports ? { tone: 'done', label: `${reports} saved` } : { tone: 'none', label: 'None yet' };
+  };
+  const activeStatus = documentStatus(activeTemplate);
+
+  // One clearly named primary action per document, plus secondary actions.
+  const noTicket = !selectedTicketId;
+  const saveDraftAction = {
+    label: 'Save draft',
+    onClick: activeTemplate === 'turnover_acceptance' ? () => saveTurnoverDraft(false) : saveActiveDocumentDraft,
+    busy: activeTemplate === 'turnover_acceptance' ? turnoverSaving : documentDraftSaving,
+    disabled: noTicket || documentDraftLoading || prefillLoading,
+  };
+  const saveSpecsAction = {
+    label: 'Save specs to ticket',
+    onClick: saveProjectSpecsToTicket,
+    busy: projectSpecsSaving,
+    busyLabel: 'Saving to ticket...',
+    disabled: noTicket || prefillLoading,
+    title: 'Keep capacity, panel count, and similar fields on the ticket so every document fills them in.',
+  };
+  let primaryAction = null;
+  let secondaryActions = [];
+  if (activeTemplate === 'quotation_proposal') {
+    const status = latestQuotation?.status;
+    primaryAction = status === 'Accepted'
+      ? { label: 'Quotation accepted', icon: FiCheckCircle, disabled: true }
+      : {
+        label: status === 'Rejected' ? 'Send revised quotation' : status === 'Sent' ? 'Send updated quotation' : 'Send quotation to client',
+        icon: FiSend,
+        onClick: handleSaveQuotation,
+        busy: quotationSaving,
+        busyLabel: 'Sending...',
+        disabled: noTicket || prefillLoading,
+        title: 'Saves the price and terms and sends the quotation to the client portal to accept or decline.',
+      };
+    secondaryActions = [saveDraftAction, saveSpecsAction];
+  } else if (activeTemplate === 'installation_contract') {
+    primaryAction = { label: 'Save contract', onClick: handleSaveContract, busy: contractSaving, disabled: noTicket || prefillLoading };
+    secondaryActions = [saveDraftAction, saveSpecsAction];
+  } else if (activeTemplate === 'commissioning_checklist') {
+    primaryAction = {
+      label: 'Save checklist',
+      onClick: saveCommissioningDraft,
+      busy: commissioningSaving,
+      disabled: noTicket || commissioningLoading,
+    };
+  } else if (activeTemplate === 'turnover_acceptance') {
+    primaryAction = {
+      label: 'Finalize project handover',
+      icon: FiCheckCircle,
+      onClick: () => saveTurnoverDraft(true),
+      busy: turnoverSaving,
+      busyLabel: 'Finalizing...',
+      disabled: noTicket || prefillLoading,
+      title: 'Officially hands over the project and starts the warranty period.',
+    };
+    secondaryActions = [
+      saveDraftAction,
+      {
+        label: 'Register equipment to client',
+        onClick: handleRegisterEquipment,
+        busy: equipmentRegistering,
+        busyLabel: 'Registering...',
+        disabled: noTicket || prefillLoading,
+        title: "Adds the installed panels and inverters to the client's equipment records.",
+      },
+      saveSpecsAction,
+    ];
+  } else {
+    primaryAction = { ...saveDraftAction };
+    secondaryActions = [saveSpecsAction];
+  }
+  const actionMessage = activeTemplate === 'turnover_acceptance'
+    ? turnoverMessage
+    : activeTemplate === 'commissioning_checklist' ? commissioningMessage : documentDraftMessage;
+  const actionMessageIsGood = /saved|loaded|successfully|finalized|sent|registered/i.test(actionMessage || '');
+  const detailsOpenByDefault = !['turnover_acceptance'].includes(activeTemplate);
+  const hasDetails = !['quotation_proposal', 'installation_contract'].includes(activeTemplate);
+
+  const actionsCard = (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="text-base font-semibold text-slate-900">{activeTemplateLabel}</h2>
+        {activeStatus ? (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+            <span className={`h-2 w-2 rounded-full ${STATUS_TONES[activeStatus.tone]}`} aria-hidden="true" />
+            {activeStatus.label}
+          </span>
+        ) : null}
+      </div>
+      {currentMissingFields.length ? (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="font-semibold">Still needed before printing</p>
+          <p className="mt-1">{currentMissingFields.map(humanizeFieldName).join(', ')}</p>
+        </div>
+      ) : null}
+      {['quotation_proposal', 'installation_contract'].includes(activeTemplate) ? (
+        <p className="mt-3 text-xs text-slate-500" role="note">
+          Amounts and payment terms are typed in for the document. Payments are collected and verified outside this system.
+        </p>
+      ) : null}
+      {canManageDocuments ? (
+        <div className="mt-4 space-y-2">
+          {noTicket ? <p className="text-xs text-slate-500">Choose a ticket to save or send this document.</p> : null}
+          <ActionButton action={primaryAction} variant="primary" />
+          {secondaryActions.map((action) => <ActionButton key={action.label} action={action} />)}
+        </div>
+      ) : null}
+      {actionMessage ? (
+        <p role="status" aria-live="polite" className={`mt-3 text-xs ${actionMessageIsGood ? 'text-emerald-700' : 'text-rose-600'}`}>
+          {actionMessage}
+        </p>
+      ) : null}
+      {activeTemplate === 'quotation_proposal' && canManageDocuments ? (
+        <div className="mt-4">
+          <QuotationDepositPanel
+            quotation={quotationRecords[0] || null}
+            onUpdated={(updated) => setQuotationRecords([updated])}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
     <Layout title="Documents" subtitle="Print-ready AFN templates.">
       <style>{printCss}</style>
@@ -3493,33 +3711,11 @@ export default function AdminDocuments() {
             You have view-only document access. You can inspect and print records, but saving and finalizing require the Manage project documents capability.
           </div>
         )}
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <FiFileText size={16} />
-            Templates
-          </div>
-          <div className="grid gap-2 md:grid-cols-3">
-            {TEMPLATE_OPTIONS.map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                onClick={() => setActiveTemplate(template.id)}
-                className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
-                  activeTemplate === template.id
-                    ? 'border-brand-500 bg-brand-50 text-brand-800'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                {template.label}
-              </button>
-            ))}
-          </div>
-        </section>
 
-        <section className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <div className="space-y-4">
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="grid gap-3">
+        {/* Ticket bar: every document is filled from the selected service ticket. */}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] md:items-start">
+            <div className="grid gap-3">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Ticket</span>
                   <div className="relative" ref={dropdownRef}>
@@ -3589,268 +3785,93 @@ export default function AdminDocuments() {
                     </p>
                   )}
                 </label>
-                {currentMissingFields.length ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    <p className="font-semibold uppercase tracking-[0.08em]">Missing Fields</p>
-                    <p className="mt-1">
-                      {currentMissingFields.join(', ')}
-                    </p>
-                  </div>
-                ) : null}
-                {selectedTicketId ? (
-                  <div className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
-                    <p className="font-semibold uppercase tracking-[0.08em]">Document data sources</p>
-                    <p><strong>Autofilled:</strong> client, request, ticket, location, technician, inspection, equipment, warranty, and completion records.</p>
-                    <p><strong>Previously saved:</strong> this ticket&apos;s document draft and structured document records.</p>
-                    <p><strong>Template defaults:</strong> business, warranty, legal, brand, and commercial wording must be reviewed before printing.</p>
-                    <p><strong>Manual input:</strong> measurements, signatures, pricing, and externally agreed payment terms.</p>
-                  </div>
-                ) : null}
-                {['quotation_proposal', 'installation_contract'].includes(activeTemplate) ? (
-                  <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-900" role="note">
-                    Commercial amounts and payment terms are entered manually for document generation. Payments are processed and verified outside this system.
-                  </div>
-                ) : null}
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Paper Size</span>
+            </div>
+            {selectedTicketSummary || documentPrefill?.ticket ? (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-slate-50 px-3 py-3 text-sm md:mt-6">
+                <span className="font-semibold text-slate-900">{documentPrefill?.ticket?.service || selectedTicketSummary?.service || 'Service'}</span>
+                <StatusBadge status={documentPrefill?.ticket?.status || selectedTicketSummary?.status} size="sm" />
+                {selectedTicketSummary?.clientFullname ? <span className="text-slate-500">{selectedTicketSummary.clientFullname}</span> : null}
+                <Link to={`/admin/service-tickets?ticketId=${selectedTicketId}`} className="ml-auto inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-800">
+                  Open ticket <FiExternalLink size={14} aria-hidden="true" />
+                </Link>
+              </div>
+            ) : (
+              <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500 md:mt-6">
+                Choose a ticket to fill every document from its client, site, technician, and job records.
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* Documents in job order, each with its state for the selected ticket. */}
+        <nav aria-label="Document templates" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {JOB_STEPS.map((step, index) => {
+            const template = TEMPLATE_OPTIONS.find((option) => option.id === step.id);
+            const status = documentStatus(step.id);
+            const active = activeTemplate === step.id;
+            return (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => setActiveTemplate(step.id)}
+                aria-pressed={active}
+                aria-label={`${template?.label || step.short}${status ? `: ${status.label}` : ''}`}
+                className={`flex min-w-[10.5rem] flex-1 items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+                  active ? 'border-brand-500 bg-brand-50 shadow-sm' : 'border-slate-200 bg-white hover:border-brand-200 hover:bg-slate-50'
+                }`}
+              >
+                <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ${active ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  {index + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className={`block text-sm font-semibold ${active ? 'text-brand-800' : 'text-slate-800'}`}>{step.short}</span>
+                  <span className="block text-xs text-slate-500">{step.hint}</span>
+                  {status ? (
+                    <span className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                      <span className={`h-2 w-2 rounded-full ${STATUS_TONES[status.tone]}`} aria-hidden="true" />
+                      {status.label}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* One grid: actions, paper, then details. Phones stack them in that order; desktop puts
+            actions and details in the left column with the paper spanning the right. */}
+        <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)] xl:grid-rows-[auto_1fr]">
+          <div className="xl:col-start-1 xl:row-start-1">{actionsCard}</div>
+
+          {/* The paper itself, scaled to fit the screen; printing always uses full size. */}
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm xl:col-start-2 xl:row-span-2 xl:row-start-1">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  Paper
                   <select
                     value={paperSize}
                     onChange={(event) => setPaperSize(event.target.value)}
-                    className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    className="h-9 rounded-lg border border-slate-300 px-2 text-sm text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   >
                     {PAPER_SIZE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
                 </label>
-                {activeTemplate === 'field_service_report' && (documentPrefill?.field_service_reports?.length || 0) > 0 ? (
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Service Report Source</span>
-                    <select
-                      value={selectedFieldServiceReportId}
-                      onChange={(event) => setSelectedFieldServiceReportId(event.target.value)}
-                      className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    >
-                      <option value="latest">Latest saved report</option>
-                      {documentPrefill.field_service_reports.map((report, index) => (
-                        <option key={report.id || index} value={String(report.id)}>
-                          {`Report ${index + 1}${report?.created_at ? ` - ${formatTicketDateForInput(report.created_at)}` : ''}`}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-                {activeTemplate === 'commissioning_checklist' ? (
-                  <>
-                    <TextField label="Site Name" value={commissioningForm.site_name} onChange={(value) => updateCommissioningField('site_name', value)} />
-                    <TextField label="System Designation" value={commissioningForm.system_designation} onChange={(value) => updateCommissioningField('system_designation', value)} />
-                    <TextField label="Inverter Type" value={commissioningForm.inverter_type} onChange={(value) => updateCommissioningField('inverter_type', value)} />
-                    <TextField label="Inverter Serial Number" value={commissioningForm.inverter_serial_number} onChange={(value) => updateCommissioningField('inverter_serial_number', value)} />
-                    <TextField label="Commissioned Date" type="date" value={commissioningForm.commissioned_date} onChange={(value) => updateCommissioningField('commissioned_date', value)} />
-                    <TextField label="Irradiance" value={commissioningForm.irradiance} onChange={(value) => updateCommissioningField('irradiance', value)} />
-                    <TextField label="Ambient Temperature" value={commissioningForm.ambient_temperature} onChange={(value) => updateCommissioningField('ambient_temperature', value)} />
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Checklist Status</span>
-                      <select
-                        value={commissioningForm.status}
-                        onChange={(event) => updateCommissioningField('status', event.target.value)}
-                        className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                      >
-                        <option value="draft">Draft</option>
-                        <option value="completed">Completed</option>
-                        <option value="finalized">Finalized</option>
-                      </select>
-                    </label>
-                    {commissioningMessage ? (
-                      <p className={`text-xs ${commissioningMessage.includes('saved') ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {commissioningMessage}
-                      </p>
-                    ) : null}
-                    {canManageDocuments && <button
-                      type="button"
-                      onClick={saveCommissioningDraft}
-                      disabled={commissioningSaving || commissioningLoading}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      <FiSave size={15} />
-                      {commissioningSaving ? 'Saving...' : commissioningLoading ? 'Loading...' : 'Save Checklist'}
-                    </button>}
-                  </>
-                ) : activeTemplate === 'quotation_proposal' ? (
-                  <>
-                    <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-3">
-                      <p className="text-sm font-semibold text-slate-900">Company-style quotation editing</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-600">
-                        This quotation follows the company document layout, so the main editing surface is the printable preview on
-                        the right. Update the header fields, terms, BOM, and warranty rows directly in the document where they appear.
-                      </p>
-                    </div>
-                    <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                      <p><strong>Autofill source:</strong> selected Service Ticket, quotation record, and saved project specifications.</p>
-                      <p><strong>Best workflow:</strong> review the company header, then edit the proposal terms and tables inline in the preview.</p>
-                      <p><strong>Keep aligned with office format:</strong> use concise text so the quotation continues to look like the company-issued version.</p>
-                    </div>
-                  </>
-                ) : activeTemplate === 'technical_data_sheet' ? (
-                  <>
-                    <TextField label="Last Name" value={tdsForm.lastName} onChange={(value) => updateTdsField('lastName', value)} />
-                    <TextField label="First Name" value={tdsForm.firstName} onChange={(value) => updateTdsField('firstName', value)} />
-                    <TextField label="Middle Name" value={tdsForm.middleName} onChange={(value) => updateTdsField('middleName', value)} />
-                    <TextField label="Mobile Number" value={tdsForm.mobileNumber} onChange={(value) => updateTdsField('mobileNumber', value)} />
-                    <TextField label="Email Address" value={tdsForm.emailAddress} onChange={(value) => updateTdsField('emailAddress', value)} />
-                    <TextField label="Complete Address" value={tdsForm.completeAddress} onChange={(value) => updateTdsField('completeAddress', value)} />
-                    <TextField label="Primary Electric Supply" value={tdsForm.primaryElectricSupply} onChange={(value) => updateTdsField('primaryElectricSupply', value)} />
-                    <TextField label="AC Supply Type" value={tdsForm.acSupplyType} onChange={(value) => updateTdsField('acSupplyType', value)} />
-                    <TextField label="Average Monthly Bill" value={tdsForm.averageMonthlyBill} onChange={(value) => updateTdsField('averageMonthlyBill', value)} />
-                    <TextField label="Battery Preference" value={tdsForm.batteryPreference} onChange={(value) => updateTdsField('batteryPreference', value)} />
-                    <TextField label="Client Confirm Name" value={tdsForm.clientConfirmationName} onChange={(value) => updateTdsField('clientConfirmationName', value)} />
-                    <TextField label="Confirmation Date" type="date" value={tdsForm.confirmationDate} onChange={(value) => updateTdsField('confirmationDate', value)} />
-                    <p className="text-xs text-slate-500">
-                      Client name and confirmation date auto-fill from the selected ticket. The rest of the TDS stays editable on the printable sheet.
-                    </p>
-                  </>
-                ) : activeTemplate === 'installation_contract' ? (
-                  <>
-                    <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3">
-                      <p className="text-sm font-semibold text-slate-900">Document-first contract editing</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-600">
-                        This template is meant to read like a real contract, not a left-side form tree. Edit the autofilled values
-                        directly inside the contract preview on the right, then save from here when you are done.
-                      </p>
-                    </div>
-                    <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                      <p><strong>Autofill source:</strong> selected Service Ticket, quotation, project specs, and saved contract data.</p>
-                      <p><strong>Best workflow:</strong> review the paragraph text on the preview, click inline fields that need adjustment, then save the contract.</p>
-                      <p><strong>What stays manual:</strong> signatures and any intentionally case-specific legal wording.</p>
-                    </div>
-                  </>
-                ) : activeTemplate === 'turnover_acceptance' ? (
-                  <>
-                    <TextField label="Project Installation Of" value={turnoverForm.projectInstallationOf} onChange={(value) => updateTurnoverField('projectInstallationOf', value)} />
-                    <TextField label="Location Address" value={turnoverForm.locationAddress} onChange={(value) => updateTurnoverField('locationAddress', value)} />
-                    <TextField label="Date of Completion" type="date" value={turnoverForm.dateOfCompletion} onChange={(value) => updateTurnoverField('dateOfCompletion', value)} />
-                    <TextField label="Date of Turnover" type="date" value={turnoverForm.dateOfTurnover} onChange={(value) => updateTurnoverField('dateOfTurnover', value)} />
-                    <TextField label="Client Name" value={turnoverForm.clientName} onChange={(value) => updateTurnoverField('clientName', value)} />
-                    <TextField label="Client Contact Number" value={turnoverForm.clientContactNumber} onChange={(value) => updateTurnoverField('clientContactNumber', value)} />
-                    <TextField label="System Capacity" value={turnoverForm.systemCapacity} onChange={(value) => updateTurnoverField('systemCapacity', value)} />
-                    <TextField label="Warranty Start Date" type="date" value={turnoverForm.warrantyStartDate} onChange={(value) => updateTurnoverField('warrantyStartDate', value)} />
-                    <p className="text-xs text-slate-500">
-                      Ticket data autofills this form, and commissioning checklist data is pulled in when available. Warranty Start Date defaults to Turnover Date if left blank.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <TextField label="Client" value={form.clientName} onChange={(value) => updateField('clientName', value)} />
-                    <TextField label="Address" value={form.address} onChange={(value) => updateField('address', value)} />
-                    <TextField label="Contact Number" value={form.contactNumber} onChange={(value) => updateField('contactNumber', value)} />
-                    <TextField label="Technician" value={form.technician} onChange={(value) => updateField('technician', value)} />
-                    <TextField label="Date" type="date" value={form.documentDate} onChange={(value) => updateField('documentDate', value)} />
-                    <TextField label="Ticket No" value={form.ticketNumber} onChange={(value) => updateField('ticketNumber', value)} />
-                    <TextField label="Service Type" value={form.serviceType} onChange={(value) => updateField('serviceType', value)} />
-                    <TextField label="Reference" value={form.reference} onChange={(value) => updateField('reference', value)} />
-                    <TextField label="System Capacity" value={form.systemCapacity} onChange={(value) => updateField('systemCapacity', value)} />
-                  </>
-                )}
-                {canManageDocuments && activeTemplate !== 'commissioning_checklist' ? (
-                  <>
-                    {(activeTemplate === 'turnover_acceptance' ? turnoverMessage : documentDraftMessage) ? (
-                      <p role="status" aria-live="polite" className={`text-xs ${(activeTemplate === 'turnover_acceptance' ? turnoverMessage : documentDraftMessage).toLowerCase().includes('saved') || (activeTemplate === 'turnover_acceptance' ? turnoverMessage : documentDraftMessage).toLowerCase().includes('loaded') || (activeTemplate === 'turnover_acceptance' ? turnoverMessage : documentDraftMessage).toLowerCase().includes('successfully') || (activeTemplate === 'turnover_acceptance' ? turnoverMessage : documentDraftMessage).toLowerCase().includes('finalized') ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {activeTemplate === 'turnover_acceptance' ? turnoverMessage : documentDraftMessage}
-                      </p>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={activeTemplate === 'turnover_acceptance' ? () => saveTurnoverDraft(false) : saveActiveDocumentDraft}
-                      disabled={(activeTemplate === 'turnover_acceptance' ? turnoverSaving : documentDraftSaving) || documentDraftLoading || prefillLoading}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      <FiSave size={15} />
-                      {activeTemplate === 'turnover_acceptance' && turnoverSaving ? 'Saving...' : documentDraftSaving ? 'Saving...' : documentDraftLoading ? 'Loading...' : 'Save Draft'}
-                    </button>
-                    {activeTemplate === 'turnover_acceptance' && (
-                      <button
-                        type="button"
-                        onClick={() => saveTurnoverDraft(true)}
-                        disabled={turnoverSaving || prefillLoading}
-                        className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-3 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:cursor-wait disabled:opacity-60"
-                        title="Finalize Turnover to officially hand over project and start warranty period."
-                      >
-                        <FiSave size={15} />
-                        {turnoverSaving ? 'Finalizing...' : 'Finalize Project Handover'}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={saveProjectSpecsToTicket}
-                      disabled={projectSpecsSaving || prefillLoading}
-                      className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-100 disabled:cursor-wait disabled:opacity-60"
-                      title="Save the current fields (like capacity, panel count, etc.) directly to the ticket so it autofills forever."
-                    >
-                      <FiSave size={15} />
-                      {projectSpecsSaving ? 'Saving to Ticket...' : 'Save Specs to Ticket'}
-                    </button>
-                    {activeTemplate === 'turnover_acceptance' && (
-                      <button
-                        type="button"
-                        onClick={handleRegisterEquipment}
-                        disabled={equipmentRegistering || prefillLoading}
-                        className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60"
-                        title="Register installed components directly to the client's profile for future Field Service Reports."
-                      >
-                        <FiSave size={15} />
-                        {equipmentRegistering ? 'Registering Equipment...' : 'Register Equipment to Client'}
-                      </button>
-                    )}
-                    {activeTemplate === 'quotation_proposal' && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={handleSaveQuotation}
-                          disabled={quotationSaving || prefillLoading}
-                          className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
-                          title="Save the pricing and terms to a Quotation Record so they auto-fill the Installation Contract later."
-                        >
-                          <FiSave size={15} />
-                          {quotationSaving ? 'Saving Quotation...' : 'Save Quotation Data'}
-                        </button>
-                        <div className="mt-3">
-                          <QuotationDepositPanel
-                            quotation={quotationRecords[0] || null}
-                            onUpdated={(updated) => setQuotationRecords([updated])}
-                          />
-                        </div>
-                      </>
-                    )}
-                    {activeTemplate === 'installation_contract' && (
-                      <button
-                        type="button"
-                        onClick={handleSaveContract}
-                        disabled={contractSaving || prefillLoading}
-                        className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
-                        title="Save contract details to the system."
-                      >
-                        <FiSave size={15} />
-                        {contractSaving ? 'Saving Contract...' : 'Save Contract Data'}
-                      </button>
-                    )}
-                  </>
-                ) : null}
+                <div className="flex items-center rounded-lg border border-slate-300" role="group" aria-label="Preview zoom">
+                  <button type="button" onClick={() => setZoomChoice(Math.max(0.4, Math.round((previewScale - 0.1) * 10) / 10))} className="grid h-9 w-9 place-items-center text-slate-600 hover:bg-slate-50" aria-label="Zoom out"><FiMinus size={14} /></button>
+                  <button type="button" onClick={() => setZoomChoice('fit')} className={`h-9 min-w-[4.5rem] border-x border-slate-300 px-2 text-xs font-semibold ${zoomChoice === 'fit' ? 'text-brand-700' : 'text-slate-600'}`} aria-label="Fit to width">
+                    {zoomChoice === 'fit' ? 'Fit' : ''} {Math.round(previewScale * 100)}%
+                  </button>
+                  <button type="button" onClick={() => setZoomChoice(Math.min(1.5, Math.round((previewScale + 0.1) * 10) / 10))} className="grid h-9 w-9 place-items-center text-slate-600 hover:bg-slate-50" aria-label="Zoom in"><FiPlus size={14} /></button>
+                </div>
               </div>
-            </div>
-
-          </div>
-
-          <div className="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col items-start gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">Print Preview</h2>
-                <p className="mt-1 text-sm text-slate-500">Paper: {paper.label}</p>
-              </div>
-              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+              <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                 >
                   <FiRefreshCw size={15} />
                   Reset
@@ -3858,17 +3879,18 @@ export default function AdminDocuments() {
                 <button
                   type="button"
                   onClick={printCurrentDocument}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white transition hover:bg-brand-700"
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white transition hover:bg-brand-700"
                 >
                   <FiPrinter size={15} />
                   Print
                 </button>
               </div>
             </div>
-            <div className="overflow-x-auto bg-[#eef5fb] p-4 lg:p-6">
+            <div ref={previewViewportRef} className="overflow-x-auto bg-[#eef5fb] p-3 sm:p-4 lg:p-6">
+              <div style={{ zoom: previewScale }}>
               <div
                 id="afn-printable-document"
-                className="mx-auto min-w-[44rem]"
+                className="mx-auto"
                 style={{ width: paper.previewWidth, maxWidth: paper.previewWidth }}
               >
                 <DocumentPreview
@@ -3955,9 +3977,119 @@ export default function AdminDocuments() {
                   inventoryItems={inventoryItems}
                 />
               </div>
+              </div>
             </div>
           </div>
+          <aside className="space-y-4 xl:col-start-1 xl:row-start-2 xl:self-start">
+
+            {hasDetails ? (
+              <details key={activeTemplate} open={detailsOpenByDefault} className="group rounded-xl border border-slate-200 bg-white shadow-sm">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold text-slate-900">
+                  Document details
+                  <FiChevronDown className="text-slate-400 transition group-open:rotate-180" aria-hidden="true" />
+                </summary>
+                <div className="grid gap-3 border-t border-slate-100 px-4 py-4">
+                  {activeTemplate === 'commissioning_checklist' ? (
+                    <>
+                      <TextField label="Site Name" value={commissioningForm.site_name} onChange={(value) => updateCommissioningField('site_name', value)} />
+                      <TextField label="System Designation" value={commissioningForm.system_designation} onChange={(value) => updateCommissioningField('system_designation', value)} />
+                      <TextField label="Inverter Type" value={commissioningForm.inverter_type} onChange={(value) => updateCommissioningField('inverter_type', value)} />
+                      <TextField label="Inverter Serial Number" value={commissioningForm.inverter_serial_number} onChange={(value) => updateCommissioningField('inverter_serial_number', value)} />
+                      <TextField label="Commissioned Date" type="date" value={commissioningForm.commissioned_date} onChange={(value) => updateCommissioningField('commissioned_date', value)} />
+                      <TextField label="Irradiance" value={commissioningForm.irradiance} onChange={(value) => updateCommissioningField('irradiance', value)} />
+                      <TextField label="Ambient Temperature" value={commissioningForm.ambient_temperature} onChange={(value) => updateCommissioningField('ambient_temperature', value)} />
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Checklist Status</span>
+                        <select
+                          value={commissioningForm.status}
+                          onChange={(event) => updateCommissioningField('status', event.target.value)}
+                          className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="completed">Completed</option>
+                          <option value="finalized">Finalized</option>
+                        </select>
+                      </label>
+                    </>
+                  ) : activeTemplate === 'technical_data_sheet' ? (
+                    <>
+                      <TextField label="Last Name" value={tdsForm.lastName} onChange={(value) => updateTdsField('lastName', value)} />
+                      <TextField label="First Name" value={tdsForm.firstName} onChange={(value) => updateTdsField('firstName', value)} />
+                      <TextField label="Middle Name" value={tdsForm.middleName} onChange={(value) => updateTdsField('middleName', value)} />
+                      <TextField label="Mobile Number" value={tdsForm.mobileNumber} onChange={(value) => updateTdsField('mobileNumber', value)} />
+                      <TextField label="Email Address" value={tdsForm.emailAddress} onChange={(value) => updateTdsField('emailAddress', value)} />
+                      <TextField label="Complete Address" value={tdsForm.completeAddress} onChange={(value) => updateTdsField('completeAddress', value)} />
+                      <TextField label="Primary Electric Supply" value={tdsForm.primaryElectricSupply} onChange={(value) => updateTdsField('primaryElectricSupply', value)} />
+                      <TextField label="AC Supply Type" value={tdsForm.acSupplyType} onChange={(value) => updateTdsField('acSupplyType', value)} />
+                      <TextField label="Average Monthly Bill" value={tdsForm.averageMonthlyBill} onChange={(value) => updateTdsField('averageMonthlyBill', value)} />
+                      <TextField label="Battery Preference" value={tdsForm.batteryPreference} onChange={(value) => updateTdsField('batteryPreference', value)} />
+                      <TextField label="Client Confirm Name" value={tdsForm.clientConfirmationName} onChange={(value) => updateTdsField('clientConfirmationName', value)} />
+                      <TextField label="Confirmation Date" type="date" value={tdsForm.confirmationDate} onChange={(value) => updateTdsField('confirmationDate', value)} />
+                    </>
+                  ) : activeTemplate === 'turnover_acceptance' ? (
+                    <>
+                      <p className="text-xs text-slate-500">These fields are also editable directly on the form.</p>
+                      <TextField label="Project Installation Of" value={turnoverForm.projectInstallationOf} onChange={(value) => updateTurnoverField('projectInstallationOf', value)} />
+                      <TextField label="Location Address" value={turnoverForm.locationAddress} onChange={(value) => updateTurnoverField('locationAddress', value)} />
+                      <TextField label="Date of Completion" type="date" value={turnoverForm.dateOfCompletion} onChange={(value) => updateTurnoverField('dateOfCompletion', value)} />
+                      <TextField label="Date of Turnover" type="date" value={turnoverForm.dateOfTurnover} onChange={(value) => updateTurnoverField('dateOfTurnover', value)} />
+                      <TextField label="Client Name" value={turnoverForm.clientName} onChange={(value) => updateTurnoverField('clientName', value)} />
+                      <TextField label="Client Contact Number" value={turnoverForm.clientContactNumber} onChange={(value) => updateTurnoverField('clientContactNumber', value)} />
+                      <TextField label="System Capacity" value={turnoverForm.systemCapacity} onChange={(value) => updateTurnoverField('systemCapacity', value)} />
+                      <TextField label="Warranty Start Date" type="date" value={turnoverForm.warrantyStartDate} onChange={(value) => updateTurnoverField('warrantyStartDate', value)} />
+                    </>
+                  ) : (
+                    <>
+                      {(documentPrefill?.field_service_reports?.length || 0) > 0 ? (
+                        <label className="block">
+                          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Service Report Source</span>
+                          <select
+                            value={selectedFieldServiceReportId}
+                            onChange={(event) => setSelectedFieldServiceReportId(event.target.value)}
+                            className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                          >
+                            <option value="latest">Latest saved report</option>
+                            {documentPrefill.field_service_reports.map((report, index) => (
+                              <option key={report.id || index} value={String(report.id)}>
+                                {`Report ${index + 1}${report?.created_at ? ` - ${formatTicketDateForInput(report.created_at)}` : ''}`}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      <TextField label="Client" value={form.clientName} onChange={(value) => updateField('clientName', value)} />
+                      <TextField label="Address" value={form.address} onChange={(value) => updateField('address', value)} />
+                      <TextField label="Contact Number" value={form.contactNumber} onChange={(value) => updateField('contactNumber', value)} />
+                      <TextField label="Technician" value={form.technician} onChange={(value) => updateField('technician', value)} />
+                      <TextField label="Date" type="date" value={form.documentDate} onChange={(value) => updateField('documentDate', value)} />
+                      <TextField label="Ticket No" value={form.ticketNumber} onChange={(value) => updateField('ticketNumber', value)} />
+                      <TextField label="Service Type" value={form.serviceType} onChange={(value) => updateField('serviceType', value)} />
+                      <TextField label="Reference" value={form.reference} onChange={(value) => updateField('reference', value)} />
+                      <TextField label="System Capacity" value={form.systemCapacity} onChange={(value) => updateField('systemCapacity', value)} />
+                    </>
+                  )}
+                </div>
+              </details>
+            ) : null}
+
+            <details className="group rounded-xl border border-slate-200 bg-white shadow-sm">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold text-slate-900">
+                <span className="inline-flex items-center gap-2"><FiInfo className="text-brand-600" aria-hidden="true" /> How this document is filled</span>
+                <FiChevronDown className="text-slate-400 transition group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="space-y-2 border-t border-slate-100 px-4 py-4 text-xs leading-5 text-slate-600">
+                <p><strong>Filled from the ticket:</strong> client, request, location, technician, inspection, equipment, warranty, and completion records.</p>
+                <p><strong>Previously saved:</strong> this ticket&apos;s draft and saved document records.</p>
+                <p><strong>Template wording:</strong> business, warranty, legal, brand, and commercial text. Review it before printing.</p>
+                <p><strong>Typed by you:</strong> measurements, signatures, pricing, and agreed payment terms.</p>
+                {['quotation_proposal', 'installation_contract'].includes(activeTemplate) ? (
+                  <p><strong>Editing:</strong> change the header fields, terms, and tables directly on the document, then save from this panel.</p>
+                ) : null}
+              </div>
+            </details>
+          </aside>
         </section>
+
       </div>
     </Layout>
   );

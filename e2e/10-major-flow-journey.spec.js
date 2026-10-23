@@ -330,10 +330,10 @@ test.describe('Major flow journey through the real UI', () => {
     await adminPage.getByRole('button', { name: 'Quotation Proposal' }).click();
     await adminPage.getByPlaceholder(/search ticket by id/i).fill(ticketCode);
     await adminPage.getByRole('button', { name: new RegExp(ticketCode) }).first().click();
-    await expect(adminPage.getByText(/document data sources/i)).toBeVisible({ timeout: 15000 });
+    await expect(adminPage.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
     // Wait for the ticket prefill to finish (it disables saving and would overwrite typed values),
     // then price the first row of the price table: the first table whose header has Total Amount.
-    const saveQuotation = adminPage.getByRole('button', { name: 'Save Quotation Data' });
+    const saveQuotation = adminPage.getByRole('button', { name: 'Send quotation to client' });
     await expect(saveQuotation).toBeEnabled({ timeout: 15000 });
     const priceTable = adminPage.locator('table:has(> thead th:text-is("Total Amount"))').first();
     const totalPrice = priceTable.locator(':scope > tbody > tr').first().locator('textarea').nth(2);
@@ -403,7 +403,7 @@ test.describe('Major flow journey through the real UI', () => {
     await adminPage.getByRole('button', { name: 'Turnover / Acceptance Form' }).click();
     await adminPage.getByPlaceholder(/search ticket by id/i).fill(ticketCode);
     await adminPage.getByRole('button', { name: new RegExp(ticketCode) }).first().click();
-    await expect(adminPage.getByText(/document data sources/i)).toBeVisible({ timeout: 15000 });
+    await expect(adminPage.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
     await adminPage.getByRole('button', { name: 'Finalize Project Handover' }).click();
     await expect(adminPage.getByText('Turnover Finalized and Ticket updated!')).toBeVisible();
     await expect.poll(ticketStatus).toBe('Turned Over / Accepted');

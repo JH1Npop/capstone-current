@@ -292,7 +292,8 @@ test.describe('Minor flows through the real UI', () => {
       await adminPage.getByRole('button', { name: 'Quotation Proposal' }).click();
       await adminPage.getByPlaceholder(/search ticket by id/i).fill(ticketCode);
       await adminPage.getByRole('button', { name: new RegExp(ticketCode) }).first().click();
-      const save = adminPage.getByRole('button', { name: 'Save Quotation Data' });
+      // First send, or a revision after the client declined.
+      const save = adminPage.getByRole('button', { name: /^Send (revised |updated )?quotation/ });
       await expect(save).toBeEnabled({ timeout: 15000 });
       const total = adminPage.locator('table:has(> thead th:text-is("Total Amount"))').first()
         .locator(':scope > tbody > tr').first().locator('textarea').nth(2);

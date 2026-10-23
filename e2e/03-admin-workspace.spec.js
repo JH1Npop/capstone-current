@@ -850,15 +850,17 @@ test.describe('Admin Workspace - All Pages', () => {
     page.on('pageerror', (error) => console.error('Documents page error:', error.message));
     await visitWorkspacePage(page, '/admin/documents', 'test-results/screenshots/03-admin-documents.png');
     await page.getByRole('button', { name: 'Quotation Proposal' }).click();
-    await expect(page.getByText(/payments are processed and verified outside this system/i)).toBeVisible();
+    await expect(page.getByText(/payments are collected and verified outside this system/i)).toBeVisible();
 
     const ticketSearch = page.getByPlaceholder(/search ticket by id/i);
     await ticketSearch.click();
     const firstTicket = page.getByRole('button', { name: /TKT-\d+/ }).first();
     await expect(firstTicket).toBeVisible();
     await firstTicket.click();
-    await expect(page.getByText(/document data sources/i)).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText(/template defaults.*must be reviewed/i)).toBeVisible();
+    // The ticket bar links to the loaded ticket; the fill rules sit in the folded help.
+    await expect(page.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
+    await page.getByText('How this document is filled').click();
+    await expect(page.getByText(/Template wording:.*Review it before printing/)).toBeVisible();
     await expect(page.locator('body')).not.toContainText('â‚±');
     await expect(page.locator('body')).toContainText('₱');
 
