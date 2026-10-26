@@ -6,10 +6,9 @@ import { getLocalDateInputValue } from '../../utils/date';
 
 const timeSlotOptions = [
   { value: '', label: 'Time to be confirmed' },
-  { value: 'morning', label: 'Morning' },
-  { value: 'midday', label: 'Midday' },
-  { value: 'afternoon', label: 'Afternoon' },
-  { value: 'evening', label: 'Evening' }
+  { value: 'morning', label: 'Morning (8 AM - 11 AM)' },
+  { value: 'midday', label: 'Midday (11 AM - 2 PM)' },
+  { value: 'afternoon', label: 'Afternoon (2 PM - 5 PM)' }
 ];
 
 const getTodayKey = () => getLocalDateInputValue();
@@ -71,6 +70,11 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
 
     if (!form.notes.trim()) {
       setError('Add the reason for changing this schedule.');
+      return;
+    }
+
+    if (form.scheduledTime && (form.scheduledTime < '08:00' || form.scheduledTime >= '17:00')) {
+      setError('Choose an exact start time from 8:00 AM through 4:59 PM.');
       return;
     }
 
@@ -157,10 +161,13 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
               </span>
               <input
                 type="time"
+                min="08:00"
+                max="16:59"
                 value={form.scheduledTime}
                 onChange={(event) => updateField('scheduledTime', event.target.value)}
                 className="mt-2 w-full rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
+              <span className="mt-1 block text-xs font-normal text-slate-500">Business-hour start times only (8 AM to 5 PM).</span>
             </label>
           </div>
 

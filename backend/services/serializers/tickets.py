@@ -14,6 +14,11 @@ from ..models import (
     SalesRecord, SalesRecordLine
 )
 from ..solar_calculator import CALCULATION_VERSION, SolarCalculationError, calculate_solar_estimate
+from ..scheduling_policy import (
+    BUSINESS_HOURS_ERROR,
+    is_bookable_time_slot,
+    is_business_start_time,
+)
 from ..sla import (
     evaluate_service_request_sla,
     evaluate_service_ticket_sla,
@@ -406,6 +411,21 @@ class ServiceTicketSerializer(serializers.ModelSerializer):
 
     def get_admin_owner_name(self, obj):
         return self.get_assigned_admin_name(obj)
+
+    def validate(self, attrs):
+        submitted_time_slot = attrs.get('scheduled_time_slot')
+        if submitted_time_slot and not is_bookable_time_slot(submitted_time_slot):
+            raise serializers.ValidationError({
+                'scheduled_time_slot': BUSINESS_HOURS_ERROR,
+            })
+
+        submitted_time = attrs.get('scheduled_time')
+        if submitted_time is not None and not is_business_start_time(submitted_time):
+            raise serializers.ValidationError({
+                'scheduled_time': BUSINESS_HOURS_ERROR,
+            })
+
+        return attrs
 
     class Meta:
         model = ServiceTicket

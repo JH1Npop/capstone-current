@@ -10,6 +10,12 @@ IMAGE_FORMATS = {
     'GIF': ('image/gif', '.gif'),
 }
 
+IMAGE_CONTENT_TYPE_ALIASES = {
+    'image/jpg': 'image/jpeg',
+    'image/pjpeg': 'image/jpeg',
+    'image/x-png': 'image/png',
+}
+
 
 def validate_image_upload(uploaded_file, *, max_bytes, allowed_formats=None, field_name='image'):
     allowed_formats = set(allowed_formats or IMAGE_FORMATS)
@@ -38,6 +44,7 @@ def validate_image_upload(uploaded_file, *, max_bytes, allowed_formats=None, fie
 
     expected_content_type, safe_extension = IMAGE_FORMATS[image_format]
     supplied_content_type = str(getattr(uploaded_file, 'content_type', '') or '').lower()
+    supplied_content_type = IMAGE_CONTENT_TYPE_ALIASES.get(supplied_content_type, supplied_content_type)
     if supplied_content_type and supplied_content_type != expected_content_type:
         raise ValidationError({field_name: 'The image content does not match its declared file type.'})
 

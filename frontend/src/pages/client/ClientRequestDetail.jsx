@@ -18,6 +18,9 @@ const TIME_SLOT_LABELS = {
   evening: 'Evening (5 PM - 8 PM)'
 };
 
+const BOOKABLE_TIME_SLOT_OPTIONS = Object.entries(TIME_SLOT_LABELS)
+  .filter(([value]) => value !== 'evening');
+
 export default function ClientRequestDetail() {
   const { requestId } = useParams();
   const [searchParams] = useSearchParams();
@@ -534,10 +537,11 @@ export default function ClientRequestDetail() {
                           className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
                         >
                           <option value="">Select time window</option>
-                          {Object.entries(TIME_SLOT_LABELS).map(([value, label]) => (
+                          {BOOKABLE_TIME_SLOT_OPTIONS.map(([value, label]) => (
                             <option key={value} value={value}>{label}</option>
                           ))}
                         </select>
+                        <p className="mt-1 text-xs text-slate-500">Available business hours: 8 AM to 5 PM.</p>
                       </div>
                     </div>
                     <div>

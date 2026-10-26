@@ -496,7 +496,10 @@ export const fetchServices = async () => {
           is_active: service?.is_active !== false,
           usage_count: Number(service?.usage_count || 0),
           request_count: Number(service?.request_count || 0),
-          ticket_count: Number(service?.ticket_count || 0)
+          ticket_count: Number(service?.ticket_count || 0),
+          service_item_count: Number(service?.service_item_count || 0),
+          maintenance_count: Number(service?.maintenance_count || 0),
+          can_delete: service?.can_delete === true
         }))
       : [];
   } catch (error) {
@@ -565,7 +568,10 @@ export const createService = async (service) => {
       is_active: data?.is_active !== false,
       usage_count: Number(data?.usage_count || 0),
       request_count: Number(data?.request_count || 0),
-      ticket_count: Number(data?.ticket_count || 0)
+      ticket_count: Number(data?.ticket_count || 0),
+      service_item_count: Number(data?.service_item_count || 0),
+      maintenance_count: Number(data?.maintenance_count || 0),
+      can_delete: data?.can_delete === true
     };
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to create service.'));
@@ -614,7 +620,10 @@ export const updateService = async (id, updates) => {
       is_active: data?.is_active !== false,
       usage_count: Number(data?.usage_count || 0),
       request_count: Number(data?.request_count || 0),
-      ticket_count: Number(data?.ticket_count || 0)
+      ticket_count: Number(data?.ticket_count || 0),
+      service_item_count: Number(data?.service_item_count || 0),
+      maintenance_count: Number(data?.maintenance_count || 0),
+      can_delete: data?.can_delete === true
     };
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to update service.'));

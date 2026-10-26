@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from services.models import ServiceType
+from services.models import ServiceRequest, ServiceRequestService, ServiceType
 from users.models import User, UserCapabilityGrant
 from users.rbac import PUBLIC_SITE_VIEW, SERVICE_CATALOG_MANAGE, SERVICE_CATALOG_VIEW
 
@@ -53,6 +53,56 @@ class ServiceCatalogCapabilityTests(APITestCase):
         self.assertEqual(self.client.get(self.admin_url).status_code, status.HTTP_200_OK)
         response = self.client.post(self.admin_url, self.payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+
+    def test_used_service_is_marked_for_deactivation_and_can_be_made_inactive(self):
+        manager = self.create_admin('service-lifecycle-manager', SERVICE_CATALOG_MANAGE)
+        client_user = User.objects.create_user(
+            username='service-history-client', password='pass', role='client'
+        )
+        service_request = ServiceRequest.objects.create(
+            client=client_user,
+            service_type=self.active_service,
+            description='Historical service request',
+        )
+        ServiceRequestService.objects.create(
+            request=service_request,
+            service_type=self.active_service,
+        )
+        self.client.force_authenticate(manager)
+
+        catalog = self.client.get(self.admin_url)
+        self.assertEqual(catalog.status_code, status.HTTP_200_OK)
+        row = next(item for item in catalog.data if item['id'] == self.active_service.id)
+        self.assertFalse(row['can_delete'])
+        self.assertEqual(row['request_count'], 1)
+        self.assertEqual(row['service_item_count'], 1)
+        self.assertGreaterEqual(row['usage_count'], 2)
+
+        refused = self.client.delete(f'{self.admin_url}{self.active_service.id}/')
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(refused.data['service_item_count'], 1)
+
+        deactivated = self.client.put(
+            f'{self.admin_url}{self.active_service.id}/',
+            {'is_active': False},
+            format='json',
+        )
+        self.assertEqual(deactivated.status_code, status.HTTP_200_OK, deactivated.data)
+        self.active_service.refresh_from_db()
+        self.assertFalse(self.active_service.is_active)
+
+    def test_unused_service_is_marked_as_permanently_deletable(self):
+        manager = self.create_admin('service-delete-manager', SERVICE_CATALOG_MANAGE)
+        self.client.force_authenticate(manager)
+
+        catalog = self.client.get(self.admin_url)
+        row = next(item for item in catalog.data if item['id'] == self.inactive_service.id)
+        self.assertTrue(row['can_delete'])
+        self.assertEqual(row['usage_count'], 0)
+
+        deleted = self.client.delete(f'{self.admin_url}{self.inactive_service.id}/')
+        self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ServiceType.objects.filter(pk=self.inactive_service.id).exists())
 
     def test_unrelated_configured_admin_cannot_open_admin_catalog(self):
         user = self.create_admin('landing-editor', PUBLIC_SITE_VIEW)

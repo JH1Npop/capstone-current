@@ -320,7 +320,7 @@ test.describe('Major flow journey through the real UI', () => {
       await yesButton.click();
     }
     await techPage.getByRole('button', { name: /Ready for service/ }).click();
-    await techPage.locator('input[type="file"][accept="image/*"]').setInputFiles({ name: 'site.png', mimeType: 'image/png', buffer: PNG });
+    await techPage.locator('input[type="file"][accept*="image/jpeg"]').setInputFiles({ name: 'site.png', mimeType: 'image/png', buffer: PNG });
     await techPage.getByRole('button', { name: 'Review and complete inspection' }).click();
     await expect(techPage.getByText('Inspection submitted successfully.')).toBeVisible();
     await expect.poll(ticketStatus).toBe('Inspection Completed');

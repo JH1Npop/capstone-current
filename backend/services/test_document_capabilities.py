@@ -2,7 +2,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from services.models import GeneratedDocument, ServiceRequest, ServiceTicket, ServiceType
+from services.models import GeneratedDocument, QuotationRecord, ServiceRequest, ServiceTicket, ServiceType
 from users.models import User, UserCapabilityGrant
 from users.rbac import DOCUMENTS_MANAGE, DOCUMENTS_VIEW, PUBLIC_SITE_VIEW
 
@@ -149,6 +149,44 @@ class DocumentCapabilityTests(APITestCase):
         self.assertEqual(first.data['id'], second.data['id'])
         self.assertEqual(first.data['quotation_number'], f'QUO-{self.ticket.id:04d}')
         self.assertEqual(second.data['total_amount'], '105000')
+
+    def test_sent_quotation_requires_positive_total(self):
+        user = self.create_admin('quotation-total-manager', DOCUMENTS_MANAGE)
+        self.client.force_authenticate(user)
+
+        response = self.client.post(
+            '/api/services/quotations/',
+            {
+                'ticket': self.ticket.id,
+                'client': self.client_user.id,
+                'total_amount': '',
+                'status': 'Sent',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('greater than zero', response.data['total_amount'][0])
+
+    def test_client_cannot_accept_legacy_sent_quotation_without_valid_total(self):
+        quotation = QuotationRecord.objects.create(
+            ticket=self.ticket,
+            client=self.client_user,
+            quotation_number=f'QUO-{self.ticket.id:04d}',
+            total_amount='',
+            status='Sent',
+        )
+        self.client.force_authenticate(self.client_user)
+
+        response = self.client.post(
+            f'/api/services/quotations/{quotation.id}/respond/',
+            {'decision': 'accept'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        quotation.refresh_from_db()
+        self.assertEqual(quotation.status, 'Sent')
 
     def test_unrelated_configured_admin_cannot_access_documents(self):
         user = self.create_admin('landing-document-denied', PUBLIC_SITE_VIEW)

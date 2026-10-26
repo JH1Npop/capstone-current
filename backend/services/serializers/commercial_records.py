@@ -189,6 +189,13 @@ class QuotationRecordSerializer(serializers.ModelSerializer):
         validity_days = attrs.get('validity_days', getattr(self.instance, 'validity_days', 30))
         if validity_days is not None and not 1 <= validity_days <= 365:
             raise serializers.ValidationError({'validity_days': 'Validity must be between 1 and 365 days.'})
+        quotation_status = attrs.get('status', getattr(self.instance, 'status', 'Draft'))
+        total_text = attrs.get('total_amount', getattr(self.instance, 'total_amount', None))
+        total = decimal_from_money(total_text)
+        if quotation_status in {'Sent', 'Accepted'} and (total is None or total <= 0):
+            raise serializers.ValidationError({
+                'total_amount': 'Enter a quotation total greater than zero before sending it to the client.'
+            })
         bill_of_materials = attrs.get('bill_of_materials', getattr(self.instance, 'bill_of_materials', []))
         if not isinstance(bill_of_materials, list):
             raise serializers.ValidationError({'bill_of_materials': 'Bill of materials must be a list.'})

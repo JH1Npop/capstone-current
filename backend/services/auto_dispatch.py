@@ -11,6 +11,7 @@ from django.utils import timezone
 from typing import Optional, List, Dict, Any
 
 from services.models import ServiceLocation, ServiceTicket
+from services.scheduling_policy import is_business_start_time
 from services.views import (
     get_eligible_technician_ids_for_service,
     score_technician_fit,
@@ -136,6 +137,10 @@ def auto_assign_technician(ticket: ServiceTicket) -> bool:
     """
     if ticket.technician is not None:
         logger.debug(f"Ticket {ticket.id} already has a primary technician assigned")
+        return False
+
+    if not is_business_start_time(ticket.scheduled_time):
+        logger.info("Skipped auto-dispatch for ticket %s: schedule is outside business hours", ticket.id)
         return False
 
     # Required inspections are allowed before payment. Direct service work is

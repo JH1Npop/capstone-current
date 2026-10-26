@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FiPlus, FiTrash2, FiEdit2, FiChevronDown, FiChevronUp, FiTool, FiClock, FiList, FiPackage } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiEdit2, FiChevronDown, FiChevronUp, FiTool, FiClock, FiList, FiPackage, FiPower } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import {
@@ -116,6 +116,11 @@ const formatCost = (cost) => {
   const num = Number(cost || 0);
   return num.toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
 };
+
+const canPermanentlyDeleteService = (service) => (
+  service?.can_delete === true
+  || (service?.can_delete == null && Number(service?.usage_count || 0) === 0)
+);
 
 const getDurationParts = (minutes) => {
   const safeMinutes = Math.max(0, Number(minutes || 0));
@@ -351,7 +356,7 @@ function EquipmentEditor({ equipment, onChange }) {
 }
 
 /* Expandable Service Card */
-function ServiceCard({ service, requirements, inventoryItems, canManage, canManageInventory, onEdit, onDelete, onSaveRequirement, onDeleteRequirement }) {
+function ServiceCard({ service, requirements, inventoryItems, canManage, canManageInventory, onEdit, onCatalogAction, onSaveRequirement, onDeleteRequirement }) {
   const [expanded, setExpanded] = useState(false);
   const [reqForm, setReqForm] = useState(null);
   const selectableInventoryItems = inventoryItems.filter((item) => item.status !== 'retired');
@@ -454,14 +459,18 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
             <FiEdit2 size={15} />
             Edit
           </button> : null}
-          {canManage ? <button
+          {canManage && (canPermanentlyDeleteService(service) || service.is_active !== false) ? <button
             type="button"
-            onClick={() => onDelete(service.id)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-            title="Delete"
+            onClick={() => onCatalogAction(service)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold ${
+              canPermanentlyDeleteService(service)
+                ? 'border-red-100 text-red-600 hover:bg-red-50'
+                : 'border-amber-200 text-amber-700 hover:bg-amber-50'
+            }`}
+            title={canPermanentlyDeleteService(service) ? 'Delete unused service' : 'Deactivate used service'}
           >
-            <FiTrash2 size={15} />
-            Delete
+            {canPermanentlyDeleteService(service) ? <FiTrash2 size={15} /> : <FiPower size={15} />}
+            {canPermanentlyDeleteService(service) ? 'Delete' : 'Deactivate'}
           </button> : null}
           <button
             type="button"
@@ -606,6 +615,7 @@ export default function AdminServices() {
   const [loading, setLoading] = useState(true);
   const [editingService, setEditingService] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [serviceActionBusy, setServiceActionBusy] = useState(false);
   const [requirementDeleteTarget, setRequirementDeleteTarget] = useState(null);
   const [serviceFormData, setServiceFormData] = useState(DEFAULT_SERVICE_FORM);
   const [feedback, setFeedback] = useState('');
@@ -692,14 +702,24 @@ export default function AdminServices() {
     }
   };
 
-  const onDeleteService = async (id) => {
+  const onConfirmCatalogAction = async () => {
+    if (!deleteTarget || serviceActionBusy) return;
+    const { service, mode } = deleteTarget;
+    setServiceActionBusy(true);
     try {
-      await deleteService(id);
-      setFeedback('Service deleted.');
+      if (mode === 'deactivate') {
+        await updateService(service.id, { ...service, is_active: false });
+        setFeedback(`${service.name} is now inactive and hidden from new requests. Historical records were preserved.`);
+      } else {
+        await deleteService(service.id);
+        setFeedback('Unused service deleted.');
+      }
       setDeleteTarget(null);
       await load();
     } catch (error) {
-      setFeedback(error.message || 'Error deleting service.');
+      setFeedback(error.message || `Unable to ${mode} service.`);
+    } finally {
+      setServiceActionBusy(false);
     }
   };
 
@@ -1058,7 +1078,10 @@ export default function AdminServices() {
               canManage={canManageServices}
               canManageInventory={canManageServices && canManageInventory}
               onEdit={onEditService}
-              onDelete={() => setDeleteTarget(service)}
+              onCatalogAction={(target) => setDeleteTarget({
+                service: target,
+                mode: canPermanentlyDeleteService(target) ? 'delete' : 'deactivate',
+              })}
               onSaveRequirement={onSaveRequirement}
               onDeleteRequirement={(id) => {
                 const target = requirements.find((requirement) => requirement.id === id);
@@ -1078,24 +1101,42 @@ export default function AdminServices() {
             className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-slate-950">Delete service?</h3>
+            <h3 className="text-lg font-semibold text-slate-950">
+              {deleteTarget.mode === 'deactivate' ? 'Deactivate service?' : 'Delete unused service?'}
+            </h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              This will remove <span className="font-semibold text-slate-900">{deleteTarget.name}</span> from the service list. Used services should be made inactive instead.
+              {deleteTarget.mode === 'deactivate' ? (
+                <>
+                  <span className="font-semibold text-slate-900">{deleteTarget.service.name}</span> has {Number(deleteTarget.service.usage_count || 0)} historical reference{Number(deleteTarget.service.usage_count || 0) === 1 ? '' : 's'}. It will be hidden from new requests while all existing records remain available.
+                </>
+              ) : (
+                <>
+                  This permanently removes <span className="font-semibold text-slate-900">{deleteTarget.service.name}</span>. It has no request, ticket, or maintenance history.
+                </>
+              )}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
+                disabled={serviceActionBusy}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => onDeleteService(deleteTarget.id)}
-                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+                onClick={onConfirmCatalogAction}
+                disabled={serviceActionBusy}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  deleteTarget.mode === 'deactivate'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
-                Delete
+                {serviceActionBusy
+                  ? (deleteTarget.mode === 'deactivate' ? 'Deactivating...' : 'Deleting...')
+                  : (deleteTarget.mode === 'deactivate' ? 'Deactivate service' : 'Delete permanently')}
               </button>
             </div>
           </div>

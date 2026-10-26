@@ -147,12 +147,16 @@ export const buildTdsFormFromTicket = (ticket) => {
   const middleName = ticket?.request_details?.client_middle_name || nameParts.middleName;
   const lastName = ticket?.request_details?.client_last_name || nameParts.lastName;
 
-  const rawPurposeOfGoingSolar = ticket?.technical_data_sheet?.purpose_of_going_solar;
-  const tds = {
-    ...(ticket?.technical_data_sheet || {}),
-    purpose_of_going_solar: typeof rawPurposeOfGoingSolar === 'string' ? rawPurposeOfGoingSolar : ''
-  };
+  const tds = ticket?.technical_data_sheet || {};
+  const rawPurposeOfGoingSolar = tds.purpose_of_going_solar;
   const normalizedPurpose = normalizePurposeOfGoingSolar(rawPurposeOfGoingSolar);
+  const generatorDetails = tds.generator_details_json && typeof tds.generator_details_json === 'object'
+    ? tds.generator_details_json
+    : {};
+  const attachments = tds.attachments_json && typeof tds.attachments_json === 'object'
+    ? tds.attachments_json
+    : {};
+  const storedBrownoutFrequency = String(tds.brownout_frequency || '');
 
   return {
     ...createInitialTdsForm(),
@@ -172,8 +176,18 @@ export const buildTdsFormFromTicket = (ticket) => {
     solarInstallLocation: tds?.solar_panel_installation_location || getProjectDetail(ticket, 'solar_install_location') || '',
     rooftopType: tds?.rooftop_type || getProjectDetail(ticket, 'rooftop_type') || '',
     averageMonthlyBill: tds?.average_monthly_electric_bill || getProjectDetail(ticket, 'average_monthly_electricity_bill') || '',
+    electricityHoursPerDay: tds?.electricity_required_hours_per_day || '',
+    frequentBrownouts: generatorDetails.frequentBrownouts || (storedBrownoutFrequency ? 'Yes' : ''),
+    brownoutFrequencyPerWeek: generatorDetails.brownoutFrequencyPerWeek || storedBrownoutFrequency,
     batteryPreference: tds?.battery_preference || getProjectDetail(ticket, 'battery_preference') || '',
     loadRows: (tds?.load_schedule_json && tds.load_schedule_json.length ? tds.load_schedule_json : storedLoadRows) || createTdsLoadRows(),
+    hasGenerator: generatorDetails.hasGenerator || '',
+    generatorBrandName: generatorDetails.brandName || '',
+    generatorCapacity: generatorDetails.capacity || '',
+    generatorFuelType: generatorDetails.fuelType || '',
+    generatorDatePurchased: generatorDetails.datePurchased || '',
+    attachElectricBill: attachments.electricBill || '',
+    attachSitePhoto: attachments.sitePhoto || '',
     clientConfirmationName: tds?.client_confirmed_name || clientName,
     confirmationDate: formatTicketDateForInput(tds?.client_confirmation_date || ticket?.scheduledDate || ticket?.preferredDate) || formatTicketDateForInput(new Date().toISOString()),
     purposeRows: createTdsPurposeRows().map((row) => {
@@ -252,6 +266,113 @@ export const createQuotationBomRows = () => ([
   { id: 'quote-bom-5', itemNo: '5', description: 'DC/AC wirings, protections, and accessories', unit: 'lot', qty: '1', unitPrice: '', amount: '' },
   { id: 'quote-bom-6', itemNo: '6', description: 'Design, engineering, and manpower', unit: 'lot', qty: '1', unitPrice: '', amount: '' }
 ]);
+
+const normalizeInventoryLookup = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, ' ')
+  .split(' ')
+  .filter(Boolean)
+  .map((token) => (token.length > 3 && token.endsWith('s') ? token.slice(0, -1) : token))
+  .join(' ');
+
+export const parseQuotationNumber = (value) => {
+  const normalized = String(value ?? '').replace(/[^0-9.-]/g, '');
+  if (!normalized || normalized === '-' || normalized === '.') return null;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
+};
+
+export const calculateQuotationAmount = (quantity, unitPrice) => {
+  const quantityNumber = parseQuotationNumber(quantity);
+  const unitPriceNumber = parseQuotationNumber(unitPrice);
+  if (quantityNumber == null || unitPriceNumber == null || quantityNumber <= 0 || unitPriceNumber < 0) {
+    return '';
+  }
+  return (quantityNumber * unitPriceNumber).toFixed(2);
+};
+
+export const findQuotationInventoryItem = (inventoryItems = [], valueOrRow = '') => {
+  const row = valueOrRow && typeof valueOrRow === 'object' ? valueOrRow : {};
+  const directId = row.inventoryItemId ?? row.inventory_item_id ?? row.inventory_item;
+  if (directId != null && directId !== '') {
+    const directMatch = inventoryItems.find((item) => String(item.id) === String(directId));
+    if (directMatch) return directMatch;
+  }
+
+  const rawValue = typeof valueOrRow === 'object'
+    ? (row.description || row.sku || '')
+    : valueOrRow;
+  const lookup = normalizeInventoryLookup(rawValue);
+  if (!lookup) return null;
+
+  const exactSkuMatches = inventoryItems.filter((item) => normalizeInventoryLookup(item.sku) === lookup);
+  if (exactSkuMatches.length === 1) return exactSkuMatches[0];
+  const exactNameMatches = inventoryItems.filter((item) => normalizeInventoryLookup(item.name) === lookup);
+  if (exactNameMatches.length === 1) return exactNameMatches[0];
+  if (exactSkuMatches.length > 1 || exactNameMatches.length > 1) return null;
+
+  const lookupTokens = lookup.split(' ').filter(Boolean);
+  const semanticMatches = inventoryItems.filter((item) => {
+    const nameTokens = new Set(normalizeInventoryLookup(item.name).split(' ').filter(Boolean));
+    return lookupTokens.length > 0 && lookupTokens.every((token) => nameTokens.has(token));
+  });
+  return semanticMatches.length === 1 ? semanticMatches[0] : null;
+};
+
+const findExactQuotationInventoryItem = (inventoryItems = [], row = {}) => {
+  const directId = row.inventoryItemId ?? row.inventory_item_id ?? row.inventory_item;
+  if (directId != null && directId !== '') {
+    const directMatch = inventoryItems.find((item) => String(item.id) === String(directId));
+    if (directMatch) return directMatch;
+  }
+  const description = normalizeInventoryLookup(row.description || '');
+  const sku = normalizeInventoryLookup(row.sku || '');
+  const exactMatches = inventoryItems.filter((item) => (
+    (description && normalizeInventoryLookup(item.name) === description)
+    || (sku && normalizeInventoryLookup(item.sku) === sku)
+  ));
+  return exactMatches.length === 1 ? exactMatches[0] : null;
+};
+
+export const applyInventoryToQuotationRow = (row, inventoryItem) => {
+  if (!inventoryItem) return row;
+  const quantity = row.qty ?? row.quantity ?? '';
+  const unitPrice = String(inventoryItem.unit_price ?? '');
+  return {
+    ...row,
+    inventoryItemId: inventoryItem.id,
+    sku: inventoryItem.sku || row.sku || '',
+    description: inventoryItem.name || row.description || '',
+    unit: inventoryItem.unit_of_measurement || row.unit || '',
+    qty: quantity,
+    unitPrice,
+    amount: calculateQuotationAmount(quantity, unitPrice),
+  };
+};
+
+const normalizeQuotationBomRows = (rows) => mapStoredRows(
+  rows,
+  (row, index) => ({
+    id: row?.id || `quote-bom-${index + 1}`,
+    itemNo: row?.itemNo || row?.item_no || String(index + 1),
+    inventoryItemId: row?.inventoryItemId || row?.inventory_item_id || row?.inventory_item || '',
+    sku: row?.sku || '',
+    description: row?.description || row?.name || '',
+    unit: row?.unit || row?.unit_of_measurement || '',
+    qty: row?.qty ?? row?.quantity ?? '',
+    unitPrice: row?.unitPrice ?? row?.unit_price ?? '',
+    amount: row?.amount ?? row?.line_total ?? '',
+  })
+);
+
+const priceUnsavedQuotationRows = (rows, inventoryItems) => rows.map((row) => {
+  // Template labels such as "Solar panels" are not catalog selections. Only
+  // refresh a row that already identifies an exact catalog item; free-text
+  // selection uses the broader unique semantic match in the editor itself.
+  const matchedItem = findExactQuotationInventoryItem(inventoryItems, row);
+  return matchedItem ? applyInventoryToQuotationRow(row, matchedItem) : row;
+});
 
 export const createQuotationWarrantyRows = () => ([
   { id: 'quote-warranty-1', item: 'Solar Panels', brand: 'JA Solar / Aiko Solar', period: '12 Years enhanced manufacturer\'s product warranty\n30 Years linear power output warranty' },
@@ -455,7 +576,7 @@ export const buildCommissioningFormFromTicket = (ticket, existing = null) => {
   };
 };
 
-export const buildQuotationFormFromTicket = (ticket, quotationRecord) => {
+export const buildQuotationFormFromTicket = (ticket, quotationRecord, inventoryItems = []) => {
   const base = createInitialQuotationForm();
   const clientName = getTicketClientName(ticket);
   const serviceName = ticket?.service || ticket?.request_details?.service_type || 'Solar PV System';
@@ -465,16 +586,17 @@ export const buildQuotationFormFromTicket = (ticket, quotationRecord) => {
   const totalAmount = quotationRecord?.total_amount || getProjectDetail(ticket, 'total_amount');
   const paymentTerms = quotationRecord?.payment_terms || '';
   const warrantyTerms = quotationRecord?.warranty_terms || '';
-  const storedBomRows = mapStoredRows(
-    getProjectDetail(ticket, 'bill_of_materials'),
-    (row, index) => ({
-      id: row?.id || `quote-bom-${index + 1}`,
-      itemNo: row?.itemNo || row?.item_no || String(index + 1),
-      description: row?.description || '',
-      unit: row?.unit || '',
-      qty: row?.qty || row?.quantity || ''
-    })
-  );
+  const quotationBomRows = normalizeQuotationBomRows(quotationRecord?.bill_of_materials);
+  const projectBomRows = normalizeQuotationBomRows(getProjectDetail(ticket, 'bill_of_materials'));
+  const storedBomRows = quotationBomRows || projectBomRows;
+  const baseBomRows = storedBomRows || base.bomRows;
+  // A sent/accepted/rejected quotation is a commercial snapshot. Unsaved and
+  // Draft forms may inherit today's inventory catalog price; client-visible
+  // records keep their saved unit price even if the catalog later changes.
+  const hasCommercialSnapshot = ['Sent', 'Accepted', 'Rejected'].includes(quotationRecord?.status);
+  const bomRows = hasCommercialSnapshot
+    ? baseBomRows
+    : priceUnsavedQuotationRows(baseBomRows, inventoryItems);
 
   return {
     ...base,
@@ -489,7 +611,7 @@ export const buildQuotationFormFromTicket = (ticket, quotationRecord) => {
         ? { ...row, totalPrice: totalAmount || row.totalPrice }
         : row
     )),
-    bomRows: storedBomRows || base.bomRows,
+    bomRows,
     paymentTerms: paymentTerms || base.paymentTerms,
     warrantyTerms: warrantyTerms || base.warrantyTerms
   };

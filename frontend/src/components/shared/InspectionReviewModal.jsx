@@ -91,6 +91,11 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
       return;
     }
 
+    if (decision === 'approve_service' && scheduledTime && (scheduledTime < '08:00' || scheduledTime >= '17:00')) {
+      setError('Choose an installation start time from 8:00 AM through 4:59 PM.');
+      return;
+    }
+
     if (['awaiting_materials', 'cancel'].includes(decision) && !notes.trim()) {
       setError('Add a reason for this exception decision.');
       return;
@@ -271,10 +276,12 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
                     id="installation-time"
                     type="time"
                     value={scheduledTime}
-                    min={scheduledDate === localDateValue() ? localTimeValue() : undefined}
+                    min={scheduledDate === localDateValue() && localTimeValue() > '08:00' ? localTimeValue() : '08:00'}
+                    max="16:59"
                     onChange={(e) => setScheduledTime(e.target.value)}
                     className="w-full rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                   />
+                  <p className="mt-1 text-xs text-emerald-800">Installation must start during business hours (8 AM to 5 PM).</p>
                 </div>
               </div>
             </div>

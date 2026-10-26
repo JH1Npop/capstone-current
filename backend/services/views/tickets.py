@@ -98,9 +98,14 @@ from services.serializers import (
     ServiceTicketReportSerializer,
     SolarCommissioningChecklistSerializer,
 )
-from services.models import GeneratedDocument, SalesPayment, ServiceRequest
-from services.deposits import quotation_deposit_summary, ticket_deposit_gate
+from services.models import GeneratedDocument, SalesPayment, ServiceRequest, TurnoverAcceptance
+from services.deposits import decimal_from_money, quotation_deposit_summary, ticket_deposit_gate
 from services.sla import evaluate_service_ticket_sla, get_ticket_dispatch_state
+from services.scheduling_policy import (
+    BUSINESS_HOURS_ERROR,
+    is_bookable_time_slot,
+    is_business_start_time,
+)
 from inventory.automation import apply_ticket_equipment_plan, create_pending_reservation
 from inventory.models import (
     EquipmentReturnRequest,
@@ -942,6 +947,11 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                     document_type=document_type,
                     **defaults,
                 )
+            if document_type == 'turnover_acceptance':
+                TurnoverAcceptance.objects.filter(
+                    ticket=ticket,
+                    generated_document__isnull=True,
+                ).update(generated_document=document)
 
         serializer = GeneratedDocumentSerializer(document, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1106,15 +1116,22 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                     return Response({'error': 'scheduled_time must be a valid time'}, status=status.HTTP_400_BAD_REQUEST)
 
             requested_time_slot = request.data.get('scheduled_time_slot')
-            if requested_time_slot not in [None, ''] and normalize_time_slot(requested_time_slot) is None:
-                return Response({'error': 'scheduled_time_slot must be a supported time slot'}, status=status.HTTP_400_BAD_REQUEST)
+            normalized_requested_time_slot = None
+            if requested_time_slot not in [None, '']:
+                normalized_requested_time_slot = normalize_time_slot(requested_time_slot)
+                if normalized_requested_time_slot is None:
+                    return Response({'error': 'scheduled_time_slot must be a supported time slot'}, status=status.HTTP_400_BAD_REQUEST)
+                if not is_bookable_time_slot(normalized_requested_time_slot):
+                    return Response({'error': BUSINESS_HOURS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
 
             effective_scheduled_date = scheduled_date or ticket.scheduled_date
             effective_scheduled_time = (
                 scheduled_time
-                or (get_default_time_for_slot(requested_time_slot) if requested_time_slot not in [None, ''] else None)
+                or (get_default_time_for_slot(normalized_requested_time_slot) if normalized_requested_time_slot else None)
                 or ticket.scheduled_time
             )
+            if not is_business_start_time(effective_scheduled_time):
+                return Response({'error': BUSINESS_HOURS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
 
             # Enforce daily assignment limit per service type
             service_type = ticket.request.service_type
@@ -1203,7 +1220,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 ticket,
                 scheduled_date=scheduled_date,
                 scheduled_time=scheduled_time,
-                scheduled_time_slot=requested_time_slot,
+                scheduled_time_slot=normalized_requested_time_slot,
             )
             ticket.smart_assignment_score = None
             ticket.smart_assignment_summary = None
@@ -1383,6 +1400,8 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 scheduled_time = parse_time(scheduled_time_value)
                 if scheduled_time is None:
                     return Response({'error': 'scheduled_time must be a valid time.'}, status=status.HTTP_400_BAD_REQUEST)
+                if not is_business_start_time(scheduled_time):
+                    return Response({'error': BUSINESS_HOURS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
             if scheduled_date == timezone.localdate() and scheduled_time is None:
                 return Response(
                     {
@@ -1505,6 +1524,9 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 {'error': f'Only tickets in {" or ".join(sorted(ASSIGNABLE_TICKET_STATUSES))} can be auto-assigned.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        if not is_business_start_time(ticket.scheduled_time):
+            return Response({'error': BUSINESS_HOURS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             location = ticket.request.location
@@ -2225,6 +2247,8 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                         {'error': 'preferred_time_slot must be a supported time slot.'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+                if not is_bookable_time_slot(normalized_preferred_time_slot):
+                    return Response({'error': BUSINESS_HOURS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
 
             ticket.reschedule_requested = True
             ticket.reschedule_reason = reason
@@ -2303,6 +2327,8 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                         {'error': 'scheduled_time_slot must be a supported time slot.'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+                if not is_bookable_time_slot(normalized_time_slot):
+                    return Response({'error': BUSINESS_HOURS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
 
             normalized_scheduled_time = None
             if scheduled_time not in [None, '']:
@@ -2316,6 +2342,8 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 or (get_default_time_for_slot(normalized_time_slot) if normalized_time_slot else None)
                 or ticket.scheduled_time
             )
+            if not is_business_start_time(effective_scheduled_time):
+                return Response({'error': BUSINESS_HOURS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
             for technician in get_ticket_team_members(ticket):
                 try:
                     validate_technician_daily_capacity(technician, effective_scheduled_date, ticket)
@@ -2602,6 +2630,13 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
         note = str(request.data.get('note') or '').strip()
         if decision == 'decline' and not note:
             return Response({'note': ['Please tell us why you are declining.']}, status=status.HTTP_400_BAD_REQUEST)
+        if decision == 'accept':
+            total = decimal_from_money(quotation.total_amount)
+            if total is None or total <= 0:
+                return Response(
+                    {'error': 'This quotation has no valid total. Ask the office to correct and resend it.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
         quotation.status = 'Accepted' if decision == 'accept' else 'Rejected'
         quotation.client_responded_at = timezone.now()
         quotation.client_response_note = note

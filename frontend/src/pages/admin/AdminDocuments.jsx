@@ -49,17 +49,21 @@ import {
   buildTdsFormFromTicket,
   buildTicketContextFromPrefill,
   buildTurnoverFormFromTicket,
+  applyInventoryToQuotationRow,
+  calculateQuotationAmount,
   createInitialCommissioningForm,
   createInitialInstallationContractForm,
   createInitialQuotationForm,
   createInitialTurnoverForm,
   createQuotationRow,
   createTurnoverRow,
+  findQuotationInventoryItem,
   hydrateFieldServiceReportForm,
   hydrateInstallationContractForm,
   hydrateQuotationForm,
   hydrateTdsForm,
-  hydrateTurnoverForm
+  hydrateTurnoverForm,
+  parseQuotationNumber,
 } from './adminDocumentsBuilders';
 
 const getPaperConfig = (paperSize) =>
@@ -867,7 +871,7 @@ function resizeTextareaField(field) {
   field.style.height = `${field.scrollHeight}px`;
 }
 
-function AutoGrowTextarea({ value, onChange, className, rows = 1, style, placeholder = '', guidePrint = '' }) {
+function AutoGrowTextarea({ value, onChange, className, rows = 1, style, placeholder = '', guidePrint = '', readOnly = false, ariaLabel }) {
   const fieldRef = useRef(null);
 
   useEffect(() => {
@@ -886,17 +890,21 @@ function AutoGrowTextarea({ value, onChange, className, rows = 1, style, placeho
       style={style}
       placeholder={placeholder}
       data-guide-print={guidePrint || placeholder}
+      readOnly={readOnly}
+      aria-label={ariaLabel}
     />
   );
 }
 
-function TableCellInput({ value, onChange }) {
+function TableCellInput({ value, onChange, readOnly = false, ariaLabel }) {
   return (
     <AutoGrowTextarea
       rows={1}
       value={value}
       onChange={onChange}
-      className="table-cell-input"
+      className={`table-cell-input ${readOnly ? 'bg-slate-50 text-slate-600' : ''}`}
+      readOnly={readOnly}
+      ariaLabel={ariaLabel}
     />
   );
 }
@@ -1475,6 +1483,9 @@ function QuotationProposalPreview({
       </datalist>
 
       <p className="quotation-section-title">System Specifications & Bill of Materials</p>
+      <p className="quotation-body-text" style={{ marginBottom: '8px' }}>
+        Choose an inventory item by name or SKU to fill its catalog unit and unit price. Quantity automatically calculates the row and quotation totals.
+      </p>
       <table className="quotation-main-table">
         <colgroup>
           <col style={{ width: '7%' }} />
@@ -1511,12 +1522,13 @@ function QuotationProposalPreview({
                   value={row.description}
                   onChange={(e) => onTableRowChange('bomRows', row.id, 'description', e.target.value)}
                   className="table-cell-input"
+                  aria-label={`BOM row ${row.itemNo || ''} description`}
                 />
               </td>
-              <td><TableCellInput value={row.unit} onChange={(value) => onTableRowChange('bomRows', row.id, 'unit', value)} /></td>
-              <td><TableCellInput value={row.qty} onChange={(value) => onTableRowChange('bomRows', row.id, 'qty', value)} /></td>
-              <td><TableCellInput value={row.unitPrice} onChange={(value) => onTableRowChange('bomRows', row.id, 'unitPrice', value)} /></td>
-              <td><TableCellInput value={row.amount} onChange={(value) => onTableRowChange('bomRows', row.id, 'amount', value)} /></td>
+              <td><TableCellInput value={row.unit} onChange={(value) => onTableRowChange('bomRows', row.id, 'unit', value)} ariaLabel={`BOM row ${row.itemNo || ''} unit`} /></td>
+              <td><TableCellInput value={row.qty} onChange={(value) => onTableRowChange('bomRows', row.id, 'qty', value)} ariaLabel={`BOM row ${row.itemNo || ''} quantity`} /></td>
+              <td><TableCellInput value={row.unitPrice} onChange={(value) => onTableRowChange('bomRows', row.id, 'unitPrice', value)} ariaLabel={`BOM row ${row.itemNo || ''} unit price`} /></td>
+              <td><TableCellInput value={row.amount} onChange={() => {}} readOnly ariaLabel={`BOM row ${row.itemNo || ''} total amount`} /></td>
               <td className="table-actions-cell">
                 <button type="button" onClick={() => onRemoveTableRow('bomRows', row.id)} className="table-row-action" title="Remove BOM row">
                   <FiTrash2 size={14} />
@@ -2486,6 +2498,40 @@ const humanizeFieldName = (key) => String(key || '')
   .replace(/_/g, ' ')
   .replace(/^\w/, (letter) => letter.toUpperCase());
 
+const getQuotationPricingError = (form) => {
+  const quotedTotal = parseQuotationNumber(form?.priceRows?.[0]?.totalPrice);
+  if (quotedTotal == null || quotedTotal <= 0) {
+    return 'Enter a quotation total greater than zero before sending it to the client.';
+  }
+
+  const rows = Array.isArray(form?.bomRows) ? form.bomRows : [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index] || {};
+    // The printable template includes placeholder rows whose default quantity is
+    // one. Only validate a row once pricing or an inventory selection makes it
+    // part of the actual quotation.
+    const hasPricing = hasValue(row.inventoryItemId) || hasValue(row.unitPrice) || hasValue(row.amount);
+    if (!hasPricing) continue;
+    const quantity = parseQuotationNumber(row.qty);
+    const unitPrice = parseQuotationNumber(row.unitPrice);
+    if (quantity == null || quantity <= 0) {
+      return `Enter a quantity greater than zero for BOM row ${index + 1}.`;
+    }
+    if (unitPrice == null || unitPrice < 0) {
+      return `Enter a valid unit price for BOM row ${index + 1}.`;
+    }
+    if (!calculateQuotationAmount(row.qty, row.unitPrice)) {
+      return `Check the quantity and unit price for BOM row ${index + 1}.`;
+    }
+  }
+  return '';
+};
+
+const normalizeMoneyForApi = (value) => {
+  const number = parseQuotationNumber(value);
+  return number == null ? null : number.toFixed(2);
+};
+
 function ActionButton({ action, variant = 'secondary', className = '' }) {
   if (!action) return null;
   const Icon = action.icon || FiSave;
@@ -2542,16 +2588,29 @@ export default function AdminDocuments() {
   const [form, setForm] = useState(createInitialForm);
   const [commissioningForm, setCommissioningForm] = useState(createInitialCommissioningForm);
   const [commissioningBaseline, setCommissioningBaseline] = useState(createInitialCommissioningForm);
-  const [quotationForm, setQuotationForm] = useState(createInitialQuotationForm);
+  const [quotationForm, setQuotationFormState] = useState(createInitialQuotationForm);
+  // Draft actions can run in the same browser task as a table edit. Keep a
+  // synchronous pointer to the newest quotation so a save never serializes a
+  // render's older closure.
+  const quotationFormRef = useRef(quotationForm);
+  const setQuotationForm = (nextValue) => {
+    const next = typeof nextValue === 'function'
+      ? nextValue(quotationFormRef.current)
+      : nextValue;
+    quotationFormRef.current = next;
+    setQuotationFormState(next);
+  };
   const [tdsForm, setTdsForm] = useState(createInitialTdsForm);
   const [installationContractForm, setInstallationContractForm] = useState(createInitialInstallationContractForm);
   const [turnoverForm, setTurnoverForm] = useState(createInitialTurnoverForm);
   const [documentPrefill, setDocumentPrefill] = useState(null);
   const [prefillLoading, setPrefillLoading] = useState(false);
+  const [prefillReadyTicketId, setPrefillReadyTicketId] = useState('');
   const [prefillError, setPrefillError] = useState('');
   const [documentDraftLoading, setDocumentDraftLoading] = useState(false);
   const [documentDraftSaving, setDocumentDraftSaving] = useState(false);
   const [documentDraftMessage, setDocumentDraftMessage] = useState('');
+  const [documentDrafts, setDocumentDrafts] = useState({});
   const [commissioningLoading, setCommissioningLoading] = useState(false);
   const [commissioningSaving, setCommissioningSaving] = useState(false);
   const [commissioningMessage, setCommissioningMessage] = useState('');
@@ -2568,6 +2627,7 @@ export default function AdminDocuments() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [inventoryItems, setInventoryItems] = useState([]);
   const dropdownRef = useRef(null);
+  const prefillRequestRef = useRef(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -2648,6 +2708,9 @@ export default function AdminDocuments() {
     if (!selectedTicketBase) {
       return;
     }
+    const requestId = prefillRequestRef.current + 1;
+    prefillRequestRef.current = requestId;
+    const isCurrentRequest = () => prefillRequestRef.current === requestId;
 
     setPrefillLoading(true);
 
@@ -2655,6 +2718,15 @@ export default function AdminDocuments() {
       const prefill = await fetchDocumentPrefill(ticketId);
       const selectedTicket = buildTicketContextFromPrefill(selectedTicketBase, prefill);
       const commissioningSource = prefill?.solar_commissioning || null;
+      let quotationInventoryItems = inventoryItems;
+      if (!quotationInventoryItems.length) {
+        try {
+          quotationInventoryItems = await fetchInventory();
+          if (isCurrentRequest()) setInventoryItems(quotationInventoryItems);
+        } catch (inventoryError) {
+          console.error('Failed to fetch inventory pricing for quotation', inventoryError);
+        }
+      }
 
       let equipmentData = [];
       let quotationData = [];
@@ -2678,6 +2750,7 @@ export default function AdminDocuments() {
       } catch (e) {
         console.error('Failed to fetch installed equipment or quotation', e);
       }
+      if (!isCurrentRequest()) return;
 
       setDocumentPrefill(prefill);
       setQuotationRecords(quotationData);
@@ -2693,12 +2766,14 @@ export default function AdminDocuments() {
       );
       setCommissioningForm(buildCommissioningFormFromTicket(selectedTicket, commissioningSource));
       setCommissioningBaseline(buildCommissioningFormFromTicket(selectedTicket, commissioningSource));
-      setQuotationForm(buildQuotationFormFromTicket(selectedTicket, quotationData[0] || null));
+      setQuotationForm(buildQuotationFormFromTicket(selectedTicket, quotationData[0] || null, quotationInventoryItems));
       setTdsForm(buildTdsFormFromTicket(selectedTicket, prefill?.technical_data_sheet));
       setInstallationContractForm(buildInstallationContractFormFromTicket(selectedTicket, quotationData));
       setTurnoverForm(buildTurnoverFormFromTicket(selectedTicket, commissioningSource, prefill?.turnover_acceptance || null));
       setPrefillError('');
+      setPrefillReadyTicketId(String(ticketId));
     } catch (error) {
+      if (!isCurrentRequest()) return;
       setPrefillError(error.message || 'Unable to load document prefill data.');
       setDocumentPrefill(null);
       setQuotationRecords([]);
@@ -2706,23 +2781,29 @@ export default function AdminDocuments() {
       setForm(buildFormFromTicket(selectedTicketBase, []));
       setCommissioningForm(buildCommissioningFormFromTicket(selectedTicketBase));
       setCommissioningBaseline(buildCommissioningFormFromTicket(selectedTicketBase));
-      setQuotationForm(buildQuotationFormFromTicket(selectedTicketBase));
+      setQuotationForm(buildQuotationFormFromTicket(selectedTicketBase, null, inventoryItems));
       setTdsForm(buildTdsFormFromTicket(selectedTicketBase));
       setInstallationContractForm(buildInstallationContractFormFromTicket(selectedTicketBase));
       setTurnoverForm(buildTurnoverFormFromTicket(selectedTicketBase));
+      setPrefillReadyTicketId(String(ticketId));
     } finally {
-      setPrefillLoading(false);
+      if (isCurrentRequest()) setPrefillLoading(false);
     }
   };
 
   const handleTicketSelection = async (ticketId, ticketList = tickets) => {
     setSelectedTicketId(ticketId);
+    setPrefillReadyTicketId('');
+    setDocumentDraftLoading(Boolean(ticketId && activeTemplate !== 'commissioning_checklist'));
+    setCommissioningLoading(Boolean(ticketId && activeTemplate === 'commissioning_checklist'));
+    setDocumentDrafts({});
     setCommissioningMessage('');
     setTurnoverMessage('');
     setDocumentDraftMessage('');
     setPrefillError('');
 
     if (!ticketId) {
+      prefillRequestRef.current += 1;
       setForm(createInitialForm());
       setCommissioningForm(createInitialCommissioningForm());
       setCommissioningBaseline(createInitialCommissioningForm());
@@ -2731,6 +2812,7 @@ export default function AdminDocuments() {
       setInstallationContractForm(createInitialInstallationContractForm());
       setTurnoverForm(createInitialTurnoverForm());
       setDocumentPrefill(null);
+      setPrefillReadyTicketId('');
       setInstalledEquipmentRecords([]);
       setSelectedFieldServiceReportId('latest');
       setPrefillLoading(false);
@@ -2776,7 +2858,7 @@ export default function AdminDocuments() {
       return form;
     }
     if (activeTemplate === 'quotation_proposal') {
-      return quotationForm;
+      return quotationFormRef.current;
     }
     if (activeTemplate === 'technical_data_sheet') {
       return tdsForm;
@@ -2840,6 +2922,10 @@ export default function AdminDocuments() {
       setDocumentDraftMessage('');
       return;
     }
+    if (String(prefillReadyTicketId) !== String(selectedTicketId)) {
+      setDocumentDraftLoading(true);
+      return;
+    }
 
     let isMounted = true;
 
@@ -2851,6 +2937,7 @@ export default function AdminDocuments() {
         const existing = await fetchDocumentDraft(selectedTicketId, activeTemplate);
         if (!isMounted) return;
 
+        setDocumentDrafts((current) => ({ ...current, [activeTemplate]: existing || null }));
         if (existing?.data_json) {
           applySavedDraft(activeTemplate, existing.data_json);
           setDocumentDraftMessage('Loaded saved draft for this template.');
@@ -2870,10 +2957,14 @@ export default function AdminDocuments() {
     return () => {
       isMounted = false;
     };
-  }, [activeTemplate, selectedTicketId]);
+  }, [activeTemplate, selectedTicketId, prefillReadyTicketId]);
 
   useEffect(() => {
     if (activeTemplate !== 'commissioning_checklist' || !selectedTicketId) {
+      return;
+    }
+    if (String(prefillReadyTicketId) !== String(selectedTicketId)) {
+      setCommissioningLoading(true);
       return;
     }
 
@@ -2913,7 +3004,7 @@ export default function AdminDocuments() {
     return () => {
       isMounted = false;
     };
-  }, [activeTemplate, selectedTicketId, tickets, documentPrefill]);
+  }, [activeTemplate, selectedTicketId, prefillReadyTicketId, tickets, documentPrefill]);
 
   useEffect(() => {
     if (activeTemplate !== 'field_service_report' || !selectedTicketId) {
@@ -2933,37 +3024,6 @@ export default function AdminDocuments() {
 
     setForm(buildFormFromTicket(selectedTicket, installedEquipmentRecords, selectedReport));
   }, [activeTemplate, selectedFieldServiceReportId, selectedTicketId, tickets, documentPrefill, installedEquipmentRecords]);
-
-  useEffect(() => {
-    if (activeTemplate !== 'turnover_acceptance' || !selectedTicketId) {
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadTurnoverData = async () => {
-      const selectedTicketBase = tickets.find((ticket) => String(ticket.id) === String(selectedTicketId));
-      const selectedTicket = buildTicketContextFromPrefill(selectedTicketBase, documentPrefill);
-      if (!selectedTicket) {
-        return;
-      }
-
-      try {
-        const existingChecklist = await fetchSolarCommissioningChecklist(selectedTicketId);
-        if (!isMounted) return;
-        setTurnoverForm(buildTurnoverFormFromTicket(selectedTicket, existingChecklist, documentPrefill?.turnover_acceptance || null));
-      } catch {
-        if (!isMounted) return;
-        setTurnoverForm(buildTurnoverFormFromTicket(selectedTicket, null, documentPrefill?.turnover_acceptance || null));
-      }
-    };
-
-    loadTurnoverData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [activeTemplate, selectedTicketId, tickets, documentPrefill]);
 
   const updateField = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -3012,7 +3072,7 @@ export default function AdminDocuments() {
     }
     if (activeTemplate === 'quotation_proposal') {
       setQuotationForm(
-        selectedTicket ? buildQuotationFormFromTicket(selectedTicket, quotationRecords[0] || null) : createInitialQuotationForm()
+        selectedTicket ? buildQuotationFormFromTicket(selectedTicket, quotationRecords[0] || null, inventoryItems) : createInitialQuotationForm()
       );
       return;
     }
@@ -3089,10 +3149,39 @@ export default function AdminDocuments() {
   };
 
   const updateQuotationTableRow = (tableKey, rowId, key, value) => {
-    setQuotationForm((current) => ({
-      ...current,
-      [tableKey]: current[tableKey].map((row) => (row.id === rowId ? { ...row, [key]: value } : row))
-    }));
+    setQuotationForm((current) => {
+      const updatedRows = current[tableKey].map((row) => {
+        if (row.id !== rowId) return row;
+        let nextRow = { ...row, [key]: value };
+        if (tableKey !== 'bomRows') return nextRow;
+
+        if (key === 'description') {
+          const matchedItem = findQuotationInventoryItem(inventoryItems, value);
+          if (matchedItem) {
+            nextRow = applyInventoryToQuotationRow(nextRow, matchedItem);
+          } else {
+            nextRow.inventoryItemId = '';
+            nextRow.sku = '';
+          }
+        }
+        if (['qty', 'unitPrice', 'description'].includes(key)) {
+          nextRow.amount = calculateQuotationAmount(nextRow.qty, nextRow.unitPrice);
+        }
+        return nextRow;
+      });
+
+      if (tableKey !== 'bomRows') {
+        return { ...current, [tableKey]: updatedRows };
+      }
+
+      const total = updatedRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+      const priceRows = current.priceRows.length
+        ? current.priceRows.map((row, index) => (
+            index === 0 ? { ...row, totalPrice: total > 0 ? total.toFixed(2) : '' } : row
+          ))
+        : current.priceRows;
+      return { ...current, bomRows: updatedRows, priceRows };
+    });
   };
 
   const addQuotationRow = (type) => {
@@ -3176,6 +3265,7 @@ export default function AdminDocuments() {
         : { ...commissioningForm, id: saved.id };
       setCommissioningForm(nextForm);
       setCommissioningBaseline(nextForm);
+      setDocumentPrefill((current) => current ? { ...current, solar_commissioning: saved } : current);
       setCommissioningMessage('Solar commissioning checklist saved.');
     } catch (error) {
       setCommissioningMessage(error.message || 'Unable to save the commissioning checklist.');
@@ -3197,7 +3287,7 @@ export default function AdminDocuments() {
       // 1. Save Document Draft
       const payloadDraft = {
         document_type: 'turnover_acceptance',
-        status: finalize ? 'finalized' : 'draft',
+        status: 'draft',
         data_json: turnoverForm,
         tables_json: {
           componentsRows: turnoverForm.componentsRows,
@@ -3206,6 +3296,7 @@ export default function AdminDocuments() {
         }
       };
       const documentDraft = await saveDocumentDraft(selectedTicketId, payloadDraft);
+      setDocumentDrafts((current) => ({ ...current, turnover_acceptance: documentDraft }));
 
       // 2. Save Turnover Acceptance Model
       const finalTurnoverDate = turnoverForm.dateOfTurnover || null;
@@ -3218,10 +3309,6 @@ export default function AdminDocuments() {
         warranty_start_date: turnoverForm.warrantyStartDate || finalTurnoverDate,
       };
 
-      if (documentDraft && documentDraft.id) {
-        payloadTurnover.generated_document = documentDraft.id;
-      }
-
       let saved = await saveTurnoverAcceptance(payloadTurnover);
       const turnoverId = saved?.id || turnoverForm.id;
       if (finalize) {
@@ -3230,13 +3317,30 @@ export default function AdminDocuments() {
         }
         const finalized = await finalizeTurnoverAcceptance(turnoverId, payloadTurnover);
         saved = { ...saved, ...finalized, id: turnoverId, status: 'finalized' };
+        const finalizedDocument = await saveDocumentDraft(selectedTicketId, {
+          ...payloadDraft,
+          status: 'finalized',
+          data_json: { ...turnoverForm, id: turnoverId, status: 'finalized' },
+        });
+        setDocumentDrafts((current) => ({ ...current, turnover_acceptance: finalizedDocument }));
       }
 
-      const selectedTicket = tickets.find((ticket) => String(ticket.id) === String(selectedTicketId));
-      const nextForm = selectedTicket
-        ? buildTurnoverFormFromTicket(selectedTicket, null, { ...payloadTurnover, id: saved.id || turnoverForm.id, status: finalize ? 'finalized' : 'draft' })
-        : { ...turnoverForm, id: saved.id || turnoverForm.id, status: finalize ? 'finalized' : 'draft' };
+      const nextForm = {
+        ...turnoverForm,
+        id: saved.id || turnoverForm.id,
+        status: finalize ? 'finalized' : 'draft',
+      };
       setTurnoverForm(nextForm);
+      setDocumentPrefill((current) => current ? {
+        ...current,
+        turnover_acceptance: {
+          ...(current.turnover_acceptance || {}),
+          ...payloadTurnover,
+          ...saved,
+          id: saved.id || turnoverForm.id,
+          status: finalize ? 'finalized' : 'draft',
+        },
+      } : current);
       setTurnoverMessage(finalize ? 'Turnover Finalized and Ticket updated!' : 'Turnover draft saved.');
     } catch (error) {
       setTurnoverMessage(error.message || 'Unable to save turnover acceptance.');
@@ -3261,7 +3365,7 @@ export default function AdminDocuments() {
     setDocumentDraftMessage('');
 
     try {
-      await saveDocumentDraft(selectedTicketId, {
+      const savedDraft = await saveDocumentDraft(selectedTicketId, {
         document_type: activeTemplate,
         title: activeTemplateLabel,
         status: 'draft',
@@ -3274,6 +3378,7 @@ export default function AdminDocuments() {
           document_defaults: documentPrefill?.document_defaults || {}
         }
       });
+      setDocumentDrafts((current) => ({ ...current, [activeTemplate]: savedDraft }));
       setDocumentDraftMessage('Document draft saved successfully.');
     } catch (error) {
       setDocumentDraftMessage(error.message || 'Unable to save the document draft.');
@@ -3304,6 +3409,13 @@ export default function AdminDocuments() {
       return;
     }
 
+    const currentQuotationForm = quotationFormRef.current;
+    const pricingError = getQuotationPricingError(currentQuotationForm);
+    if (pricingError) {
+      setDocumentDraftMessage(pricingError);
+      return;
+    }
+
     setQuotationSaving(true);
     setDocumentDraftMessage('');
 
@@ -3314,20 +3426,28 @@ export default function AdminDocuments() {
         throw new Error('No client found for this ticket.');
       }
 
-      const totalAmountRow = quotationForm.priceRows?.[0] || {};
+      const totalAmountRow = currentQuotationForm.priceRows?.[0] || {};
       const totalAmount = totalAmountRow.totalPrice || '';
       
       const payload = {
         ticket: selectedTicketId,
         client: clientId,
         total_amount: totalAmount,
-        payment_terms: quotationForm.paymentTerms,
-        bill_of_materials: quotationForm.bomRows || [],
+        payment_terms: currentQuotationForm.paymentTerms,
+        bill_of_materials: currentQuotationForm.bomRows || [],
         status: 'Sent'
       };
 
       const saved = await saveQuotationRecord(payload);
       setQuotationRecords([saved]);
+      setDocumentPrefill((current) => current ? { ...current, quotation_record: saved } : current);
+      const savedDraft = await saveDocumentDraft(selectedTicketId, {
+        document_type: 'quotation_proposal',
+        title: 'Quotation Proposal',
+        status: 'draft',
+        data_json: currentQuotationForm,
+      });
+      setDocumentDrafts((current) => ({ ...current, quotation_proposal: savedDraft }));
       setDocumentDraftMessage('Quotation saved and sent to the client to accept or decline in their portal.');
     } catch (error) {
       setDocumentDraftMessage(error.message || 'Unable to save quotation data.');
@@ -3337,6 +3457,75 @@ export default function AdminDocuments() {
   };
 
   const [contractSaving, setContractSaving] = useState(false);
+
+  const [tdsSaving, setTdsSaving] = useState(false);
+
+  const handleSaveTechnicalDataSheet = async () => {
+    if (!selectedTicketId) {
+      setDocumentDraftMessage('Choose a ticket first to save the technical data sheet.');
+      return;
+    }
+
+    setTdsSaving(true);
+    setDocumentDraftMessage('');
+
+    try {
+      const purposeOfGoingSolar = tdsForm.purposeRows
+        .filter((row) => hasValue(row.mark) && !String(row.label || '').toLowerCase().startsWith('others'))
+        .map((row) => row.label);
+      if (hasValue(tdsForm.purposeOther)) {
+        purposeOfGoingSolar.push(tdsForm.purposeOther);
+      }
+
+      const payload = {
+        ticket: Number(selectedTicketId),
+        status: documentPrefill?.technical_data_sheet?.status || 'draft',
+        premise_type: tdsForm.sitePremisePlan || null,
+        premise_category: tdsForm.sitePremiseCategory || null,
+        ownership_type: tdsForm.ownershipStatus || null,
+        primary_electric_supply: tdsForm.primaryElectricSupply || null,
+        ac_phase_power_supply: tdsForm.acSupplyType || null,
+        solar_panel_installation_location: tdsForm.solarInstallLocation || null,
+        rooftop_type: tdsForm.rooftopType || null,
+        average_monthly_electric_bill: tdsForm.averageMonthlyBill || null,
+        electricity_required_hours_per_day: tdsForm.electricityHoursPerDay || null,
+        brownout_frequency: tdsForm.brownoutFrequencyPerWeek || null,
+        battery_preference: tdsForm.batteryPreference || null,
+        purpose_of_going_solar: purposeOfGoingSolar,
+        load_schedule_json: tdsForm.loadRows,
+        generator_details_json: {
+          hasGenerator: tdsForm.hasGenerator || '',
+          brandName: tdsForm.generatorBrandName || '',
+          capacity: tdsForm.generatorCapacity || '',
+          fuelType: tdsForm.generatorFuelType || '',
+          datePurchased: tdsForm.generatorDatePurchased || '',
+          frequentBrownouts: tdsForm.frequentBrownouts || '',
+          brownoutFrequencyPerWeek: tdsForm.brownoutFrequencyPerWeek || '',
+        },
+        attachments_json: {
+          electricBill: tdsForm.attachElectricBill || '',
+          sitePhoto: tdsForm.attachSitePhoto || '',
+        },
+        client_confirmation_date: tdsForm.confirmationDate || null,
+        client_confirmed_name: tdsForm.clientConfirmationName || null,
+      };
+
+      const saved = await saveTechnicalDataSheet(payload, documentPrefill?.technical_data_sheet?.id || null);
+      setDocumentPrefill((current) => current ? { ...current, technical_data_sheet: saved } : current);
+      const savedDraft = await saveDocumentDraft(selectedTicketId, {
+        document_type: 'technical_data_sheet',
+        title: 'TDS - Technical Data Sheet',
+        status: 'draft',
+        data_json: tdsForm,
+      });
+      setDocumentDrafts((current) => ({ ...current, technical_data_sheet: savedDraft }));
+      setDocumentDraftMessage('Technical data sheet and printable draft saved successfully.');
+    } catch (error) {
+      setDocumentDraftMessage(error.message || 'Unable to save the technical data sheet.');
+    } finally {
+      setTdsSaving(false);
+    }
+  };
 
   const handleSaveContract = async () => {
     if (!selectedTicketId) {
@@ -3353,17 +3542,26 @@ export default function AdminDocuments() {
         scope_of_work: installationContractForm.scopeNotes || '',
         start_date: installationContractForm.startDate || null,
         estimated_completion_days: parseInt(installationContractForm.estimatedCompletionTime) || null,
-        total_contract_amount: installationContractForm.totalContractAmount || null,
-        payment_terms_upfront: installationContractForm.upfrontPayment || null,
-        payment_terms_completion: installationContractForm.completionPayment || null,
-        payment_terms_final: installationContractForm.finalPayment || null,
+        total_contract_amount: normalizeMoneyForApi(installationContractForm.totalContractAmount),
+        payment_terms_upfront: normalizeMoneyForApi(installationContractForm.upfrontPayment),
+        payment_terms_completion: normalizeMoneyForApi(installationContractForm.completionPayment),
+        payment_terms_final: normalizeMoneyForApi(installationContractForm.finalPayment),
         warranty_period: installationContractForm.warrantyPeriod || '',
         status: 'draft'
       };
 
       const contractId = installationContractForm.contractId;
-      await saveInstallationContract(payload, contractId);
-      setDocumentDraftMessage('Installation contract data saved successfully!');
+      const saved = await saveInstallationContract(payload, contractId);
+      setInstallationContractForm((current) => ({ ...current, contractId: saved.id, contractStatus: saved.status }));
+      setDocumentPrefill((current) => current ? { ...current, installation_contract: saved } : current);
+      const savedDraft = await saveDocumentDraft(selectedTicketId, {
+        document_type: 'installation_contract',
+        title: 'Solar Installation Contract',
+        status: 'draft',
+        data_json: { ...installationContractForm, contractId: saved.id },
+      });
+      setDocumentDrafts((current) => ({ ...current, installation_contract: savedDraft }));
+      setDocumentDraftMessage('Installation contract and printable draft saved successfully.');
     } catch (error) {
       setDocumentDraftMessage(error.message || 'Unable to save contract data.');
     } finally {
@@ -3551,7 +3749,12 @@ export default function AdminDocuments() {
   const documentStatus = (templateId) => {
     if (!selectedTicketId) return null;
     if (templateId === 'technical_data_sheet') {
-      return documentPrefill?.technical_data_sheet ? { tone: 'done', label: 'Saved' } : { tone: 'none', label: 'Not started' };
+      const status = documentPrefill?.technical_data_sheet?.status;
+      if (status === 'reviewed') return { tone: 'done', label: 'Reviewed' };
+      if (status === 'submitted') return { tone: 'progress', label: 'Submitted' };
+      if (status) return { tone: 'progress', label: 'Draft' };
+      if (documentDrafts.technical_data_sheet) return { tone: 'progress', label: 'Printable draft' };
+      return { tone: 'none', label: 'Not started' };
     }
     if (templateId === 'quotation_proposal') {
       const status = latestQuotation?.status;
@@ -3562,7 +3765,12 @@ export default function AdminDocuments() {
       return { tone: 'progress', label: 'Draft' };
     }
     if (templateId === 'installation_contract') {
-      return documentPrefill?.installation_contract ? { tone: 'done', label: 'Saved' } : { tone: 'none', label: 'Not started' };
+      const status = documentPrefill?.installation_contract?.status;
+      if (status === 'signed') return { tone: 'done', label: 'Signed' };
+      if (status === 'finalized') return { tone: 'done', label: 'Finalized' };
+      if (status) return { tone: 'progress', label: 'Draft' };
+      if (documentDrafts.installation_contract) return { tone: 'progress', label: 'Printable draft' };
+      return { tone: 'none', label: 'Not started' };
     }
     if (templateId === 'commissioning_checklist') {
       const status = commissioningForm?.id ? commissioningForm.status : documentPrefill?.solar_commissioning?.status;
@@ -3578,9 +3786,28 @@ export default function AdminDocuments() {
       return { tone: 'none', label: 'Not started' };
     }
     const reports = documentPrefill?.field_service_reports?.length || 0;
-    return reports ? { tone: 'done', label: `${reports} saved` } : { tone: 'none', label: 'None yet' };
+    if (reports) return { tone: 'done', label: `${reports} saved` };
+    return documentDrafts.field_service_report
+      ? { tone: 'progress', label: 'Printable draft' }
+      : { tone: 'none', label: 'None yet' };
   };
   const activeStatus = documentStatus(activeTemplate);
+  const documentEditorLoading = Boolean(
+    selectedTicketId
+    && (
+      prefillLoading
+      || documentDraftLoading
+      || (activeTemplate === 'commissioning_checklist' && commissioningLoading)
+      || String(prefillReadyTicketId) !== String(selectedTicketId)
+    )
+  );
+  const activeDocumentLocked = (
+    (activeTemplate === 'quotation_proposal' && latestQuotation?.status === 'Accepted')
+    || (activeTemplate === 'technical_data_sheet' && documentPrefill?.technical_data_sheet?.status === 'reviewed')
+    || (activeTemplate === 'installation_contract' && documentPrefill?.installation_contract?.status === 'signed')
+    || (activeTemplate === 'commissioning_checklist' && commissioningForm?.status === 'finalized')
+    || (activeTemplate === 'turnover_acceptance' && ['finalized', 'accepted'].includes(turnoverForm?.status))
+  );
 
   // One clearly named primary action per document, plus secondary actions.
   const noTicket = !selectedTicketId;
@@ -3588,14 +3815,14 @@ export default function AdminDocuments() {
     label: 'Save draft',
     onClick: activeTemplate === 'turnover_acceptance' ? () => saveTurnoverDraft(false) : saveActiveDocumentDraft,
     busy: activeTemplate === 'turnover_acceptance' ? turnoverSaving : documentDraftSaving,
-    disabled: noTicket || documentDraftLoading || prefillLoading,
+    disabled: noTicket || documentEditorLoading || activeDocumentLocked,
   };
   const saveSpecsAction = {
     label: 'Save specs to ticket',
     onClick: saveProjectSpecsToTicket,
     busy: projectSpecsSaving,
     busyLabel: 'Saving to ticket...',
-    disabled: noTicket || prefillLoading,
+    disabled: noTicket || documentEditorLoading || activeDocumentLocked,
     title: 'Keep capacity, panel count, and similar fields on the ticket so every document fills them in.',
   };
   let primaryAction = null;
@@ -3610,28 +3837,33 @@ export default function AdminDocuments() {
         onClick: handleSaveQuotation,
         busy: quotationSaving,
         busyLabel: 'Sending...',
-        disabled: noTicket || prefillLoading,
+        disabled: noTicket || documentEditorLoading,
         title: 'Saves the price and terms and sends the quotation to the client portal to accept or decline.',
       };
     secondaryActions = [saveDraftAction, saveSpecsAction];
   } else if (activeTemplate === 'installation_contract') {
-    primaryAction = { label: 'Save contract', onClick: handleSaveContract, busy: contractSaving, disabled: noTicket || prefillLoading };
-    secondaryActions = [saveDraftAction, saveSpecsAction];
+    primaryAction = {
+      label: activeDocumentLocked ? 'Contract signed' : 'Save contract',
+      onClick: handleSaveContract,
+      busy: contractSaving,
+      disabled: noTicket || documentEditorLoading || activeDocumentLocked,
+    };
+    secondaryActions = [saveSpecsAction];
   } else if (activeTemplate === 'commissioning_checklist') {
     primaryAction = {
-      label: 'Save checklist',
+      label: activeDocumentLocked ? 'Checklist finalized' : 'Save checklist',
       onClick: saveCommissioningDraft,
       busy: commissioningSaving,
-      disabled: noTicket || commissioningLoading,
+      disabled: noTicket || documentEditorLoading || activeDocumentLocked,
     };
   } else if (activeTemplate === 'turnover_acceptance') {
     primaryAction = {
-      label: 'Finalize project handover',
+      label: activeDocumentLocked ? 'Project handover finalized' : 'Finalize project handover',
       icon: FiCheckCircle,
       onClick: () => saveTurnoverDraft(true),
       busy: turnoverSaving,
       busyLabel: 'Finalizing...',
-      disabled: noTicket || prefillLoading,
+      disabled: noTicket || documentEditorLoading || activeDocumentLocked,
       title: 'Officially hands over the project and starts the warranty period.',
     };
     secondaryActions = [
@@ -3641,11 +3873,19 @@ export default function AdminDocuments() {
         onClick: handleRegisterEquipment,
         busy: equipmentRegistering,
         busyLabel: 'Registering...',
-        disabled: noTicket || prefillLoading,
+        disabled: noTicket || documentEditorLoading,
         title: "Adds the installed panels and inverters to the client's equipment records.",
       },
       saveSpecsAction,
     ];
+  } else if (activeTemplate === 'technical_data_sheet') {
+    primaryAction = {
+      label: activeDocumentLocked ? 'Data sheet reviewed' : 'Save data sheet',
+      onClick: handleSaveTechnicalDataSheet,
+      busy: tdsSaving,
+      disabled: noTicket || documentEditorLoading || activeDocumentLocked,
+    };
+    secondaryActions = [saveSpecsAction];
   } else {
     primaryAction = { ...saveDraftAction };
     secondaryActions = [saveSpecsAction];
@@ -3677,6 +3917,11 @@ export default function AdminDocuments() {
       {['quotation_proposal', 'installation_contract'].includes(activeTemplate) ? (
         <p className="mt-3 text-xs text-slate-500" role="note">
           Amounts and payment terms are typed in for the document. Payments are collected and verified outside this system.
+        </p>
+      ) : null}
+      {activeDocumentLocked ? (
+        <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" role="note">
+          This document is locked at its current workflow status. Its saved record can still be viewed and printed.
         </p>
       ) : null}
       {canManageDocuments ? (
@@ -3813,7 +4058,14 @@ export default function AdminDocuments() {
               <button
                 key={step.id}
                 type="button"
-                onClick={() => setActiveTemplate(step.id)}
+                  onClick={() => {
+                    setActiveTemplate(step.id);
+                    setDocumentDraftLoading(Boolean(selectedTicketId && step.id !== 'commissioning_checklist'));
+                    setCommissioningLoading(Boolean(selectedTicketId && step.id === 'commissioning_checklist'));
+                    setDocumentDraftMessage('');
+                    setCommissioningMessage('');
+                    setTurnoverMessage('');
+                  }}
                 aria-pressed={active}
                 aria-label={`${template?.label || step.short}${status ? `: ${status.label}` : ''}`}
                 className={`flex min-w-[10.5rem] flex-1 items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
@@ -3871,6 +4123,7 @@ export default function AdminDocuments() {
                 <button
                   type="button"
                   onClick={resetForm}
+                  disabled={documentEditorLoading || activeDocumentLocked}
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                 >
                   <FiRefreshCw size={15} />
@@ -3879,6 +4132,7 @@ export default function AdminDocuments() {
                 <button
                   type="button"
                   onClick={printCurrentDocument}
+                  disabled={documentEditorLoading}
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white transition hover:bg-brand-700"
                 >
                   <FiPrinter size={15} />
@@ -3890,10 +4144,15 @@ export default function AdminDocuments() {
               <div style={{ zoom: previewScale }}>
               <div
                 id="afn-printable-document"
-                className="mx-auto"
+                className={`mx-auto ${activeDocumentLocked ? 'pointer-events-none' : ''}`}
                 style={{ width: paper.previewWidth, maxWidth: paper.previewWidth }}
+                aria-readonly={activeDocumentLocked || undefined}
               >
-                <DocumentPreview
+                {documentEditorLoading ? (
+                  <div className="document-paper flex min-h-[32rem] items-center justify-center text-sm font-medium text-slate-500" role="status">
+                    Loading the ticket and saved document data...
+                  </div>
+                ) : <DocumentPreview
                   activeTemplate={activeTemplate}
                   form={form}
                   onUpdateRow={(id, field, value) => {
@@ -3920,47 +4179,7 @@ export default function AdminDocuments() {
                   onCommissioningReadingChange={updateCommissioningReading}
                   quotationForm={quotationForm}
                   onQuotationFieldChange={updateQuotationField}
-                  onQuotationTableRowChange={(tableKey, rowId, key, value) => {
-                    setQuotationForm((current) => {
-                      let updatedRows = current[tableKey].map((row) => {
-                        if (row.id !== rowId) return row;
-                        
-                        let newRow = { ...row, [key]: value };
-                        
-                        if (tableKey === 'bomRows') {
-                          if (key === 'description') {
-                            const matchedItem = inventoryItems.find(i => i.name === value);
-                            if (matchedItem) {
-                              newRow.unitPrice = matchedItem.unit_price || '';
-                              // Keep the user's unit if they already typed one, or leave blank since item doesn't have a strict unit field
-                            }
-                          }
-                          
-                          if (['qty', 'unitPrice', 'description'].includes(key)) {
-                            const qty = parseFloat(newRow.qty) || 0;
-                            const price = parseFloat(newRow.unitPrice) || 0;
-                            newRow.amount = (qty * price) > 0 ? (qty * price).toFixed(2) : '';
-                          }
-                        }
-                        return newRow;
-                      });
-
-                      const nextForm = { ...current, [tableKey]: updatedRows };
-
-                      if (tableKey === 'bomRows') {
-                        const total = nextForm.bomRows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
-                        if (total > 0 && nextForm.priceRows.length > 0) {
-                          nextForm.priceRows = [...nextForm.priceRows];
-                          nextForm.priceRows[0] = { 
-                            ...nextForm.priceRows[0], 
-                            totalPrice: total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) 
-                          };
-                        }
-                      }
-
-                      return nextForm;
-                    });
-                  }}
+                  onQuotationTableRowChange={updateQuotationTableRow}
                   onQuotationAddRow={addQuotationRow}
                   onQuotationRemoveRow={removeQuotationRow}
                   tdsForm={tdsForm}
@@ -3975,7 +4194,7 @@ export default function AdminDocuments() {
                   onTurnoverAddRow={addTurnoverRow}
                   onTurnoverRemoveRow={removeTurnoverRow}
                   inventoryItems={inventoryItems}
-                />
+                />}
               </div>
               </div>
             </div>
@@ -3988,8 +4207,10 @@ export default function AdminDocuments() {
                   Document details
                   <FiChevronDown className="text-slate-400 transition group-open:rotate-180" aria-hidden="true" />
                 </summary>
-                <div className="grid gap-3 border-t border-slate-100 px-4 py-4">
-                  {activeTemplate === 'commissioning_checklist' ? (
+                <fieldset disabled={activeDocumentLocked} className="grid gap-3 border-t border-slate-100 px-4 py-4">
+                  {documentEditorLoading ? (
+                    <p className="text-sm text-slate-500">Loading saved document details...</p>
+                  ) : activeTemplate === 'commissioning_checklist' ? (
                     <>
                       <TextField label="Site Name" value={commissioningForm.site_name} onChange={(value) => updateCommissioningField('site_name', value)} />
                       <TextField label="System Designation" value={commissioningForm.system_designation} onChange={(value) => updateCommissioningField('system_designation', value)} />
@@ -4068,7 +4289,7 @@ export default function AdminDocuments() {
                       <TextField label="System Capacity" value={form.systemCapacity} onChange={(value) => updateField('systemCapacity', value)} />
                     </>
                   )}
-                </div>
+                </fieldset>
               </details>
             ) : null}
 

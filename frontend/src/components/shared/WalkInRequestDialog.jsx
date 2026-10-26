@@ -182,6 +182,7 @@ export default function WalkInRequestDialog({
                   <select value={form.preferredTimeSlot} onChange={(event) => onChange('preferredTimeSlot', event.target.value)} className={inputClass}>
                     {timeSlotOptions.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}
                   </select>
+                  <span className="mt-1 block text-xs font-normal text-slate-500">Service visits are scheduled from 8 AM to 5 PM.</span>
                 </label>
               </div>
               <label className="mt-4 block text-sm font-medium text-slate-700">

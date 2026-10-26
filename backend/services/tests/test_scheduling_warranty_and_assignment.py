@@ -6,6 +6,7 @@ from inventory.models import InventoryCategory, InventoryItem, InventoryReservat
 from services.models import QuotationRecord
 from django.db import transaction
 from services.views.technician import TechnicianJobsView
+from services.auto_dispatch import auto_assign_technician
 
 
 class SchedulingWarrantyAndAssignmentTests(APITestCase):
@@ -353,8 +354,8 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             f'/api/services/service-tickets/{ticket.id}/request_reschedule/',
             {
                 'preferred_date': (preferred_date + timedelta(days=2)).isoformat(),
-                'preferred_time_slot': 'evening',
-                'reason': 'Building access is only allowed after 5 PM.',
+                'preferred_time_slot': 'morning',
+                'reason': 'Building access is available in the morning.',
             },
             format='json',
         )
@@ -363,15 +364,15 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         ticket.refresh_from_db()
         request_obj.refresh_from_db()
         self.assertTrue(ticket.reschedule_requested)
-        self.assertEqual(ticket.reschedule_reason, 'Building access is only allowed after 5 PM.')
-        self.assertEqual(request_obj.preferred_time_slot, 'evening')
+        self.assertEqual(ticket.reschedule_reason, 'Building access is available in the morning.')
+        self.assertEqual(request_obj.preferred_time_slot, 'morning')
 
         self.client.force_authenticate(user=self.admin_user)
         confirm_response = self.client.post(
             f'/api/services/service-tickets/{ticket.id}/reschedule/',
             {
                 'scheduled_date': (preferred_date + timedelta(days=2)).isoformat(),
-                'scheduled_time_slot': 'evening',
+                'scheduled_time_slot': 'morning',
                 'notes': 'Confirmed with dispatch.',
             },
             format='json',
@@ -380,8 +381,8 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         self.assertEqual(confirm_response.status_code, status.HTTP_200_OK)
         ticket.refresh_from_db()
         self.assertFalse(ticket.reschedule_requested)
-        self.assertEqual(ticket.scheduled_time_slot, 'evening')
-        self.assertEqual(ticket.scheduled_time.strftime('%H:%M'), '18:00')
+        self.assertEqual(ticket.scheduled_time_slot, 'morning')
+        self.assertEqual(ticket.scheduled_time.strftime('%H:%M'), '09:00')
 
     def test_reschedule_rejects_malformed_or_past_dates(self):
         request_obj = ServiceRequest.objects.create(
@@ -628,6 +629,127 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         ticket.refresh_from_db()
         self.assertFalse(ticket.reschedule_requested)
+
+    def test_client_reschedule_request_rejects_evening_time_slot(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Reject an after-hours client preference',
+            status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            status='Not Started',
+        )
+        self.client.force_authenticate(user=self.client_user)
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/request_reschedule/',
+            {'preferred_time_slot': 'evening', 'reason': 'Requesting an evening visit.'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('8:00 AM and 5:00 PM', response.data['error'])
+        ticket.refresh_from_db()
+        self.assertFalse(ticket.reschedule_requested)
+
+    def test_staff_reschedule_rejects_after_hours_exact_time(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Reject an after-hours exact schedule',
+            status='Approved',
+        )
+        original_date = timezone.localdate() + timedelta(days=1)
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            scheduled_date=original_date,
+            scheduled_time=time(hour=15),
+            status='Not Started',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/reschedule/',
+            {
+                'scheduled_date': (original_date + timedelta(days=1)).isoformat(),
+                'scheduled_time': '18:00',
+                'notes': 'Attempt an evening schedule.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('8:00 AM and 5:00 PM', response.data['error'])
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.scheduled_date, original_date)
+        self.assertEqual(ticket.scheduled_time, time(hour=15))
+
+    def test_generic_ticket_update_rejects_after_hours_schedule(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Reject a generic after-hours update',
+            status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            scheduled_time=time(hour=15),
+            scheduled_time_slot='afternoon',
+            status='Not Started',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.patch(
+            f'/api/services/service-tickets/{ticket.id}/',
+            {'scheduled_time': '18:00', 'scheduled_time_slot': 'evening'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.scheduled_time, time(hour=15))
+        self.assertEqual(ticket.scheduled_time_slot, 'afternoon')
+
+    def test_inspection_approval_rejects_after_hours_installation_time(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Inspection cannot create an evening installation',
+            status='In Progress',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            technician=self.technician_user,
+            scheduled_date=timezone.localdate(),
+            ticket_type='inspection',
+            status='Inspection Completed',
+        )
+        QuotationRecord.objects.create(
+            ticket=ticket,
+            client=request_obj.client,
+            quotation_number='QUO-BUSINESS-HOURS-01',
+            status='Accepted',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/inspection_decision/',
+            {
+                'decision': 'approve_service',
+                'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
+                'scheduled_time': '18:00',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('8:00 AM and 5:00 PM', response.data['error'])
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'Inspection Completed')
 
     def test_auto_assign_moves_installation_ticket_to_ready_for_service(self):
         request_obj = ServiceRequest.objects.create(
@@ -1523,6 +1645,111 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         ticket.refresh_from_db()
         self.assertEqual(ticket.technician, self.technician_user)
 
+    def test_assignment_requires_legacy_evening_ticket_to_be_rescheduled(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Legacy evening schedule',
+            priority='Normal',
+            status='Approved',
+        )
+        ServiceLocation.objects.create(
+            request=request_obj,
+            address='302 Dispatch Avenue',
+            city='Makati',
+            province='Metro Manila',
+            latitude='14.565000',
+            longitude='121.025000',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            scheduled_time_slot='evening',
+            scheduled_time=time(hour=18),
+            status='Not Started',
+            priority='Normal',
+            assigned_admin=self.supervisor_user,
+        )
+        self.client.force_authenticate(user=self.supervisor_user)
+
+        rejected = self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/assign/',
+            {'technician_id': self.technician_user.id},
+            format='json',
+        )
+        accepted = self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/assign/',
+            {
+                'technician_id': self.technician_user.id,
+                'scheduled_time_slot': 'afternoon',
+            },
+            format='json',
+        )
+
+        self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('8:00 AM and 5:00 PM', rejected.data['error'])
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.technician, self.technician_user)
+        self.assertEqual(ticket.scheduled_time_slot, 'afternoon')
+        self.assertEqual(ticket.scheduled_time, time(hour=15))
+
+    def test_smart_assignment_rejects_legacy_evening_ticket(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Legacy evening smart assignment',
+            priority='Normal',
+            status='Approved',
+        )
+        ServiceLocation.objects.create(
+            request=request_obj,
+            address='303 Dispatch Avenue',
+            city='Makati',
+            province='Metro Manila',
+            latitude='14.565000',
+            longitude='121.025000',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            scheduled_time_slot='evening',
+            scheduled_time=time(hour=18),
+            status='Not Started',
+            priority='Normal',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/auto_assign/',
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('8:00 AM and 5:00 PM', response.data['error'])
+        ticket.refresh_from_db()
+        self.assertIsNone(ticket.technician)
+
+    def test_unattended_auto_dispatch_skips_legacy_evening_ticket(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Legacy evening unattended dispatch',
+            status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            scheduled_time_slot='evening',
+            scheduled_time=time(hour=18),
+            status='Not Started',
+        )
+
+        self.assertFalse(auto_assign_technician(ticket))
+        ticket.refresh_from_db()
+        self.assertIsNone(ticket.technician)
+
     def test_assigned_admin_can_assign_ticket_with_crew_and_crew_member_can_work_it(self):
         request_obj = ServiceRequest.objects.create(
             client=self.client_user,
@@ -1736,6 +1963,40 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         checklist = InspectionChecklist.objects.get(ticket=ticket)
         self.assertEqual(len(checklist.proof_media), 2)
         self.assertTrue(all(item['url'].startswith('http://testserver/media/checklists/') for item in checklist.proof_media))
+
+    def test_inspection_photo_endpoint_accepts_safe_legacy_png_mime(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Inspection photo upload',
+            status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            technician=self.technician_user,
+            scheduled_date=timezone.localdate(),
+            ticket_type='inspection',
+            status='In Progress',
+        )
+        source_photo = completion_photo()
+        photo = SimpleUploadedFile(
+            'inspection-site.png',
+            source_photo.read(),
+            content_type='image/x-png',
+        )
+        self.client.force_authenticate(user=self.technician_user)
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/upload_photos/',
+            {'photo_files': [photo]},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        checklist = InspectionChecklist.objects.get(ticket=ticket)
+        self.assertEqual(len(checklist.proof_media), 1)
+        self.assertEqual(checklist.proof_media[0]['type'], 'photo')
+        self.assertTrue(checklist.proof_media[0]['url'].startswith('http://testserver/media/checklists/'))
 
     def test_checklist_rejects_spoofed_image_upload(self):
         request_obj = ServiceRequest.objects.create(

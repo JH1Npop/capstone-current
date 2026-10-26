@@ -785,12 +785,10 @@ def save_uploaded_proof_media(*, ticket, uploaded_files, request=None, media_typ
     validated_extensions = []
     for uploaded_file in uploaded_files:
         content_type = str(getattr(uploaded_file, 'content_type', '') or '').lower()
-        if content_type not in allowed_content_types.get(media_type, set()):
-            allowed_label = 'JPG, PNG, or WebP' if media_type == 'photo' else 'MP4, WebM, or MOV'
-            raise ValidationError({
-                f'{media_type}_files': f'Unsupported {media_type} file. Upload {allowed_label} files only.'
-            })
         if media_type == 'photo':
+            # Inspect the image signature before trusting browser MIME metadata.
+            # Safe JPEG/PNG uploads sometimes arrive with a blank or legacy MIME
+            # alias, while unsupported formats still fail the signature check.
             _format, _content_type, safe_extension, _stem = validate_image_upload(
                 uploaded_file,
                 max_bytes=max_sizes[media_type],
@@ -798,6 +796,10 @@ def save_uploaded_proof_media(*, ticket, uploaded_files, request=None, media_typ
                 field_name='photo_files',
             )
         else:
+            if content_type not in allowed_content_types.get(media_type, set()):
+                raise ValidationError({
+                    f'{media_type}_files': 'Unsupported video file. Upload MP4, WebM, or MOV files only.'
+                })
             safe_extension = validate_video_upload(
                 uploaded_file,
                 max_bytes=max_sizes[media_type],

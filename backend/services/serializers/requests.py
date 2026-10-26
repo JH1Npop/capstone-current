@@ -14,6 +14,7 @@ from ..models import (
     SalesRecord, SalesRecordLine
 )
 from ..solar_calculator import CALCULATION_VERSION, SolarCalculationError, calculate_solar_estimate
+from ..scheduling_policy import BUSINESS_HOURS_ERROR, is_bookable_time_slot
 from ..sla import (
     evaluate_service_request_sla,
     evaluate_service_ticket_sla,
@@ -30,7 +31,10 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
     inventory_requirements = serializers.SerializerMethodField()
     request_count = serializers.SerializerMethodField()
     ticket_count = serializers.SerializerMethodField()
+    service_item_count = serializers.SerializerMethodField()
+    maintenance_count = serializers.SerializerMethodField()
     usage_count = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
 
     def _viewer_level(self):
         # 'staff' for catalog viewers and internal callers, otherwise 'user' or 'anonymous'.
@@ -118,10 +122,36 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
             return annotated
         return ServiceTicket.objects.filter(request__service_type=obj).count()
 
+    def get_service_item_count(self, obj):
+        if self._viewer_level() != 'staff':
+            return None
+        annotated = getattr(obj, 'annotated_service_item_count', None)
+        if annotated is not None:
+            return annotated
+        return obj.request_items.count()
+
+    def get_maintenance_count(self, obj):
+        if self._viewer_level() != 'staff':
+            return None
+        annotated = getattr(obj, 'annotated_maintenance_count', None)
+        if annotated is not None:
+            return annotated
+        return obj.maintenance_schedules.count()
+
     def get_usage_count(self, obj):
         if self._viewer_level() != 'staff':
             return None
-        return self.get_request_count(obj) + self.get_ticket_count(obj)
+        return sum([
+            self.get_request_count(obj),
+            self.get_ticket_count(obj),
+            self.get_service_item_count(obj),
+            self.get_maintenance_count(obj),
+        ])
+
+    def get_can_delete(self, obj):
+        if self._viewer_level() != 'staff':
+            return None
+        return self.get_usage_count(obj) == 0
 
     def validate_name(self, value):
         name = str(value or '').strip()
@@ -219,7 +249,8 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
                   'procedures', 'required_equipment', 'inspection_procedures',
                   'is_active', 'requires_site_inspection',
                   'deposit_policy', 'deposit_value',
-                  'request_count', 'ticket_count', 'usage_count',
+                  'request_count', 'ticket_count', 'service_item_count',
+                  'maintenance_count', 'usage_count', 'can_delete',
                   'inventory_requirements_count', 'inventory_requirements']
 
 
@@ -486,6 +517,14 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
             'preferred_time_slot',
             getattr(self.instance, 'preferred_time_slot', None),
         )
+
+        # Keep historical evening values readable, but do not accept a new or
+        # explicitly changed after-hours preference.
+        submitted_time_slot = attrs.get('preferred_time_slot')
+        if submitted_time_slot and not is_bookable_time_slot(submitted_time_slot):
+            raise serializers.ValidationError({
+                'preferred_time_slot': BUSINESS_HOURS_ERROR,
+            })
 
         if preferred_date and preferred_date < timezone.localdate():
             raise serializers.ValidationError({

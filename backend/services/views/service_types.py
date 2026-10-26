@@ -1,5 +1,6 @@
 # Auto-split from services/views.py
 from services.views.helpers import *  # noqa: F401,F403
+from services.models import MaintenanceSchedule, ServiceRequestService
 from users.permissions import CanManageServiceCatalog, CanViewServiceCatalog
 from users.rbac import SERVICE_CATALOG_VIEW_CAPABILITIES, user_has_any_capability
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, Subquery
@@ -15,15 +16,29 @@ def with_catalog_counts(queryset):
 
     requests = ServiceRequest.objects.filter(service_type=OuterRef('pk')).order_by().values('service_type').annotate(c=Count('id'))
     tickets = ServiceTicket.objects.filter(request__service_type=OuterRef('pk')).order_by().values('request__service_type').annotate(c=Count('id'))
+    service_items = ServiceRequestService.objects.filter(service_type=OuterRef('pk')).order_by().values('service_type').annotate(c=Count('id'))
+    maintenance = MaintenanceSchedule.objects.filter(service_type=OuterRef('pk')).order_by().values('service_type').annotate(c=Count('id'))
     requirements = ServiceTypeInventoryRequirement.objects.filter(service_type=OuterRef('pk')).order_by().values('service_type').annotate(c=Count('id'))
     return queryset.annotate(
         annotated_request_count=_count_subquery(requests),
         annotated_ticket_count=_count_subquery(tickets),
+        annotated_service_item_count=_count_subquery(service_items),
+        annotated_maintenance_count=_count_subquery(maintenance),
         annotated_requirement_count=_count_subquery(requirements),
     ).prefetch_related(Prefetch(
         'inventory_requirements',
         queryset=ServiceTypeInventoryRequirement.objects.select_related('item').order_by('item__name', 'id'),
     ))
+
+
+def service_catalog_usage(service):
+    """Return every historical reference that prevents a hard catalog delete."""
+    return {
+        'request_count': ServiceRequest.objects.filter(service_type=service).count(),
+        'ticket_count': ServiceTicket.objects.filter(request__service_type=service).count(),
+        'service_item_count': service.request_items.count(),
+        'maintenance_count': service.maintenance_schedules.count(),
+    }
 
 
 class ServiceTypeViewSet(viewsets.ModelViewSet):
@@ -44,11 +59,7 @@ class ServiceTypeViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         service = self.get_object()
-        usage = {
-            'request_count': ServiceRequest.objects.filter(service_type=service).count(),
-            'service_item_count': service.request_items.count(),
-            'maintenance_count': service.maintenance_schedules.count(),
-        }
+        usage = service_catalog_usage(service)
         if any(usage.values()):
             return Response({
                 'error': 'This service is already used by requests, tickets, or maintenance schedules. Deactivate it instead of deleting it.',

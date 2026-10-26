@@ -209,7 +209,7 @@ test.describe('Technician Workspace - All Pages', () => {
       await yesButton.click();
     }
     await page.getByRole('button', { name: /Ready for service/ }).click();
-    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+    await page.locator('input[type="file"][accept*="image/jpeg"]').setInputFiles({
       name: 'inspection-site.png',
       mimeType: 'image/png',
       buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),

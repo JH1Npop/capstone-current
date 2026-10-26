@@ -279,6 +279,30 @@ class ServiceRequestTicketLifecycleTests(APITestCase):
         self.assertEqual(request_obj.location.latitude, Decimal('14.599500'))
         self.assertEqual(request_obj.location.longitude, Decimal('120.984200'))
 
+    def test_service_request_rejects_evening_preference(self):
+        self.client.force_authenticate(user=self.client_user)
+
+        response = self.client.post(
+            '/api/services/service-requests/',
+            {
+                'service_type': self.service_type.id,
+                'description': 'Attempt an evening service request',
+                'priority': 'Normal',
+                'preferred_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
+                'preferred_time_slot': 'evening',
+                'location_address': '123 Business Hours Street',
+                'location_city': 'Makati',
+                'location_province': 'Metro Manila',
+                'latitude': '14.599500',
+                'longitude': '120.984200',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('8:00 AM and 5:00 PM', str(response.data['preferred_time_slot']))
+        self.assertFalse(ServiceRequest.objects.filter(description='Attempt an evening service request').exists())
+
     def test_admin_walk_in_request_creates_real_ticket_after_approval(self):
         second_service = ServiceType.objects.create(
             name='Solar Panel Cleaning',

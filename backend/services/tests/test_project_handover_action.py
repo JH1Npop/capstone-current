@@ -37,6 +37,14 @@ class ProjectHandoverActionTests(APITestCase):
         }, format='json')
         self.assertEqual(turnover_response.status_code, status.HTTP_201_CREATED)
         turnover_id = turnover_response.data['id']
+        generated_document = GeneratedDocument.objects.get(
+            ticket=self.ticket,
+            document_type='turnover_acceptance',
+        )
+        self.assertEqual(
+            TurnoverAcceptance.objects.get(id=turnover_id).generated_document_id,
+            generated_document.id,
+        )
 
         finalize_response = self.api.post(
             f'/api/services/turnover-acceptances/{turnover_id}/finalize/', {}, format='json'

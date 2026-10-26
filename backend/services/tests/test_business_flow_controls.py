@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -53,7 +54,11 @@ class QuotationAcceptanceTests(FlowFixture):
         self.inspected = self.ticket('Inspection Completed', ticket_type='inspection', technician=self.tech)
         ServiceStatusHistory.objects.create(ticket=self.inspected, status='For Inspection', changed_by=self.admin)
         self.quotation = QuotationRecord.objects.create(
-            ticket=self.inspected, client=self.client_user, quotation_number='QUO-FLOW-1', status='Sent',
+            ticket=self.inspected,
+            client=self.client_user,
+            quotation_number='QUO-FLOW-1',
+            total_amount=Decimal('1000.00'),
+            status='Sent',
         )
         self.decision_url = f'/api/services/service-tickets/{self.inspected.id}/inspection_decision/'
         self.respond_url = f'/api/services/quotations/{self.quotation.id}/respond/'
@@ -95,19 +100,23 @@ class QuotationAcceptanceTests(FlowFixture):
     def test_same_day_installation_reuses_ticket_and_requires_a_time(self):
         QuotationRecord.objects.filter(pk=self.quotation.pk).update(status='Accepted')
         today = timezone.localdate().isoformat()
-        installation_time = (timezone.localtime() + timedelta(hours=1)).strftime('%H:%M')
+        installation_time = '10:00'
+        business_hours_now = timezone.localtime().replace(
+            hour=9, minute=0, second=0, microsecond=0,
+        )
 
-        missing_date = self.as_user(self.admin).post(
-            self.decision_url, {'decision': 'approve_service'}, format='json',
-        )
-        missing_time = self.as_user(self.admin).post(
-            self.decision_url, {'decision': 'approve_service', 'scheduled_date': today}, format='json',
-        )
-        accepted = self.as_user(self.admin).post(
-            self.decision_url,
-            {'decision': 'approve_service', 'scheduled_date': today, 'scheduled_time': installation_time},
-            format='json',
-        )
+        with patch('services.views.tickets.timezone.localtime', return_value=business_hours_now):
+            missing_date = self.as_user(self.admin).post(
+                self.decision_url, {'decision': 'approve_service'}, format='json',
+            )
+            missing_time = self.as_user(self.admin).post(
+                self.decision_url, {'decision': 'approve_service', 'scheduled_date': today}, format='json',
+            )
+            accepted = self.as_user(self.admin).post(
+                self.decision_url,
+                {'decision': 'approve_service', 'scheduled_date': today, 'scheduled_time': installation_time},
+                format='json',
+            )
 
         self.assertEqual(missing_date.status_code, 400)
         self.assertEqual(missing_time.status_code, 400)

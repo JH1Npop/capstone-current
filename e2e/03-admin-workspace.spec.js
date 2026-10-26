@@ -528,6 +528,37 @@ test.describe('Admin Workspace - All Pages', () => {
     });
   });
 
+  test('3.7c - Used services deactivate without destructive delete requests', async ({ page }) => {
+    await visitWorkspacePage(page, '/admin/services');
+    const headers = { Authorization: `Token ${adminAuthState.token}` };
+    const catalogResponse = await page.request.get('/api/admin/services/', { headers });
+    expect(catalogResponse.ok()).toBeTruthy();
+    const catalogPayload = await catalogResponse.json();
+    const services = Array.isArray(catalogPayload) ? catalogPayload : catalogPayload.results || [];
+    const usedService = services.find((service) => service.is_active !== false && service.can_delete === false);
+    expect(usedService).toBeTruthy();
+
+    const serviceCard = page.locator('div.rounded-xl.border.bg-white.shadow-sm')
+      .filter({ hasText: usedService.name })
+      .first();
+    await expect(serviceCard.getByRole('button', { name: 'Deactivate', exact: true })).toBeVisible();
+    await expect(serviceCard.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+    await serviceCard.getByRole('button', { name: 'Deactivate', exact: true }).click();
+
+    await expect(page.getByRole('heading', { name: 'Deactivate service?' })).toBeVisible();
+    await expect(page.getByText(/historical reference/)).toBeVisible();
+    const deactivateResponse = page.waitForResponse((response) => (
+      response.url().endsWith(`/api/admin/services/${usedService.id}/`)
+      && response.request().method() === 'PUT'
+    ));
+    await page.getByRole('button', { name: 'Deactivate service', exact: true }).click();
+    const response = await deactivateResponse;
+    expect(response.ok(), await response.text()).toBeTruthy();
+    expect((await response.json()).is_active).toBe(false);
+    await expect(page.getByText(/hidden from new requests.*Historical records were preserved/i)).toBeVisible();
+    await expect(serviceCard.getByText('Inactive', { exact: true })).toBeVisible();
+  });
+
   test('3.8 - Inventory Management loads', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/inventory', 'test-results/screenshots/03-admin-inventory.png');
     await expect(page.getByText('Physical units')).toBeVisible();
@@ -856,6 +887,7 @@ test.describe('Admin Workspace - All Pages', () => {
     await ticketSearch.click();
     const firstTicket = page.getByRole('button', { name: /TKT-\d+/ }).first();
     await expect(firstTicket).toBeVisible();
+    const selectedTicketCode = (await firstTicket.textContent()).match(/TKT-\d+/)?.[0];
     await firstTicket.click();
     // The ticket bar links to the loaded ticket; the fill rules sit in the folded help.
     await expect(page.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
@@ -864,12 +896,58 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.locator('body')).not.toContainText('â‚±');
     await expect(page.locator('body')).toContainText('₱');
 
+    const headers = { Authorization: `Token ${adminAuthState.token}` };
+    const inventoryPayload = await (await page.request.get('/api/inventory/items/', { headers })).json();
+    const inventoryItems = Array.isArray(inventoryPayload) ? inventoryPayload : inventoryPayload.results || [];
+    let pricedItem = inventoryItems.find((item) => Number(item.unit_price) > 0);
+    if (!pricedItem) {
+      const referenceItem = inventoryItems[0];
+      const pricedItemResponse = await page.request.post('/api/inventory/items/', {
+        headers,
+        data: {
+          name: `Quotation Test Item ${Date.now()}`,
+          sku: `QUOTE-${Date.now()}`,
+          category: referenceItem.category,
+          item_type: 'part',
+          quantity: 10,
+          minimum_stock: 0,
+          unit_of_measurement: 'piece',
+          unit_price: '125.50',
+          status: 'available',
+        },
+      });
+      expect(pricedItemResponse.ok(), await pricedItemResponse.text()).toBeTruthy();
+      pricedItem = await pricedItemResponse.json();
+      await page.reload();
+      await page.getByRole('button', { name: 'Quotation Proposal' }).click();
+      await page.getByPlaceholder(/search ticket by id/i).fill(selectedTicketCode);
+      await page.getByRole('button', { name: new RegExp(selectedTicketCode) }).first().click();
+      await expect(page.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
+    }
+    expect(pricedItem).toBeTruthy();
+
+    const bomTable = page.locator('table:has(> thead th:text-is("Unit Price (₱)"))').first();
+    const firstBomRow = bomTable.locator(':scope > tbody > tr').first();
+    await firstBomRow.getByLabel('BOM row 1 description', { exact: true }).fill(pricedItem.name);
+    await expect(firstBomRow.getByLabel('BOM row 1 unit price', { exact: true })).toHaveValue(String(pricedItem.unit_price));
+    await expect(firstBomRow.getByLabel('BOM row 1 unit', { exact: true })).toHaveValue(pricedItem.unit_of_measurement);
+    await firstBomRow.getByLabel('BOM row 1 quantity', { exact: true }).fill('2');
+    const expectedAmount = (Number(pricedItem.unit_price) * 2).toFixed(2);
+    await expect(firstBomRow.getByLabel('BOM row 1 total amount', { exact: true })).toHaveValue(expectedAmount);
+    const priceTable = page.locator('table:has(> thead th:text-is("Total Amount"))').first();
+    await expect(priceTable.locator(':scope > tbody > tr').first().locator('textarea').nth(2)).toHaveValue(expectedAmount);
+
     const saveResponse = page.waitForResponse((response) => (
       response.url().includes('/document-draft/')
       && response.request().method() === 'POST'
     ));
     await page.getByRole('button', { name: 'Save Draft' }).click();
-    expect((await saveResponse).ok()).toBeTruthy();
+    const savedDraftResponse = await saveResponse;
+    expect(savedDraftResponse.ok()).toBeTruthy();
+    const savedDraftPayload = savedDraftResponse.request().postDataJSON();
+    expect(savedDraftPayload.data_json.bomRows[0].description).toBe(pricedItem.name);
+    expect(savedDraftPayload.data_json.bomRows[0].unitPrice).toBe(String(pricedItem.unit_price));
+    expect(savedDraftPayload.data_json.bomRows[0].amount).toBe(expectedAmount);
     await expect(page.getByRole('status')).toContainText(/draft saved successfully/i);
 
     // Reloading and reselecting the same ticket proves the draft traversed the
@@ -879,6 +957,113 @@ test.describe('Admin Workspace - All Pages', () => {
     await page.getByPlaceholder(/search ticket by id/i).click();
     await page.getByRole('button', { name: /TKT-\d+/ }).first().click();
     await expect(page.getByRole('status')).toContainText(/loaded saved draft/i, { timeout: 15000 });
+    const reloadedBomRow = page.locator('table:has(> thead th:text-is("Unit Price (₱)"))').first().locator(':scope > tbody > tr').first();
+    await expect(reloadedBomRow.getByLabel('BOM row 1 description', { exact: true })).toHaveValue(pricedItem.name);
+    await expect(reloadedBomRow.getByLabel('BOM row 1 unit price', { exact: true })).toHaveValue(String(pricedItem.unit_price));
+    await expect(reloadedBomRow.getByLabel('BOM row 1 total amount', { exact: true })).toHaveValue(expectedAmount);
+  });
+
+  test('3.9b - Every document stage saves its business record or printable draft and reloads', async ({ page }) => {
+    await visitWorkspacePage(page, '/admin/documents');
+    let ticketCode = '';
+
+    const selectTicket = async () => {
+      const search = page.getByPlaceholder(/search ticket by id/i);
+      if (ticketCode) {
+        await search.fill(ticketCode.replace(/\D/g, ''));
+      } else {
+        await search.click();
+      }
+      const ticketButton = page.getByRole('button', { name: ticketCode ? new RegExp(ticketCode) : /TKT-\d+/ }).first();
+      await expect(ticketButton).toBeVisible();
+      ticketCode ||= (await ticketButton.textContent()).match(/TKT-\d+/)?.[0] || '';
+      await ticketButton.click();
+      await expect(page.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
+    };
+    const openStage = async (name) => {
+      await page.getByRole('button', { name }).click();
+      await expect(page.getByText('Loading the ticket and saved document data...')).toBeHidden({ timeout: 15000 });
+    };
+
+    await selectTicket();
+
+    await openStage('Technical Data Sheet');
+    await page.getByLabel('Primary Electric Supply').fill('E2E utility supply');
+    const tdsRecordResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/services/technical-data-sheets/')
+      && ['POST', 'PATCH'].includes(response.request().method())
+    ));
+    const tdsDraftResponse = page.waitForResponse((response) => (
+      response.url().includes('/document-draft/') && response.request().method() === 'POST'
+    ));
+    await page.getByRole('button', { name: 'Save data sheet' }).click();
+    expect((await tdsRecordResponse).ok()).toBeTruthy();
+    expect((await tdsDraftResponse).ok()).toBeTruthy();
+    await expect(page.getByText('Technical data sheet and printable draft saved successfully.')).toBeVisible();
+
+    await openStage('Solar Installation Contract');
+    await page.getByPlaceholder('[Solar PV System Description]').fill('E2E preserved contract scope');
+    const contractRecordResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/services/installation-contracts/')
+      && ['POST', 'PATCH'].includes(response.request().method())
+    ));
+    const contractDraftResponse = page.waitForResponse((response) => (
+      response.url().includes('/document-draft/') && response.request().method() === 'POST'
+    ));
+    await page.getByRole('button', { name: 'Save contract' }).click();
+    expect((await contractRecordResponse).ok()).toBeTruthy();
+    expect((await contractDraftResponse).ok()).toBeTruthy();
+    await expect(page.getByText('Installation contract and printable draft saved successfully.')).toBeVisible();
+
+    await openStage('PV Solar Site Commissioning Checklist');
+    await page.getByLabel('Site Name').fill('E2E commissioning site');
+    const commissioningResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/services/solar-commissioning-checklists/')
+      && ['POST', 'PATCH'].includes(response.request().method())
+    ));
+    await page.getByRole('button', { name: 'Save checklist' }).click();
+    expect((await commissioningResponse).ok()).toBeTruthy();
+    await expect(page.getByText('Solar commissioning checklist saved.')).toBeVisible();
+
+    await openStage('Turnover / Acceptance Form');
+    await page.getByText('Document details', { exact: true }).click();
+    await page.getByLabel('Project Installation Of').fill('E2E preserved handover scope');
+    const turnoverDraftResponse = page.waitForResponse((response) => (
+      response.url().includes('/document-draft/') && response.request().method() === 'POST'
+    ));
+    const turnoverRecordResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/services/turnover-acceptances/')
+      && ['POST', 'PATCH'].includes(response.request().method())
+    ));
+    await page.getByRole('button', { name: 'Save draft' }).click();
+    expect((await turnoverDraftResponse).ok()).toBeTruthy();
+    expect((await turnoverRecordResponse).ok()).toBeTruthy();
+    await expect(page.getByText('Turnover draft saved.')).toBeVisible();
+    await expect(page.getByLabel('Project Installation Of')).toHaveValue('E2E preserved handover scope');
+
+    await openStage('Field Service Report');
+    await page.getByLabel('Reference').fill('E2E preserved service report reference');
+    const reportDraftResponse = page.waitForResponse((response) => (
+      response.url().includes('/document-draft/') && response.request().method() === 'POST'
+    ));
+    await page.getByRole('button', { name: 'Save draft' }).click();
+    expect((await reportDraftResponse).ok()).toBeTruthy();
+    await expect(page.getByText('Document draft saved successfully.')).toBeVisible();
+
+    await page.reload();
+    await selectTicket();
+
+    await openStage('Technical Data Sheet');
+    await expect(page.getByLabel('Primary Electric Supply')).toHaveValue('E2E utility supply');
+    await openStage('Solar Installation Contract');
+    await expect(page.getByPlaceholder('[Solar PV System Description]')).toHaveValue('E2E preserved contract scope');
+    await openStage('PV Solar Site Commissioning Checklist');
+    await expect(page.getByLabel('Site Name')).toHaveValue('E2E commissioning site');
+    await openStage('Turnover / Acceptance Form');
+    await page.getByText('Document details', { exact: true }).click();
+    await expect(page.getByLabel('Project Installation Of')).toHaveValue('E2E preserved handover scope');
+    await openStage('Field Service Report');
+    await expect(page.getByLabel('Reference')).toHaveValue('E2E preserved service report reference');
   });
 
   test('3.10 - Analytics page with charts', async ({ page }) => {

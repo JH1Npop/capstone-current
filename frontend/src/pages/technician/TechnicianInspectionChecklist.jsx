@@ -13,6 +13,26 @@ const RECOMMENDATIONS = [
   { value: 'Rejected', label: 'Cannot proceed', description: 'The site is currently unsuitable for the requested work.' },
 ];
 
+const SUPPORTED_PHOTO_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/pjpeg',
+  'image/png',
+  'image/x-png',
+  'image/webp',
+]);
+const SUPPORTED_PHOTO_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+const MAX_PHOTO_COUNT = 20;
+
+const fileExtension = (file) => String(file?.name || '').split('.').pop()?.toLowerCase() || '';
+const isSupportedPhoto = (file) => {
+  const contentType = String(file?.type || '').toLowerCase();
+  return contentType
+    ? SUPPORTED_PHOTO_TYPES.has(contentType)
+    : SUPPORTED_PHOTO_EXTENSIONS.has(fileExtension(file));
+};
+
 const draftKey = (ticketId) => `technician-inspection-draft:${ticketId}`;
 
 function AnswerButtons({ value, onChange, label }) {
@@ -162,7 +182,37 @@ export default function TechnicianInspectionChecklist() {
   );
 
   const handlePhotoSelection = (event) => {
-    const selectedFiles = Array.from(event.target.files || []).filter((file) => file.type.startsWith('image/'));
+    const selectedFiles = Array.from(event.target.files || []);
+    const unsupportedPhoto = selectedFiles.find((file) => !isSupportedPhoto(file));
+    const oversizedPhoto = selectedFiles.find((file) => file.size > MAX_PHOTO_BYTES);
+
+    if (unsupportedPhoto) {
+      setFieldErrors((previous) => ({
+        ...previous,
+        photos: `${unsupportedPhoto.name} is not supported. Use a JPG, PNG, or WebP photo. HEIC photos must be converted first.`,
+      }));
+      setMessage('Choose a supported site photo before submitting the inspection.');
+      event.target.value = '';
+      return;
+    }
+    if (oversizedPhoto) {
+      setFieldErrors((previous) => ({
+        ...previous,
+        photos: `${oversizedPhoto.name} is larger than 10 MB. Choose a smaller photo.`,
+      }));
+      setMessage('One of the selected site photos is too large.');
+      event.target.value = '';
+      return;
+    }
+    if (photos.length + selectedFiles.length > MAX_PHOTO_COUNT) {
+      setFieldErrors((previous) => ({
+        ...previous,
+        photos: `Upload no more than ${MAX_PHOTO_COUNT} site photos at a time.`,
+      }));
+      setMessage('Too many site photos were selected.');
+      event.target.value = '';
+      return;
+    }
     if (selectedFiles.length > 0) {
       setPhotos((previous) => [...previous, ...selectedFiles]);
       setFieldErrors((previous) => ({ ...previous, photos: '' }));
@@ -238,7 +288,11 @@ export default function TechnicianInspectionChecklist() {
       setMessage('Inspection submitted successfully.');
       setTimeout(() => navigate('/technician/dashboard'), 1200);
     } catch (submitError) {
-      setMessage(submitError.message || 'Failed to submit inspection.');
+      const errorMessage = submitError.message || 'Failed to submit inspection.';
+      setMessage(errorMessage);
+      if (/photo|image|proof|file/i.test(errorMessage)) {
+        setFieldErrors((previous) => ({ ...previous, photos: errorMessage }));
+      }
       setSubmitting(false);
     }
   };
@@ -297,7 +351,14 @@ export default function TechnicianInspectionChecklist() {
 
   return (
     <Layout>
-      <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoSelection} />
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+        multiple
+        className="hidden"
+        onChange={handlePhotoSelection}
+      />
       <div className="mx-auto max-w-3xl pb-28 sm:pb-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -394,7 +455,7 @@ export default function TechnicianInspectionChecklist() {
               <label className="mt-5 block text-sm font-semibold text-slate-800" htmlFor="inspection-notes">Inspection notes</label>
               <textarea id="inspection-notes" value={techNotes} onChange={(event) => setTechNotes(event.target.value)} rows={5} className="mt-2 w-full rounded-xl border border-slate-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" placeholder="Describe site conditions, measurements, obstacles, and special requirements..." />
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div><p className="text-sm font-semibold text-slate-800">Site photos <span className="text-rose-600">(required)</span></p><p className="mt-1 text-xs text-slate-500">{photoSummary}. You can add several angles.</p></div>
+                <div><p className="text-sm font-semibold text-slate-800">Site photos <span className="text-rose-600">(required)</span></p><p className="mt-1 text-xs text-slate-500">{photoSummary}. JPG, PNG, or WebP; up to 10 MB each and 20 photos.</p></div>
                 <button type="button" onClick={() => photoInputRef.current?.click()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-purple-300 bg-purple-50 px-5 py-2.5 text-sm font-semibold text-purple-800 hover:bg-purple-100"><FiImage /> Add site photos</button>
               </div>
               {fieldErrors.photos && <p className="mt-2 text-sm font-medium text-rose-700">{fieldErrors.photos}</p>}

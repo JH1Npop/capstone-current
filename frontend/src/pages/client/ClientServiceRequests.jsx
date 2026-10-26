@@ -40,8 +40,7 @@ const TIME_SLOT_OPTIONS = [
   { value: '', label: 'No preference' },
   { value: 'morning', label: 'Morning (8 AM - 11 AM)' },
   { value: 'midday', label: 'Midday (11 AM - 2 PM)' },
-  { value: 'afternoon', label: 'Afternoon (2 PM - 5 PM)' },
-  { value: 'evening', label: 'Evening (5 PM - 8 PM)' }
+  { value: 'afternoon', label: 'Afternoon (2 PM - 5 PM)' }
 ];
 
 const CALABARZON_PROVINCES = ['Cavite', 'Laguna', 'Batangas', 'Rizal', 'Quezon'];
@@ -646,6 +645,7 @@ const selectSearchResult = async (result) => {
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-xs text-slate-500">Service visits are scheduled during business hours, from 8 AM to 5 PM.</p>
               </div>
             </div>
             <div>

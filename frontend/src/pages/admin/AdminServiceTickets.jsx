@@ -61,10 +61,9 @@ const priorityOptions = ['Low', 'Normal', 'High', 'Urgent'];
 
 const timeSlotOptions = [
   { value: '', label: 'Any time' },
-  { value: 'morning', label: 'Morning' },
-  { value: 'midday', label: 'Midday' },
-  { value: 'afternoon', label: 'Afternoon' },
-  { value: 'evening', label: 'Evening' }
+  { value: 'morning', label: 'Morning (8 AM - 11 AM)' },
+  { value: 'midday', label: 'Midday (11 AM - 2 PM)' },
+  { value: 'afternoon', label: 'Afternoon (2 PM - 5 PM)' }
 ];
 
 const getServiceTypeName = (serviceType) => serviceType?.name || serviceType?.service || `Service #${serviceType?.id}`;

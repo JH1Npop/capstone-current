@@ -10,7 +10,7 @@ from django.utils.dateparse import parse_date
 from inventory.models import ServiceTypeInventoryRequirement
 from users.analytics_service import _forecast_readiness, build_admin_analytics
 from users.views.helpers import *  # noqa: F401,F403
-from services.views.service_types import with_catalog_counts
+from services.views.service_types import service_catalog_usage, with_catalog_counts
 from users.permissions import CanManageServiceCatalog, CanViewAnalytics, CanViewServiceCatalog
 
 
@@ -91,15 +91,12 @@ class AdminServicesViewSet(viewsets.ViewSet):
         """Delete a service type"""
         try:
             service = ServiceType.objects.get(id=pk)
-            request_count = ServiceRequest.objects.filter(service_type=service).count()
-            ticket_count = ServiceTicket.objects.filter(request__service_type=service).count()
-            linked_count = service.request_items.count() + service.maintenance_schedules.count()
-            if request_count or ticket_count or linked_count:
+            usage = service_catalog_usage(service)
+            if any(usage.values()):
                 return Response({
                     'error': 'This service is already used by requests or tickets. Deactivate it instead of deleting it.',
-                    'request_count': request_count,
-                    'ticket_count': ticket_count,
-                    'usage_count': request_count + ticket_count + linked_count,
+                    **usage,
+                    'usage_count': sum(usage.values()),
                 }, status=status.HTTP_400_BAD_REQUEST)
             service.delete()
             return Response({'message': 'Service deleted'}, status=status.HTTP_204_NO_CONTENT)

@@ -360,9 +360,9 @@ export const submitInspectionChecklist = async (ticketId, checklistData) => {
       for (const photo of checklistData.photos) {
         photoFormData.append('photo_files', photo);
       }
-      await api.post(`/services/service-tickets/${ticketId}/upload_photos/`, photoFormData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // Let Axios/the browser add the multipart boundary. Supplying only the
+      // media type can make Django receive the request with no parsed files.
+      await api.post(`/services/service-tickets/${ticketId}/upload_photos/`, photoFormData);
     }
     
     if (data && data.id) {

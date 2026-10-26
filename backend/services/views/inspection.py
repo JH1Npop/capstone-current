@@ -5,7 +5,7 @@ from rest_framework import serializers, viewsets, permissions
 from rest_framework.exceptions import ValidationError
 from users.permissions import CanManageTechnicianSkills
 
-from services.models import SolarCommissioningChecklist, TurnoverAcceptance, TechnicalDataSheet, InstallationContract
+from services.models import GeneratedDocument, SolarCommissioningChecklist, TurnoverAcceptance, TechnicalDataSheet, InstallationContract
 from services.serializers import SolarCommissioningChecklistSerializer, TurnoverAcceptanceSerializer, TechnicalDataSheetSerializer, InstallationContractSerializer
 from services.views.helpers import *  # noqa: F401,F403
 from django.shortcuts import get_object_or_404
@@ -349,7 +349,11 @@ class TurnoverAcceptanceViewSet(viewsets.ModelViewSet):
         ticket = serializer.validated_data['ticket']
         if self.request.user.role == 'technician' and not ticket_has_technician_access(ticket, self.request.user):
             raise PermissionDenied('You can only create turnover acceptances for tickets assigned to you.')
-        turnover = serializer.save()
+        generated_document = GeneratedDocument.objects.filter(
+            ticket=ticket,
+            document_type='turnover_acceptance',
+        ).first()
+        turnover = serializer.save(generated_document=generated_document)
         if turnover.status in {'finalized', 'accepted'}:
             sync_ticket_maintenance_schedule(ticket)
 
