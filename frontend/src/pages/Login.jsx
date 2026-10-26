@@ -4,6 +4,26 @@ import { FiArrowRight, FiEye, FiEyeOff } from 'react-icons/fi';
 import AuthShell from '../components/AuthShell';
 import { useAuth } from '../context/AuthContext';
 
+// Set after the first successful sign-in on this browser. It is not a credential and survives
+// logout, so the heading can tell a first visit ("Welcome") from a returning one ("Welcome back").
+const RETURNING_DEVICE_KEY = 'afn_signed_in_before';
+
+const hasSignedInBefore = () => {
+  try {
+    return window.localStorage.getItem(RETURNING_DEVICE_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const rememberSignIn = () => {
+  try {
+    window.localStorage.setItem(RETURNING_DEVICE_KEY, '1');
+  } catch {
+    // Storage can be blocked (private mode); the heading then stays "Welcome".
+  }
+};
+
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-200';
 
@@ -19,6 +39,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [errorField, setErrorField] = useState('');
   const [loading, setLoading] = useState(false);
+  const [returningVisitor] = useState(hasSignedInBefore);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,6 +73,7 @@ export default function Login() {
         return;
       }
 
+      rememberSignIn();
       const requestedPath = searchParams.get('next');
       const safeNextPath = requestedPath?.startsWith('/') && !requestedPath.startsWith('//')
         ? requestedPath
@@ -66,7 +88,7 @@ export default function Login() {
 
   return (
     <AuthShell
-      title="Welcome back"
+      title={returningVisitor ? 'Welcome back' : 'Welcome'}
       subtitle="Sign in to continue to the AFN service management system."
       maxWidth="max-w-[360px]"
       variant="solar"

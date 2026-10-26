@@ -81,6 +81,24 @@ test.describe('Public Pages', () => {
     await page.screenshot({ path: 'test-results/screenshots/01-landing-page.png', fullPage: true });
   });
 
+  test('1.1f - Opening intro plays on request, can be skipped, and ends on its own', async ({ page }) => {
+    await page.goto('/?intro=play');
+    const intro = page.getByTestId('afn-intro');
+    await expect(intro).toBeVisible();
+    await expect(intro.getByRole('img', { name: 'AFN Solar Power Engineering Services' })).toBeVisible();
+    await page.getByRole('button', { name: 'Skip intro' }).click();
+    await expect(intro).toBeHidden();
+    await expect(page.locator('h1').first()).toBeVisible();
+
+    await page.goto('/?intro=play');
+    await expect(intro).toBeVisible();
+    await expect(intro).toBeHidden({ timeout: 8000 });
+
+    // The test server disables the automatic intro, so a plain visit is never blocked.
+    await page.goto('/');
+    await expect(intro).toHaveCount(0);
+  });
+
   test('1.1b - Landing actions and cross-page section links work', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');

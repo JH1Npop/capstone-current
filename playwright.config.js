@@ -91,6 +91,8 @@ export default defineConfig({
         ...process.env,
         VITE_BACKEND_HOST: backendUrl,
         VITE_DEV_SERVER_PORT: String(frontendPort),
+        // The opening intro covers the landing page for 4 s; tests opt in with ?intro=play.
+        VITE_DISABLE_INTRO: 'true',
       },
     },
   ],

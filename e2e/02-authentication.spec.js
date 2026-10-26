@@ -98,3 +98,19 @@ test.describe('Authentication - Route Guards', () => {
     await page.screenshot({ path: 'test-results/screenshots/02-role-guard-client.png' });
   });
 });
+
+test.describe('Authentication - Sign-in greeting', () => {
+  test('2.8 - Login says Welcome on a new device and Welcome back after signing in', async ({ page }) => {
+    const heading = page.locator('h1:visible', { hasText: /^Welcome/ });
+
+    await clearStoredAuth(page);
+    await page.evaluate(() => localStorage.removeItem('afn_signed_in_before'));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(heading).toHaveText('Welcome');
+
+    await loginAs(page, ACCOUNTS.client.username, { expectedPath: /\/client\/dashboard/ });
+    await clearStoredAuth(page);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(heading).toHaveText('Welcome back');
+  });
+});

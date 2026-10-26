@@ -1,0 +1,59 @@
+/* "Sun to Panel" opening intro (4 s). Timings mirror the approved preview. */
+.afn-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background: linear-gradient(180deg, #d6eaff 0%, #f7fbff 72%);
+  transition: opacity 0.5s ease;
+}
+.afn-intro--leaving { opacity: 0; }
+.afn-intro--skipping { opacity: 0; transition-duration: 0.25s; }
+
+.afn-intro__logo { width: min(54vw, 62vh, 560px); height: auto; overflow: visible; }
+.afn-intro__logo text { font-family: inherit; }
+.afn-intro__logo * { transform-box: fill-box; transform-origin: center; }
+.afn-intro__sun { transform-box: view-box; transform-origin: 325px 200px; }
+.afn-intro__panel { transform-box: view-box; transform-origin: 333px 242px; opacity: 0; }
+.afn-intro__beam { stroke-dasharray: 1; opacity: 0; }
+.afn-intro__bar { transform-origin: left center; }
+.afn-intro__dash--left { transform-origin: right center; }
+.afn-intro__dash--right { transform-origin: left center; }
+.afn-intro__cell { fill: #ffc21a; }
+
+.afn-intro__skip {
+  position: absolute;
+  right: calc(20px + env(safe-area-inset-right, 0px));
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  border-radius: 8px;
+  border: 1px solid rgba(13, 27, 46, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0d1b2e;
+}
+.afn-intro__skip:focus-visible { outline: 3px solid #f5a300; outline-offset: 2px; }
+
+@keyframes afn-intro-sun { 0%, 40% { transform: translate(-205px, -100px) scale(0.55); } 100% { transform: none; } }
+@keyframes afn-intro-beam { 0% { opacity: 0.9; stroke-dashoffset: 1; } 40% { opacity: 0.9; stroke-dashoffset: 0; } 75% { opacity: 0.9; stroke-dashoffset: 0; } 100% { opacity: 0; stroke-dashoffset: 0; } }
+@keyframes afn-intro-dock { 0%, 45% { opacity: 1; transform: translate(0, 140px) scale(2.2); } 85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; } }
+@keyframes afn-intro-cell { from { fill: #0a3f80; } to { fill: #ffc21a; } }
+@keyframes afn-intro-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes afn-intro-pop { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: none; } }
+@keyframes afn-intro-rise { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+@keyframes afn-intro-grow { from { transform: scaleX(0); } to { transform: none; } }
+
+.afn-intro__sun { animation: afn-intro-sun 2.6s cubic-bezier(0.6, 0, 0.25, 1) both; }
+.afn-intro__beam { animation: afn-intro-beam 1.8s ease 0.28s both; }
+.afn-intro__panel { animation: afn-intro-dock 2.9s cubic-bezier(0.6, 0, 0.25, 1) both; }
+.afn-intro__cell { animation: afn-intro-cell 0.4s ease calc(0.76s + var(--i) * 97ms) both; }
+.afn-intro__bar { animation: afn-intro-fade 0.48s ease 2.42s both; }
+.afn-intro__a { animation: afn-intro-pop 0.69s cubic-bezier(0.2, 0.9, 0.3, 1.2) 2.14s both; }
+.afn-intro__f { animation: afn-intro-pop 0.69s cubic-bezier(0.2, 0.9, 0.3, 1.2) 2.24s both; }
+.afn-intro__n { animation: afn-intro-pop 0.69s cubic-bezier(0.2, 0.9, 0.3, 1.2) 2.33s both; }
+.afn-intro__tagline { animation: afn-intro-rise 0.76s ease 2.83s both; }
+.afn-intro__dash { animation: afn-intro-grow 0.62s ease 2.97s both; }
+.afn-intro__subline { animation: afn-intro-rise 0.76s ease 3.1s both; }

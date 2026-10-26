@@ -8,6 +8,7 @@ import { Link, useLocation } from 'react-router-dom';
 import LandingNavbar from '../components/LandingNavbar';
 import Footer from '../components/LandingFooter';
 import SolarCalculator from '../components/SolarCalculator';
+import IntroSplash from '../components/IntroSplash';
 import { fetchPublicLandingSettings } from '../api/site';
 import { mergeLandingSettings, toTelHref } from '../utils/landingSettings';
 import { useCountUp, useLandingReveal } from '../hooks/useLandingReveal';
@@ -96,6 +97,7 @@ export default function LandingPage() {
 
   return (
     <div ref={pageRef} className="min-h-screen overflow-x-hidden bg-slate-50">
+      {location.pathname === '/' && <IntroSplash />}
       <LandingNavbar companyName={siteSettings.companyName} />
       <main className="pt-[65px] sm:pt-[73px]">
         <section aria-labelledby="landing-heading" className="relative isolate overflow-hidden">

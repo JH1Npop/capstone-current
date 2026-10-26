@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-26 (Chen ERD re-layout) Asia/Singapore**
+Last updated: **2026-10-27 (landing intro and sign-in greeting) Asia/Singapore**
 Current objective (latest): **No implementation work is in progress. Admin Documents job-workspace runtime `d3ed6ac` is pushed to `origin/staging-deploy` and verified live on Render frontend deploy `dep-dbddjmp5efls73ao0qbg`; the backend correctly remains on compatible runtime `5f1fcd9` because this release has no backend change. The canonical release gate passed 608 backend tests with 3 expected skips, the 2,541-module production build, and 18/18 browser smoke scenarios; complete browser evidence is 222/222. Production was not accessed or changed. Remaining production gates and dependency-advisory follow-up are recorded in section 9.**
 Current focused objective: **None open. Most recent completed themes (2026-10-18 to 2026-10-19, all committed): cross-role notifications and routing, technician-chosen holds, inspection-path integrity and service-specific inspection checks (`services.0062`), the whole-system audit fixes and post-review remediation, the light-palette landing redesign with map/contact, the page-ordered Landing Page Editor, and solar calculator 1.1 (savings range). Details are in the change ledger; residual risks are in section 9.**
 Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the inspection-first path, allow guarded same-day continuation on the same ticket with a fresh service dispatch, keep installation inventory out of inspection assignments, and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
@@ -495,6 +495,8 @@ verify the code, then update this file in the same change.
 
 ### Latest pass-on checkpoint (2026-10-23)
 
+- **Sign-in greeting (committed 2026-10-27, not pushed or deployed):** the login heading now says "Welcome" on a browser that has never signed in and "Welcome back" after a successful sign-in there (`localStorage` flag `afn_signed_in_before`, not a credential, kept across logout). Only `frontend/src/pages/Login.jsx` and `e2e/02-authentication.spec.js` changed for this; the other uncommitted backend/frontend files belong to the separate Documents/scheduling candidate.
+- **Opening intro (committed 2026-10-27, not pushed or deployed):** the public landing page (`/` only, signed-out visitors) now opens with the user-chosen 4-second "Sun to Panel" logo animation (`IntroSplash`). It plays once per browser tab (`sessionStorage.afn_intro_seen`), is skipped by click, key, or "Skip intro", is not shown when the device asks for reduced motion, and can be replayed with `/?intro=play`. The E2E servers set `VITE_DISABLE_INTRO=true` so existing tests are never blocked; test 1.1f covers it.
 - **Documentation and diagram refresh (uncommitted, after `c7d12a2`):** the
   workflow contract, route matrix, sales contract, manual playbook, supporting
   workflow model and DFD, final diagram pack README, the draw.io DFD, and the
@@ -876,6 +878,15 @@ production database still requires backup, release review, and explicit
 deployment authorization.
 
 ## 8. Validation ledger
+
+2026-10-27 (landing intro):
+- `npx playwright test e2e/01-public-pages.spec.js` on the isolated E2E database: 12/12 passed, including new test 1.1f (`/?intro=play` shows the intro, "Skip intro" removes it, it ends on its own within 8 s, and a plain `/` visit on the E2E server shows none).
+- A temporary Vite dev server without `VITE_DISABLE_INTRO` was driven in headless Chromium: the intro rendered with no page errors, its final frame showed the complete logo, it was gone after 5 s, a fresh tab showed it, and a reload of that tab did not. The server was stopped afterwards.
+- `npm --prefix frontend run build`: 2,543 modules transformed, built successfully (includes the other session's uncommitted frontend changes).
+
+2026-10-27 (sign-in greeting):
+- `npx playwright test e2e/02-authentication.spec.js` on the isolated E2E database: 8/8 passed, including new test 2.8 (fresh browser shows "Welcome"; after a client sign-in and sign-out the login page shows "Welcome back"). The first run failed only because the new test's `h1:visible` selector also matched the login side panel heading; the selector was narrowed and the suite rerun.
+- `npm --prefix frontend run build`: 2,541 modules transformed, built successfully. This build includes the other session's uncommitted Documents/scheduling frontend changes present in the worktree.
 
 2026-10-26 (Chen ERD re-layout; documentation generators only, no schema or runtime change):
 - `venv/Scripts/python.exe backend/scripts/generate_afn_chen_drawio.py` and `backend/scripts/generate_afn_relationship_map.py` ran successfully. Two consecutive generator runs produced byte-identical output (same MD5), and `AFN_ERD_CHEN_PRESENTATION.drawio` equals `ERD_CURRENT.drawio`.
@@ -1352,6 +1363,9 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
 
+- **2026-10-27 landing intro:** the landing page loads underneath the intro, so its own scroll-reveal animations near the top may already have finished when the intro fades. Any new deployment environment must not set `VITE_DISABLE_INTRO` unless the intro should be off. Not yet verified on a real phone.
+- **2026-10-27 sign-in greeting:** recognition is per browser on one device. A new device, private window, or cleared site data shows "Welcome" again; nothing personal is stored, so no name is shown on shared computers.
+
 - **2026-10-26 Chen ERD layout:** entity seats are the fixed `ENTITY_GRID` in `generate_afn_chen_drawio.py`, found by a scratch local search that minimised measured crossings (not committed; the generator itself is deterministic). A new table is seated in the nearest free cell (4 free seats remain), which may add crossings; rerun a placement search if the schema grows. The remaining 211 crossings are mostly the User and Service Ticket hubs' legs and are unavoidable with each entity drawn once. PNG/PDF exports of the ERD must be regenerated from the new `.drawio`.
 
 - **2026-10-23 diagram notes:** the Context Diagram flows were re-routed with no box moved; box positions and the professor-format notation are unchanged. The DFD keeps its eight processes; the new flows reuse existing stores, and a duplicate D2 symbol was added beside 4.0, following the existing D4/D12 duplicates. Diagram exports (PNG/PDF) for the paper must be regenerated from the updated `.drawio` sources. Superseded diagram notes: the earlier "DFD inspection detail gap" in this section is now resolved.
@@ -1495,6 +1509,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
+- 2026-10-27 (committed locally, not pushed or deployed, landing intro and sign-in greeting): new `frontend/src/components/{IntroSplash.jsx,IntroSplash.css}`; `frontend/src/pages/{LandingPage.jsx,Login.jsx}`; `playwright.config.js`; `e2e/{global-setup.js,01-public-pages.spec.js,02-authentication.spec.js}`; and this handoff.
 - 2026-10-26 (uncommitted, ERD re-layout): `backend/scripts/{generate_afn_chen_drawio.py,generate_afn_relationship_map.py}`, `docs/models/{AFN_ERD_CHEN_PRESENTATION.drawio,ERD_CURRENT.drawio,ERD_CURRENT.md,ERD_CURRENT_CONNECTIONS.md,README.md}`, and `docs/academic/final_diagrams/README.md` (also in the 2026-10-23 entry below).
 - 2026-10-23 (uncommitted, documentation only, after `c7d12a2`): `docs/security/{WORKFLOW_STATE_MACHINES.md,ROUTE_API_CAPABILITY_MATRIX.md,SALES_RECORD_CONTRACT.md}`, `docs/quality/MANUAL_END_TO_END_TESTING_PLAYBOOK.md`, `docs/models/{SYSTEM_WORKFLOW_MODEL.md,DATA_FLOW_DIAGRAM.md,AFN_DETAILED_DFD_STRUCTURED.drawio,AFN_ERD.dbml}`, `docs/academic/final_diagrams/{01_CONTEXT_DIAGRAM.drawio,README.md}`, and this handoff.
 - 2026-10-23 (committed and deployed in `d3ed6ac`): `frontend/src/pages/admin/AdminDocuments.jsx` (job-workspace redesign), `e2e/03-admin-workspace.spec.js` (3.9 wording and ticket-loaded signal), `e2e/10-major-flow-journey.spec.js` and `e2e/11-minor-flow-journeys.spec.js` (new quotation action name), and this handoff (UI-to-backend audit, redesign, and validation records).
@@ -2162,6 +2177,16 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-27 (landing intro, user-chosen original "Sun to Panel" at 4 s):
+- **`frontend/src/components/IntroSplash.jsx` + `.css` (new):** full-screen SVG logo animation (sun glides in, beams charge a panel, the panel docks as the F bar, letters and tagline appear) in brand colors, 4 s then a 0.5 s fade; once per tab, skippable, reduced-motion aware, `?intro=play` override, `VITE_DISABLE_INTRO` switch.
+- **`LandingPage.jsx`:** renders the intro on `/` only (not `/solar-calculator`); signed-in users are redirected before the landing page renders, so they never see it.
+- **`playwright.config.js`, `e2e/global-setup.js`:** E2E frontend servers set `VITE_DISABLE_INTRO=true`.
+- **`e2e/01-public-pages.spec.js`:** new test 1.1f.
+
+2026-10-27 (sign-in greeting, at the user's request: "on the log in page ... it always says welcome back"):
+- **`frontend/src/pages/Login.jsx`:** the heading is "Welcome" until this browser completes a sign-in, then "Welcome back". A successful sign-in sets `localStorage.afn_signed_in_before = "1"`; reads and writes are wrapped so blocked storage falls back to "Welcome". `clearStoredAuth` does not remove the flag.
+- **`e2e/02-authentication.spec.js`:** new test 2.8 covers both greetings.
 
 2026-10-26 (Chen ERD re-layout, user-chosen "Rebuild one-page layout"):
 - **`backend/scripts/generate_afn_chen_drawio.py`:** layout rewritten (parsing, `GROUP_ORDER`, `TABLE_ORDER`, labels, and the names imported by the map generator are kept).
