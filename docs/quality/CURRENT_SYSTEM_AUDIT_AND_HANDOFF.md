@@ -1,9 +1,9 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-27 (safe service deactivation release candidate, Documents persistence, sign-in greeting, and landing intro) Asia/Singapore**
-Current objective (latest): **Release the validated combined candidate without allowing a used service definition to be destructively deleted. Admin Services now receives an exact `can_delete` contract covering primary requests, tickets, multi-service request lines, and maintenance schedules; used active services offer a reasoned Deactivate flow, unused services alone offer permanent Delete, and action buttons are single-submit while busy. Historical records remain intact and inactive services are hidden from new requests. The same candidate completes the six-stage Admin Documents persistence work, inspection-photo repair, daytime scheduling policy, landing intro, and sign-in greeting already recorded below. The canonical release gate passes all 621 backend tests with 3 expected skips, a 2,543-module production build, and all 20 public/authentication browser smoke scenarios; the focused real-browser deactivation journey also passes 1/1 without issuing DELETE. Commit, push, Render deployment, and live Aiven-backed readiness verification are the next actions authorized by the user. No schema, migration, dependency, environment, or persistent database changed.**
-Current focused objective: **Document status chips now distinguish draft/submitted/reviewed/finalized/signed states where a canonical record exists and printable-draft-only state where appropriate. Technical Data Sheet round-trips its load, generator, attachment, brownout, power, and client-confirmation fields; Contract normalizes formatted money before its decimal API fields; Turnover retains custom rows and signatures after save/reload. The isolated all-stage E2E journey proved these paths. The local accepted quotation for ticket 626 still has a blank legacy total and remains unchanged; inspection photo and business-hours candidates also remain uncommitted. Details and paths are in sections 8–10 and 13.**
+Last updated: **2026-10-27 (safe service retirement and combined staging deployment) Asia/Singapore**
+Current objective (latest): **Keep the validated combined release healthy after deploying application commit `dc95ae0`. Admin Services now receives an exact `can_delete` contract covering primary requests, tickets, multi-service request lines, and maintenance schedules; used active services offer a reasoned Deactivate flow, unused services alone offer permanent Delete, and action buttons are single-submit while busy. Historical records remain intact and inactive services are hidden from new requests. The same deployed commit completes the six-stage Admin Documents persistence work, inspection-photo repair, daytime scheduling policy, landing intro, sign-in greeting, and diagram refresh recorded below. The canonical release gate passed all 621 backend tests with 3 expected skips, a 2,543-module production build, and all 20 public/authentication browser smoke scenarios; the focused real-browser deactivation journey passed 1/1 without issuing DELETE. `origin/staging-deploy` was fast-forwarded to `dc95ae0`; Render frontend deploy `dep-dbfpbcmc6qcc73ba1dgg` and backend deploy `dep-dbfpbcmc6qcc73ba1djg` are live on that exact commit. Live readiness reports the Aiven database, cache, realtime, and storage dependencies ready, and the guarded staging perimeter passes. No schema, migration, dependency, environment, staging business record, or production system changed.**
+Current focused objective: **Document status chips now distinguish draft/submitted/reviewed/finalized/signed states where a canonical record exists and printable-draft-only state where appropriate. Technical Data Sheet round-trips its load, generator, attachment, brownout, power, and client-confirmation fields; Contract normalizes formatted money before its decimal API fields; Turnover retains custom rows and signatures after save/reload. The isolated all-stage E2E journey proved these paths. The local accepted quotation for ticket 626 still has a blank legacy total and remains unchanged. The inspection-photo and business-hours fixes are deployed in `dc95ae0`; details and paths are in sections 8–10 and 13.**
 Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the inspection-first path, allow guarded same-day continuation on the same ticket with a fresh service dispatch, keep installation inventory out of inspection assignments, and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
 accidental remote-database use, keep every frontend, API, object, and Django-admin
@@ -534,30 +534,30 @@ scan. Read the linked specialist contract only when changing that area. If code
 or configuration disagrees with this file, treat that as documentation drift:
 verify the code, then update this file in the same change.
 
-### Latest pass-on checkpoint (2026-10-26)
+### Latest pass-on checkpoint (2026-10-27)
 
-- **Sign-in greeting (committed 2026-10-27, not pushed or deployed):** the login heading now says "Welcome" on a browser that has never signed in and "Welcome back" after a successful sign-in there (`localStorage` flag `afn_signed_in_before`, not a credential, kept across logout). Only `frontend/src/pages/Login.jsx` and `e2e/02-authentication.spec.js` changed for this; the other uncommitted backend/frontend files belong to the separate Documents/scheduling candidate.
-- **Opening intro (committed 2026-10-27, not pushed or deployed):** the public landing page (`/` only, signed-out visitors) now opens with the user-chosen 4-second "Sun to Panel" logo animation (`IntroSplash`). It plays once per browser tab (`sessionStorage.afn_intro_seen`), is skipped by click, key, or "Skip intro", is not shown when the device asks for reduced motion, and can be replayed with `/?intro=play`. The E2E servers set `VITE_DISABLE_INTRO=true` so existing tests are never blocked; test 1.1f covers it.
-- **Inspection photo upload repair (uncommitted):** inspection evidence uses the
+- **Sign-in greeting (deployed through `dc95ae0`):** the login heading now says "Welcome" on a browser that has never signed in and "Welcome back" after a successful sign-in there (`localStorage` flag `afn_signed_in_before`, not a credential, kept across logout). Only `frontend/src/pages/Login.jsx` and `e2e/02-authentication.spec.js` changed for this feature.
+- **Opening intro (deployed through `dc95ae0`):** the public landing page (`/` only, signed-out visitors) now opens with the user-chosen 4-second "Sun to Panel" logo animation (`IntroSplash`). It plays once per browser tab (`sessionStorage.afn_intro_seen`), is skipped by click, key, or "Skip intro", is not shown when the device asks for reduced motion, and can be replayed with `/?intro=play`. The E2E servers set `VITE_DISABLE_INTRO=true` so existing tests are never blocked; test 1.1f covers it.
+- **Inspection photo upload repair (deployed in `dc95ae0`):** inspection evidence uses the
   browser-generated multipart boundary, accepts signature-valid JPG/PNG/WebP
   despite blank or safe legacy browser MIME metadata, and validates format,
   per-file size, and count before submission. HEIC remains intentionally
   unsupported and the UI tells the technician to convert it. Ticket 626 was
   read only: it remains In Progress with an incomplete checklist and zero proof.
-- **Business-hours scheduling (uncommitted):** new requests and schedule changes
+- **Business-hours scheduling (deployed in `dc95ae0`):** new requests and schedule changes
   offer Morning (8–11), Midday (11–2), and Afternoon (2–5) only. Backend
   validation rejects exact starts before 08:00 or at/after 17:00 and rejects
   Evening across request intake, client/staff rescheduling, inspection approval,
   manual assignment, smart assignment, and unattended auto-dispatch. Existing
   evening rows remain readable but cannot be dispatched until rescheduled.
-- **Documentation and diagram refresh (committed locally in `23abc72`, not pushed or deployed):** the
+- **Documentation and diagram refresh (deployed through `dc95ae0`):** the
   workflow contract, route matrix, sales contract, manual playbook, supporting
   workflow model and DFD, final diagram pack README, the draw.io DFD, and the
   Context Diagram now match the deployed behaviour (quotation revision after a
   decline, Awaiting Materials dispatch, business-day payment dates, the
   dashboard change token, the Documents job workspace). The DBML was
   regenerated with no schema change. See the change ledger.
-- **Chen ERD re-layout (committed locally in `23abc72`, not pushed or deployed):** at the user's request ("ERD
+- **Chen ERD re-layout (deployed through `dc95ae0`):** at the user's request ("ERD
   chen style without line tangled"), `generate_afn_chen_drawio.py` now draws a
   one-page classic Chen ERD in which each diamond sits between its two entities
   and every line has its own track: 0 coincident segments (was 3,195), 0 lines
@@ -629,13 +629,13 @@ other repository path must include this living handoff file.
 | Item | Current state |
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
-| Branch | `feature/analytics-decision-workspace`; no same-named remote branch was present at this checkpoint |
-| HEAD | `23abc72 Refresh documents and untangle the diagrams` (documentation/generator output only); parent `c7d12a2` records the Documents deployment, while application staging runtimes remain frontend `d3ed6ac` and backend `5f1fcd9` |
+| Branch | `feature/analytics-decision-workspace`; releases are pushed to `origin/staging-deploy` |
+| HEAD | Application release commit `dc95ae0 Complete document workflows and safe service retirement`; this handoff-only follow-up is the next commit |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | Rechecked locally on 2026-10-26: `origin/staging-deploy` points to `c7d12a2`; local HEAD `23abc72` is one documentation-only commit ahead and has not been pushed or deployed |
-| Worktree | Dirty by design with the uncommitted business-hours scheduling candidate listed in section 10; no unrelated path was removed or overwritten |
+| Remote comparison | Rechecked locally on 2026-10-27: `origin/staging-deploy` and application HEAD both point to `dc95ae0` before this required handoff-only follow-up |
+| Worktree | Application paths are clean after `dc95ae0`; only this required deployment-evidence handoff update is pending |
 | Tracked deletions | None |
-| Commit/push status | Staging remains verified through the frontend runtime `d3ed6ac` / backend runtime `5f1fcd9`. Local `23abc72` and the current business-hours changes are not pushed or deployed. Production was not accessed or changed. |
+| Commit/push status | `dc95ae0` was pushed to `origin/staging-deploy`. Render frontend deploy `dep-dbfpbcmc6qcc73ba1dgg` and backend deploy `dep-dbfpbcmc6qcc73ba1djg` are live on that exact commit; production was not accessed or changed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -952,54 +952,57 @@ deployment authorization.
 
 ## 8. Validation ledger
 
-2026-10-27 (safe service deactivation release candidate):
+2026-10-27 (safe service deactivation release and staging deployment):
 - `venv\Scripts\python.exe backend\manage.py test services.test_service_catalog_capabilities --noinput --verbosity 1` passed 6/6, including exact staff-only deletion eligibility, used-service DELETE refusal, successful history-preserving deactivation, and unused-service permanent deletion.
 - `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3\\.7c"` passed 1/1 on isolated E2E SQLite. It selected a real active used service, proved the card offered Deactivate and no Delete control, confirmed the warning, observed a successful PUT (not DELETE), and verified the service remained visible as Inactive with preserved-history feedback.
-- `npm.cmd --prefix frontend run build` passed with 2,541 transformed modules, and `venv\Scripts\python.exe backend\manage.py check` reported no issues. The expected Vite WebSocket `ECONNABORTED` teardown messages did not fail the browser scenario. Full release-gate and deployment evidence will be appended only after those commands run.
-- The first full `npm.cmd run quality` attempt stopped at 620 pass/1 fail (3 skips): the same-day installation regression derived its test appointment as wall-clock now plus one hour and, when run after midnight, produced a pre-08:00 time correctly rejected by the business-hours policy. The test now freezes the view's local clock at 09:00 and submits 10:00, making its intended future same-day scenario deterministic. This is a test correction, not a runtime scheduling change; the superseding full-gate result must be recorded after rerun.
+- `npm.cmd --prefix frontend run build` passed with 2,541 transformed modules, and `venv\Scripts\python.exe backend\manage.py check` reported no issues. The expected Vite WebSocket `ECONNABORTED` teardown messages did not fail the browser scenario.
+- The first full `npm.cmd run quality` attempt stopped at 620 pass/1 fail (3 skips): the same-day installation regression derived its test appointment as wall-clock now plus one hour and, when run after midnight, produced a pre-08:00 time correctly rejected by the business-hours policy. The test now freezes the view's local clock at 09:00 and submits 10:00, making its intended future same-day scenario deterministic. This is a test correction, not a runtime scheduling change; the superseding result is the passing full gate below.
 - The superseding `npm.cmd run quality` passed completely: Django check, Python dependency integrity, migration drift (`No changes detected`), all 621 backend tests with 3 expected skips, the 2,543-module Vite production build, and all 20 public/authentication browser smoke scenarios in 3.0 minutes. Expected negative-path API logs and Vite WebSocket teardown messages were exercised/non-failing test behavior. Tests used disposable databases; no persistent development, staging, or production data was changed.
+- `git diff --check` passed with no output, and the release secret-pattern scan returned no matches.
+- Commit `dc95ae0` was pushed fast-forward to `origin/staging-deploy`. Render frontend deploy `dep-dbfpbcmc6qcc73ba1dgg` and backend deploy `dep-dbfpbcmc6qcc73ba1djg` both reached `live` on exact commit `dc95ae098d2469f355c4277d19972ec74af08e2a`.
+- Live backend readiness returned HTTP 200 with database, cache, realtime, and storage all `ready`; the frontend root and generated entry asset returned HTTP 200. The deployed Admin Services chunk contains the new `Deactivate service?` and `Delete unused service?` flows. The guarded read-only staging perimeter passed HTTPS, dependency readiness, security headers, CORS, anonymous-access, and TRACE checks. No staging business record was mutated, and production was untouched.
 
 2026-10-27 (landing intro):
 - `npx playwright test e2e/01-public-pages.spec.js` on the isolated E2E database: 12/12 passed, including new test 1.1f (`/?intro=play` shows the intro, "Skip intro" removes it, it ends on its own within 8 s, and a plain `/` visit on the E2E server shows none).
 - A temporary Vite dev server without `VITE_DISABLE_INTRO` was driven in headless Chromium: the intro rendered with no page errors, its final frame showed the complete logo, it was gone after 5 s, a fresh tab showed it, and a reload of that tab did not. The server was stopped afterwards.
-- `npm --prefix frontend run build`: 2,543 modules transformed, built successfully (includes the other session's uncommitted frontend changes).
+- `npm --prefix frontend run build`: 2,543 modules transformed, built successfully (included the then-concurrent frontend changes later deployed through `dc95ae0`).
 
 2026-10-27 (sign-in greeting):
 - `npx playwright test e2e/02-authentication.spec.js` on the isolated E2E database: 8/8 passed, including new test 2.8 (fresh browser shows "Welcome"; after a client sign-in and sign-out the login page shows "Welcome back"). The first run failed only because the new test's `h1:visible` selector also matched the login side panel heading; the selector was narrowed and the suite rerun.
-- `npm --prefix frontend run build`: 2,541 modules transformed, built successfully. This build includes the other session's uncommitted Documents/scheduling frontend changes present in the worktree.
+- `npm --prefix frontend run build`: 2,541 modules transformed, built successfully. This build included the then-uncommitted Documents/scheduling frontend changes later deployed in `dc95ae0`.
 
-2026-10-26 (complete Documents workflow persistence audit; current combined uncommitted candidate):
+2026-10-26 (complete Documents workflow persistence audit; deployed in `dc95ae0`):
 - `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3\\.9"` passed 2/2 on isolated E2E SQLite. Scenario 3.9 retained the inventory-priced quotation calculate/save/reload proof. New scenario 3.9b selected one real ticket; edited and saved Technical Data Sheet, Installation Contract, Solar Commissioning, Turnover, and Field Service Report through their real APIs; reloaded the browser; reselected the same ticket; and verified every edited value returned. Two earlier 3.9b attempts failed only because the test searched for a mock-era fixed ticket ID that does not exist in a freshly seeded real E2E database; the final test dynamically selects and reuses an actual ticket.
 - `npm.cmd run test:e2e -- e2e/10-major-flow-journey.spec.js --grep "10.2"` passed 1/1 in 1.5 minutes of test time, covering inspection, priced quotation plus printable snapshot, client acceptance, deposit, service dispatch/work/completion, two-step turnover document finalization, client confirmation, and confirmed Sales Record across roles.
 - `npm.cmd --prefix frontend run build` passed with 2,541 transformed modules. `venv\\Scripts\\python.exe backend\\manage.py check` reported no issues, and `venv\\Scripts\\python.exe backend\\manage.py makemigrations --check --dry-run` reported `No changes detected`.
 - `venv\Scripts\python.exe backend\manage.py test services.tests.test_project_handover_action --noinput --verbosity 1` passed 1/1 after adding the secure generated-document relationship assertion. The final `venv\Scripts\python.exe backend\manage.py test --noinput --verbosity 1` passed all 619 tests with 3 expected skips after the backend linkage change.
 - A final rerun of the same major-flow command after the server-side turnover-linkage change passed 1/1 in 1.5 minutes of test time (2.5 minutes including isolated setup), proving the exact final candidate through client confirmation and the confirmed Sales Record.
 - After the final code and handoff update, Django `check` again reported no issues, `makemigrations --check --dry-run` again reported `No changes detected`, and `git diff --check` passed with no output.
-- Browser and Django runs used disposable databases. WebSocket `ECONNABORTED` messages were non-failing Vite development-proxy teardown/navigation noise. No persistent development, staging, or production data was changed; no deployment, commit, or push ran.
+- Browser and Django runs used disposable databases. WebSocket `ECONNABORTED` messages were non-failing Vite development-proxy teardown/navigation noise. No persistent development, staging, or production data was changed during validation; this candidate was later committed, pushed, and deployed in `dc95ae0` as recorded above.
 
-2026-10-26 (quotation inventory pricing and document-load race; current combined uncommitted candidate):
+2026-10-26 (quotation inventory pricing and document-load race; deployed in `dc95ae0`):
 - `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.9"` finally passed 1/1 on isolated E2E SQLite. It created a priced catalog item when the seed had none, selected it in the first BOM row, verified unit/unit-price/quantity/line-total/quotation-total calculation, asserted the exact POST payload, reloaded the page, and verified the saved values returned from the API/database. Earlier runs failed on the stale POST payload and exposed that the editor accepted input while prefill/draft requests were still pending; the new loading boundary closed that race.
 - `npm.cmd run test:e2e -- e2e/10-major-flow-journey.spec.js --grep "10.2"` passed 1/1 in 2.4 minutes, covering inspection, quotation, deposit, service, turnover, and sale across roles with the current photo-input and quotation contracts. Vite's page-transition WebSocket `ECONNABORTED` messages were non-failing development-proxy noise.
 - `venv\Scripts\python.exe backend\manage.py test services.tests.test_business_flow_controls.QuotationAcceptanceTests services.test_document_capabilities --noinput --verbosity 1` passed 14/14 after the existing acceptance fixture was given a valid positive total.
 - `venv\Scripts\python.exe backend\manage.py test --noinput --verbosity 1` passed all 619 tests with 3 expected skips. The immediately preceding full run found one stale zero-total quotation acceptance fixture (618 pass/1 fail); updating only that fixture to satisfy the new invariant produced this clean superseding run.
 - `npm.cmd --prefix frontend run build` passed with 2,541 transformed modules. `venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run` reported `No changes detected`. `git diff --check` passed with no output.
-- All browser and Django tests used disposable databases. Ticket 626 and its accepted legacy blank-total quotation were inspected read-only; no persistent development, staging, or production data was changed. No deployment, commit, or push was run.
+- All browser and Django tests used disposable databases. Ticket 626 and its accepted legacy blank-total quotation were inspected read-only; no persistent development, staging, or production data was changed during validation. The candidate was later deployed in `dc95ae0`.
 
-2026-10-26 (inspection photo-upload repair; current combined uncommitted candidate):
+2026-10-26 (inspection photo-upload repair; deployed in `dc95ae0`):
 - `venv\Scripts\python.exe backend\manage.py test services.tests.test_scheduling_warranty_and_assignment.SchedulingWarrantyAndAssignmentTests.test_inspection_photo_endpoint_accepts_safe_legacy_png_mime --noinput --verbosity 1` passed 1/1 against the exact `upload_photos` route, which returned HTTP 200 for a signature-valid PNG declared as legacy `image/x-png`.
 - `venv\Scripts\python.exe backend\manage.py test services.tests.test_scheduling_warranty_and_assignment --noinput --verbosity 0` passed 60/60.
 - `venv\Scripts\python.exe backend\manage.py test --noinput --verbosity 0` passed all 617 tests with 3 expected skips. This supersedes the 616-test result below for the combined code candidate.
 - `npm.cmd --prefix frontend run build` passed with 2,541 transformed modules.
 - `npx.cmd playwright test e2e/04-technician-workspace.spec.js --grep "4.6 - Inspection Checklist form" --reporter=line` passed 1/1 in 1.8 minutes on isolated E2E SQLite. The real browser flow returned HTTP 201 for checklist creation, HTTP 200 for the exact photo-upload endpoint, and HTTP 200 for completion. Vite emitted expected page/server-transition WebSocket `ECONNABORTED` warnings; they did not fail the test.
 - A read-only local query found ticket 626 is an In Progress inspection assigned to technician 37, has an existing checklist, and has zero proof records. No persistent data was changed.
-- After the documentation update, `venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run` reported `No changes detected`; `git diff --check` passed with no output; and `git status --short --branch` confirmed the expected inspection-upload and business-hours candidate paths plus this handoff. No persistent development, staging, or production database was migrated or modified, and no deployment, commit, or push was run.
+- After the documentation update, `venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run` reported `No changes detected`; `git diff --check` passed with no output; and `git status --short --branch` confirmed the expected inspection-upload and business-hours candidate paths plus this handoff. No persistent development, staging, or production database was migrated or modified during validation; the repair was later deployed in `dc95ae0`.
 
-2026-10-26 (business-hours scheduling policy; current uncommitted candidate):
+2026-10-26 (business-hours scheduling policy; deployed in `dc95ae0`):
 - After the final generic-ticket serializer guard, the same focused Django command passed 74/74 and the full Django command passed 616 tests with 3 expected skips. These results are superseded by the later 617-test combined-candidate run above.
 - Before the final generic-ticket serializer guard, `venv\Scripts\python.exe backend\manage.py test services.tests.test_scheduling_warranty_and_assignment services.tests.test_service_request_ticket_lifecycle --noinput --verbosity 1` passed 73/73, and `venv\Scripts\python.exe backend\manage.py test --noinput --verbosity 0` passed all 615 tests with 3 expected skips. These results are now stale for the later two-path serializer/test edit and must be superseded by the reruns recorded above this entry; the negative-path warning/error logs were exercised test outcomes, not suite failures.
 - `npm.cmd --prefix frontend run build` passed with 2,541 transformed modules.
 - `venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run` reported `No changes detected`; `git diff --check` passed with no output.
-- Tests used Django's disposable test database. No persistent development, staging, or production database was migrated or modified. No browser test, deployment, commit, or push was run for this candidate.
+- Tests used Django's disposable test database. No persistent development, staging, or production database was migrated or modified. The candidate was later deployed in `dc95ae0` after the superseding full gate above.
 
 2026-10-26 (Chen ERD re-layout; documentation generators only, no schema or runtime change):
 - `venv/Scripts/python.exe backend/scripts/generate_afn_chen_drawio.py` and `backend/scripts/generate_afn_relationship_map.py` ran successfully. Two consecutive generator runs produced byte-identical output (same MD5), and `AFN_ERD_CHEN_PRESENTATION.drawio` equals `ERD_CURRENT.drawio`.
@@ -1599,7 +1602,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 - “Terminate” is deliberate operator wording for a client backout, but the persisted canonical lifecycle state remains `Cancelled`; records are retained rather than deleted. The UI permits the action only from statuses already accepted by the server transition map.
 
-- **Mitigated 2026-10-23 (committed locally, not yet deployed):** role dashboards keep the visible 5-second cadence but now poll `/api/dashboard/changes/` (2 queries, about 3 ms, 36 bytes measured) and reload the full dashboard (admin: 41 queries, about 200 ms, 30 KB) only when the change token moves, at most about once a minute when idle. The original risk text follows. Reducing visible dashboard and disconnected-notification recovery polling from 25 to 5 seconds makes each active loop run five times as often (up to 12 polls per minute). This cadence is now deployed to staging. Hidden tabs remain paused and a connected notification WebSocket still suppresses recovery requests until its 120-second safety boundary, but role-dashboard API/database load can rise materially with concurrent users; monitor latency, database utilization, and 429/5xx rates and restore a 15-25-second cadence if capacity is insufficient.
+- **Mitigated 2026-10-23 (deployed to staging):** role dashboards keep the visible 5-second cadence but now poll `/api/dashboard/changes/` (2 queries, about 3 ms, 36 bytes measured) and reload the full dashboard (admin: 41 queries, about 200 ms, 30 KB) only when the change token moves, at most about once a minute when idle. The original risk text follows. Reducing visible dashboard and disconnected-notification recovery polling from 25 to 5 seconds makes each active loop run five times as often (up to 12 polls per minute). Hidden tabs remain paused and a connected notification WebSocket still suppresses recovery requests until its 120-second safety boundary, but role-dashboard API/database load can rise materially with concurrent users; monitor latency, database utilization, and 429/5xx rates and restore a 15-25-second cadence if capacity is insufficient.
 
 - The compact User Management profile editor and opaque notification-card correction have production-build evidence but have not yet received an authenticated browser screenshot review at desktop and phone widths.
 
@@ -1670,7 +1673,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
-- 2026-10-27 (uncommitted safe service deactivation):
+- 2026-10-27 (committed and deployed in `dc95ae0`, safe service deactivation):
   `backend/services/{serializers/requests.py,views/service_types.py,test_service_catalog_capabilities.py}`
   and `backend/users/views/admin_services.py` align exact protected-reference
   counts, staff-only `can_delete`, both catalog delete guards, and API
@@ -1681,8 +1684,8 @@ Python code on 8000/5174. Restart a development server after backend changes.
   contract and evidence. No schema, migration, dependency, environment, or
   persistent-data change.
 
-- 2026-10-27 (committed locally, not pushed or deployed, landing intro and sign-in greeting): new `frontend/src/components/{IntroSplash.jsx,IntroSplash.css}`; `frontend/src/pages/{LandingPage.jsx,Login.jsx}`; `playwright.config.js`; `e2e/{global-setup.js,01-public-pages.spec.js,02-authentication.spec.js}`; and this handoff.
-- 2026-10-26 (uncommitted complete Documents persistence and workflow repair):
+- 2026-10-27 (committed in `30c8253` and deployed through `dc95ae0`, landing intro and sign-in greeting): new `frontend/src/components/{IntroSplash.jsx,IntroSplash.css}`; `frontend/src/pages/{LandingPage.jsx,Login.jsx}`; `playwright.config.js`; `e2e/{global-setup.js,01-public-pages.spec.js,02-authentication.spec.js}`; and this handoff.
+- 2026-10-26 (committed and deployed in `dc95ae0`, complete Documents persistence and workflow repair):
   `frontend/src/pages/admin/{AdminDocuments.jsx,adminDocumentsBuilders.js}`
   (canonical-plus-printable saves, full TDS round-trip, decimal normalization,
   async response guards, terminal locking, honest status chips, and preserved
@@ -1692,7 +1695,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
   regression), `e2e/03-admin-workspace.spec.js` (all six stages, API storage,
   reload, and restored-value proof), and this handoff. It adds no schema,
   migration, route, dependency, environment, or persistent-data change.
-- 2026-10-26 (uncommitted quotation catalog pricing and draft-race repair):
+- 2026-10-26 (committed and deployed in `dc95ae0`, quotation catalog pricing and draft-race repair):
   `frontend/src/pages/admin/{AdminDocuments.jsx,adminDocumentsBuilders.js}`
   (catalog matching/snapshots, calculations, positive-total guard, latest-state
   draft serialization, load-safe editor),
@@ -1702,8 +1705,8 @@ Python code on 8000/5174. Restart a development server after backend changes.
   (regressions and valid fixture), `e2e/03-admin-workspace.spec.js` (real
   calculate/save/reload path), `e2e/10-major-flow-journey.spec.js` (current
   photo-input selector), and this handoff. No schema, migration, route,
-  dependency, environment, persistent-data, deployment, commit, or push change.
-- 2026-10-26 (uncommitted inspection photo-upload repair):
+  dependency, environment, or persistent-data change.
+- 2026-10-26 (committed and deployed in `dc95ae0`, inspection photo-upload repair):
   `backend/afn_service_management/upload_validation.py` (safe legacy image MIME
   aliases), `backend/services/views/helpers.py` (signature-first inspection
   image validation),
@@ -1713,16 +1716,16 @@ Python code on 8000/5174. Restart a development server after backend changes.
   `frontend/src/pages/technician/TechnicianInspectionChecklist.jsx` (explicit
   formats, 10 MB/20-file preflight, nearby API error),
   `e2e/04-technician-workspace.spec.js` (explicit accept-selector contract), and
-  this handoff. No schema, migration, route, dependency, environment,
-  persistent-data, deployment, commit, or push change.
-- 2026-10-26 (uncommitted business-hours scheduling): new `backend/services/scheduling_policy.py`; `backend/services/{auto_dispatch.py,serializers/{requests.py,tickets.py},views/tickets.py,tests/{test_scheduling_warranty_and_assignment.py,test_service_request_ticket_lifecycle.py}}`; `frontend/src/components/shared/{InspectionReviewModal.jsx,RescheduleTicketModal.jsx,WalkInRequestDialog.jsx}`; `frontend/src/pages/admin/AdminServiceTickets.jsx`; `frontend/src/pages/client/{ClientRequestDetail.jsx,ClientServiceRequests.jsx}`; and this handoff. No schema, migration, route, dependency, environment, persistent-data, deployment, commit, or push change.
-- 2026-10-26 (committed locally in `23abc72`, not pushed or deployed, ERD re-layout): `backend/scripts/{generate_afn_chen_drawio.py,generate_afn_relationship_map.py}`, `docs/models/{AFN_ERD_CHEN_PRESENTATION.drawio,ERD_CURRENT.drawio,ERD_CURRENT.md,ERD_CURRENT_CONNECTIONS.md,README.md}`, and `docs/academic/final_diagrams/README.md` (also in the 2026-10-23 entry below).
-- 2026-10-23 (committed locally in `23abc72`, not pushed or deployed, documentation only): `docs/security/{WORKFLOW_STATE_MACHINES.md,ROUTE_API_CAPABILITY_MATRIX.md,SALES_RECORD_CONTRACT.md}`, `docs/quality/MANUAL_END_TO_END_TESTING_PLAYBOOK.md`, `docs/models/{SYSTEM_WORKFLOW_MODEL.md,DATA_FLOW_DIAGRAM.md,AFN_DETAILED_DFD_STRUCTURED.drawio,AFN_ERD.dbml}`, `docs/academic/final_diagrams/{01_CONTEXT_DIAGRAM.drawio,README.md}`, and this handoff.
+  this handoff. No schema, migration, route, dependency, environment, or
+  persistent-data change.
+- 2026-10-26 (committed and deployed in `dc95ae0`, business-hours scheduling): new `backend/services/scheduling_policy.py`; `backend/services/{auto_dispatch.py,serializers/{requests.py,tickets.py},views/tickets.py,tests/{test_scheduling_warranty_and_assignment.py,test_service_request_ticket_lifecycle.py}}`; `frontend/src/components/shared/{InspectionReviewModal.jsx,RescheduleTicketModal.jsx,WalkInRequestDialog.jsx}`; `frontend/src/pages/admin/AdminServiceTickets.jsx`; `frontend/src/pages/client/{ClientRequestDetail.jsx,ClientServiceRequests.jsx}`; and this handoff. No schema, migration, route, dependency, environment, or persistent-data change.
+- 2026-10-26 (committed in `23abc72` and deployed through `dc95ae0`, ERD re-layout): `backend/scripts/{generate_afn_chen_drawio.py,generate_afn_relationship_map.py}`, `docs/models/{AFN_ERD_CHEN_PRESENTATION.drawio,ERD_CURRENT.drawio,ERD_CURRENT.md,ERD_CURRENT_CONNECTIONS.md,README.md}`, and `docs/academic/final_diagrams/README.md` (also in the 2026-10-23 entry below).
+- 2026-10-23 (committed in `23abc72` and deployed through `dc95ae0`, documentation only): `docs/security/{WORKFLOW_STATE_MACHINES.md,ROUTE_API_CAPABILITY_MATRIX.md,SALES_RECORD_CONTRACT.md}`, `docs/quality/MANUAL_END_TO_END_TESTING_PLAYBOOK.md`, `docs/models/{SYSTEM_WORKFLOW_MODEL.md,DATA_FLOW_DIAGRAM.md,AFN_DETAILED_DFD_STRUCTURED.drawio,AFN_ERD.dbml}`, `docs/academic/final_diagrams/{01_CONTEXT_DIAGRAM.drawio,README.md}`, and this handoff.
 - 2026-10-23 (committed and deployed in `d3ed6ac`): `frontend/src/pages/admin/AdminDocuments.jsx` (job-workspace redesign), `e2e/03-admin-workspace.spec.js` (3.9 wording and ticket-loaded signal), `e2e/10-major-flow-journey.spec.js` and `e2e/11-minor-flow-journeys.spec.js` (new quotation action name), and this handoff (UI-to-backend audit, redesign, and validation records).
 - 2026-10-23 (committed in "Speed up dashboards and fix minor-flow defects found by UI journeys"), minor flows: `backend/services/serializers/commercial_records.py` (declined-quotation revision), `backend/services/views/tickets.py` (service dispatch after a completed inspection), `backend/afn_service_management/settings_e2e.py` (E2E-only request throttle), new `backend/services/business_time.py`, `backend/users/serializers.py` (project date), new `backend/services/tests/test_business_day.py`, `backend/services/tests/test_business_flow_controls.py` (future date on the business day), new `backend/services/tests/test_quotation_revision.py`, `backend/services/tests/test_end_to_end_journeys.py` (awaiting-materials dispatch), `frontend/src/api/core.js` (`ticketType`, `inspectionCompleted`), `frontend/src/pages/admin/AdminDispatchBoard.jsx` (stage decision, alert role, 8-second refusal), `frontend/src/components/ui/StatusBadge.jsx`, `frontend/src/components/sales/QuotationDepositPanel.jsx`, `frontend/src/components/shared/RescheduleTicketModal.jsx`, `frontend/src/pages/technician/TechnicianJobs.jsx` (equipment list closes), `frontend/src/pages/client/ClientRequestDetail.jsx` (named rating stars; reloads keep unsaved rating/reschedule input), `frontend/src/pages/admin/AdminServiceTickets.jsx` (linked ticket opens once), `e2e/04-technician-workspace.spec.js` (4.5 selects the seeded ticket), new `e2e/11-minor-flow-journeys.spec.js`.
 - 2026-10-23 (committed in "Speed up dashboards and fix minor-flow defects found by UI journeys"): `backend/services/views_dashboard.py` (`DashboardChangesView`), `backend/api/urls.py` (`dashboard/changes/`), new `backend/services/tests/test_dashboard_changes.py`, new `frontend/src/utils/dashboardRefresh.js`, `frontend/src/api/services.js` (`fetchDashboardChanges`), `frontend/src/pages/{admin/AdminDashboard.jsx,client/ClientDashboard.jsx,technician/TechnicianDashboard.jsx}`, `frontend/src/pages/admin/AdminDocuments.jsx` (`resolveSelectedClientId`), `e2e/03-admin-workspace.spec.js` (3.1 change-token reload), `e2e/10-major-flow-journey.spec.js` (10.2), and this handoff.
 
-- No application work remains uncommitted. The paths below describe the release now deployed through frontend runtime `d3ed6ac` and backend runtime `5f1fcd9` and are retained as its manifest. This deployment-evidence update to the living handoff is the only subsequent path before its own documentation commit.
+- No application work remains uncommitted. The paths below describe earlier releases and are retained as their historical manifests. The current combined frontend/backend runtime is application commit `dc95ae0`; this deployment-evidence update to the living handoff is the only subsequent path before its own documentation commit.
 
 - Post-review defect remediation (committed in `09fe7cb`) touches `backend/services/{models/core.py,serializers/requests.py,views/{helpers.py,service_requests.py,technician.py,tickets.py},tests/{proof_fixtures.py (new),test_end_to_end_journeys.py,test_maintenance_workflow.py,test_scheduling_warranty_and_assignment.py,test_service_request_ticket_lifecycle.py}}`, `backend/{api/tests.py,inventory/tests.py}`, `backend/users/views/admin_users.py`, `frontend/src/{components/LandingLocationMap.jsx,hooks/useTechnicianJobs.js,pages/{LandingPage.jsx,technician/TechnicianMapNavigation.jsx}}`, `e2e/{01-public-pages.spec.js,04-technician-workspace.spec.js}`, `docs/security/{AUTHENTICATION_ACCOUNT_SECURITY_CONTRACT.md,WORKFLOW_STATE_MACHINES.md}`, and this handoff. This entry supersedes the older Audit fixes description below where it says completion URL references are kept: new completion submissions now reject every caller-supplied reference. It adds no model field, migration, route, dependency, or environment variable.
 
@@ -2384,7 +2387,7 @@ All paths below are preserved work, not cleanup candidates.
 
 ## 13. Change ledger
 
-2026-10-27 (safe service deactivation, uncommitted release candidate):
+2026-10-27 (safe service deactivation, committed and deployed in `dc95ae0`):
 - Added one server-derived `can_delete` contract using every reference already
   protected by the catalog delete boundary: primary requests, tickets,
   multi-service request lines, and maintenance schedules. Both catalog DELETE
@@ -2396,10 +2399,9 @@ All paths below are preserved work, not cleanup candidates.
   repeated clicks cannot generate duplicate requests.
 - Added focused API regressions for used and unused records plus a real-browser
   regression proving deactivation uses PUT, not DELETE, and leaves the row
-  visible as Inactive. Initial evidence is the first section 8 entry; the full
-  release gate and deployment evidence are pending the authorized run. No
-  schema, migration, dependency, environment, persistent database, commit,
-  push, or deployment change has occurred at this checkpoint.
+  visible as Inactive. The full release and deployment evidence is in the first
+  section 8 entry. No schema, migration, dependency, environment, persistent
+  database, staging business-data, or production change occurred.
 
 2026-10-27 (landing intro, user-chosen original "Sun to Panel" at 4 s):
 - **`frontend/src/components/IntroSplash.jsx` + `.css` (new):** full-screen SVG logo animation (sun glides in, beams charge a panel, the panel docks as the F bar, letters and tagline appear) in brand colors, 4 s then a 0.5 s fade; once per tab, skippable, reduced-motion aware, `?intro=play` override, `VITE_DISABLE_INTRO` switch.
@@ -2411,7 +2413,7 @@ All paths below are preserved work, not cleanup candidates.
 - **`frontend/src/pages/Login.jsx`:** the heading is "Welcome" until this browser completes a sign-in, then "Welcome back". A successful sign-in sets `localStorage.afn_signed_in_before = "1"`; reads and writes are wrapped so blocked storage falls back to "Welcome". `clearStoredAuth` does not remove the flag.
 - **`e2e/02-authentication.spec.js`:** new test 2.8 covers both greetings.
 
-2026-10-26 (complete Documents persistence and workflow repair, uncommitted):
+2026-10-26 (complete Documents persistence and workflow repair, deployed in `dc95ae0`):
 - Added real Technical Data Sheet saving and complete canonical field
   round-tripping; Quotation, TDS, and Contract now preserve their full printable
   snapshot as well as their narrower workflow records.
@@ -2428,27 +2430,27 @@ All paths below are preserved work, not cleanup candidates.
   finalized records while keeping them viewable and printable.
 - Added backend relationship proof and a real-browser all-stage edit, save,
   reload, and value-restoration journey. Validation is the first entry in
-  section 8. No schema, migration, route, dependency, environment, persistent
-  database, deployment, commit, or push changed.
+  section 8. No schema, migration, route, dependency, environment, or persistent
+  database changed.
 
-2026-10-26 (quotation catalog pricing and document-load race, uncommitted):
+2026-10-26 (quotation catalog pricing and document-load race, deployed in `dc95ae0`):
 - Replaced description-only quotation prefill with unique normalized inventory name/SKU (or unambiguous name-token) selection that snapshots item identity, unit, and price; quantity now calculates the read-only row amount and aggregated quotation total.
 - Preserved BOM and price snapshots from saved quotation records and document drafts, including across a real save/reload browser cycle. Existing non-draft records are not silently repriced from today's catalog.
 - Prevented users from editing the document paper while ticket prefill or saved-draft lookup can still replace its state, and made draft/send actions serialize the latest synchronous quotation form.
 - Required a positive total when staff sends a quotation and when a client accepts a legacy Sent quotation. Manual positive lump-sum quotations remain supported; blank placeholder rows do not trigger false pricing errors.
-- Updated backend and browser regressions, including the major-flow upload selector. Final validation is the first entry in section 8. No schema, migration, route, dependency, environment, persistent database, deployment, commit, or push changed.
+- Updated backend and browser regressions, including the major-flow upload selector. Final validation is the first entry in section 8. No schema, migration, route, dependency, environment, or persistent database changed.
 
-2026-10-26 (inspection photo-upload repair, uncommitted):
+2026-10-26 (inspection photo-upload repair, deployed in `dc95ae0`):
 - Removed the manually supplied multipart `Content-Type` from inspection photo submissions so Axios/the browser adds the boundary required by Django's parser.
 - Aligned UI and API validation on signature-valid JPG/JPEG, PNG, and WebP evidence, at most 10 MB per file and 20 files. Safe legacy MIME aliases are normalized, while HEIC/HEIF, spoofed content, and unsupported files remain rejected with an actionable message next to the photo control.
-- Added an exact endpoint regression and updated the browser selector; the real inspection flow proved create/upload/complete responses of 201/200/200. Ticket 626 was inspected read-only and remains retryable. Affected paths are the first item in section 10 and validation is the first entry in section 8. No schema, migration, route, dependency, environment, persistent database, deployment, commit, or push changed.
+- Added an exact endpoint regression and updated the browser selector; the real inspection flow proved create/upload/complete responses of 201/200/200. Ticket 626 was inspected read-only and remains retryable. Affected paths are the first item in section 10 and validation is the first entry in section 8. No schema, migration, route, dependency, environment, or persistent database changed.
 
-2026-10-26 (business-hours scheduling, uncommitted):
+2026-10-26 (business-hours scheduling, deployed in `dc95ae0`):
 - Added `backend/services/scheduling_policy.py` as the shared no-night-service policy: Morning/Midday/Afternoon are bookable and exact starts must be at least 08:00 and earlier than 17:00.
 - Enforced the rule in service-request validation, generic ticket serialization, client and staff rescheduling, inspection-to-installation approval, manual technician assignment, Find Best Match, and unattended auto-dispatch. Legacy Evening rows remain readable but are blocked from dispatch until rescheduled.
 - Removed Evening from client request, client reschedule, admin walk-in, and staff reschedule controls; added explicit business-hour labels, exact-time bounds, and immediate UI error copy.
 - Updated the daytime reschedule regression and added API regressions for each after-hours bypass. No model choice was deleted, so there is no migration and no historical data rewrite.
-- Affected paths are the first item in section 10. Validation is the first entry in section 8. No persistent database, deployment, commit, or push changed.
+- Affected paths are the first item in section 10. Validation is the first entry in section 8. No persistent database changed.
 
 2026-10-26 (Chen ERD re-layout, user-chosen "Rebuild one-page layout"):
 - **`backend/scripts/generate_afn_chen_drawio.py`:** layout rewritten (parsing, `GROUP_ORDER`, `TABLE_ORDER`, labels, and the names imported by the map generator are kept).
