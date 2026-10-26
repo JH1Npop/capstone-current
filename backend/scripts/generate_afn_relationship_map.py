@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-
 from generate_afn_chen_drawio import (
     DBML_PATH,
     FIELD_RE,
     GROUP_ORDER,
     TABLE_ORDER,
     TABLE_RE,
+    cardinality,
+    ordered_relationships,
     parse_dbml,
     relationship_title,
 )
@@ -114,46 +114,29 @@ def parse_columns(source: str) -> dict[str, list[tuple[str, str, str]]]:
 
 
 def relationship_lines(relationships: list) -> list[str]:
-    """Format all relationships by domain in the requested readable notation."""
+    """Format all relationships by domain; each R### code is the matching Chen ERD diamond."""
     group_by_table = {
         table_name: group_name
         for group_name in GROUP_ORDER
         for table_name in TABLE_ORDER[group_name]
     }
-    grouped = defaultdict(list)
-    for relationship in relationships:
-        grouped[group_by_table[relationship.source_table]].append(relationship)
+    numbered = list(enumerate(ordered_relationships(relationships), start=1))
 
     lines: list[str] = []
-    relationship_number = 1
     for group_name in GROUP_ORDER:
         lines.extend((f"### {group_name}", ""))
-        ordered = sorted(
-            grouped[group_name],
-            key=lambda relationship: (
-                entity_name(relationship.source_table),
-                relationship.source_field,
-                entity_name(relationship.target_table),
-            ),
-        )
-        for relationship in ordered:
-            source_cardinality = (
-                "0..1"
-                if relationship.one_to_one and relationship.optional
-                else "1"
-                if relationship.one_to_one
-                else "N"
-            )
+        for relationship_number, relationship in numbered:
+            if group_by_table[relationship.source_table] != group_name:
+                continue
             lines.append(
-                f"{relationship_number}. "
+                f"- **R{relationship_number:03d}** "
                 f"({entity_name(relationship.source_table)}) "
-                f"---- {source_cardinality} ---- "
+                f"---- {cardinality(relationship)} ---- "
                 f"{relationship_title(relationship.source_field)} "
                 f"---- 1 ---- "
                 f"({entity_name(relationship.target_table)})  "
                 f"[`{relationship.source_field}` -> `{relationship.target_field}`]"
             )
-            relationship_number += 1
         lines.append("")
     return lines
 
@@ -166,6 +149,9 @@ def relationship_introduction(count: int) -> list[str]:
         "",
         "`N` means many, `1` means exactly one, and `0..1` means optional one. "
         "The field mapping identifies the exact foreign-key and referenced fields.",
+        "",
+        f"Each code R001–R{count:03d} is printed in the matching relationship diamond of "
+        "the Chen ERD (`AFN_ERD_CHEN_PRESENTATION.drawio`).",
         "",
         f"Total relationships: **{count}**",
         "",

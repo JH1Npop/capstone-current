@@ -1,7 +1,7 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-23 Asia/Singapore**
+Last updated: **2026-10-26 (Chen ERD re-layout) Asia/Singapore**
 Current objective (latest): **No implementation work is in progress. Admin Documents job-workspace runtime `d3ed6ac` is pushed to `origin/staging-deploy` and verified live on Render frontend deploy `dep-dbddjmp5efls73ao0qbg`; the backend correctly remains on compatible runtime `5f1fcd9` because this release has no backend change. The canonical release gate passed 608 backend tests with 3 expected skips, the 2,541-module production build, and 18/18 browser smoke scenarios; complete browser evidence is 222/222. Production was not accessed or changed. Remaining production gates and dependency-advisory follow-up are recorded in section 9.**
 Current focused objective: **None open. Most recent completed themes (2026-10-18 to 2026-10-19, all committed): cross-role notifications and routing, technician-chosen holds, inspection-path integrity and service-specific inspection checks (`services.0062`), the whole-system audit fixes and post-review remediation, the light-palette landing redesign with map/contact, the page-ordered Landing Page Editor, and solar calculator 1.1 (savings range). Details are in the change ledger; residual risks are in section 9.**
 Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the inspection-first path, allow guarded same-day continuation on the same ticket with a fresh service dispatch, keep installation inventory out of inspection assignments, and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
@@ -495,6 +495,22 @@ verify the code, then update this file in the same change.
 
 ### Latest pass-on checkpoint (2026-10-23)
 
+- **Documentation and diagram refresh (uncommitted, after `c7d12a2`):** the
+  workflow contract, route matrix, sales contract, manual playbook, supporting
+  workflow model and DFD, final diagram pack README, the draw.io DFD, and the
+  Context Diagram now match the deployed behaviour (quotation revision after a
+  decline, Awaiting Materials dispatch, business-day payment dates, the
+  dashboard change token, the Documents job workspace). The DBML was
+  regenerated with no schema change. See the change ledger.
+- **Chen ERD re-layout (uncommitted, 2026-10-26):** at the user's request ("ERD
+  chen style without line tangled"), `generate_afn_chen_drawio.py` now draws a
+  one-page classic Chen ERD in which each diamond sits between its two entities
+  and every line has its own track: 0 coincident segments (was 3,195), 0 lines
+  through shapes, 0 label overlaps, and 211 bridged crossings (was 287 plus the
+  stacked rails). Same 52 entities, 708 attributes, 107 relationships; codes
+  `R001`-`R107` now also prefix every line of `ERD_CURRENT.md` and
+  `ERD_CURRENT_CONNECTIONS.md`.
+
 - **Staging runtime (2026-10-23):** frontend runtime `d3ed6ac` ("Redesign
   Documents as a job workspace") and backend runtime `5f1fcd9` are live on
   their respective Render services. The split is intentional: the new release
@@ -860,6 +876,19 @@ production database still requires backup, release review, and explicit
 deployment authorization.
 
 ## 8. Validation ledger
+
+2026-10-26 (Chen ERD re-layout; documentation generators only, no schema or runtime change):
+- `venv/Scripts/python.exe backend/scripts/generate_afn_chen_drawio.py` and `backend/scripts/generate_afn_relationship_map.py` ran successfully. Two consecutive generator runs produced byte-identical output (same MD5), and `AFN_ERD_CHEN_PRESENTATION.drawio` equals `ERD_CURRENT.drawio`.
+- The draw.io engine itself (`viewer.diagrams.net` static script in headless Chromium, routed `absolutePoints`) measured the new ERD: 870 vertices, 922 edges, 0 coincident segments, 0 segments through a non-endpoint shape, 0 label overlaps, 211 crossings (all drawn with `jumpStyle=arc`). The previous layout measured 287 crossings, 3,195 coincident segments, and 10 label overlaps. A Python count of the same file agreed (211 crossings, 0 overlaps).
+- Cell counts in the output: 52 entities, 708 attributes, 107 diamonds, 214 relationship legs; no shape has a negative coordinate. Renders of the whole canvas and of zoomed regions were reviewed; the longest diamond label (`R023`, `location_validation_updated_by_id`) fits inside its shape.
+- The `R###` numbering in `ERD_CURRENT_CONNECTIONS.md` was diffed against the previous `1.`-`107.` list: identical order and content apart from the prefix. Diamond codes in the drawio match it.
+- Superseded: the 2026-10-23 bullet below that the Chen ERD regenerated byte-identical is no longer true after this re-layout (the schema is still unchanged).
+
+2026-10-23 (documentation and diagram refresh; no code change):
+- `backend/scripts/generate_afn_dbml.py` changed only the generation date in `AFN_ERD.dbml`. `backend/scripts/generate_afn_chen_drawio.py` regenerated `AFN_ERD_CHEN_PRESENTATION.drawio` and `ERD_CURRENT.drawio` byte-identical, confirming no schema change since `services.0062`.
+- Both edited `.drawio` files parse as XML. They were rendered before and after with the draw.io viewer (`viewer.diagrams.net` static script) in headless Chromium, and the renders were reviewed: no labels overlap boxes or each other, no two flows share a segment, and no line crosses a box.
+- The edited Mermaid blocks in `SYSTEM_WORKFLOW_MODEL.md` and `DATA_FLOW_DIAGRAM.md` rendered without errors with Mermaid 10.9.1.
+- Every statement added to the contracts was checked against the code read this session: `QuotationRecordSerializer.validate/update`, `respond`, the `deposit-payments` action, the `assign` guard in `services/views/tickets.py`, `services/business_time.py`, and `DashboardChangesView`.
 
 2026-10-23 (authorized Documents redesign staging deployment): after the fresh release gate, `git fetch origin staging-deploy` showed the candidate 0 behind and 1 ahead with `origin/staging-deploy` as an ancestor. Commit `d3ed6ac` was pushed as the fast-forward `3099f49..d3ed6ac`. Render frontend deploy `dep-dbddjmp5efls73ao0qbg` reported exact commit `d3ed6ac957abc8617d4c7d49e3518bc88fbbc39c` live. The unchanged backend correctly retained live deploy `dep-dbdc9em417fc738f66mg` on compatible runtime `5f1fcd9`. Cache-controlled HTTPS probes returned HTTP 200 for `index-FbmGTrMl.js` and `AdminDocuments-HYsr2NDt.js`; the exact Documents chunk contains `Send quotation to client` and `How this document is filled`. Backend readiness returned HTTP 200 with database, cache, realtime, and storage ready. The guarded read-only staging perimeter passed HTTPS, dependency readiness, security headers, CORS, anonymous access, and TRACE controls. No migration or staging business-data mutation occurred, and production was not accessed or changed.
 
@@ -1323,6 +1352,10 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
 
+- **2026-10-26 Chen ERD layout:** entity seats are the fixed `ENTITY_GRID` in `generate_afn_chen_drawio.py`, found by a scratch local search that minimised measured crossings (not committed; the generator itself is deterministic). A new table is seated in the nearest free cell (4 free seats remain), which may add crossings; rerun a placement search if the schema grows. The remaining 211 crossings are mostly the User and Service Ticket hubs' legs and are unavoidable with each entity drawn once. PNG/PDF exports of the ERD must be regenerated from the new `.drawio`.
+
+- **2026-10-23 diagram notes:** the Context Diagram flows were re-routed with no box moved; box positions and the professor-format notation are unchanged. The DFD keeps its eight processes; the new flows reuse existing stores, and a duplicate D2 symbol was added beside 4.0, following the existing D4/D12 duplicates. Diagram exports (PNG/PDF) for the paper must be regenerated from the updated `.drawio` sources. Superseded diagram notes: the earlier "DFD inspection detail gap" in this section is now resolved.
+
 - **2026-10-23 backend features without a UI (decision needed, nothing broken):**
   - `solar-commissioning-checklists/{id}/complete/`: Documents saves the commissioning checklist but cannot mark it completed; no flow depends on that status.
   - `solar-estimates/{id}/submit/` and `promote-to-profile/`: clients go straight from a draft estimate to "Request site assessment" (`convert`).
@@ -1462,6 +1495,8 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
+- 2026-10-26 (uncommitted, ERD re-layout): `backend/scripts/{generate_afn_chen_drawio.py,generate_afn_relationship_map.py}`, `docs/models/{AFN_ERD_CHEN_PRESENTATION.drawio,ERD_CURRENT.drawio,ERD_CURRENT.md,ERD_CURRENT_CONNECTIONS.md,README.md}`, and `docs/academic/final_diagrams/README.md` (also in the 2026-10-23 entry below).
+- 2026-10-23 (uncommitted, documentation only, after `c7d12a2`): `docs/security/{WORKFLOW_STATE_MACHINES.md,ROUTE_API_CAPABILITY_MATRIX.md,SALES_RECORD_CONTRACT.md}`, `docs/quality/MANUAL_END_TO_END_TESTING_PLAYBOOK.md`, `docs/models/{SYSTEM_WORKFLOW_MODEL.md,DATA_FLOW_DIAGRAM.md,AFN_DETAILED_DFD_STRUCTURED.drawio,AFN_ERD.dbml}`, `docs/academic/final_diagrams/{01_CONTEXT_DIAGRAM.drawio,README.md}`, and this handoff.
 - 2026-10-23 (committed and deployed in `d3ed6ac`): `frontend/src/pages/admin/AdminDocuments.jsx` (job-workspace redesign), `e2e/03-admin-workspace.spec.js` (3.9 wording and ticket-loaded signal), `e2e/10-major-flow-journey.spec.js` and `e2e/11-minor-flow-journeys.spec.js` (new quotation action name), and this handoff (UI-to-backend audit, redesign, and validation records).
 - 2026-10-23 (committed in "Speed up dashboards and fix minor-flow defects found by UI journeys"), minor flows: `backend/services/serializers/commercial_records.py` (declined-quotation revision), `backend/services/views/tickets.py` (service dispatch after a completed inspection), `backend/afn_service_management/settings_e2e.py` (E2E-only request throttle), new `backend/services/business_time.py`, `backend/users/serializers.py` (project date), new `backend/services/tests/test_business_day.py`, `backend/services/tests/test_business_flow_controls.py` (future date on the business day), new `backend/services/tests/test_quotation_revision.py`, `backend/services/tests/test_end_to_end_journeys.py` (awaiting-materials dispatch), `frontend/src/api/core.js` (`ticketType`, `inspectionCompleted`), `frontend/src/pages/admin/AdminDispatchBoard.jsx` (stage decision, alert role, 8-second refusal), `frontend/src/components/ui/StatusBadge.jsx`, `frontend/src/components/sales/QuotationDepositPanel.jsx`, `frontend/src/components/shared/RescheduleTicketModal.jsx`, `frontend/src/pages/technician/TechnicianJobs.jsx` (equipment list closes), `frontend/src/pages/client/ClientRequestDetail.jsx` (named rating stars; reloads keep unsaved rating/reschedule input), `frontend/src/pages/admin/AdminServiceTickets.jsx` (linked ticket opens once), `e2e/04-technician-workspace.spec.js` (4.5 selects the seeded ticket), new `e2e/11-minor-flow-journeys.spec.js`.
 - 2026-10-23 (committed in "Speed up dashboards and fix minor-flow defects found by UI journeys"): `backend/services/views_dashboard.py` (`DashboardChangesView`), `backend/api/urls.py` (`dashboard/changes/`), new `backend/services/tests/test_dashboard_changes.py`, new `frontend/src/utils/dashboardRefresh.js`, `frontend/src/api/services.js` (`fetchDashboardChanges`), `frontend/src/pages/{admin/AdminDashboard.jsx,client/ClientDashboard.jsx,technician/TechnicianDashboard.jsx}`, `frontend/src/pages/admin/AdminDocuments.jsx` (`resolveSelectedClientId`), `e2e/03-admin-workspace.spec.js` (3.1 change-token reload), `e2e/10-major-flow-journey.spec.js` (10.2), and this handoff.
@@ -2127,6 +2162,37 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-26 (Chen ERD re-layout, user-chosen "Rebuild one-page layout"):
+- **`backend/scripts/generate_afn_chen_drawio.py`:** layout rewritten (parsing, `GROUP_ORDER`, `TABLE_ORDER`, labels, and the names imported by the map generator are kept).
+  - Entities sit on a 7 × 8 grid (`ENTITY_GRID`), attributes on both sides; domain panels and shared rails are gone.
+  - Each diamond sits in the horizontal channel beside its foreign-key entity, between its two entities, sized to its label; lanes that overflow are packed back from the right edge.
+  - Every leg has its own track in a band or vertical channel; track order is solved per channel as a linear-ordering problem (`order_tracks`) to minimise crossings; legs use exact ports and `jumpStyle=arc` bridges.
+  - Diamonds print `R###`, verb, and field; legs carry `1`, `0..1`, or `N`. Relationship order (`ordered_relationships`) is shared with the Markdown map.
+- **`backend/scripts/generate_afn_relationship_map.py`:** uses `ordered_relationships` and `cardinality` from the Chen generator and prints `- **R###**` items plus a sentence linking the codes to the diagram; unused `defaultdict` import removed.
+- **Regenerated:** `AFN_ERD_CHEN_PRESENTATION.drawio`, `ERD_CURRENT.drawio`, `ERD_CURRENT.md`, `ERD_CURRENT_CONNECTIONS.md`.
+- **`docs/models/README.md` and `docs/academic/final_diagrams/README.md`:** ERD descriptions rewritten for the new layout.
+
+2026-10-23 (documents and diagrams after deploying `5f1fcd9` and `d3ed6ac`): at the user's request ("update the documents and the diagrams"):
+- **`WORKFLOW_STATE_MACHINES.md`:**
+  - new "Quotations and deposits" section (state table including `Rejected` → revised `Sent` as `QUO-…-R2`; Accepted locked; deposit rules; business-day payment dates);
+  - Awaiting Materials and held-installation service dispatch (status-history condition, Dispatch Board stage rule, refusal alert);
+  - rejection shown to clients as "Not accepted by our office".
+- **`ROUTE_API_CAPABILITY_MATRIX.md`:** `/api/dashboard/changes/` for the admin and technician dashboards.
+- **`SALES_RECORD_CONTRACT.md`:** revised quotation numbers; business-day payment dates.
+- **`MANUAL_END_TO_END_TESTING_PLAYBOOK.md`:** LIFE-07 rewritten for the Documents job workspace with decline/revise, deposit void, and handover steps; LIFE step 9 covers Awaiting Materials dispatch; ADM-01 covers the automatic dashboard update.
+- **`SYSTEM_WORKFLOW_MODEL.md` (Mermaid):** a declined quotation now loops through "Revises and resends" instead of a dead end; the technician step mentions GPS arrival and hold/resume.
+- **`DATA_FLOW_DIAGRAM.md` (Mermaid):** client quotation decision into 3.0; inspection report from 4.0 to 3.0.
+- **Draw.io DFD (`AFN_DETAILED_DFD_STRUCTURED.drawio`):**
+  - 3.0 and 4.0 labels updated ("Manage Technician Field Work");
+  - new flows: Client → 3.0 "quotation accept / decline", 4.0 → 3.0 "inspection report and findings", and a duplicate D2 → 4.0 "service and inspection checklists";
+  - three pre-existing labels that overlapped 3.0/5.0 split onto two lines.
+- **Context Diagram (`01_CONTEXT_DIAGRAM.drawio`):**
+  - all 28 flows re-routed into separate lanes: client and superadmin on top, technician on the left, admin, database, media, and map on the bottom, email on the right;
+  - this fixes coincident segments (the client and technician flows shared a line; the admin, database, media, and map flows shared one vertical) and the media line that crossed the Email box;
+  - the client flow adds "handover confirmation" and the technician flow adds "inspection report, hold reason".
+- **Final pack README:** refresh date and scope statements for quotation revision and Awaiting Materials.
+- **`AFN_ERD.dbml`:** regenerated (date only).
 
 2026-10-23 (Documents redesign staging deployment): with explicit user authorization, committed the validated five-path batch as `d3ed6ac` ("Redesign Documents as a job workspace"), pushed it fast-forward to `origin/staging-deploy`, and verified Render frontend deploy `dep-dbddjmp5efls73ao0qbg` live on the exact commit. The deployed Documents chunk fingerprint, new action/help strings, backend readiness dependencies, and guarded staging perimeter all passed. Backend runtime `5f1fcd9` did not rebuild because no backend path changed. No migration, staging business-data mutation, or production access occurred. Affected path after deployment: this living handoff only.
 

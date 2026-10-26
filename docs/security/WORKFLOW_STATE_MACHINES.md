@@ -118,7 +118,9 @@ A technician who still leads or crews a non-closed ticket cannot be
 deactivated or changed to another role (HTTP 409 listing the tickets to reassign,
 on both the user and technician update endpoints). A request rejected by
 the office is stored as `Cancelled` with an explicit `rejected` closure in its
-activity metadata, which the client sees as "Rejected" with the reason.
+activity metadata; the client's request pages show it as "Not accepted by our
+office" followed by the office's reason, distinct from the client's own
+withdrawal.
 Assigned lead or crew technicians may request additional equipment while a
 ticket is `Not Started` or in a supported inspection, active, awaiting-materials,
 or hold state. Every request creates pending inventory reservations and a
@@ -139,6 +141,18 @@ existing `On Hold` → `In Progress` action without a new GPS arrival. A rejecte
 equipment request leaves the job's status unchanged. `Awaiting Materials`
 remains an office decision from inspection review (stock unavailable, return
 trip required), whose return still travels through navigation and arrival.
+When the materials arrive, the office dispatches the installation directly from
+the Dispatch Board; no second inspection review is needed (2026-10-23). Service
+dispatch of an inspection-first ticket is allowed from `Inspection Completed`
+or `Ready for Service`, or from any state once the ticket's append-only status
+history contains `Inspection Completed`. That covers `Awaiting Materials` and a
+held installation, while an inspection visit that has not reported yet is still
+refused. Dispatching an `Awaiting Materials` or held installation moves it to
+`Ready for Service` ("Materials ready; dispatched for service"), and the deposit
+gate still applies. The Dispatch Board treats a ticket as an inspection visit
+only before its inspection (`Not Started`, `For Inspection`) or while an
+`inspection`-type visit is held, and shows the server's refusal reason as an
+alert.
 Automatic reassignment skips any ticket whose work has started, so a paused job
 stays with the crew that began it.
 Pending ticket reservations are reviewed in Admin Inventory as one grouped
@@ -161,6 +175,31 @@ reason. Rescheduling also requires and preserves an operator reason, and
 inspection exceptions (`Awaiting Materials` or cancellation) require a reason
 in both the API and review dialog. Whitespace is normalized before the same
 evidence is written to the ticket activity log and `ServiceStatusHistory`.
+
+## Quotations and deposits
+
+One quotation record belongs to each ticket (`QuotationRecord.ticket` is
+one-to-one). Office staff save and send it from Admin Documents ("Send quotation
+to client"); a deposit-required quotation needs a valid total, and its deposit
+rule and required amount are snapshotted from the services at creation.
+
+| Current state | Allowed transition | Actor/action |
+| --- | --- | --- |
+| `Draft` | `Sent` | Office sends from Documents; the client is notified |
+| `Sent` | `Sent` | Office sends an updated quotation before the client answers |
+| `Sent` | `Accepted` | Owning client accepts in the portal, or office records an offline acceptance |
+| `Sent` | `Rejected` | Owning client declines with a required reason |
+| `Rejected` | `Sent` (revision) | Office revises and resends; the number becomes `QUO-…-R2`, `-R3`, …, the client response is cleared, the client is notified, and the decline note is kept in the activity log |
+| `Accepted` | none | Locked; corrections need a new commercial agreement |
+
+Any other edit of a `Rejected` quotation is refused. The client can respond
+only to a `Sent` quotation. Deposit payments can be recorded only on an
+`Accepted` quotation, can never exceed the remaining required amount, and can be
+voided with a reason; service dispatch stays blocked until non-voided payments
+cover the snapshotted amount. Payment dates (deposit and Sales Record payments)
+cannot be later than today in the business timezone
+(`BUSINESS_DISPLAY_TIMEZONE`, UTC+8), so a payment entered between midnight and
+08:00 local time is not mistaken for a future date by the UTC server clock.
 
 ## Ticket progress records
 

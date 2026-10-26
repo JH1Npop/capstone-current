@@ -48,21 +48,22 @@ Regenerate the exhaustive single-page Chen ERD from the same models:
 ```
 
 The resulting `.drawio` file is generated directly from `AFN_ERD.dbml` and
-contains all 52 application entities, all 708 local attributes, and a Chen
-relationship diamond for all 107 in-scope relationships. Every relationship
-edge connects the actual canonical entity box to its diamond. Connections leave
-through clear space below each entity, share an orderly domain gutter, and then
-branch onto dedicated horizontal rails; visible bridge arcs keep the exhaustive
-cross-domain wiring readable. Stable `R001`-`R107` identifiers appear on both
-legs and the matching diamond, while every diamond prints its complete source
-and target entity, field, and cardinality. This allows a reader to identify a
-connection without following a long rail across the canvas. The notation
-follows the supplied reference:
-small green entity rectangles, yellow attribute ovals, orange relationship
-diamonds, black connectors, underlined primary keys, and cardinality labels.
-Placement is graph-driven rather than table-ordered: the User and Service Ticket
-hubs are centered, related modules surround them, and low-connectivity entities
-sit toward the landscape edges.
+contains all 52 application entities (each drawn once), all 708 local
+attributes, and a Chen relationship diamond for all 107 in-scope relationships.
+Entities sit on a 7 × 8 grid with their attribute ovals on both sides. Each
+diamond sits in the horizontal channel beside its foreign-key entity, on the
+path between the two entities it relates, and both legs run from the entity box
+to the diamond. Every connecting line has its own track: no two lines share a
+segment, no line passes through a shape, and the order of parallel tracks is
+chosen to minimise crossings. The crossings that remain are drawn as bridge
+arcs. Each diamond prints its stable `R001`-`R107` code, verb, and
+foreign-key field; the codes are the same as in `ERD_CURRENT_CONNECTIONS.md`.
+`1`, `0..1`, and `N` cardinality labels sit on the legs beside the diamond. The
+notation follows the supplied reference: small green entity rectangles, yellow
+attribute ovals, orange relationship diamonds, black connectors, and underlined
+primary keys. Entity seats (`ENTITY_GRID` in the generator) were chosen by a
+local search that minimised the measured line crossings of this layout; a new
+table takes the free seat nearest the entities it references.
 
 Regeneration writes identical maintained copies to
 `AFN_ERD_CHEN_PRESENTATION.drawio` and the convenient `ERD_CURRENT.drawio`
@@ -72,7 +73,8 @@ For the complete entity, attribute, and connection reference, open
 `ERD_CURRENT.md`. It contains all 52 entities, 708 attributes, and 107
 relationships. `ERD_CURRENT_CONNECTIONS.md` is the compact relationship-only
 companion. Both use `(SOURCE) ---- N ---- VERB ---- 1 ---- (TARGET)` with exact
-field mappings and no diagram lines to trace. Regenerate both Markdown files
+field mappings and no diagram lines to trace; each line starts with the `R###`
+code printed in the matching Chen ERD diamond. Regenerate both Markdown files
 with:
 
 ```powershell

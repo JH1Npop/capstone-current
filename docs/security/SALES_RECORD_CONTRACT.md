@@ -72,3 +72,11 @@ conditional one-active-record-per-ticket constraint. It has passed fresh SQLite
 test/E2E migration and was applied successfully to the local development SQLite
 database on 2026-08-30. It must still be tested against staging, backed up, and
 explicitly authorized before application to the Aiven PostgreSQL database.
+
+## 2026-10-23 additions
+
+- The accepted quotation that values a Sales Record may be a revision issued after the
+  client declined an earlier offer (`QUO-…-R2`); its accepted total is the source.
+- Payment and deposit dates cannot be later than the business day
+  (`BUSINESS_DISPLAY_TIMEZONE`, UTC+8), so office staff can record a payment dated today
+  at any hour. Recorded payments are voided with a reason, never edited.

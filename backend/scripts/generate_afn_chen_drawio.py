@@ -1,4 +1,9 @@
-"""Generate the exhaustive, untangled single-page Chen ERD for the AFN paper."""
+"""Generate the exhaustive single-page Chen ERD for the AFN paper.
+
+Entities sit on a grid placed to keep related entities close; each relationship diamond sits in
+the channel between its two entities, and every connecting line gets its own track, so no two
+lines share a segment and none passes through a shape. Crossings are drawn with bridge arcs.
+"""
 
 from __future__ import annotations
 
@@ -162,61 +167,11 @@ def parse_dbml(source: str) -> tuple[dict[str, list[Attribute]], list[Relationsh
     return tables, relationships
 
 
-def cell(cell_id: str, value: str, style: str, x: int, y: int, width: int, height: int) -> str:
+def cell(cell_id: str, value: str, style: str, x: float, y: float, width: float, height: float) -> str:
     return (
         f'        <mxCell id="{cell_id}" parent="1" style="{style}" '
         f'value="{html.escape(value, quote=True)}" vertex="1">\n'
-        f'          <mxGeometry x="{x}" y="{y}" width="{width}" height="{height}" as="geometry" />\n'
-        "        </mxCell>"
-    )
-
-
-def edge(
-    cell_id: str, source: str, target: str, value: str, color: str,
-    connection_style: str = "",
-) -> str:
-    style = (
-        "edgeStyle=none;rounded=0;html=1;endArrow=none;startArrow=none;"
-        f"labelBackgroundColor=#FFFFFF;strokeColor={color};fontSize=10;{connection_style}"
-    )
-    return (
-        f'        <mxCell id="{cell_id}" edge="1" parent="1" source="{source}" '
-        f'target="{target}" style="{style}" value="{html.escape(value, quote=True)}">\n'
-        '          <mxGeometry relative="1" as="geometry" />\n'
-        "        </mxCell>"
-    )
-
-
-def routed_edge(
-    cell_id: str,
-    source: str,
-    target: str,
-    value: str,
-    exit_x: float,
-    entry_x: float,
-    entry_y: float,
-    waypoints: list[tuple[float, float]],
-) -> str:
-    points = "\n".join(
-        f'              <mxPoint x="{x:.2f}" y="{y:.2f}" />'
-        for x, y in waypoints
-    )
-    style = (
-        "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;"
-        "html=1;endArrow=none;startArrow=none;jumpStyle=arc;jumpSize=10;"
-        "strokeColor=#000000;strokeWidth=1.3;labelBackgroundColor=#FFFFFF;"
-        "fontSize=11;fontStyle=1;"
-        f"exitX={exit_x:.4f};exitY=1;exitPerimeter=1;entryX={entry_x:.1f};"
-        f"entryY={entry_y:.2f};entryPerimeter=1;"
-    )
-    return (
-        f'        <mxCell id="{cell_id}" edge="1" parent="1" source="{source}" '
-        f'target="{target}" style="{style}" value="{html.escape(value, quote=True)}">\n'
-        '          <mxGeometry relative="1" as="geometry">\n'
-        '            <Array as="points">\n'
-        f"{points}\n"
-        '            </Array>\n'
-        '          </mxGeometry>\n'
+        f'          <mxGeometry x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" height="{height:.1f}" as="geometry" />\n'
         "        </mxCell>"
     )
 
@@ -230,233 +185,619 @@ def display_name(table_name: str) -> str:
     return table_name.replace("_", " ").upper()
 
 
+def paper_name(table_name: str) -> str:
+    """Readable entity name shared with the Markdown relationship reference."""
+    from generate_afn_relationship_map import ENTITY_NAMES  # imported lazily: that module imports this one
+
+    return ENTITY_NAMES.get(table_name, display_name(table_name))
+
+
 def relationship_title(field_name: str) -> str:
     logical_name = field_name[:-3] if field_name.endswith("_id") else field_name
     return RELATIONSHIP_LABELS.get(logical_name, f"HAS {logical_name.replace('_', ' ').upper()}")
 
 
-def generate() -> str:
-    tables, relationships = parse_dbml(DBML_PATH.read_text(encoding="utf-8"))
+def cardinality(relation: Relationship) -> str:
+    return "0..1" if relation.one_to_one and relation.optional else "1" if relation.one_to_one else "N"
 
-    page_margin = 80
-    column_width = 2700
-    entity_width = 380
-    entity_height = 56
-    attribute_width = 380
-    attribute_height = 30
-    attribute_step = 40
-    first_y = 205
-    page_width = page_margin * 2 + len(GROUP_ORDER) * column_width
-    nodes: list[str] = []
-    edges: list[str] = []
-    group_extents: dict[str, tuple[int, int, int, int]] = {}
-    entity_layout: dict[str, tuple[int, int, int, int]] = {}
-    entity_attribute_tops: dict[str, int] = {}
-    entity_clear_routes: dict[str, int] = {}
 
-    styles = {
-        "entity": "rounded=0;whiteSpace=wrap;html=1;fillColor=#B7E36D;strokeColor=#000000;fontStyle=0;fontSize=12;strokeWidth=1.2;",
-        "entity_ref": "rounded=0;whiteSpace=wrap;html=1;fillColor=#B7E36D;strokeColor=#000000;fontStyle=0;fontSize=10;strokeWidth=1.2;",
-        "attribute": "ellipse;whiteSpace=wrap;html=1;fillColor=#FFD966;strokeColor=#000000;fontSize=9;strokeWidth=1;",
-        "relationship": "rhombus;whiteSpace=wrap;html=1;fillColor=#F6B26B;strokeColor=#000000;fontSize=10;fontStyle=0;strokeWidth=1.3;",
-        "header": "rounded=0;whiteSpace=wrap;html=1;fillColor=#DCE6F1;strokeColor=#3D85C6;fontSize=14;fontStyle=1;strokeWidth=1.5;",
-        "group": "rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#CBD5E1;dashed=1;verticalAlign=top;spacingTop=10;",
-        "note": "rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;fontSize=12;fontColor=#334155;align=left;spacing=12;",
-    }
-
-    degree: Counter[str] = Counter()
-    for relation in relationships:
-        degree.update((relation.source_table, relation.target_table))
-    layout_order: dict[str, list[str]] = {}
-    for group_name in GROUP_ORDER:
-        ranked = sorted(TABLE_ORDER[group_name], key=lambda table: (-degree[table], table))
-        slot_priority = sorted(
-            range(len(ranked)),
-            key=lambda slot: (abs(slot - (len(ranked) - 1) / 2), slot),
-        )
-        arranged = [""] * len(ranked)
-        for table_name, slot in zip(ranked, slot_priority, strict=True):
-            arranged[slot] = table_name
-        layout_order[group_name] = arranged
-
-    entity_section_bottom = first_y
-    for group_index, group_name in enumerate(GROUP_ORDER):
-        group_x = page_margin + group_index * column_width
-        entity_x = group_x + (column_width - entity_width) // 2
-        current_y = first_y
-        for table_name in layout_order[group_name]:
-            row_count = ceil(len(tables[table_name]) / 2)
-            attribute_area_height = max(70, row_count * attribute_step)
-            entity_y = current_y + max(0, (attribute_area_height - entity_height) // 2)
-            entity_layout[table_name] = (entity_x, entity_y, entity_width, entity_height)
-            entity_attribute_tops[table_name] = current_y
-            entity_clear_routes[table_name] = current_y + attribute_area_height + 28
-            current_y += attribute_area_height + 105
-        group_height = current_y - 150
-        group_extents[group_name] = (group_x, 105, column_width - 50, group_height)
-        entity_section_bottom = max(entity_section_bottom, 105 + group_height)
-
-    for group_index, group_name in enumerate(GROUP_ORDER):
-        gx, gy, gw, gh = group_extents[group_name]
-        nodes.append(cell(f"group_{group_index}", "", styles["group"], gx, gy, gw, gh))
-        nodes.append(cell(f"header_{group_index}", group_name.upper(), styles["header"], gx + 20, 125, gw - 40, 48))
-        for table_name in layout_order[group_name]:
-            entity_x, entity_y, width, height = entity_layout[table_name]
-            entity_id = f"entity_{table_name}"
-            nodes.append(cell(entity_id, display_name(table_name), styles["entity"], entity_x, entity_y, width, height))
-            for index, attribute in enumerate(tables[table_name]):
-                row, side = divmod(index, 2)
-                attr_x = entity_x - attribute_width - 70 if side == 0 else entity_x + width + 70
-                attr_y = entity_attribute_tops[table_name] + row * attribute_step
-                label = f"<u>{attribute.name}</u>" if attribute.primary_key else attribute.name
-                attr_id = f"attr_{table_name}_{attribute.name}"
-                nodes.append(cell(attr_id, label, styles["attribute"], attr_x, attr_y, attribute_width, attribute_height))
-                connection = (
-                    "exitX=1;exitY=0.5;entryX=0;entryY=0.5;"
-                    if side == 0 else
-                    "exitX=0;exitY=0.5;entryX=1;entryY=0.5;"
-                )
-                edges.append(edge(f"ae_{table_name}_{index}", attr_id, entity_id, "", "#000000", connection))
-
-    relationship_top = entity_section_bottom + 120
-    nodes.append(cell(
-        "relationship_header",
-        "DIRECT CHEN RELATIONSHIPS — EVERY DIAMOND CONNECTS TO THE CANONICAL ENTITIES ABOVE",
-        styles["header"], page_margin, relationship_top,
-        page_width - page_margin * 2, 54,
-    ))
-    nodes.append(cell(
-        "relationship_note",
-        f"Every direct connection has one stable identifier (R001-R{len(relationships):03d}) printed on both legs and its diamond. Each diamond also names both endpoint entities, fields, and cardinalities, so a relationship remains readable without visually tracing a long rail. Bridge arcs distinguish intersections.",
-        styles["note"], page_margin, relationship_top + 70,
-        page_width - page_margin * 2, 58,
-    ))
-
-    def entity_center_x(table_name: str) -> float:
-        x, _y, width, _height = entity_layout[table_name]
-        return x + width / 2
-
-    ordered_relationships = sorted(
+def ordered_relationships(relationships: list[Relationship]) -> list[Relationship]:
+    """Same order as ERD_CURRENT_CONNECTIONS.md, so R001 there is R001 on the diagram."""
+    group_by_table = {table: group for group in GROUP_ORDER for table in TABLE_ORDER[group]}
+    return sorted(
         relationships,
         key=lambda relation: (
-            abs(entity_center_x(relation.source_table) - entity_center_x(relation.target_table)),
-            relation.source_table,
+            GROUP_ORDER.index(group_by_table[relation.source_table]),
+            paper_name(relation.source_table),
             relation.source_field,
+            paper_name(relation.target_table),
         ),
     )
-    relationship_row_height = 74
-    relationship_start_y = relationship_top + 160
-    diamond_width = 500
-    diamond_height = 62
-    group_by_table = {
-        table_name: group_name
-        for group_name in GROUP_ORDER
-        for table_name in TABLE_ORDER[group_name]
+
+
+# ---- Layout constants ---------------------------------------------------------------------------
+GRID_COLUMNS = 8
+GRID_ROWS = 7
+MARGIN = 80
+TITLE_HEIGHT = 190
+ATTRIBUTE_WIDTH = 260
+ATTRIBUTE_HEIGHT = 28
+ATTRIBUTE_STEP = 34
+ATTRIBUTE_GAP = 50
+ENTITY_HEIGHT = 56
+ENTITY_MIN_WIDTH = 340
+PORT_SPACING = 14
+ROW_PAD = 30
+DIAMOND_MIN_WIDTH = 150
+DIAMOND_HEIGHT = 84
+DIAMOND_GAP = 44
+SIDE_STUB = 14
+TRACK = 12
+BAND_PAD = 20
+LANE_PAD = 24
+VCHANNEL_PAD = 40
+
+STYLES = {
+    "entity": "rounded=0;whiteSpace=wrap;html=1;fillColor=#B7E36D;strokeColor=#000000;fontStyle=1;fontSize=12;strokeWidth=1.2;",
+    "attribute": "ellipse;whiteSpace=wrap;html=1;fillColor=#FFD966;strokeColor=#000000;fontSize=9;strokeWidth=1;",
+    "relationship": "rhombus;whiteSpace=wrap;html=1;fillColor=#F6B26B;strokeColor=#000000;fontSize=10;strokeWidth=1.3;",
+    "note": "text;html=1;strokeColor=none;fillColor=none;fontSize=13;fontColor=#334155;align=center;",
+    "legend_text": "text;html=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#475569;align=left;",
+}
+ATTRIBUTE_EDGE = "edgeStyle=none;rounded=0;html=1;endArrow=none;startArrow=none;strokeColor=#000000;strokeWidth=1;"
+LEG_EDGE = (
+    "edgeStyle=none;rounded=0;html=1;endArrow=none;startArrow=none;jumpStyle=arc;jumpSize=8;"
+    "strokeColor=#000000;strokeWidth=1.2;labelBackgroundColor=#FFFFFF;fontColor=#000000;fontSize=11;fontStyle=1;"
+)
+
+
+# Entity seats on the poster grid, row by row (None is an empty seat). The seats were chosen by a
+# local search that minimised the measured line crossings of this exact layout. A table missing
+# here (a new model) takes the free seat closest to the entities it is related to.
+ENTITY_GRID: list[list[str | None]] = [
+    [
+        "services_salesrecord",
+        "inventory_equipmentreturnrequest",
+        "users_usercapabilitygrant",
+        "services_salespayment",
+        "users_adminsettings",
+        "services_technicianperformance",
+        "users_activitylog",
+        "services_quotationrecord",
+    ],
+    [
+        "services_turnoveracceptance",
+        "progress_ticketprogress",
+        "users_user",
+        "services_aftersalescaseevent",
+        "users_managementprofile",
+        "users_landingpageasset",
+        "services_technicianlocationhistory",
+        "users_technicianprofile",
+    ],
+    [
+        "users_changelog",
+        "services_slarule",
+        "services_arrivalvalidationlog",
+        "messages_app_customersupportcase",
+        "services_inspectionchecklist",
+        "services_ticketcrewassignment",
+        "services_technicaldatasheet",
+        "services_aftersalescase",
+    ],
+    [
+        "messages_app_message",
+        "users_clientprofile",
+        "services_serviceticket",
+        "notifications_notification",
+        "services_solarestimate",
+        "inventory_inventorytransaction",
+        "services_servicelocation",
+        "services_technicianskill",
+    ],
+    [
+        "services_servicestatushistory",
+        None,
+        "services_installationcontract",
+        "services_maintenanceschedule",
+        "services_servicerequest",
+        "services_solarprojectprofile",
+        "services_servicerequestservice",
+        None,
+    ],
+    [
+        "services_generateddocument",
+        "services_installedequipment",
+        "inventory_inventoryreservation",
+        "inventory_inventoryitem",
+        "inventory_inventorycategory",
+        "services_fieldservicereport",
+        "services_servicetrend",
+        "services_serviceanalytics",
+    ],
+    [
+        "services_salesrecordline",
+        "inventory_equipmentreturnrequestitem",
+        "services_solarcommissioningchecklist",
+        "inventory_servicetypeinventoryrequirement",
+        "services_demandforecast",
+        None,
+        "services_servicetype",
+        None,
+    ],
+]
+
+
+def place_entities(tables: dict[str, list[Attribute]], relationships: list[Relationship]) -> dict[str, tuple[int, int]]:
+    """Seat every entity: ENTITY_GRID first, then any new table beside its related entities."""
+    position = {
+        table: (row, column)
+        for row, seats in enumerate(ENTITY_GRID)
+        for column, table in enumerate(seats)
+        if table in tables
     }
-    routing_trunks = {
-        group_name: group_extents[group_name][0] + column_width - 25
-        for group_name in GROUP_ORDER
-    }
-    for index, relation in enumerate(ordered_relationships):
-        relationship_code = f"R{index + 1:03d}"
-        source_cardinality = "0..1" if relation.one_to_one and relation.optional else "1" if relation.one_to_one else "N"
-        source_group = group_by_table[relation.source_table]
-        target_group = group_by_table[relation.target_table]
-        source_trunk_x = routing_trunks[source_group]
-        target_trunk_x = routing_trunks[target_group]
-        preferred_center_x = (source_trunk_x + target_trunk_x) / 2
-        minimum_center_x = page_margin + diamond_width / 2 + 20
-        maximum_center_x = page_width - page_margin - diamond_width / 2 - 20
-        candidate_centers = [
-            preferred_center_x + offset
-            for distance in range(0, 1901, 380)
-            for offset in ((-distance, distance) if distance else (0,))
+    free = [
+        (row, column)
+        for row in range(GRID_ROWS)
+        for column in range(GRID_COLUMNS)
+        if (row, column) not in position.values()
+    ]
+    for table in (table for group in GROUP_ORDER for table in TABLE_ORDER[group]):
+        if table in position:
+            continue
+        if not free:
+            raise RuntimeError(f"No free ERD seat for {table}; add a row to ENTITY_GRID and GRID_ROWS")
+        related = [
+            position[other]
+            for relation in relationships
+            for own, other in ((relation.source_table, relation.target_table), (relation.target_table, relation.source_table))
+            if own == table and other in position
         ]
-        diamond_center_x = next(
-            candidate
-            for candidate in candidate_centers
-            if minimum_center_x <= candidate <= maximum_center_x
-            and all(
-                abs(candidate - trunk_x) >= diamond_width / 2 + 50
-                for trunk_x in routing_trunks.values()
-            )
+        seat = min(free, key=lambda slot: (sum(abs(slot[0] - r) + abs(slot[1] - c) for r, c in related), slot))
+        position[table] = seat
+        free.remove(seat)
+    return position
+
+
+def diamond_width(relation: Relationship) -> float:
+    """Wide enough for the verb on the middle line and the field on the narrower lower line."""
+    verb_width = len(relationship_title(relation.source_field)) * 6.7
+    field_width = len(relation.source_field) * 5.2
+    # At 12px from the centre a rhombus of height 84 keeps about 71% of its width.
+    return float(max(DIAMOND_MIN_WIDTH, ceil(verb_width / 0.85 + 16), ceil(field_width / 0.71 + 16)))
+
+
+def order_tracks(items: list[tuple[tuple, float, float, list[tuple[float, int]]]]) -> list[int]:
+    """Order parallel tracks so the fewest line ends cross other tracks (insertion descent).
+
+    Each item is (starting key, low, high, ends): the span its track covers and where its ends leave
+    the track, -1 toward the first track (up or left) and +1 toward the last (down or right).
+    """
+    count = len(items)
+    # before[i][j] = crossings caused when track i is placed before track j.
+    before = [[0] * count for _ in range(count)]
+    for i, (_key_i, low_i, high_i, ends_i) in enumerate(items):
+        for j, (_key_j, low_j, high_j, ends_j) in enumerate(items):
+            if i != j:
+                before[i][j] = (
+                    sum(1 for at, way in ends_j if way < 0 and low_i + 0.5 < at < high_i - 0.5)
+                    + sum(1 for at, way in ends_i if way > 0 and low_j + 0.5 < at < high_j - 0.5)
+                )
+    order = sorted(range(count), key=lambda i: items[i][0])
+    improved = True
+    while improved:
+        improved = False
+        for item in list(order):
+            start = order.index(item)
+            best_delta, best_slot = 0, start
+            delta = 0
+            for slot in range(start + 1, count):
+                other = order[slot]
+                delta += before[other][item] - before[item][other]
+                if delta < best_delta:
+                    best_delta, best_slot = delta, slot
+            delta = 0
+            for slot in range(start - 1, -1, -1):
+                other = order[slot]
+                delta += before[item][other] - before[other][item]
+                if delta < best_delta:
+                    best_delta, best_slot = delta, slot
+            if best_slot != start:
+                order.pop(start)
+                order.insert(best_slot, item)
+                improved = True
+    return order
+
+
+def path_length(points: list[tuple[float, float]]) -> float:
+    return sum(abs(points[i + 1][0] - points[i][0]) + abs(points[i + 1][1] - points[i][1]) for i in range(len(points) - 1))
+
+
+def generate() -> str:
+    tables, relationships = parse_dbml(DBML_PATH.read_text(encoding="utf-8"))
+    relations = ordered_relationships(relationships)
+    position = place_entities(tables, relations)
+
+    # ---- 1. Routing topology: diamond channel, leg kinds, bands, and vertical channels ----------
+    # Horizontal channel k lies above grid row k (k = GRID_ROWS is below the last row). Its upper
+    # band serves the row above it, its lower band the row below, and diamonds sit in its lane.
+    lane_load: Counter[int] = Counter()
+    diamonds: list[dict] = []
+    legs: list[dict] = []
+    for index, relation in enumerate(relations):
+        source, target = relation.source_table, relation.target_table
+        source_row, source_column = position[source]
+        target_row, _ = position[target]
+        if source_row == target_row:
+            channel = source_row if lane_load[source_row] <= lane_load[source_row + 1] else source_row + 1
+        elif target_row < source_row:
+            channel = source_row
+        else:
+            channel = source_row + 1
+        lane_load[channel] += 1
+        diamond = {
+            "index": index, "code": f"R{index + 1:03d}", "relation": relation, "channel": channel,
+            "width": diamond_width(relation), "legs": [],
+        }
+        diamonds.append(diamond)
+        for role, table in (("source", source), ("target", target)):
+            row, column = position[table]
+            if row == channel - 1:
+                kind, side = "A", "bottom"
+            elif row == channel:
+                kind, side = "B", "top"
+            elif row < channel - 1:
+                kind, side = "C_up", "bottom"
+            else:
+                kind, side = "C_down", "top"
+            leg = {"diamond": diamond, "role": role, "table": table, "kind": kind, "side": side}
+            leg["direction"] = "up" if kind in ("A", "C_up") else "down"
+            leg["departure_band"] = (channel, leg["direction"])
+            if kind.startswith("C"):
+                leg["vchannel"] = column if source_column <= column else column + 1
+                leg["arrival_band"] = (row + 1, "up") if kind == "C_up" else (row, "down")
+            diamond["legs"].append(leg)
+            legs.append(leg)
+
+    # ---- 2. Sizes: entity widths from port counts, channels from track counts --------------------
+    side_ports: dict[tuple[str, str], list[dict]] = {}
+    band_members: dict[tuple[int, str], list[dict]] = {}
+    vchannel_members: dict[int, list[dict]] = {}
+    for leg in legs:
+        side_ports.setdefault((leg["table"], leg["side"]), []).append(leg)
+        band = leg.get("arrival_band", leg["departure_band"])
+        band_members.setdefault(band, []).append(leg)
+        if leg["kind"].startswith("C"):
+            band_members.setdefault(leg["departure_band"], []).append(leg)
+            vchannel_members.setdefault(leg["vchannel"], []).append(leg)
+
+    entity_width = {
+        table: max(
+            ENTITY_MIN_WIDTH,
+            PORT_SPACING * max(len(side_ports.get((table, "top"), [])), len(side_ports.get((table, "bottom"), []))) + 40,
         )
-        diamond_x = diamond_center_x - diamond_width / 2
-        diamond_y = relationship_start_y + index * relationship_row_height
-        source_rail_y = diamond_y + diamond_height * 0.28
-        target_rail_y = diamond_y + diamond_height * 0.72
-        diamond_id = f"relationship_{index}"
+        for table in tables
+    }
+    attribute_area = {table: max(ENTITY_HEIGHT, ceil(len(tables[table]) / 2) * ATTRIBUTE_STEP) for table in tables}
+    cluster_width = {table: 2 * ATTRIBUTE_WIDTH + 2 * ATTRIBUTE_GAP + entity_width[table] for table in tables}
+    by_column: dict[int, list[str]] = {}
+    by_row: dict[int, list[str]] = {}
+    for table, (row, column) in position.items():
+        by_column.setdefault(column, []).append(table)
+        by_row.setdefault(row, []).append(table)
+    column_width = {
+        column: max((cluster_width[t] for t in by_column.get(column, [])), default=2 * ATTRIBUTE_WIDTH + 2 * ATTRIBUTE_GAP + ENTITY_MIN_WIDTH) + 40
+        for column in range(GRID_COLUMNS)
+    }
+    row_height = {
+        row: max((attribute_area[t] for t in by_row.get(row, [])), default=ENTITY_HEIGHT) + 2 * ROW_PAD
+        for row in range(GRID_ROWS)
+    }
+
+    def band_height(channel: int, direction: str) -> float:
+        count = len(band_members.get((channel, direction), []))
+        return 2 * BAND_PAD + max(0, count - 1) * TRACK if count else BAND_PAD
+
+    lane_height = DIAMOND_HEIGHT + 2 * LANE_PAD
+    vchannel_width = {
+        j: 2 * VCHANNEL_PAD + max(0, len(vchannel_members.get(j, [])) - 1) * TRACK
+        for j in range(GRID_COLUMNS + 1)
+    }
+
+    vchannel_x: dict[int, float] = {}
+    column_x: dict[int, float] = {}
+    x = MARGIN
+    for column in range(GRID_COLUMNS):
+        vchannel_x[column] = x
+        x += vchannel_width[column]
+        column_x[column] = x
+        x += column_width[column]
+    vchannel_x[GRID_COLUMNS] = x
+    x += vchannel_width[GRID_COLUMNS]
+    page_width = x + MARGIN
+
+    channel_y: dict[int, float] = {}
+    row_y: dict[int, float] = {}
+    y = TITLE_HEIGHT
+    for row in range(GRID_ROWS + 1):
+        channel_y[row] = y
+        y += band_height(row, "up") + lane_height + band_height(row, "down")
+        if row < GRID_ROWS:
+            row_y[row] = y
+            y += row_height[row]
+    grid_bottom = y
+
+    def band_top(channel: int, direction: str) -> float:
+        if direction == "up":
+            return channel_y[channel]
+        return channel_y[channel] + band_height(channel, "up") + lane_height
+
+    def lane_middle(channel: int) -> float:
+        return channel_y[channel] + band_height(channel, "up") + lane_height / 2
+
+    entity_box: dict[str, tuple[float, float, float, float]] = {}
+    for table, (row, column) in position.items():
+        width = entity_width[table]
+        center_x = column_x[column] + column_width[column] / 2
+        top = row_y[row] + ROW_PAD
+        entity_box[table] = (center_x - width / 2, top + (attribute_area[table] - ENTITY_HEIGHT) / 2, width, ENTITY_HEIGHT)
+
+    def entity_center(table: str) -> float:
+        bx, _by, bw, _bh = entity_box[table]
+        return bx + bw / 2
+
+    def vchannel_center(j: int) -> float:
+        return vchannel_x[j] + vchannel_width[j] / 2
+
+    # Port x positions are fixed by counts, so diamonds can avoid them.
+    def port_positions(table: str, side: str) -> list[float]:
+        count = len(side_ports.get((table, side), []))
+        bx, _by, bw, _bh = entity_box[table]
+        if count <= 1:
+            return [bx + bw / 2]
+        return [bx + 20 + i * (bw - 40) / (count - 1) for i in range(count)]
+
+    # ---- 3. Diamonds: in their lane, between their entities, never over a vertical channel ----------
+    for diamond in diamonds:
+        target_leg = diamond["legs"][1]
+        source_x = entity_center(diamond["relation"].source_table)
+        if target_leg["kind"].startswith("C"):
+            diamond["desired"] = source_x * 0.6 + vchannel_center(target_leg["vchannel"]) * 0.4
+        else:
+            diamond["desired"] = (source_x + entity_center(diamond["relation"].target_table)) / 2
+    forbidden = [(vchannel_x[j] - DIAMOND_GAP, vchannel_x[j] + vchannel_width[j] + DIAMOND_GAP) for j in vchannel_x]
+
+    def settle(center: float, width: float, step: float, blocked_x: list[float]) -> float:
+        """Move a diamond (in the direction of step) until it clears vertical channels and entity ports."""
+        half = width / 2 + SIDE_STUB
+        moved = True
+        while moved:
+            moved = False
+            for low, high in forbidden:
+                if center + half > low and center - half < high:
+                    center = high + half + 1 if step > 0 else low - half - 1
+                    moved = True
+            if any(abs(stub - blocked) < 4 for stub in (center, center - half, center + half) for blocked in blocked_x):
+                center += step
+                moved = True
+        return center
+
+    right_limit = vchannel_x[GRID_COLUMNS] - DIAMOND_GAP
+    for channel in range(GRID_ROWS + 1):
+        members = sorted((d for d in diamonds if d["channel"] == channel), key=lambda d: (d["desired"], d["index"]))
+        blocked_x = []
+        for row, side in ((channel - 1, "bottom"), (channel, "top")):
+            for table in by_row.get(row, []):
+                blocked_x.extend(port_positions(table, side))
+        cursor = MARGIN
+        for diamond in members:
+            diamond["x"] = settle(max(diamond["desired"], cursor + diamond["width"] / 2), diamond["width"], 7, blocked_x)
+            cursor = diamond["x"] + diamond["width"] / 2 + DIAMOND_GAP
+        if members and members[-1]["x"] + members[-1]["width"] / 2 + SIDE_STUB > right_limit:
+            # The lane overflowed the grid: pack it back from the right edge, keeping the order.
+            forward = [diamond["x"] for diamond in members]
+            cursor = right_limit
+            for diamond in reversed(members):
+                start = min(diamond["x"], cursor - diamond["width"] / 2 - SIDE_STUB)
+                diamond["x"] = settle(start, diamond["width"], -7, blocked_x)
+                cursor = diamond["x"] - diamond["width"] / 2 - DIAMOND_GAP
+            if members[0]["x"] - members[0]["width"] / 2 - SIDE_STUB < MARGIN:
+                for diamond, x in zip(members, forward):
+                    diamond["x"] = x
+        for diamond in members:
+            diamond["y"] = lane_middle(channel)
+            page_width = max(page_width, diamond["x"] + diamond["width"] / 2 + SIDE_STUB + MARGIN)
+
+    # Diamond ports: the first leg in a direction uses the top/bottom vertex, a second uses a side vertex.
+    for diamond in diamonds:
+        used: set[str] = set()
+        for leg in diamond["legs"]:
+            vertical = "top" if leg["direction"] == "up" else "bottom"
+            if vertical not in used:
+                leg["diamond_port"] = vertical
+                used.add(vertical)
+            else:
+                toward = entity_center(leg["table"]) if not leg["kind"].startswith("C") else vchannel_center(leg["vchannel"])
+                side = "left" if toward < diamond["x"] and "left" not in used else "right" if "right" not in used else "left"
+                leg["diamond_port"] = side
+                used.add(side)
+            if leg["diamond_port"] in ("top", "bottom"):
+                leg["stub_x"] = diamond["x"]
+            elif leg["diamond_port"] == "left":
+                leg["stub_x"] = diamond["x"] - diamond["width"] / 2 - SIDE_STUB
+            else:
+                leg["stub_x"] = diamond["x"] + diamond["width"] / 2 + SIDE_STUB
+
+    # ---- 4. Entity ports, ordered by where each leg heads first ----------------------------------
+    for (table, side), members in side_ports.items():
+        def heading(leg: dict) -> float:
+            return vchannel_center(leg["vchannel"]) if leg["kind"].startswith("C") else leg["stub_x"]
+        for leg, port_x in zip(sorted(members, key=lambda leg: (heading(leg), leg["diamond"]["index"])), port_positions(table, side)):
+            leg["port_x"] = port_x
+
+    # ---- 5. Tracks: one per segment in each band and vertical channel -----------------------------
+    for j, members in vchannel_members.items():
+        for slot, leg in enumerate(sorted(members, key=lambda leg: (leg["port_x"], leg["diamond"]["index"]))):
+            leg["v_x"] = vchannel_x[j] + VCHANNEL_PAD + slot * TRACK
+
+    def band_segment(leg: dict, band: tuple[int, str]) -> tuple[float, float, str, str]:
+        """(x1, x2, end1 vertical direction, end2 vertical direction) of the leg's run in a band."""
+        channel, direction = band
+        if not leg["kind"].startswith("C"):
+            entity_end = "up" if direction == "up" else "down"
+            diamond_end = "down" if direction == "up" else "up"
+            return leg["port_x"], leg["stub_x"], entity_end, diamond_end
+        if band == leg["arrival_band"] and band != leg["departure_band"]:
+            entity_end = "up" if direction == "up" else "down"
+            channel_end = "down" if leg["kind"] == "C_up" else "up"
+            return leg["port_x"], leg["v_x"], entity_end, channel_end
+        diamond_end = "down" if direction == "up" else "up"
+        channel_end = "up" if leg["kind"] == "C_up" else "down"
+        return leg["stub_x"], leg["v_x"], diamond_end, channel_end
+
+    track_y: dict[tuple[int, int, tuple[int, str]], float] = {}
+
+    def track(leg: dict, band: tuple[int, str]) -> float:
+        return track_y[(leg["diamond"]["index"], 0 if leg["role"] == "source" else 1, band)]
+
+    def assign_band_tracks() -> None:
+        for band, members in band_members.items():
+            items = []
+            for leg in members:
+                x1, x2, d1, d2 = band_segment(leg, band)
+                length = abs(x2 - x1)
+                # Starting order: both ends rising at the top (shortest first), both falling at the bottom.
+                group = 0 if d1 == d2 == "up" else 2 if d1 == d2 == "down" else 1
+                key = (group, length if group == 0 else -length if group == 2 else min(x1, x2), leg["diamond"]["index"], leg["role"])
+                ends = [(x1, -1 if d1 == "up" else 1), (x2, -1 if d2 == "up" else 1)]
+                items.append((key, min(x1, x2), max(x1, x2), ends))
+            top = band_top(*band) + BAND_PAD
+            for slot, item in enumerate(order_tracks(items)):
+                leg = members[item]
+                track_y[(leg["diamond"]["index"], 0 if leg["role"] == "source" else 1, band)] = top + slot * TRACK
+
+    def assign_vertical_tracks() -> None:
+        for j, members in vchannel_members.items():
+            items = []
+            for leg in members:
+                arrival, departure = track(leg, leg["arrival_band"]), track(leg, leg["departure_band"])
+                ends = [(arrival, -1 if leg["port_x"] < vchannel_x[j] else 1), (departure, -1 if leg["stub_x"] < vchannel_x[j] else 1)]
+                items.append(((leg["v_x"], leg["diamond"]["index"]), min(arrival, departure), max(arrival, departure), ends))
+            for slot, item in enumerate(order_tracks(items)):
+                members[item]["v_x"] = vchannel_x[j] + VCHANNEL_PAD + slot * TRACK
+
+    # Band order depends on where vertical tracks sit and vice versa, so settle them alternately.
+    assign_band_tracks()
+    for _round in range(3):
+        assign_vertical_tracks()
+        assign_band_tracks()
+
+    # ---- 6. Emit cells ---------------------------------------------------------------------------
+    nodes: list[str] = []
+    edges: list[str] = []
+    for table in tables:
+        bx, by, bw, bh = entity_box[table]
+        row, _column = position[table]
+        nodes.append(cell(f"entity_{table}", paper_name(table), STYLES["entity"], bx, by, bw, bh))
+        attribute_top = row_y[row] + ROW_PAD
+        left_count = ceil(len(tables[table]) / 2)
+        for index, attribute in enumerate(tables[table]):
+            row_index, side = divmod(index, 2)
+            ax = bx - ATTRIBUTE_GAP - ATTRIBUTE_WIDTH if side == 0 else bx + bw + ATTRIBUTE_GAP
+            ay = attribute_top + row_index * ATTRIBUTE_STEP
+            label = f"<u>{attribute.name}</u>" if attribute.primary_key else attribute.name
+            attribute_id = f"attr_{table}_{attribute.name}"
+            nodes.append(cell(attribute_id, label, STYLES["attribute"], ax, ay, ATTRIBUTE_WIDTH, ATTRIBUTE_HEIGHT))
+            spread = 0.15 + 0.7 * (row_index / max(1, left_count - 1)) if left_count > 1 else 0.5
+            connection = (
+                f"exitX=1;exitY=0.5;entryX=0;entryY={spread:.3f};" if side == 0 else
+                f"exitX=0;exitY=0.5;entryX=1;entryY={spread:.3f};"
+            )
+            edges.append(
+                f'        <mxCell id="ae_{table}_{index}" edge="1" parent="1" source="{attribute_id}" '
+                f'target="entity_{table}" style="{ATTRIBUTE_EDGE}{connection}" value="">\n'
+                '          <mxGeometry relative="1" as="geometry" />\n'
+                "        </mxCell>"
+            )
+
+    for diamond in diamonds:
+        relation = diamond["relation"]
+        dx, dy, width = diamond["x"], diamond["y"], diamond["width"]
         nodes.append(cell(
-            diamond_id,
-            (
-                f"<b>{relationship_code} · {relationship_title(relation.source_field)}</b><br>"
-                f"{display_name(relation.source_table)}.{relation.source_field} ({source_cardinality})"
-                f" → {display_name(relation.target_table)}.{relation.target_field} (1)"
-            ),
-            styles["relationship"],
-            int(diamond_x), diamond_y, diamond_width, diamond_height,
+            f"relationship_{diamond['index']}",
+            f"<b>{diamond['code']}</b><br>{relationship_title(relation.source_field)}<br><i>{relation.source_field}</i>",
+            STYLES["relationship"], dx - width / 2, dy - DIAMOND_HEIGHT / 2, width, DIAMOND_HEIGHT,
         ))
+        for leg in diamond["legs"]:
+            bx, by, bw, bh = entity_box[leg["table"]]
+            start = (leg["port_x"], by if leg["side"] == "top" else by + bh)
+            port = leg["diamond_port"]
+            entry = {
+                "top": (dx, dy - DIAMOND_HEIGHT / 2), "bottom": (dx, dy + DIAMOND_HEIGHT / 2),
+                "left": (dx - width / 2, dy), "right": (dx + width / 2, dy),
+            }[port]
+            points = [start]
+            if leg["kind"].startswith("C"):
+                arrival = track(leg, leg["arrival_band"])
+                departure = track(leg, leg["departure_band"])
+                points += [(leg["port_x"], arrival), (leg["v_x"], arrival), (leg["v_x"], departure), (leg["stub_x"], departure)]
+            else:
+                level = track(leg, leg["departure_band"])
+                points += [(leg["port_x"], level), (leg["stub_x"], level)]
+            if port in ("left", "right"):
+                points.append((leg["stub_x"], dy))
+            points.append(entry)
+            cleaned = [points[0]]
+            for point in points[1:]:
+                if abs(point[0] - cleaned[-1][0]) > 0.01 or abs(point[1] - cleaned[-1][1]) > 0.01:
+                    cleaned.append(point)
+            waypoints = cleaned[1:-1]
+            total = path_length(cleaned)
+            label_position = 1 - 2 * min(20, total / 3) / total if total else 0
+            exit_x = (leg["port_x"] - bx) / bw
+            exit_y = 0 if leg["side"] == "top" else 1
+            entry_x, entry_y = {"top": (0.5, 0), "bottom": (0.5, 1), "left": (0, 0.5), "right": (1, 0.5)}[port]
+            style = (
+                f"{LEG_EDGE}exitX={exit_x:.4f};exitY={exit_y};exitDx=0;exitDy=0;exitPerimeter=0;"
+                f"entryX={entry_x};entryY={entry_y};entryDx=0;entryDy=0;entryPerimeter=0;"
+            )
+            value = cardinality(relation) if leg["role"] == "source" else "1"
+            point_xml = "".join(f'<mxPoint x="{px:.1f}" y="{py:.1f}" />' for px, py in waypoints)
+            edges.append(
+                f'        <mxCell id="re_{diamond["index"]}_{leg["role"]}" edge="1" parent="1" '
+                f'source="entity_{leg["table"]}" target="relationship_{diamond["index"]}" style="{style}" '
+                f'value="{value}">\n'
+                f'          <mxGeometry relative="1" x="{label_position:.4f}" as="geometry"><Array as="points">{point_xml}</Array></mxGeometry>\n'
+                "        </mxCell>"
+            )
 
-        source_entity_x, source_entity_y, source_width, source_height = entity_layout[relation.source_table]
-        target_entity_x, target_entity_y, target_width, target_height = entity_layout[relation.target_table]
-        source_center_x = source_entity_x + source_width / 2
-        target_center_x = target_entity_x + target_width / 2
-        source_clear_y = entity_clear_routes[relation.source_table]
-        target_clear_y = entity_clear_routes[relation.target_table]
-        source_entry_x = 0.0 if source_trunk_x < diamond_center_x else 1.0
-        target_entry_x = 0.0 if target_trunk_x < diamond_center_x else 1.0
-        edges.append(routed_edge(
-            f"re_{index}_source",
-            f"entity_{relation.source_table}",
-            diamond_id,
-            f"{relationship_code} · {source_cardinality}",
-            0.5,
-            source_entry_x,
-            0.28,
-            [
-                (source_center_x, source_clear_y),
-                (source_trunk_x, source_clear_y),
-                (source_trunk_x, source_rail_y),
-            ],
-        ))
-        edges.append(routed_edge(
-            f"re_{index}_target",
-            f"entity_{relation.target_table}",
-            diamond_id,
-            f"{relationship_code} · 1",
-            0.5,
-            target_entry_x,
-            0.72,
-            [
-                (target_center_x, target_clear_y),
-                (target_trunk_x, target_clear_y),
-                (target_trunk_x, target_rail_y),
-            ],
-        ))
-
-    legend_y = relationship_start_y + len(ordered_relationships) * relationship_row_height + 70
+    legend_y = grid_bottom + 60
     nodes.extend([
-        cell("legend_entity", "ENTITY", styles["entity_ref"], 100, legend_y + 8, 300, 48),
-        cell("legend_relation", "RELATIONSHIP", styles["relationship"], 470, legend_y, 320, 68),
-        cell("legend_attribute", "ATTRIBUTE", styles["attribute"], 860, legend_y + 10, 340, 38),
+        cell("note", (
+            f"Every diamond sits on the path between its two entities, and every line has its own track. "
+            f"R001-R{len(relations):03d} match ERD_CURRENT_CONNECTIONS.md; cardinality (1, 0..1, N) is printed beside each diamond; "
+            "bridge arcs mark where two lines cross without connecting."
+        ), STYLES["note"], page_width / 2 - 1800, 95, 3600, 40),
+        cell("legend_entity", "ENTITY", STYLES["entity"], MARGIN, legend_y + 8, 300, 48),
+        cell("legend_relation", "RELATIONSHIP", STYLES["relationship"], MARGIN + 370, legend_y, 320, 68),
+        cell("legend_attribute", "ATTRIBUTE", STYLES["attribute"], MARGIN + 760, legend_y + 10, 340, 38),
         cell(
             "scope_note",
-            f"Complete DBML scope: {len(tables)} entities, {sum(len(attributes) for attributes in tables.values())} attributes, and {len(relationships)} relationships. Underlined attributes are primary keys; 1, 0..1, and N state cardinality.",
-            "text;html=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#475569;align=left;",
-            1300, legend_y + 8, 2500, 48,
+            f"Complete DBML scope: {len(tables)} entities, {sum(len(a) for a in tables.values())} attributes, and "
+            f"{len(relations)} relationships. Underlined attributes are primary keys.",
+            STYLES["legend_text"], MARGIN + 1200, legend_y + 8, 2600, 48,
         ),
     ])
-
     page_height = legend_y + 160
     body = "\n".join(nodes + edges)
     return f'''<mxfile host="Electron" agent="Codex" pages="1">
   <diagram id="afn-full-chen-erd" name="AFN Full Chen ERD">
-    <mxGraphModel dx="2400" dy="1600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="{page_width}" pageHeight="{page_height}" math="0" shadow="0">
+    <mxGraphModel dx="2400" dy="1600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="{ceil(page_width)}" pageHeight="{ceil(page_height)}" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=26;fontStyle=1" value="Entity Relationship Diagram of the AFN Service Management System" vertex="1">
-          <mxGeometry x="{page_width // 2 - 900}" y="25" width="1800" height="45" as="geometry" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=30;fontStyle=1" value="Entity Relationship Diagram of the AFN Service Management System" vertex="1">
+          <mxGeometry x="{page_width / 2 - 1200:.1f}" y="30" width="2400" height="50" as="geometry" />
         </mxCell>
 {body}
       </root>

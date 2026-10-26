@@ -299,7 +299,9 @@ Search for that marker after every handoff.
    field report, commissioning data, incomplete submission rejection, and final
    successful submission.
 9. Test Awaiting Materials and On Hold with meaningful notes, then resume only
-   through allowed state transitions.
+   through allowed state transitions. When materials arrive, dispatch the
+   Awaiting Materials ticket straight from the Dispatch Board (it must be
+   treated as service work, not a second inspection).
 10. Complete the work with completion notes. Reload My Jobs and verify the job
     moves to `/technician/job-history` with actual timing, team, evidence,
     materials/equipment, report, warranty, documents, and timeline.
@@ -324,7 +326,24 @@ Search for that marker after every handoff.
 
 ### LIFE-07 Documents, quotation, and turnover
 
-On `/admin/documents`, test every offered document type that applies:
+`/admin/documents` is a job workspace: pick the ticket in the top bar, then work
+through the job-order tabs (Technical Data Sheet, Quotation, Contract,
+Commissioning, Turnover, Service Report). Each tab shows that document's state
+for the ticket; the left panel holds the named main action, missing information,
+and the deposit panel; the paper fits the screen (zoom −/+ and Fit) and prints
+at full size.
+
+1. On the Quotation tab, price the job and press **Send quotation to client**.
+   As the client, **Decline** with a reason. As the office, confirm the tab
+   shows *Declined*, change the price, and press **Send revised quotation**;
+   the number must become `QUO-…-R2` and the client must be notified. Accept it
+   as the client; the main button must then read *Quotation accepted* (locked).
+2. Record a partial deposit, void it with a reason, then record the full
+   amount; dispatch must be refused until the deposit is fully paid.
+3. On the Turnover tab, **Finalize project handover**, then confirm the
+   handover as the client.
+
+Then test every offered document type that applies:
 
 - quotation proposal;
 - installation contract;
@@ -383,7 +402,7 @@ Complete this even if the golden lifecycle already touched the page.
 
 | ID | Route | Minimum manual checks |
 | --- | --- | --- |
-| ADM-01 | `/admin/dashboard` | KPIs, attention links, pending decisions, active-job modal, refresh, empty/loading/error states |
+| ADM-01 | `/admin/dashboard` | KPIs, attention links, pending decisions, active-job modal, refresh, automatic update after a change elsewhere ("checks for updates every 5 seconds"), empty/loading/error states |
 | ADM-02 | `/admin/calendar` | Month/day navigation, filters, event detail, queue/dispatch/reschedule links, overlap warning |
 | ADM-03 | `/admin/service-tickets` | All queue views, search/filter/pagination at 10, detail, approval/rejection, status reason, reschedule, walk-in |
 | ADM-04 | `/admin/dispatch-board` | Ready-to-assign scope, select/team/review, best match, manual assignment, equipment plan |

@@ -49,12 +49,14 @@ flowchart LR
     Admin -->|"Request Approval Data"| P2
     P2 -->|"Service Request Record Data"| D2
 
-    Admin -->|"Assignment and Schedule Data"| P3
+    Admin -->|"Assignment, Quotation, Deposit, and Schedule Data"| P3
+    Client -->|"Quotation Decision Data"| P3
     D2 -->|"Approved Request Data"| P3
     P3 -->|"Service Ticket Record Data"| D3
     P3 -->|"Assigned Job Data"| Technician
 
-    Technician -->|"Job Status, Checklist, and Proof Data"| P4
+    Technician -->|"Job Status, Inspection Report, Hold, Checklist, and Proof Data"| P4
+    P4 -->|"Inspection Report and Findings"| P3
     D3 -->|"Assigned Ticket Data"| P4
     P4 -->|"Checklist and Proof Data"| D4
     P4 -->|"Inventory Usage Data"| D5

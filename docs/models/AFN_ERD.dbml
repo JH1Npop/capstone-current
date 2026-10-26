@@ -1,6 +1,6 @@
 Project AFN_Service_Management_Database_Schema {
   database_type: 'PostgreSQL'
-  Note: 'Generated from all 52 active AFN Django application models on 2026-10-18. Primary keys, columns, relationships, uniqueness, and nullability reflect the current model contract.'
+  Note: 'Generated from all 52 active AFN Django application models on 2026-10-23. Primary keys, columns, relationships, uniqueness, and nullability reflect the current model contract.'
 }
 
 Table inventory_equipmentreturnrequest {

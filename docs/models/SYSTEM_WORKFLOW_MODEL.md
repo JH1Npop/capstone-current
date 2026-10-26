@@ -29,14 +29,15 @@ flowchart TD
     R --> S
     S --> T["Client<br/>Accepts or declines quotation"]
     T --> U{"Accepted and deposit required?"}
-    U -- "Declined" --> E
+    U -- "Declined" --> S2["Admin / Superadmin<br/>Revises and resends the quotation<br/>(QUO-…-R2, decline reason kept)"]
+    S2 --> T
     U -- "No deposit" --> G["Admin / Superadmin<br/>Assigns lead technician, schedule,<br/>crew, and inventory needs"]
     U -- "Deposit required" --> V["SalesPayment<br/>Admin / Superadmin records money<br/>received outside the portal"]
     V --> W{"Required deposit fully paid?"}
     W -- "No" --> V
     W -- "Yes" --> G
     G --> H["Technician<br/>Views assigned job and schedule"]
-    H --> I["Technician<br/>Starts work and updates job status"]
+    H --> I["Technician<br/>Travels, arrives by GPS, starts work;<br/>may hold and resume the job"]
     I --> J["InspectionChecklist<br/>Technician completes checklist<br/>and uploads proof"]
     J --> K{"Checklist Complete?"}
     K -- "No" --> J
@@ -55,7 +56,7 @@ flowchart TD
     classDef support fill:#fee2e2,stroke:#dc2626,stroke-width:2px,color:#0f172a
 
     class A,M,T client
-    class C,G,S,V admin
+    class C,G,S,S2,V admin
     class H,I,J tech
     class B,F,L,R,X data
     class D,K,Q,U,W decision

@@ -14,7 +14,7 @@ Status meanings:
 
 | Feature | React route | Primary APIs | Capability | Status |
 | --- | --- | --- | --- | --- |
-| Operations dashboard | `/admin/dashboard` | dashboard and SLA summaries | `supervisor.dashboard.view` | Parity; unrelated admin capabilities cannot retrieve the full dashboard and login redirects select the first authorized workspace |
+| Operations dashboard | `/admin/dashboard` | dashboard and SLA summaries; `/api/dashboard/changes/?role=admin` change token polled every 5 seconds (full reload only when it changes or once a minute) | `supervisor.dashboard.view` | Parity; unrelated admin capabilities cannot retrieve the full dashboard and login redirects select the first authorized workspace |
 | Service tickets | `/admin/service-tickets` | service requests, tickets, service locations, inspections, and administrator progress updates | `supervisor.tickets.view`, `services.requests.review`, `services.tickets.manage` | Parity for core request review and ticket mutations, including legacy location/inspection/progress endpoints; document/report actions are tracked separately |
 | Dispatch board/calendar | `/admin/dispatch-board`, `/admin/calendar` | ticket assignment, calendar, auto-dispatch | `supervisor.dispatch.view` | Parity; routes, calendar reads, dispatch lists, and dispatch actions share the capability boundary |
 | Technician tracking | `/admin/technician-tracking` | tracking, technician locations, legacy GIS dashboard | `supervisor.tracking.view` | Parity |
@@ -37,7 +37,7 @@ Status meanings:
 
 | Feature | React route | Capability | Object scope | Status |
 | --- | --- | --- | --- | --- |
-| Dashboard | `/technician/dashboard` | `technician.dashboard.view` | Signed-in technician | Parity |
+| Dashboard | `/technician/dashboard` | `technician.dashboard.view` | Signed-in technician; `/api/dashboard/changes/?role=technician` uses the same workspace check | Parity |
 | Jobs | `/technician/my-jobs` | `technician.jobs.view` | Lead or crew assignment | Parity |
 | Schedule | `/technician/schedule` | `technician.schedule.view` | Own schedule | Parity |
 | Navigation | `/technician/map-navigation` | `technician.navigation.view` | Assigned jobs | Parity |

@@ -46,7 +46,7 @@
         <mxCell id="a3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#7c3aed;fontSize=12;fontStyle=1" value="Admin / Superadmin" vertex="1">
           <mxGeometry height="50" width="160" x="30" y="444" as="geometry" />
         </mxCell>
-        <mxCell id="p3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="3.0&lt;br&gt;&lt;b&gt;Manage Ticket Dispatch&lt;/b&gt;&lt;br&gt;approve, inspect, verify quotation/deposit, schedule, assign crew" vertex="1">
+        <mxCell id="p3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="3.0&lt;br&gt;&lt;b&gt;Manage Ticket Dispatch&lt;/b&gt;&lt;br&gt;approve, inspection decision, send/revise quotation, deposit gate, schedule, assign lead and crew" vertex="1">
           <mxGeometry height="88" width="250" x="330" y="425" as="geometry" />
         </mxCell>
         <mxCell id="d4" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D4  Service Ticket, Crew, Quotation, Status, Progress, and History Records" vertex="1">
@@ -58,7 +58,7 @@
         <mxCell id="a4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ddd6fe;strokeColor=#7c3aed;fontSize=12;fontStyle=1" value="Technician" vertex="1">
           <mxGeometry height="50" width="160" x="55" y="595" as="geometry" />
         </mxCell>
-        <mxCell id="p4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="4.0&lt;br&gt;&lt;b&gt;Manage Technician Job Completion&lt;/b&gt;&lt;br&gt;status update, checklist, proof, completion notes" vertex="1">
+        <mxCell id="p4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde8c8;strokeColor=#d97706;fontSize=12" value="4.0&lt;br&gt;&lt;b&gt;Manage Technician Field Work&lt;/b&gt;&lt;br&gt;GPS arrival, inspection report, hold/resume, checklist, proof, Finish Job" vertex="1">
           <mxGeometry height="96" width="250" x="330" y="575" as="geometry" />
         </mxCell>
         <mxCell id="d5" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D5  Checklist and Proof Records" vertex="1">
@@ -133,13 +133,13 @@
         <mxCell id="ea2" edge="1" parent="1" source="a2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p2" value="service request data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="ea3" edge="1" parent="1" source="a3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p3" value="approval / quotation / payment / dispatch data">
+        <mxCell id="ea3" edge="1" parent="1" source="a3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p3" value="approval, quotation,&lt;br&gt;payment, dispatch data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="ea4" edge="1" parent="1" source="a4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p4" value="job completion data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="ea5" edge="1" parent="1" source="a5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p5" value="inventory, sale and external payment data">
+        <mxCell id="ea5" edge="1" parent="1" source="a5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p5" value="inventory, sale,&lt;br&gt;payment data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="ea6" edge="1" parent="1" source="a6" style="edgeStyle=entityRelationEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;fontSize=10;strokeWidth=1.2" target="p6" value="follow-up or maintenance details">
@@ -187,7 +187,7 @@
         <mxCell id="ps5a" edge="1" parent="1" source="d6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="p5" value="stock and requirement data">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="ps5b" edge="1" parent="1" source="p5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="d7" value="reservation / transaction / sale / payment records">
+        <mxCell id="ps5b" edge="1" parent="1" source="p5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="d7" value="reservation, transaction,&lt;br&gt;sale, payment records">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="ps6a" edge="1" parent="1" source="p6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2" target="d8" value="case records">
@@ -260,6 +260,29 @@
             <mxPoint x="-71" y="71" as="offset" />
             <mxPoint x="454.76" y="1165" as="sourcePoint" />
             <mxPoint x="454.76" y="1234" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d2b" parent="1" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;fillColor=#ffffff;strokeColor=#64748b;fontSize=12" value="D2  Service Type, SLA, and Skill Records" vertex="1">
+          <mxGeometry height="36" width="330" x="770" y="688" as="geometry" />
+        </mxCell>
+        <mxCell id="ea2q" edge="1" parent="1" source="a2" target="p3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.12;entryY=0;entryDx=0;entryDy=0" value="quotation accept / decline">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="135" y="400" />
+              <mxPoint x="360" y="400" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="mf3r" edge="1" parent="1" source="p4" target="p3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2;labelBackgroundColor=#ffffff;exitX=0.92;exitY=0;exitDx=0;exitDy=0;entryX=0.92;entryY=1;entryDx=0;entryDy=0" value="inspection report and findings">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="85" y="0" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ps4c" edge="1" parent="1" source="d2b" target="p4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;strokeWidth=1.2;labelBackgroundColor=#ffffff;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.84;entryY=1;entryDx=0;entryDy=0" value="service and inspection checklists">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="540" y="706" />
+            </Array>
           </mxGeometry>
         </mxCell>
       </root>
