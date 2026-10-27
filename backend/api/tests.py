@@ -5,6 +5,7 @@ from django.test import override_settings
 from django.core.files.storage import default_storage
 from unittest.mock import patch
 from services.tests.proof_fixtures import completion_photo
+from services.views.technician import TechnicianJobsView
 from rest_framework.test import APITestCase
 
 from inventory.models import InventoryCategory, InventoryItem, InventoryReservation, InventoryTransaction
@@ -595,6 +596,59 @@ class DataPersistenceSmokeTests(APITestCase):
                 }, format='multipart')
         self.assertEqual(len(saved_names), 1)
         self.assertFalse(default_storage.exists(saved_names[0]))
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, 'In Progress')
+
+    @override_settings(STORAGES={'default': {'BACKEND': 'django.core.files.storage.InMemoryStorage'}})
+    def test_completion_upload_finishes_storage_before_ticket_row_lock(self):
+        _, ticket = self._equipment_hold_fixture()
+        InspectionChecklist.objects.create(ticket=ticket, is_completed=True)
+        self.client.force_authenticate(user=self.technician)
+        real_save = default_storage.save
+        real_get_locked_job = TechnicianJobsView.get_locked_job
+        events = []
+
+        def record_save(*args, **kwargs):
+            events.append('storage')
+            return real_save(*args, **kwargs)
+
+        def record_lock(view, *args, **kwargs):
+            events.append('lock')
+            return real_get_locked_job(view, *args, **kwargs)
+
+        with patch.object(default_storage, 'save', side_effect=record_save), patch.object(
+            TechnicianJobsView,
+            'get_locked_job',
+            autospec=True,
+            side_effect=record_lock,
+        ):
+            response = self.client.post(f'/api/technician/jobs/{ticket.id}/status/', {
+                'status': 'completed',
+                'completion_photo_files': completion_photo(),
+                'inventory_usage': '[]',
+            }, format='multipart')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn('storage', events)
+        self.assertIn('lock', events)
+        self.assertLess(events.index('storage'), events.index('lock'))
+
+    @override_settings(STORAGES={'default': {'BACKEND': 'django.core.files.storage.InMemoryStorage'}})
+    def test_completion_rejects_more_than_twenty_files_before_storage(self):
+        _, ticket = self._equipment_hold_fixture()
+        InspectionChecklist.objects.create(ticket=ticket, is_completed=True)
+        self.client.force_authenticate(user=self.technician)
+
+        with patch.object(default_storage, 'save', wraps=default_storage.save) as storage_save:
+            response = self.client.post(f'/api/technician/jobs/{ticket.id}/status/', {
+                'status': 'completed',
+                'completion_photo_files': [completion_photo() for _ in range(21)],
+                'inventory_usage': '[]',
+            }, format='multipart')
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn('media_files', response.data)
+        storage_save.assert_not_called()
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'In Progress')
 

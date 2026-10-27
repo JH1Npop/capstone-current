@@ -80,6 +80,8 @@ __all__ = ['record_arrival_validation_log', 'compute_arrival_validation_result',
     'build_initial_ticket_payload',
     'normalize_proof_media_payload',
     'save_uploaded_proof_media',
+    'validate_proof_upload_batch',
+    'cleanup_failed_proof_uploads',
     'collect_completion_proof',
     'cleanup_failed_completion_uploads',
     'parse_inventory_usage',
@@ -829,24 +831,51 @@ def save_uploaded_proof_media(*, ticket, uploaded_files, request=None, media_typ
     return normalized_media
 
 
-def cleanup_failed_completion_uploads(view):
-    """Wrap the transaction so failed completions also undo their nontransactional file writes."""
+MAX_PROOF_UPLOAD_FILES = 20
+MAX_PROOF_UPLOAD_BYTES = 50 * 1024 * 1024
+
+
+def validate_proof_upload_batch(*file_groups):
+    """Bound the complete multipart proof batch before any storage write begins."""
+    uploaded_files = [uploaded_file for group in file_groups for uploaded_file in list(group or [])]
+    if len(uploaded_files) > MAX_PROOF_UPLOAD_FILES:
+        raise ValidationError({
+            'media_files': f'Upload no more than {MAX_PROOF_UPLOAD_FILES} photo and video files at a time.',
+        })
+
+    total_bytes = sum(max(0, int(getattr(uploaded_file, 'size', 0) or 0)) for uploaded_file in uploaded_files)
+    if total_bytes > MAX_PROOF_UPLOAD_BYTES:
+        raise ValidationError({
+            'media_files': 'The combined photo and video upload must be 50 MB or smaller.',
+        })
+    return uploaded_files
+
+
+def cleanup_failed_proof_uploads(view):
+    """Delete nontransactional storage writes whenever the surrounding API action fails."""
     @wraps(view)
-    def wrapped(self, request, *args, **kwargs):
-        request._completion_upload_names = []
+    def wrapped(*args, **kwargs):
+        request = next((arg for arg in args if hasattr(arg, 'FILES') and hasattr(arg, 'user')), None)
+        if request is None:
+            return view(*args, **kwargs)
+
+        request._proof_upload_names = []
         succeeded = False
         try:
-            response = view(self, request, *args, **kwargs)
+            response = view(*args, **kwargs)
             succeeded = response.status_code < 400
             return response
         finally:
             if not succeeded:
-                for name in request._completion_upload_names:
+                for name in request._proof_upload_names:
                     try:
                         default_storage.delete(name)
                     except Exception:
-                        logger.exception('Unable to remove failed completion upload %s', name)
+                        logger.exception('Unable to remove failed proof upload %s', name)
     return wrapped
+
+
+cleanup_failed_completion_uploads = cleanup_failed_proof_uploads
 
 
 def collect_completion_proof(request, ticket):
@@ -864,9 +893,10 @@ def collect_completion_proof(request, ticket):
         raise ValueError('Upload completion photos as image files. Refresh the app and attach the photo again.')
 
     files = request.FILES.getlist('completion_photo_files') if hasattr(request.FILES, 'getlist') else []
+    validate_proof_upload_batch(files)
     uploaded = save_uploaded_proof_media(
         ticket=ticket, uploaded_files=files, request=request, media_type='photo',
-        saved_names=request._completion_upload_names,
+        saved_names=request._proof_upload_names,
     )
     return [entry['url'] for entry in uploaded]
 

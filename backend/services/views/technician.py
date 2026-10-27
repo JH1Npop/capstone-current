@@ -233,6 +233,15 @@ class TechnicianJobsView(viewsets.ViewSet):
             return [CanViewTechnicianJobs()]
         return [permissions.IsAuthenticated()]
 
+    def get_job_queryset(self):
+        return ServiceTicket.objects.select_related(
+            'request__client',
+            'request__location',
+            'request__service_type',
+            'assigned_admin',
+            'technician__technician_profile',
+        )
+
     def get_locked_job_queryset(self):
         # Lock only the ticket row. The related location, assigned admin, and
         # technician profile joins are nullable, and PostgreSQL rejects FOR
@@ -240,13 +249,13 @@ class TechnicianJobsView(viewsets.ViewSet):
         # the base ticket queryset so PostgreSQL also avoids the DISTINCT added
         # by the lead-or-crew access query, which cannot be combined with a row
         # lock.
-        return ServiceTicket.objects.select_for_update(of=('self',)).select_related(
-            'request__client',
-            'request__location',
-            'request__service_type',
-            'assigned_admin',
-            'technician__technician_profile',
-        )
+        return self.get_job_queryset().select_for_update(of=('self',))
+
+    def get_job(self, user, pk):
+        ticket = self.get_job_queryset().get(pk=pk)
+        if not ticket_has_technician_access(ticket, user):
+            raise ServiceTicket.DoesNotExist
+        return ticket
 
     def get_locked_job(self, user, pk):
         ticket = self.get_locked_job_queryset().get(pk=pk)
@@ -582,8 +591,41 @@ class TechnicianJobsView(viewsets.ViewSet):
         })
 
     @cleanup_failed_completion_uploads
-    @transaction.atomic
     def update_status(self, request, pk=None):
+        requested_status = str(request.data.get('status', '')).strip().lower()
+        prepared_completion = None
+        if requested_status == 'completed':
+            try:
+                ticket = self.get_job(request.user, pk)
+            except ServiceTicket.DoesNotExist:
+                return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
+            if ticket.status != 'In Progress':
+                return Response({
+                    'error': 'You must start the job before completing it.',
+                    'status': ticket.status,
+                }, status=status.HTTP_400_BAD_REQUEST)
+            if ticket.technician_id != request.user.id:
+                return Response({
+                    'error': 'Only the lead technician can complete this ticket.',
+                    'status': ticket.status,
+                }, status=status.HTTP_403_FORBIDDEN)
+            try:
+                ensure_ticket_checklist_completed(ticket)
+                inventory_usage = parse_inventory_usage(request.data.get('inventory_usage'))
+                proof_images = collect_completion_proof(request, ticket)
+                ensure_ticket_completion_proof(ticket, proof_images)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            prepared_completion = {
+                'inventory_usage': inventory_usage,
+                'proof_images': proof_images,
+                'completion_notes': request.data.get('completion_notes') or '',
+            }
+
+        return self._update_status_locked(request, pk, requested_status, prepared_completion)
+
+    @transaction.atomic
+    def _update_status_locked(self, request, pk, requested_status, prepared_completion=None):
         """Update a technician job status using the ticket workflow"""
         try:
             ticket = self.get_locked_job(request.user, pk)
@@ -591,7 +633,6 @@ class TechnicianJobsView(viewsets.ViewSet):
         except ServiceTicket.DoesNotExist:
             return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        requested_status = str(request.data.get('status', '')).strip().lower()
         status_map = {
             'accepted': 'Not Started',
             'in_progress': 'In Progress',
@@ -651,14 +692,10 @@ class TechnicianJobsView(viewsets.ViewSet):
         status_notes = f'Technician updated job status to {new_status}'
         inventory_usage = None
         if new_status == 'Completed':
-            try:
-                inventory_usage = parse_inventory_usage(request.data.get('inventory_usage'))
-                proof_images = collect_completion_proof(request, ticket)
-                ensure_ticket_completion_proof(ticket, proof_images)
-            except ValueError as exc:
-                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-            completion_notes = request.data.get('completion_notes') or ''
+            prepared_completion = prepared_completion or {}
+            inventory_usage = prepared_completion.get('inventory_usage')
+            proof_images = prepared_completion.get('proof_images') or []
+            completion_notes = prepared_completion.get('completion_notes') or ''
             ticket.completion_proof_images = proof_images
             ticket.completion_notes = completion_notes
             extra_update_fields = ['completion_proof_images', 'completion_notes']

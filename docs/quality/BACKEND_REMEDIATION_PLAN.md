@@ -36,7 +36,7 @@ Exit evidence:
 
 ## Phase 1 — Stabilize critical backend workflows
 
-Status update (2026-10-27): the REL-001 shared ticket-lock code repair and regression coverage pass the complete release gate. Commit `a9da39758cfc466b896b6e9a7c7adba9149d3cfc` is live on PostgreSQL-backed staging through Render deployment `dep-dbg4feoae00c73fo0ml0`; startup, health, perimeter, and post-cutover error-log checks passed without recurrence. The exact authenticated technician action remains a manual live-UAT step. Dependency and public-error-safety work in this phase is not yet complete.
+Status update (2026-10-27): the REL-001 shared ticket-lock repair is live and stable on PostgreSQL-backed staging. The uncommitted hardening batch upgrades DRF to 3.18.3 and cryptography to 50.0.2; dependency integrity, the complete release gate, and a fresh audit pass with only the unresolved Twisted findings remaining. Deployment and authenticated UAT are pending. Public-error-safety work in this phase is not yet complete.
 
 Objective: restore core technician workflows and remove immediately actionable security exposure.
 
@@ -48,6 +48,12 @@ Objective: restore core technician workflows and remove immediately actionable s
 - Verify concurrent attempts preserve state-machine rules and do not allow unauthorized row discovery.
 
 ### 1B. Dependency remediation
+
+Implementation update (2026-10-27): the DRF and cryptography upgrades below
+are complete and locally validated. Twisted 26.4.0 remains because the current
+audit lists five fixes only in 26.10.0rc1 and one advisory without a fix; do not
+replace stable production infrastructure with that release candidate without a
+separate compatibility/proxy review. Frontend build/dev advisories remain.
 
 - Upgrade DRF to at least 3.18.2 for the three reported advisories.
 - Upgrade `cryptography` to at least 50.0.0 after compatibility validation.
@@ -103,6 +109,13 @@ Primary risk: lock-order or idempotency changes can introduce authorization gaps
 Rollback: use backward-compatible schema expansion, leave old columns/contracts readable through the rollback window, and restore only from the verified backup when forward correction is unsafe.
 
 ## Phase 3 — Optimize slow endpoints and resource usage
+
+Implementation update (2026-10-27): the core proof-media paths now stage
+validated object writes outside ticket row locks and finalize inside short
+atomic blocks with authorization/state rechecks and compensating cleanup. A
+combined 20-file/50-MB backend budget and matching technician UI preflight are
+implemented and covered by regressions. Durable quarantine/scanning, an orphan
+ledger/sweeper, provider idempotency, and non-proof external calls remain.
 
 Objective: remove external network work and unreliable threads from request-critical transactions.
 

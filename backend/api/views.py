@@ -23,12 +23,14 @@ from services.tracking_config import get_tracking_config
 from services.views.helpers import (
     ACTIVE_TICKET_STATUSES,
     _display_name,
+    cleanup_failed_proof_uploads,
     get_visible_service_tickets_queryset,
     keep_inspection_proof_media,
     normalize_proof_media_payload,
     save_uploaded_proof_media,
     sync_ticket_maintenance_schedule,
     ticket_has_technician_access,
+    validate_proof_upload_batch,
 )
 from services.maintenance import MAINTENANCE_RULES, resolve_interval_days
 from users.models import User, Management, Technician, Client, AdminSettings
@@ -437,7 +439,7 @@ def tracking_view(request):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-@transaction.atomic
+@cleanup_failed_proof_uploads
 def checklist_view(request):
     """Compatibility endpoint for technician checklist submissions."""
     if request.user.role != 'technician':
@@ -448,7 +450,7 @@ def checklist_view(request):
         return Response({'error': 'jobId is required'}, status=400)
 
     try:
-        ticket = ServiceTicket.objects.select_for_update().get(id=ticket_id)
+        ticket = ServiceTicket.objects.get(id=ticket_id)
     except ServiceTicket.DoesNotExist:
         return Response({'error': 'Ticket not found'}, status=404)
 
@@ -582,59 +584,77 @@ def checklist_view(request):
 
     uploaded_proof_media = []
     if hasattr(request.FILES, 'getlist'):
+        photo_files = request.FILES.getlist('photo_files')
+        video_files = request.FILES.getlist('video_files')
+        validate_proof_upload_batch(photo_files, video_files)
         uploaded_proof_media.extend(
             save_uploaded_proof_media(
                 ticket=ticket,
-                uploaded_files=request.FILES.getlist('photo_files'),
+                uploaded_files=photo_files,
                 request=request,
                 media_type='photo',
+                saved_names=request._proof_upload_names,
             )
         )
         uploaded_proof_media.extend(
             save_uploaded_proof_media(
                 ticket=ticket,
-                uploaded_files=request.FILES.getlist('video_files'),
+                uploaded_files=video_files,
                 request=request,
                 media_type='video',
+                saved_names=request._proof_upload_names,
             )
         )
 
     normalized_proof_media += uploaded_proof_media
     submitted_media_count = len(normalized_proof_media)
-    existing_checklist = InspectionChecklist.objects.filter(ticket=ticket).only('proof_media').first()
-    if existing_checklist:
-        # The record may hold this ticket's earlier inspection; never drop its site photos.
-        normalized_proof_media = keep_inspection_proof_media(existing_checklist.proof_media, normalized_proof_media)
+    with transaction.atomic():
+        try:
+            ticket = ServiceTicket.objects.select_for_update(of=('self',)).get(id=ticket_id)
+        except ServiceTicket.DoesNotExist:
+            return Response({'error': 'Ticket not found'}, status=404)
+        if not ticket_has_technician_access(ticket, request.user):
+            return Response({'error': 'Ticket not found'}, status=404)
+        if ticket.status in CLOSED_TICKET_STATUSES:
+            return Response(
+                {'error': 'This job is already closed, so its checklist can no longer be edited.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-    checklist, _ = InspectionChecklist.objects.update_or_create(
-        ticket=ticket,
-        defaults={
-            'is_completed': all_complete,
-            'completed_at': timezone.now() if all_complete else None,
-            'completed_by': request.user if all_complete else None,
-            'submitted_by': request.user,
-            'submitted_at': timezone.now(),
-            'additional_notes': notes,
-            'maintenance_required': maintenance_required,
-            'maintenance_profile': maintenance_profile,
-            'maintenance_interval_days': maintenance_interval_days,
-            'maintenance_notes': maintenance_notes,
-            'service_type_label': service_type_label,
-            'procedure_source': procedure_source,
-            'checklist_items': checklist_items,
-            'required_equipment_snapshot': required_equipment_snapshot,
-            'proof_media': normalized_proof_media,
-            'warranty_provided': warranty_provided,
-            'warranty_period_days': warranty_period_days,
-            'warranty_notes': warranty_notes,
-            'follow_up_required': follow_up_required,
-            'follow_up_case_type': follow_up_case_type,
-            'follow_up_due_date': follow_up_due_date,
-            'follow_up_summary': follow_up_summary,
-            'follow_up_details': follow_up_details,
-        }
-    )
-    sync_ticket_maintenance_schedule(ticket)
+        existing_checklist = InspectionChecklist.objects.filter(ticket=ticket).only('proof_media').first()
+        if existing_checklist:
+            # The record may hold this ticket's earlier inspection; never drop its site photos.
+            normalized_proof_media = keep_inspection_proof_media(existing_checklist.proof_media, normalized_proof_media)
+
+        checklist, _ = InspectionChecklist.objects.update_or_create(
+            ticket=ticket,
+            defaults={
+                'is_completed': all_complete,
+                'completed_at': timezone.now() if all_complete else None,
+                'completed_by': request.user if all_complete else None,
+                'submitted_by': request.user,
+                'submitted_at': timezone.now(),
+                'additional_notes': notes,
+                'maintenance_required': maintenance_required,
+                'maintenance_profile': maintenance_profile,
+                'maintenance_interval_days': maintenance_interval_days,
+                'maintenance_notes': maintenance_notes,
+                'service_type_label': service_type_label,
+                'procedure_source': procedure_source,
+                'checklist_items': checklist_items,
+                'required_equipment_snapshot': required_equipment_snapshot,
+                'proof_media': normalized_proof_media,
+                'warranty_provided': warranty_provided,
+                'warranty_period_days': warranty_period_days,
+                'warranty_notes': warranty_notes,
+                'follow_up_required': follow_up_required,
+                'follow_up_case_type': follow_up_case_type,
+                'follow_up_due_date': follow_up_due_date,
+                'follow_up_summary': follow_up_summary,
+                'follow_up_details': follow_up_details,
+            }
+        )
+        sync_ticket_maintenance_schedule(ticket)
     return Response({
         'status': 'Checklist submitted',
         'checklist_id': checklist.id,

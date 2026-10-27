@@ -70,6 +70,7 @@ from services.views.helpers import (
     parse_time,
     permissions,
     save_uploaded_proof_media,
+    validate_proof_upload_batch,
     score_technician_fit,
     send_notification_email,
     send_user_notification,
@@ -1845,10 +1846,11 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     @cleanup_failed_completion_uploads
-    @transaction.atomic
     def complete_work(self, request, pk=None):
         """Mark ticket as completed with validated completion photo uploads."""
-        ticket = self.get_locked_ticket()
+        # Validate and store evidence without holding a PostgreSQL row lock or
+        # transaction open across the object-storage network request.
+        ticket = self.get_object()
         if not ticket_has_technician_access(ticket, request.user):
             raise PermissionDenied('You can only complete tickets assigned to you or your crew.')
         if ticket.technician_id != request.user.id:
@@ -1865,47 +1867,57 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         completion_notes = request.data.get('completion_notes') or ''
-        ticket.completion_proof_images = proof_images
-        ticket.completion_notes = completion_notes
         extra_update_fields = ['completion_proof_images', 'completion_notes']
         status_notes = completion_notes or 'Completed via complete_work.'
 
-        try:
-            resolved_status = apply_ticket_status_change(
-                ticket,
-                'Completed',
-                changed_by=request.user,
-                notes=status_notes,
-                extra_update_fields=extra_update_fields,
-                inventory_usage=inventory_usage,
-            )
-        except ValueError as exc:
-            # The status save precedes stock issuing; undo it so a rejected request leaves no partial completion.
-            transaction.set_rollback(True)
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            ticket = self.get_locked_ticket()
+            if not ticket_has_technician_access(ticket, request.user):
+                raise PermissionDenied('You can only complete tickets assigned to you or your crew.')
+            if ticket.technician_id != request.user.id:
+                raise PermissionDenied('Only the lead technician can complete this ticket.')
+            try:
+                # State and checklist can change while storage is running, so
+                # revalidate them after acquiring the lock.
+                validate_ticket_transition(ticket, 'Completed')
+                ensure_ticket_checklist_completed(ticket)
+                ticket.completion_proof_images = proof_images
+                ticket.completion_notes = completion_notes
+                resolved_status = apply_ticket_status_change(
+                    ticket,
+                    'Completed',
+                    changed_by=request.user,
+                    notes=status_notes,
+                    extra_update_fields=extra_update_fields,
+                    inventory_usage=inventory_usage,
+                )
+            except ValueError as exc:
+                # The status save precedes stock issuing; undo it so a rejected request leaves no partial completion.
+                transaction.set_rollback(True)
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        if resolved_status == 'Completed':
-            from .helpers import record_arrival_validation_log, sync_ticket_maintenance_schedule
-            from ..maintenance import sync_completion_follow_up_case
-            record_arrival_validation_log(
-                ticket=ticket,
-                technician=request.user,
-                performed_by=request.user,
-                action='job_completed',
-                validation_result='not_required',
-                remarks=status_notes,
-            )
-            sync_ticket_maintenance_schedule(ticket)
-            sync_completion_follow_up_case(ticket)
-            send_user_notification(
-                user=ticket.request.client,
-                title=f"Ticket #{ticket.id} Completed",
-                body=f"Your service ticket #{ticket.id} has been completed.",
-                notification_type='success',
-                ticket=ticket,
-                request=ticket.request,
-            )
-            _notify_ticket_completion_recipients(ticket=ticket, technician=request.user)
+            if resolved_status == 'Completed':
+                from .helpers import record_arrival_validation_log, sync_ticket_maintenance_schedule
+                from ..maintenance import sync_completion_follow_up_case
+                record_arrival_validation_log(
+                    ticket=ticket,
+                    technician=request.user,
+                    performed_by=request.user,
+                    action='job_completed',
+                    validation_result='not_required',
+                    remarks=status_notes,
+                )
+                sync_ticket_maintenance_schedule(ticket)
+                sync_completion_follow_up_case(ticket)
+                send_user_notification(
+                    user=ticket.request.client,
+                    title=f"Ticket #{ticket.id} Completed",
+                    body=f"Your service ticket #{ticket.id} has been completed.",
+                    notification_type='success',
+                    ticket=ticket,
+                    request=ticket.request,
+                )
+                _notify_ticket_completion_recipients(ticket=ticket, technician=request.user)
 
         return Response({
             'status': resolved_status,
@@ -1956,29 +1968,36 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         })
 
     @action(detail=True, methods=['post'])
-    @transaction.atomic
+    @cleanup_failed_completion_uploads
     def upload_photos(self, request, pk=None):
-        ticket = self.get_locked_ticket()
+        # Authorize before accepting a potentially slow storage upload. The
+        # permission scope is checked again when the ticket row is locked.
+        ticket = self.get_object()
         photos = request.data.get('photos', []) or []
         videos = request.data.get('videos', []) or []
         media = request.data.get('media', []) or []
         proof_media = normalize_proof_media_payload(photos=photos, videos=videos, media=media)
         uploaded_media = []
         if hasattr(request.FILES, 'getlist'):
+            photo_files = request.FILES.getlist('photo_files')
+            video_files = request.FILES.getlist('video_files')
+            validate_proof_upload_batch(photo_files, video_files)
             uploaded_media.extend(
                 save_uploaded_proof_media(
                     ticket=ticket,
-                    uploaded_files=request.FILES.getlist('photo_files'),
+                    uploaded_files=photo_files,
                     request=request,
                     media_type='photo',
+                    saved_names=request._proof_upload_names,
                 )
             )
             uploaded_media.extend(
                 save_uploaded_proof_media(
                     ticket=ticket,
-                    uploaded_files=request.FILES.getlist('video_files'),
+                    uploaded_files=video_files,
                     request=request,
                     media_type='video',
+                    saved_names=request._proof_upload_names,
                 )
             )
 
@@ -1986,18 +2005,20 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         if not proof_media:
             return Response({'error': 'At least one photo or video proof entry is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        checklist, _ = InspectionChecklist.objects.get_or_create(ticket=ticket)
-        checklist.proof_media = list(checklist.proof_media or []) + proof_media
-        checklist.save(update_fields=['proof_media'])
+        with transaction.atomic():
+            ticket = self.get_locked_ticket()
+            checklist, _ = InspectionChecklist.objects.get_or_create(ticket=ticket)
+            checklist.proof_media = list(checklist.proof_media or []) + proof_media
+            checklist.save(update_fields=['proof_media'])
 
-        photo_count = sum(1 for item in proof_media if item['type'] == 'photo')
-        video_count = sum(1 for item in proof_media if item['type'] == 'video')
-        ServiceStatusHistory.objects.create(
-            ticket=ticket,
-            status=ticket.status,
-            changed_by=request.user,
-            notes=f"Proof uploaded: {photo_count} photo(s), {video_count} video(s)"
-        )
+            photo_count = sum(1 for item in proof_media if item['type'] == 'photo')
+            video_count = sum(1 for item in proof_media if item['type'] == 'video')
+            ServiceStatusHistory.objects.create(
+                ticket=ticket,
+                status=ticket.status,
+                changed_by=request.user,
+                notes=f"Proof uploaded: {photo_count} photo(s), {video_count} video(s)"
+            )
 
         return Response({
             'status': 'Proof uploaded',

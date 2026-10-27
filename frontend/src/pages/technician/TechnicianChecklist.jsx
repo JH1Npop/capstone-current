@@ -46,6 +46,34 @@ const GENERIC_CHECKLIST = [
   'Record final technician notes'
 ];
 
+const MAX_PROOF_FILE_COUNT = 20;
+const MAX_PROOF_BATCH_BYTES = 50 * 1024 * 1024;
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const SUPPORTED_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const SUPPORTED_VIDEO_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
+
+const validateProofFiles = (photoFiles, videoFiles) => {
+  const allFiles = [...photoFiles, ...videoFiles];
+  if (allFiles.length > MAX_PROOF_FILE_COUNT) {
+    return `Upload no more than ${MAX_PROOF_FILE_COUNT} photo and video files at a time.`;
+  }
+  if (allFiles.reduce((total, file) => total + Number(file?.size || 0), 0) > MAX_PROOF_BATCH_BYTES) {
+    return 'The combined photo and video upload must be 50 MB or smaller.';
+  }
+  const invalidPhoto = photoFiles.find((file) => file?.type && !SUPPORTED_PHOTO_TYPES.has(file.type));
+  if (invalidPhoto) return 'Photos must be JPEG, PNG, or WebP files.';
+  if (photoFiles.some((file) => Number(file?.size || 0) > MAX_PHOTO_BYTES)) {
+    return 'Each photo must be 10 MB or smaller.';
+  }
+  const invalidVideo = videoFiles.find((file) => file?.type && !SUPPORTED_VIDEO_TYPES.has(file.type));
+  if (invalidVideo) return 'Videos must be MP4, WebM, or MOV files.';
+  if (videoFiles.some((file) => Number(file?.size || 0) > MAX_VIDEO_BYTES)) {
+    return 'Each video must be 50 MB or smaller.';
+  }
+  return '';
+};
+
 const maintenanceProfiles = [
   {
     value: 'commercial_area',
@@ -444,7 +472,16 @@ export default function TechnicianChecklist() {
   const handlePhotoSelection = (event) => {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length > 0) {
-      setPhotos((previousState) => [...previousState, ...selectedFiles]);
+      const nextPhotos = [...photos, ...selectedFiles];
+      const validationError = validateProofFiles(nextPhotos, videos);
+      if (validationError) {
+        setMessage(validationError);
+        photoStepIndexRef.current = null;
+        event.target.value = '';
+        return;
+      }
+      setMessage('');
+      setPhotos(nextPhotos);
       if (Number.isInteger(photoStepIndexRef.current)) {
         const targetStepIndex = photoStepIndexRef.current;
         setStepPhotos((previousState) => ({
@@ -485,7 +522,15 @@ export default function TechnicianChecklist() {
   const handleVideoSelection = (event) => {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length > 0) {
-      setVideos((previousState) => [...previousState, ...selectedFiles]);
+      const nextVideos = [...videos, ...selectedFiles];
+      const validationError = validateProofFiles(photos, nextVideos);
+      if (validationError) {
+        setMessage(validationError);
+        event.target.value = '';
+        return;
+      }
+      setMessage('');
+      setVideos(nextVideos);
     }
     event.target.value = '';
   };
