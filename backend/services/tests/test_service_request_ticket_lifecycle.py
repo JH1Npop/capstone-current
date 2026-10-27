@@ -64,6 +64,23 @@ class ServiceRequestTicketLifecycleTests(APITestCase):
 
         queryset = get_object.call_args.args[0]
         self.assertEqual(queryset.query.select_for_update_of, ('self',))
+        self.assertFalse(queryset.query.distinct)
+
+    def test_technician_ticket_lock_keeps_distinct_inside_authorization_subquery(self):
+        """Keep PostgreSQL row locking off the DISTINCT lead-or-crew query."""
+        view = ServiceTicketViewSet()
+        view.action = 'upload_photos'
+        view.kwargs = {'pk': 1}
+        view.request = SimpleNamespace(query_params={}, user=self.technician_user)
+
+        with patch('services.views.tickets.get_object_or_404', return_value=sentinel.ticket) as get_object:
+            with patch.object(view, 'check_object_permissions'):
+                self.assertIs(view.get_locked_ticket(), sentinel.ticket)
+
+        queryset = get_object.call_args.args[0]
+        self.assertEqual(queryset.query.select_for_update_of, ('self',))
+        self.assertFalse(queryset.query.distinct)
+        self.assertIn('SELECT DISTINCT', str(queryset.query))
 
     def test_creating_request_stays_pending_until_reviewed(self):
         self.client.force_authenticate(user=self.client_user)

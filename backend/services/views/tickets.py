@@ -1,5 +1,6 @@
 # Auto-split from services/views.py
 from django.http import FileResponse
+from django.db.models import Subquery
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import ValidationError
 
@@ -307,11 +308,19 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
 
     def get_locked_ticket(self):
         """Lock one ticket before assignment or workflow-state mutation."""
-        # The optimized ticket queryset joins several optional relations
-        # (technician, location, inspection, and maintenance). PostgreSQL
-        # cannot apply FOR UPDATE to the nullable side of those outer joins.
-        # Related rows are read-only here, so lock only the ServiceTicket row.
-        queryset = self.filter_queryset(self.get_queryset()).select_for_update(of=('self',))
+        # Keep the permission-scoped queryset in a subquery and lock a clean
+        # outer ServiceTicket query. Technician visibility needs DISTINCT for
+        # the lead-or-crew join, but PostgreSQL rejects DISTINCT on the same
+        # SELECT that carries FOR UPDATE. This shape preserves authorization
+        # in the locking statement without locking nullable related joins.
+        authorized_ticket_ids = (
+            self.filter_queryset(self.get_queryset())
+            .order_by()
+            .values('pk')
+        )
+        queryset = ServiceTicket.objects.filter(
+            pk__in=Subquery(authorized_ticket_ids),
+        ).select_for_update(of=('self',))
         ticket = get_object_or_404(queryset, pk=self.kwargs.get(self.lookup_field))
         self.check_object_permissions(self.request, ticket)
         return ticket

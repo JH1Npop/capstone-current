@@ -1,7 +1,9 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-27 (Redis 8 idle-WebSocket repair deployed and observed) Asia/Singapore**
+Last updated: **2026-10-27 (comprehensive backend/production audit documented; no runtime change) Asia/Singapore**
+Current objective (latest): **Deploy the authorization-safe PostgreSQL ticket-lock repair. `ServiceTicketViewSet.get_locked_ticket()` now places the permission-scoped lead-or-crew `DISTINCT` query inside a primary-key subquery and applies `SELECT ... FOR UPDATE OF self` only to a clean outer `ServiceTicket` query. This preserves admin/client/technician visibility and object permission checks while removing PostgreSQL's forbidden `FOR UPDATE` plus outer `DISTINCT` shape across photo upload, start, completion, equipment-return, and every other shared-helper call site. Two regressions cover the outer query shape and the actual crew upload action on PostgreSQL. Focused checks passed 22 tests with six expected PostgreSQL-only skips; the complete release gate passed all 626 backend tests with six expected PostgreSQL-only skips, the 2,543-module frontend build, and 20/20 browser smoke scenarios. No schema, migration, API response, business rule, environment value, or persistent-data change. Commit/push/Render deployment and live verification are the remaining actions explicitly authorized by the user.**
+Current objective (latest): **Treat the current free deployed staging environment as defense/staging, not client production, until the audit release blockers are closed. Read-only live evidence confirms six `POST /api/services/service-tickets/16/upload_photos/` 503 responses caused by PostgreSQL rejecting `FOR UPDATE` on the technician ticket queryset's `DISTINCT`; the same shared lock helper also places technician start, completion, and equipment-return actions at risk. The complete 624-test SQLite/isolated-browser quality gate still passes, which proves the release gate does not currently exercise this PostgreSQL dialect path. Dependency audit also finds production-relevant DRF 3.17.2 resource-exhaustion advisories fixed in 3.18.2 and a potentially relevant Twisted/Daphne HTTP parsing advisory. No separate production target was inspected. No code, configuration, schema, migration, environment value, external data, commit, push, or deployment was changed in this audit. Six audit reports under `docs/quality/` now define architecture, evidence, database/deployment risks, remediation phases, and hosting options.**
 Current objective (latest): **Keep the deployed notification channel stable without weakening Redis health checks or HTTP fallbacks. Live evidence after the row-lock deployment proves technician job 13 now completes with HTTP 200. The independent five-second notification WebSocket churn was caused by redis-py 8's five-second default socket read timeout colliding with channels-redis 4.3.0's five-second blocking `BZPOPMIN`; commit `e92db58` now passes the Render Redis URL as a structured channel-layer host with `socket_timeout=None`, leaves the command-level blocking interval in control, and pins redis-py at `8.1.0`. Render backend deploy `dep-dbg14l7b9u1s73fpbt90` reached `live` on that exact application commit. Two authenticated notification sockets connected after cutover and post-cutover logs through more than eight idle minutes contain no Redis timeout, WebSocket disconnect, application ERROR, or HTTP 5xx match. Liveness, dependency readiness, and the guarded staging perimeter pass. The full release gate passed all 624 backend tests with five expected PostgreSQL-only skips, the 2,543-module production build, and all 20 browser smoke scenarios. No schema, migration, route, frontend, environment-value, or persistent-data change was required; a live notification-push delivery remains a short manual UAT check rather than a deployment blocker.**
 Current focused objective: **Document status chips now distinguish draft/submitted/reviewed/finalized/signed states where a canonical record exists and printable-draft-only state where appropriate. Technical Data Sheet round-trips its load, generator, attachment, brownout, power, and client-confirmation fields; Contract normalizes formatted money before its decimal API fields; Turnover retains custom rows and signatures after save/reload. The isolated all-stage E2E journey proved these paths. The local accepted quotation for ticket 626 still has a blank legacy total and remains unchanged. The inspection-photo and business-hours fixes remain deployed through `08dc94c`; details and paths are in sections 8–10 and 13.**
 Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the inspection-first path, allow guarded same-day continuation on the same ticket with a fresh service dispatch, keep installation inventory out of inspection assignments, and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
@@ -961,6 +963,24 @@ deployment authorization.
 
 ## 8. Validation ledger
 
+2026-10-27 (authorization-safe PostgreSQL ticket-lock repair; deployment pending):
+- Replaced the shared lock query's invalid outer `DISTINCT ... FOR UPDATE` shape with one SQL statement whose permission-scoped IDs remain in a subquery while a clean outer `ServiceTicket` SELECT receives `FOR UPDATE OF self`. This retains lead/crew/client/admin visibility and the existing object-permission call without a check-then-lock race.
+- Added a query-shape regression proving the outer locking queryset is not distinct while the technician authorization subquery remains distinct, plus a PostgreSQL-only endpoint regression that gives a crew technician ticket access and proves the upload action reaches its expected missing-proof HTTP 400 rather than raising PostgreSQL `NotSupportedError`.
+- Django `check` plus focused `services.tests.test_service_request_ticket_lifecycle services.test_postgres_concurrency` passed 22 tests with six expected PostgreSQL-only skips on local SQLite.
+- The superseding `npm.cmd run quality` gate passed Django checks, dependency integrity, migration drift (`No changes detected`), all 626 backend tests with six expected PostgreSQL-only skips in 58.758 seconds, the 2,543-module Vite production build in 7.98 seconds, and all 20 isolated browser smoke scenarios in 2.6 minutes. Expected failure-injection responses and non-ASGI Vite WebSocket fallback noise were exercised non-failing behavior.
+- Tests used isolated SQLite/E2E databases. No development/staging business record, migration, schema, environment value, or external service configuration changed. Deployment verification remains pending the authorized commit/push.
+
+2026-10-27 (comprehensive backend stability and production audit; documentation only):
+- Read-only repository discovery counted 369 Python files (about 55,847 lines), 58 test files, 624 explicit test functions, 52 active application models, 708 documented attributes, 107 documented relationships, and approximately 448 resolved API patterns including DRF-generated duplicates/format variants. No business database was queried.
+- Read-only Render logs confirmed six current `POST /api/services/service-tickets/16/upload_photos/` failures with HTTP 503 and `psycopg2.errors.FeatureNotSupported: FOR UPDATE is not allowed with DISTINCT clause`, traced to `ServiceTicketViewSet.get_locked_ticket()`. The error occurs before media/database mutation. Code-path review found the same helper on technician start, complete, and equipment-return actions. This is an application/PostgreSQL defect, not a demonstrated Render/Aiven outage.
+- `venv\Scripts\python.exe -m pip check` passed. Django `check`, `makemigrations --check --dry-run`, and read-only `migrate --plan` passed with no issue, model change, or planned migration.
+- Standalone `manage.py test --noinput` passed all 624 tests with five expected PostgreSQL-only skips in 63.599 seconds. The superseding `npm.cmd run quality` also passed: checks/dependency integrity/migration drift, 624 tests with five skips in 62.695 seconds, the 2,543-module Vite 8.2.2 production build in 9.79 seconds, and 20/20 isolated browser smoke scenarios in 3.3 minutes. The browser harness uses `--noasgi`; WebSocket negotiation fell back to HTTP/polling, so this result does not prove the live ASGI path.
+- `pip-audit -r backend/requirements.txt` reported 11 advisory entries across three packages (10 unique advisories; one duplicated cryptography entry): three DRF 3.17.2 advisories fixed in 3.18.2, cryptography 49.0.0 fixed in 50.0.0, and six Twisted 26.4.0 advisories. The DRF parser/content-negotiation issues are production-relevant; current code avoids the reported `TokenProxy.delete()` call shape; cryptography PKCS#7 and Twisted mail/chat protocol issues are not current app paths; Twisted HTTP request-smuggling applicability through the Render proxy remains unresolved. Root `npm audit` reported zero vulnerabilities. Frontend `npm audit` reported four vulnerable dev/build packages (three high, one moderate), primarily affecting Node/Vite build or development operation rather than the deployed static browser bundle.
+- Read-only live checks returned HTTP 200 for backend liveness, full dependency readiness, and frontend root. HSTS was present; neither observed service returned a Content-Security-Policy header. Render metadata confirmed one free backend instance, a free non-durable Redis service, Daphne (not Gunicorn), startup migrations, and no scheduler resource.
+- Official current Render/Aiven plan documentation was reviewed for cold starts, one-instance/free limitations, Redis durability, pre-deploy/cron availability, PostgreSQL resource/connection limits, SLA and price options. A free stack remains suitable for defense/staging only; the reports recommend paid Render/Aiven for a monitored pilot after code remediation rather than a provider migration now.
+- `git status --short`, `git diff --check`, and porcelain status were clean before the six audit documents were created. All automated tests used disposable SQLite/E2E databases. No migration, business record, environment value, service configuration, commit, push, or deploy occurred.
+- Final documentation validation confirmed that all six required reports exist and are nonempty, contain balanced fenced blocks, contain no trailing whitespace, and include the required seven remediation phases and exact A–D hosting alternatives; `git diff --check` passed and the audit-document secret-value pattern scan returned zero matches. The first literal-heading validation attempt failed only because Windows PowerShell decoded UTF-8 em dashes differently, then the encoding-independent content check passed. No runtime test was repeated after the documentation-only edits because the already-passing full release gate's code/configuration inputs did not change.
+
 2026-10-27 (Redis 8 idle-WebSocket timeout repair):
 - Live Render logs proved the PostgreSQL completion repair worked: `POST /api/technician/jobs/13/status/` returned HTTP 200 at 02:36:49 UTC. The remaining recurring deployed error was independent: every idle notification WebSocket raised `redis.exceptions.TimeoutError: Timeout reading from ...:6379` through `channels_redis.core.RedisChannelLayer.receive` and reconnected.
 - Local dependency inspection and the redis-py 8 release contract identified the exact timeout collision: redis-py 8 defaults `socket_timeout` to five seconds, while channels-redis 4.3.0 waits five seconds in blocking `BZPOPMIN`. The production channel layer now explicitly supplies `{'address': REDIS_URL, 'socket_timeout': None}` so the channel layer's command timeout governs idle receives. `redis==8.1.0` is explicitly pinned instead of floating transitively.
@@ -1524,6 +1544,36 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
 
+- **2026-10-27 shared ticket-lock repair pending PostgreSQL deployment:** the
+  candidate removes outer `DISTINCT` from the locking SELECT without weakening
+  permission scope. Local query-shape and complete release gates pass. The new
+  end-to-end PostgreSQL regression is intentionally skipped on SQLite and needs
+  the guarded disposable-PostgreSQL gate when one is provisioned. Live staging
+  health/log verification can prove the intended commit is running, but the
+  failing action is not considered live-UAT proven until an authorized
+  technician retries it; do not create or mutate a staging business ticket only
+  for verification.
+
+- **2026-10-27 comprehensive production audit — release blockers:** current live
+  service-ticket photo upload has a confirmed PostgreSQL `FOR UPDATE` plus
+  `DISTINCT` defect, with shared-helper blast radius across technician start,
+  completion, and equipment-return paths. DRF 3.17.2 has unauthenticated
+  parser/content-negotiation resource-exhaustion advisories fixed in 3.18.2;
+  the Twisted/Daphne HTTP parsing advisory requires upstream/proxy resolution.
+  Do not claim client-production readiness or blindly redeploy the same commit.
+  First repair authorization-safe locking, upgrade dependencies, and run every
+  affected action on a disposable PostgreSQL database.
+
+- **2026-10-27 operations and hosting audit:** the free Render/Aiven topology
+  has one cold-starting web instance, non-durable Redis, a 20-connection free
+  PostgreSQL ceiling/no SLA, migrations in the web start command, and no deployed
+  scheduler or durable worker. Existing SLA, maintenance, analytics, forecast,
+  auto-assignment, and cleanup commands therefore have no repository-defined
+  automatic cadence. Synchronous provider/storage work, static non-expiring API
+  tokens, absent central alerting/CSP, and incomplete media idempotency/cleanup
+  remain pre-production work. Precise connection/capacity risk is unknown until
+  Aiven metrics and production-shaped bounded load evidence are collected.
+
 - **2026-10-27 Redis 8 idle-WebSocket repair:** commit `e92db58` is live on
   staging, two authenticated sockets remained connected through more than eight
   idle minutes, and post-cutover logs contain no recurrence of the prior
@@ -1738,6 +1788,18 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Medium product decision | Sales Records use a read-only accepted-quotation or signed-contract value when available. A reasoned manual reference value remains available for legacy completed work with neither source; it is not independently approved and is not payment evidence | Periodically review manual-value records and decide whether future exports need tax/accounting integration; keep payment collection and accounting state outside this service-management system |
 
 ## 10. Current worktree manifest
+
+- 2026-10-27 (authorization-safe shared ticket-lock repair; deployment pending):
+  `backend/services/views/tickets.py` moves permission-scoped ticket IDs into a
+  subquery and row-locks only the clean outer ticket row;
+  `backend/services/tests/test_service_request_ticket_lifecycle.py` protects the
+  SQL shape; `backend/services/test_postgres_concurrency.py` adds the real crew
+  upload PostgreSQL regression; and the audit/handoff documents record cause,
+  scope, validation, residual risks, and deployment state. No migration, schema,
+  API shape, business rule, frontend, environment, or persistent-data change.
+
+- 2026-10-27 (uncommitted audit documentation only):
+  `docs/quality/{BACKEND_ARCHITECTURE_AUDIT.md,BACKEND_ERROR_REPORT.md,DATABASE_AUDIT.md,RENDER_PRODUCTION_AUDIT.md,BACKEND_REMEDIATION_PLAN.md,HOSTING_RECOMMENDATION.md,CURRENT_SYSTEM_AUDIT_AND_HANDOFF.md}`. These files record the read-only full-system audit, confirmed deployed-staging traceback, dependency evidence, seven-phase remediation sequence, and four hosting options. No application, test, dependency, schema, migration, environment, persistent-data, commit, push, or deployed service change.
 
 - 2026-10-27 (committed and deployed in `e92db58`, Redis 8 idle-WebSocket repair):
   `backend/afn_service_management/settings.py` builds the Redis channel host
@@ -2415,6 +2477,9 @@ All paths below are preserved work, not cleanup candidates.
   widths, relationship labels, and persistence rules.
 - `docs/quality/{IMPLEMENTATION_CHECKPOINT_PHASE_3_2026-08-29.md,IMPLEMENTATION_CHECKPOINT_PHASES_4_TO_9_2026-08-29.md,CURRENT_SYSTEM_AUDIT_AND_HANDOFF.md,MANUAL_END_TO_END_TESTING_PLAYBOOK.md}`:
   dated evidence, this living handoff, and the route-complete manual QA flow.
+- `docs/quality/{BACKEND_ARCHITECTURE_AUDIT.md,BACKEND_ERROR_REPORT.md,DATABASE_AUDIT.md,RENDER_PRODUCTION_AUDIT.md,BACKEND_REMEDIATION_PLAN.md,HOSTING_RECOMMENDATION.md}`:
+  the 2026-10-27 read-only backend/production audit, evidence-backed issue
+  register, database and hosting assessments, and ordered remediation contract.
 - `docs/academic/final_diagrams/`: the final manually laid-out draw.io Context
   Diagram plus links to one unified draw.io DFD, one unified draw.io Chen ERD,
   and the DBML schema, with captions, colors, and paper-layout instructions.
@@ -2437,6 +2502,7 @@ All paths below are preserved work, not cleanup candidates.
 | Area | Document |
 | --- | --- |
 | Living status and handoff | This file |
+| Backend/production audit | `docs/quality/BACKEND_ARCHITECTURE_AUDIT.md`, `BACKEND_ERROR_REPORT.md`, `DATABASE_AUDIT.md`, `RENDER_PRODUCTION_AUDIT.md`, `BACKEND_REMEDIATION_PLAN.md`, and `HOSTING_RECOMMENDATION.md` |
 | Whole-system delivery | `docs/SYSTEM_END_TO_END_IMPLEMENTATION_PLAN.md` |
 | Workflow states | `docs/security/WORKFLOW_STATE_MACHINES.md` |
 | Authentication/account security | `docs/security/AUTHENTICATION_ACCOUNT_SECURITY_CONTRACT.md` |
@@ -2464,6 +2530,17 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-27 (authorization-safe shared ticket-lock repair; deployment pending):
+- Preserved the permission-scoped lead/crew `DISTINCT` queryset as a primary-key subquery and applied `FOR UPDATE OF self` only to a clean outer `ServiceTicket` query. This corrects all shared-helper actions rather than special-casing photo upload and avoids a permission check/lock race.
+- Added one engine-independent query-shape regression and one PostgreSQL-only crew upload endpoint regression. Focused tests passed 22 with six expected skips; the complete release gate passed 626 backend tests with six skips, the 2,543-module build, and 20/20 browser smoke scenarios.
+- No schema, migration, response contract, business rule, frontend, environment, or persistent-data change. Commit/push/deployment remain pending in this checkpoint.
+
+2026-10-27 (comprehensive backend stability, database, Render and hosting audit; documentation only):
+- Audited every installed Django domain, the resolved REST/WebSocket surface, model/migration inventory, authentication/permissions, core transaction and file-upload paths, provider integrations, management commands, settings, Daphne/Render/Aiven deployment contracts, logging/error handling, dependency advisories and test coverage.
+- Confirmed from current live logs that ticket 16 photo upload fails on PostgreSQL because the technician queryset combines `DISTINCT` with the shared `FOR UPDATE` helper; documented its wider call-site blast radius and the fact that failure precedes mutation.
+- Passed the complete 624-test/build/20-browser quality gate and explicitly recorded its SQLite/non-ASGI coverage boundary. Recorded dependency audits, live health/header checks, official plan constraints and all unresolved evidence as confirmed, hypothesis or unknown.
+- Added six reports covering architecture, detailed issue-level evidence, database integrity/performance, Render production readiness, seven remediation phases and four costed hosting options. This audit intentionally changed no runtime code/configuration/dependency/schema/environment/data and performed no commit, push or deploy.
 
 2026-10-27 (Redis 8 idle-WebSocket timeout repair, committed and deployed in `e92db58`):
 - Confirmed from live logs that job 13 completion now returns HTTP 200 and separated that repaired workflow from the continuing notification-socket churn.

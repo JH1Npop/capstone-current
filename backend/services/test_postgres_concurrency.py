@@ -13,7 +13,7 @@ from inventory.automation import (
     fulfill_pending_reservation,
 )
 from inventory.models import InventoryCategory, InventoryItem, InventoryReservation, InventoryTransaction
-from services.models import ServiceRequest, ServiceTicket, ServiceType
+from services.models import ServiceRequest, ServiceTicket, ServiceType, TicketCrewAssignment
 from users.models import User
 
 
@@ -183,3 +183,41 @@ class PostgreSQLConcurrencyContractTests(TransactionTestCase):
         self.assertEqual(reservation.status, 'cancelled')
         self.assertEqual(item.quantity, 5)
         self.assertEqual(item.reserved_quantity, 0)
+
+    def test_crew_ticket_upload_lock_does_not_apply_for_update_to_distinct(self):
+        lead = User.objects.create_user(
+            username='concurrency-lead-tech',
+            password='pass',
+            role='technician',
+        )
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Crew upload lock probe',
+            status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=service_request,
+            technician=lead,
+            scheduled_date=timezone.localdate(),
+            status='In Progress',
+        )
+        TicketCrewAssignment.objects.create(
+            ticket=ticket,
+            technician=self.technician,
+            assigned_by=self.admin,
+        )
+
+        api = APIClient()
+        api.force_authenticate(user=self.technician)
+        response = api.post(
+            f'/api/services/service-tickets/{ticket.pk}/upload_photos/',
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.data.get('error'),
+            'At least one photo or video proof entry is required',
+        )
