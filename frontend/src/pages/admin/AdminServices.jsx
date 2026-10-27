@@ -459,18 +459,27 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
             <FiEdit2 size={15} />
             Edit
           </button> : null}
-          {canManage && (canPermanentlyDeleteService(service) || service.is_active !== false) ? <button
+          {canManage ? <button
             type="button"
-            onClick={() => onCatalogAction(service)}
+            onClick={() => onCatalogAction(service, service.is_active === false ? 'activate' : 'deactivate')}
             className={`inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold ${
-              canPermanentlyDeleteService(service)
-                ? 'border-red-100 text-red-600 hover:bg-red-50'
+              service.is_active === false
+                ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
                 : 'border-amber-200 text-amber-700 hover:bg-amber-50'
             }`}
-            title={canPermanentlyDeleteService(service) ? 'Delete unused service' : 'Deactivate used service'}
+            title={service.is_active === false ? 'Activate service' : 'Deactivate service'}
           >
-            {canPermanentlyDeleteService(service) ? <FiTrash2 size={15} /> : <FiPower size={15} />}
-            {canPermanentlyDeleteService(service) ? 'Delete' : 'Deactivate'}
+            <FiPower size={15} />
+            {service.is_active === false ? 'Activate' : 'Deactivate'}
+          </button> : null}
+          {canManage && canPermanentlyDeleteService(service) ? <button
+            type="button"
+            onClick={() => onCatalogAction(service, 'delete')}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+            title="Delete unused service"
+          >
+            <FiTrash2 size={15} />
+            Delete
           </button> : null}
           <button
             type="button"
@@ -707,9 +716,12 @@ export default function AdminServices() {
     const { service, mode } = deleteTarget;
     setServiceActionBusy(true);
     try {
-      if (mode === 'deactivate') {
-        await updateService(service.id, { ...service, is_active: false });
-        setFeedback(`${service.name} is now inactive and hidden from new requests. Historical records were preserved.`);
+      if (mode === 'activate' || mode === 'deactivate') {
+        const isActivating = mode === 'activate';
+        await updateService(service.id, { ...service, is_active: isActivating });
+        setFeedback(isActivating
+          ? `${service.name} is active and available for new requests again.`
+          : `${service.name} is now inactive and hidden from new requests. Historical records were preserved.`);
       } else {
         await deleteService(service.id);
         setFeedback('Unused service deleted.');
@@ -935,18 +947,17 @@ export default function AdminServices() {
                 onChange={(e) => setServiceFormData({ ...serviceFormData, max_daily_assignments: Number(e.target.value) || 1 })}
               />
             </div>
-            <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
               <span>
                 <span className="block text-sm font-medium text-slate-700">Available for new requests</span>
-                <span className="block text-xs text-slate-500">Inactive services stay in history but are hidden from new client requests.</span>
+                <span className="block text-xs text-slate-500">Use the service card's Activate or Deactivate action so the status change is confirmed.</span>
               </span>
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                checked={serviceFormData.is_active}
-                onChange={(e) => setServiceFormData({ ...serviceFormData, is_active: e.target.checked })}
-              />
-            </label>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                serviceFormData.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+              }`}>
+                {serviceFormData.is_active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
             <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2">
               <span>
                 <span className="block text-sm font-medium text-slate-700">Requires site inspection first</span>
@@ -1078,9 +1089,9 @@ export default function AdminServices() {
               canManage={canManageServices}
               canManageInventory={canManageServices && canManageInventory}
               onEdit={onEditService}
-              onCatalogAction={(target) => setDeleteTarget({
+              onCatalogAction={(target, mode) => setDeleteTarget({
                 service: target,
-                mode: canPermanentlyDeleteService(target) ? 'delete' : 'deactivate',
+                mode,
               })}
               onSaveRequirement={onSaveRequirement}
               onDeleteRequirement={(id) => {
@@ -1095,17 +1106,25 @@ export default function AdminServices() {
       {deleteTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
-          onClick={() => setDeleteTarget(null)}
+          onClick={() => {
+            if (!serviceActionBusy) setDeleteTarget(null);
+          }}
         >
           <div
             className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-slate-950">
-              {deleteTarget.mode === 'deactivate' ? 'Deactivate service?' : 'Delete unused service?'}
+              {deleteTarget.mode === 'activate'
+                ? 'Activate service?'
+                : (deleteTarget.mode === 'deactivate' ? 'Deactivate service?' : 'Delete unused service?')}
             </h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              {deleteTarget.mode === 'deactivate' ? (
+              {deleteTarget.mode === 'activate' ? (
+                <>
+                  <span className="font-semibold text-slate-900">{deleteTarget.service.name}</span> will become available for new client and staff requests again. Existing history will remain unchanged.
+                </>
+              ) : deleteTarget.mode === 'deactivate' ? (
                 <>
                   <span className="font-semibold text-slate-900">{deleteTarget.service.name}</span> has {Number(deleteTarget.service.usage_count || 0)} historical reference{Number(deleteTarget.service.usage_count || 0) === 1 ? '' : 's'}. It will be hidden from new requests while all existing records remain available.
                 </>
@@ -1129,14 +1148,20 @@ export default function AdminServices() {
                 onClick={onConfirmCatalogAction}
                 disabled={serviceActionBusy}
                 className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                  deleteTarget.mode === 'deactivate'
-                    ? 'bg-amber-600 hover:bg-amber-700'
-                    : 'bg-red-600 hover:bg-red-700'
+                  deleteTarget.mode === 'activate'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : (deleteTarget.mode === 'deactivate'
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-red-600 hover:bg-red-700')
                 }`}
               >
                 {serviceActionBusy
-                  ? (deleteTarget.mode === 'deactivate' ? 'Deactivating...' : 'Deleting...')
-                  : (deleteTarget.mode === 'deactivate' ? 'Deactivate service' : 'Delete permanently')}
+                  ? (deleteTarget.mode === 'activate'
+                    ? 'Activating...'
+                    : (deleteTarget.mode === 'deactivate' ? 'Deactivating...' : 'Deleting...'))
+                  : (deleteTarget.mode === 'activate'
+                    ? 'Activate service'
+                    : (deleteTarget.mode === 'deactivate' ? 'Deactivate service' : 'Delete permanently'))}
               </button>
             </div>
           </div>

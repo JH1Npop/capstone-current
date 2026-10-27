@@ -1,8 +1,8 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-27 (safe service retirement and combined staging deployment) Asia/Singapore**
-Current objective (latest): **Keep the validated combined release healthy after deploying application commit `dc95ae0`. Admin Services now receives an exact `can_delete` contract covering primary requests, tickets, multi-service request lines, and maintenance schedules; used active services offer a reasoned Deactivate flow, unused services alone offer permanent Delete, and action buttons are single-submit while busy. Historical records remain intact and inactive services are hidden from new requests. The same deployed commit completes the six-stage Admin Documents persistence work, inspection-photo repair, daytime scheduling policy, landing intro, sign-in greeting, and diagram refresh recorded below. The canonical release gate passed all 621 backend tests with 3 expected skips, a 2,543-module production build, and all 20 public/authentication browser smoke scenarios; the focused real-browser deactivation journey passed 1/1 without issuing DELETE. `origin/staging-deploy` was fast-forwarded to `dc95ae0`; Render frontend deploy `dep-dbfpbcmc6qcc73ba1dgg` and backend deploy `dep-dbfpbcmc6qcc73ba1djg` are live on that exact commit. Live readiness reports the Aiven database, cache, realtime, and storage dependencies ready, and the guarded staging perimeter passes. No schema, migration, dependency, environment, staging business record, or production system changed.**
+Last updated: **2026-10-27 (uncommitted confirmed service activation/deactivation, intro smoothness, and image-style DFD, after the combined staging deployment) Asia/Singapore**
+Current objective (latest): **Complete the current local candidate without hiding service availability controls. Admin Services now shows a confirmed Deactivate action for every active service and a confirmed Activate action for every inactive service; unused services additionally retain their separate permanent Delete action. The Edit form displays status read-only so it cannot silently bypass confirmation. The real browser regression proves active to inactive to active through two PUT requests and no DELETE. Preserve the concurrent intro-smoothness and image-style DFD work listed in sections 8, 10, and 13. The last deployed application remains `dc95ae0`, whose canonical release gate passed all 621 backend tests with 3 expected skips, a 2,543-module production build, and all 20 public/authentication browser smoke scenarios. Render frontend deploy `dep-dbfpbcmc6qcc73ba1dgg` and backend deploy `dep-dbfpbcmc6qcc73ba1djg` remain live with Aiven database, cache, realtime, and storage ready. The current local candidate has not been committed, pushed, or deployed. No schema, migration, dependency, environment, persistent database, staging business record, or production system changed.**
 Current focused objective: **Document status chips now distinguish draft/submitted/reviewed/finalized/signed states where a canonical record exists and printable-draft-only state where appropriate. Technical Data Sheet round-trips its load, generator, attachment, brownout, power, and client-confirmation fields; Contract normalizes formatted money before its decimal API fields; Turnover retains custom rows and signatures after save/reload. The isolated all-stage E2E journey proved these paths. The local accepted quotation for ticket 626 still has a blank legacy total and remains unchanged. The inspection-photo and business-hours fixes are deployed in `dc95ae0`; details and paths are in sections 8–10 and 13.**
 Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the inspection-first path, allow guarded same-day continuation on the same ticket with a fresh service dispatch, keep installation inventory out of inspection assignments, and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
@@ -415,14 +415,15 @@ document by supplying an arbitrary ID.
 Ticket-prefill requests are sequence-guarded, template controls wait for their
 canonical/draft load, and reviewed/signed/finalized/accepted records are shown
 read-only with save/reset actions disabled.
-Admin Services now separates catalog retirement from deletion. Staff list and
+Admin Services now separates catalog availability from deletion. Staff list and
 detail responses expose staff-only direct-request, ticket, multi-service-line,
 and maintenance reference counts plus `can_delete`. A service with any such
-reference retains the server-side HTTP 400 hard-delete guard and the UI offers
-Deactivate instead; deactivation is an ordinary service update that preserves
-history and removes the service from new-request choices. Only a catalog row
-with no protected references offers permanent Delete, and confirmation actions
-are disabled while their request is in flight to prevent repeated submissions.
+reference retains the server-side HTTP 400 hard-delete guard. Every active row
+offers confirmed Deactivate and every inactive row offers confirmed Activate;
+these ordinary updates preserve history while controlling new-request choices.
+Only a catalog row with no protected references additionally offers permanent
+Delete. Status is read-only in Edit so it cannot bypass confirmation, and all
+confirmation actions are disabled while their request is in flight.
 Technician completion checklists now show all service procedures on one
 touch-friendly work-step screen instead of one wizard page per procedure, retain
 per-step photo requirements, allow proof removal, and recover non-file drafts on
@@ -536,6 +537,7 @@ verify the code, then update this file in the same change.
 
 ### Latest pass-on checkpoint (2026-10-27)
 
+- **Intro smoothness and image-style DFD (uncommitted, after `adf77a9`):** staging runs the first intro build from `dc95ae0`, which measured about 17 fps under a 4x CPU slowdown. The cause was the landing page itself: two large blurred hero glows drifting under blurred panels. They are now static, the intro is split into GPU-composited layers, and the page under the intro is not painted until it fades (about 50 fps). The paper DFD `AFN_DETAILED_DFD_STRUCTURED.drawio` was redrawn in the user's reference-image style by the new `backend/scripts/generate_afn_dfd_drawio.py`. After a crossing-free variant with repeated * symbols, the user asked for everything connected ("i want it all connected"): every entity and store now appears once, and the router minimises crossings (40, bridged) without overlaps. Suite 08's login assertion now accepts "Welcome" or "Welcome back" (it broke with the greeting change).
 - **Sign-in greeting (deployed through `dc95ae0`):** the login heading now says "Welcome" on a browser that has never signed in and "Welcome back" after a successful sign-in there (`localStorage` flag `afn_signed_in_before`, not a credential, kept across logout). Only `frontend/src/pages/Login.jsx` and `e2e/02-authentication.spec.js` changed for this feature.
 - **Opening intro (deployed through `dc95ae0`):** the public landing page (`/` only, signed-out visitors) now opens with the user-chosen 4-second "Sun to Panel" logo animation (`IntroSplash`). It plays once per browser tab (`sessionStorage.afn_intro_seen`), is skipped by click, key, or "Skip intro", is not shown when the device asks for reduced motion, and can be replayed with `/?intro=play`. The E2E servers set `VITE_DISABLE_INTRO=true` so existing tests are never blocked; test 1.1f covers it.
 - **Inspection photo upload repair (deployed in `dc95ae0`):** inspection evidence uses the
@@ -951,6 +953,19 @@ production database still requires backup, release review, and explicit
 deployment authorization.
 
 ## 8. Validation ledger
+
+2026-10-27 (uncommitted confirmed service activation/deactivation controls):
+- `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3\\.7c"` passed 1/1 on isolated E2E SQLite. The browser confirmed Deactivate, observed PUT with `is_active=false`, confirmed the resulting Activate action, observed a second PUT with `is_active=true`, and verified the service returned to Active; the used service never exposed Delete. Expected Vite WebSocket `ECONNABORTED` teardown noise did not fail the run.
+- The superseding combined `npm.cmd run quality` release gate passed Django system checks, Python dependency integrity, migration drift (`No changes detected`), all 621 backend tests with 3 expected skips, the 2,543-module Vite production build, and all 20 public/authentication browser smoke scenarios in 2.7 minutes. Expected negative-path API logs and Vite WebSocket teardown messages were non-failing exercised behavior.
+- No backend, schema, migration, dependency, environment, or persistent database changed. This work is not committed, pushed, or deployed.
+
+2026-10-27 (uncommitted intro smoothness and image-style DFD):
+- Frame timing, production builds served locally, headless Chromium with `Emulation.setCPUThrottlingRate` 4, `/?intro=play`, rAF over 3.8 s, 3 runs each: previous intro build 16.5-17.1 fps with 60-65 frames over 25 ms; new build 46.6-50.6 fps with 4-11. Landing page alone (intro hidden): 18.1-18.4 fps before, 48.8-54.5 fps after. Isolation runs showed the cost came from the animated `.landing-glow` circles under `backdrop-filter` panels (stopping either restored about 55 fps; stopping the marquee did not).
+- New intro frames captured at 1280x720 and 390x844 showed no page errors and the same final logo.
+- `npx playwright test e2e/01-public-pages.spec.js e2e/08-responsive-accessibility.spec.js`: 16 passed, 1 failed (08 "public login is usable without horizontal overflow" still expected "Welcome back"); after widening that assertion, `e2e/08-responsive-accessibility.spec.js` passed 5/5.
+- `npm --prefix frontend run build` passed.
+- `backend/scripts/generate_afn_dfd_drawio.py` ran with `-W error` and produced byte-identical output on repeated runs. The draw.io engine measured the final all-connected DFD: 25 shapes, 61 flows, 40 crossings (all drawn as bridges), 0 coincident segments, 0 lines through shapes, 0 label overlaps, 0 labels on shapes. For comparison, the first image-style version measured 55 crossings, and the rejected repeated-symbol variant measured 0 crossings with 31 shapes and 56 flows.
 
 2026-10-27 (safe service deactivation release and staging deployment):
 - `venv\Scripts\python.exe backend\manage.py test services.test_service_catalog_capabilities --noinput --verbosity 1` passed 6/6, including exact staff-only deletion eligibility, used-service DELETE refusal, successful history-preserving deactivation, and unused-service permanent deletion.
@@ -1479,6 +1494,8 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
 
+- **2026-10-27 intro and DFD (uncommitted):** staging still serves the slower first intro until this change is deployed. The hero glows no longer drift. The redrawn DFD follows the user's reference image (single page, processes 1.0-8.0, stores D1-D14) and replaces the previous structured DFD and its store numbering (previous figure in git at `23abc72`); the user mentioned "level 2" but declined the question about per-process Level 2 pages, so the reference's single-page structure was kept. With one copy of Admin, Technician, and Client each linked to 1.0, 3.0, and 7.0, the graph is non-planar, so some crossings cannot be removed; the user chose all-connected single symbols over repeated * symbols. The router accepts a bridged crossing instead of a detour longer than about 900px (`CROSSING_COST`). Re-export the DFD PNG/PDF for the paper.
+
 - **2026-10-27 service retirement:** deactivation intentionally preserves a used
   service forever unless every protected historical reference is separately
   removed through an authorized retention workflow. The displayed `usage_count`
@@ -1673,6 +1690,8 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
+- 2026-10-27 (uncommitted confirmed service activation/deactivation): `frontend/src/pages/admin/AdminServices.jsx` gives every active service a Deactivate action and every inactive service an Activate action, keeps permanent Delete separate for unused rows, requires confirmation for all three actions, locks the confirmation while saving, and makes status read-only in Edit; `e2e/03-admin-workspace.spec.js` proves the active/inactive round trip through PUT without DELETE; and this handoff records the contract and evidence.
+- 2026-10-27 (uncommitted, intro smoothness and DFD): `frontend/src/components/{IntroSplash.jsx,IntroSplash.css}`, `frontend/src/index.css`, `e2e/08-responsive-accessibility.spec.js`, new `backend/scripts/generate_afn_dfd_drawio.py`, `docs/models/AFN_DETAILED_DFD_STRUCTURED.drawio`, `docs/academic/final_diagrams/README.md`, and this handoff.
 - 2026-10-27 (committed and deployed in `dc95ae0`, safe service deactivation):
   `backend/services/{serializers/requests.py,views/service_types.py,test_service_catalog_capabilities.py}`
   and `backend/users/views/admin_services.py` align exact protected-reference
@@ -2386,6 +2405,18 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-27 (confirmed service activation/deactivation controls):
+- Every active service card now exposes amber Deactivate and every inactive card exposes green Activate. Unused rows keep a separate red permanent Delete action, so retirement and deletion are no longer mutually exclusive or hidden in Edit.
+- Activate, Deactivate, and Delete each open consequence-specific confirmation. The status update uses the existing service PUT, locks repeated submission, preserves historical records, and reloads the authoritative catalog response.
+- The Edit form now displays availability read-only and directs staff to the confirmed card actions, preventing the checkbox from silently bypassing confirmation.
+- Expanded browser scenario 3.7c proves active to inactive to active against the real API and isolated database with two PUT responses and no Delete control for a used service.
+
+2026-10-27 (intro smoothness and image-style DFD, at the user's request: "optimize the animation intro its kinda laggy" and "i want my dfd to become like this on my image"):
+- **`IntroSplash.jsx`/`.css`:** same 4 s "Sun to Panel" design rebuilt as separate absolutely positioned layers (sun, beams, panel cells, bar, A/F/N, tagline) animated only by transform/opacity with `will-change`; the component is memoised; landing content after the intro is `visibility: hidden` until the fade starts; the logo is larger on screens up to 640px.
+- **`frontend/src/index.css`:** removed the infinite `landing-glow-drift` animation (the glows stay as static highlights).
+- **`e2e/08-responsive-accessibility.spec.js`:** login heading assertion accepts "Welcome" or "Welcome back".
+- **`backend/scripts/generate_afn_dfd_drawio.py` (new) and `AFN_DETAILED_DFD_STRUCTURED.drawio`:** DFD redrawn in the reference style with A*-routed orthogonal flows on a 15px grid, overlaps forbidden and crossings costed (`CROSSING_COST`), rip-up-and-reroute rounds keeping the best result, port swaps for two-way pairs, port stubs included in routing, one symbol per entity and store, and collision-free labels kept on the canvas; `final_diagrams/README.md` describes it and no longer claims a Yes/No overlap branch in the DFD.
 
 2026-10-27 (safe service deactivation, committed and deployed in `dc95ae0`):
 - Added one server-derived `can_delete` contract using every reference already

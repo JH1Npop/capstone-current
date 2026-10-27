@@ -430,13 +430,9 @@ textarea {
   .landing-steps-line { transform: scaleX(1); transition: none; }
 }
 
-/* Light hero: slowly drifting highlights, a faint brand dot texture, and a staggered entrance. */
-@keyframes landing-glow-drift {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to { transform: translate3d(-6%, 5%, 0) scale(1.08); }
-}
-.landing-glow { animation: landing-glow-drift 18s ease-in-out infinite alternate; }
-.landing-glow-slow { animation-duration: 24s; animation-direction: alternate-reverse; }
+/* Light hero: soft highlights, a faint brand dot texture, and a staggered entrance. The highlights
+   stay still: drifting these large blurred circles under the blurred navbar and hero panels made
+   the browser redo the blur every frame (about 17 fps instead of 55 at a 4x CPU slowdown). */
 .landing-dots {
   background-image: radial-gradient(rgba(13, 99, 199, 0.18) 1px, transparent 1px);
   background-size: 22px 22px;

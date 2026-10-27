@@ -528,7 +528,7 @@ test.describe('Admin Workspace - All Pages', () => {
     });
   });
 
-  test('3.7c - Used services deactivate without destructive delete requests', async ({ page }) => {
+  test('3.7c - Services deactivate and reactivate through confirmed non-destructive updates', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/services');
     const headers = { Authorization: `Token ${adminAuthState.token}` };
     const catalogResponse = await page.request.get('/api/admin/services/', { headers });
@@ -557,6 +557,23 @@ test.describe('Admin Workspace - All Pages', () => {
     expect((await response.json()).is_active).toBe(false);
     await expect(page.getByText(/hidden from new requests.*Historical records were preserved/i)).toBeVisible();
     await expect(serviceCard.getByText('Inactive', { exact: true })).toBeVisible();
+    await expect(serviceCard.getByRole('button', { name: 'Activate', exact: true })).toBeVisible();
+    await expect(serviceCard.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+
+    await serviceCard.getByRole('button', { name: 'Activate', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Activate service?' })).toBeVisible();
+    await expect(page.getByText(/available for new client and staff requests again/i)).toBeVisible();
+    const activateResponse = page.waitForResponse((candidate) => (
+      candidate.url().endsWith(`/api/admin/services/${usedService.id}/`)
+      && candidate.request().method() === 'PUT'
+    ));
+    await page.getByRole('button', { name: 'Activate service', exact: true }).click();
+    const activated = await activateResponse;
+    expect(activated.ok(), await activated.text()).toBeTruthy();
+    expect((await activated.json()).is_active).toBe(true);
+    await expect(page.getByText(/active and available for new requests again/i)).toBeVisible();
+    await expect(serviceCard.getByText('Active', { exact: true })).toBeVisible();
+    await expect(serviceCard.getByRole('button', { name: 'Deactivate', exact: true })).toBeVisible();
   });
 
   test('3.8 - Inventory Management loads', async ({ page }) => {

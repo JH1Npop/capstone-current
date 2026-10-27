@@ -1,10 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import './IntroSplash.css';
 
 // "Sun to Panel": sunlight charges a solar panel that docks into the logo as the yellow bar of the F.
+// Every moving part is its own HTML layer animated only with transform/opacity, so the browser can
+// composite the frames on the GPU instead of repainting one large SVG while the page loads below.
 const INTRO_MS = 4000;
 const FADE_MS = 500;
 const SEEN_KEY = 'afn_intro_seen';
+
+// The logo is laid out on a 650 x 570 grid; layers are placed as percentages of that grid.
+const GRID_W = 650;
+const GRID_H = 570;
+const place = (x, y, width, height) => ({
+  left: `${(x / GRID_W) * 100}%`,
+  top: `${(y / GRID_H) * 100}%`,
+  width: `${(width / GRID_W) * 100}%`,
+  height: `${(height / GRID_H) * 100}%`,
+});
 
 const SUN_X = 325;
 const SUN_Y = 200;
@@ -23,8 +35,15 @@ const RAYS = Array.from({ length: 13 }, (_, index) => {
     [base[0] - 7 * sin, base[1] - 7 * cos],
   ].map((point) => point.map((value) => value.toFixed(1)).join(',')).join(' ');
 });
+
+const BEAM_FROM = [120, 100];
+const BEAMS = [210, 333, 456].map((x) => {
+  const dx = x - BEAM_FROM[0];
+  const dy = 338 - BEAM_FROM[1];
+  return { length: Math.hypot(dx, dy), angle: (Math.atan2(dy, dx) * 180) / Math.PI };
+});
+
 const CELLS = Array.from({ length: 12 }, (_, index) => ({ row: Math.floor(index / 6), column: index % 6 }));
-const BEAM_TARGETS = [210, 333, 456];
 
 const readSession = (key) => {
   try {
@@ -50,7 +69,21 @@ export function shouldPlayIntro(search = window.location.search) {
   return readSession(SEEN_KEY) !== '1';
 }
 
-export default function IntroSplash() {
+function Letter({ className, box, viewBox, gradientId, children }) {
+  return (
+    <svg className={`afn-intro__layer ${className}`} style={place(...box)} viewBox={viewBox} aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#2a86e6" />
+          <stop offset="1" stopColor="#0d63c7" />
+        </linearGradient>
+      </defs>
+      {children(`url(#${gradientId})`)}
+    </svg>
+  );
+}
+
+function IntroSplash() {
   const [phase, setPhase] = useState(() => (shouldPlayIntro() ? 'playing' : 'done'));
 
   const finish = useCallback((fast = false) => {
@@ -83,67 +116,73 @@ export default function IntroSplash() {
       data-testid="afn-intro"
       onClick={() => finish(true)}
     >
-      <svg className="afn-intro__logo" viewBox="0 0 650 570" role="img" aria-label="AFN Solar Power Engineering Services">
-        <defs>
-          <linearGradient id="afn-intro-blue" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#2a86e6" />
-            <stop offset="1" stopColor="#0d63c7" />
-          </linearGradient>
-          <linearGradient id="afn-intro-bar" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="#f6a800" />
-            <stop offset="1" stopColor="#ffe24d" />
-          </linearGradient>
-          <linearGradient id="afn-intro-ray" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#ffd21f" />
-            <stop offset="1" stopColor="#f7a900" />
-          </linearGradient>
-          <clipPath id="afn-intro-sky">
-            <rect x="0" y="0" width="650" height="222" />
-          </clipPath>
-        </defs>
+      <div className="afn-intro__stage" role="img" aria-label="AFN Solar Power Engineering Services">
+        {BEAMS.map(({ length, angle }) => (
+          <div
+            key={angle}
+            className="afn-intro__beam"
+            style={{
+              left: `${(BEAM_FROM[0] / GRID_W) * 100}%`,
+              top: `${(BEAM_FROM[1] / GRID_H) * 100}%`,
+              width: `${(length / GRID_W) * 100}%`,
+              transform: `rotate(${angle}deg)`,
+            }}
+          >
+            <span />
+          </div>
+        ))}
 
-        <g>
-          {BEAM_TARGETS.map((x) => (
-            <line key={x} className="afn-intro__beam" pathLength="1" x1="120" y1="100" x2={x} y2="338" stroke="#ffc21a" strokeWidth="3" />
-          ))}
-        </g>
+        <svg className="afn-intro__layer afn-intro__sun" style={place(150, 22, 350, 186)} viewBox="150 22 350 186" aria-hidden="true">
+          <defs>
+            <linearGradient id="afn-intro-ray" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#ffd21f" />
+              <stop offset="1" stopColor="#f7a900" />
+            </linearGradient>
+          </defs>
+          {RAYS.map((points) => <polygon key={points} points={points} fill="url(#afn-intro-ray)" />)}
+          <path d="M240,200 A85,85 0 0 1 410,200" fill="none" stroke="#f7b500" strokeWidth="13" />
+        </svg>
 
-        <g clipPath="url(#afn-intro-sky)">
-          <g className="afn-intro__sun">
-            {RAYS.map((points) => <polygon key={points} points={points} fill="url(#afn-intro-ray)" />)}
-            <path d="M240,200 A85,85 0 0 1 410,200" fill="none" stroke="#f7b500" strokeWidth="13" />
-          </g>
-        </g>
+        <Letter className="afn-intro__a" box={[80, 222, 166, 168]} viewBox="80 222 166 168" gradientId="afn-intro-a">
+          {(fill) => <path fillRule="evenodd" fill={fill} d="M80,390 L143,222 L183,222 L246,390 L203,390 L192,358 L134,358 L123,390 Z M144,326 L182,326 L163,272 Z" />}
+        </Letter>
+        <Letter className="afn-intro__f" box={[258, 262, 118, 128]} viewBox="258 262 118 128" gradientId="afn-intro-f">
+          {(fill) => (
+            <>
+              <rect x="258" y="262" width="44" height="128" fill={fill} />
+              <rect x="258" y="298" width="118" height="36" fill={fill} />
+            </>
+          )}
+        </Letter>
+        <Letter className="afn-intro__n" box={[422, 222, 149, 168]} viewBox="422 222 149 168" gradientId="afn-intro-n">
+          {(fill) => <path fill={fill} d="M422,390 L422,222 L463,222 L530,322 L530,222 L571,222 L571,390 L530,390 L463,290 L463,390 Z" />}
+        </Letter>
 
-        <path className="afn-intro__a" fillRule="evenodd" fill="url(#afn-intro-blue)" d="M80,390 L143,222 L183,222 L246,390 L203,390 L192,358 L134,358 L123,390 Z M144,326 L182,326 L163,272 Z" />
-        <g className="afn-intro__f">
-          <rect x="258" y="262" width="44" height="128" fill="url(#afn-intro-blue)" />
-          <rect x="258" y="298" width="118" height="36" fill="url(#afn-intro-blue)" />
-        </g>
-        <rect className="afn-intro__bar" x="258" y="222" width="150" height="40" rx="2" fill="url(#afn-intro-bar)" />
-        <path className="afn-intro__n" fill="url(#afn-intro-blue)" d="M422,390 L422,222 L463,222 L530,322 L530,222 L571,222 L571,390 L530,390 L463,290 L463,390 Z" />
-
-        <g className="afn-intro__panel">
-          <rect x="258" y="222" width="150" height="40" rx="2" fill="#0a3f80" stroke="#c9d6e8" strokeWidth="1.5" />
+        <div className="afn-intro__layer afn-intro__bar" style={place(258, 222, 150, 40)} />
+        <div className="afn-intro__layer afn-intro__panel" style={place(258, 222, 150, 40)}>
           {CELLS.map(({ row, column }) => (
-            <rect
+            <span
               key={`${row}-${column}`}
-              className="afn-intro__cell"
-              style={{ '--i': column }}
-              x={261 + column * 24.5}
-              y={225 + row * 18.5}
-              width="21.5"
-              height="15.5"
-              rx="1"
+              style={{
+                '--i': column,
+                left: `${((3 + column * 24.5) / 150) * 100}%`,
+                top: `${((3 + row * 18.5) / 40) * 100}%`,
+                width: `${(21.5 / 150) * 100}%`,
+                height: `${(15.5 / 40) * 100}%`,
+              }}
             />
           ))}
-        </g>
+        </div>
 
-        <line className="afn-intro__dash afn-intro__dash--left" x1="30" y1="460" x2="104" y2="460" stroke="#f5a300" strokeWidth="4" strokeLinecap="round" />
-        <line className="afn-intro__dash afn-intro__dash--right" x1="546" y1="460" x2="620" y2="460" stroke="#f5a300" strokeWidth="4" strokeLinecap="round" />
-        <text className="afn-intro__tagline" x="325" y="478" textAnchor="middle" fontSize="48" fontWeight="600" letterSpacing="1" fill="#f5a300">SOLAR POWER</text>
-        <text className="afn-intro__subline" x="325" y="540" textAnchor="middle" fontSize="38" fontWeight="500" letterSpacing="4" fill="#0b2f63">ENGINEERING SERVICES</text>
-      </svg>
+        <div className="afn-intro__layer afn-intro__dash afn-intro__dash--left" style={place(30, 458, 74, 4)} />
+        <div className="afn-intro__layer afn-intro__dash afn-intro__dash--right" style={place(546, 458, 74, 4)} />
+        <svg className="afn-intro__layer afn-intro__tagline" style={place(100, 430, 450, 60)} viewBox="100 430 450 60" aria-hidden="true">
+          <text x="325" y="478" textAnchor="middle" fontSize="48" fontWeight="600" letterSpacing="1" fill="#f5a300">SOLAR POWER</text>
+        </svg>
+        <svg className="afn-intro__layer afn-intro__subline" style={place(0, 505, 650, 45)} viewBox="0 505 650 45" aria-hidden="true">
+          <text x="325" y="540" textAnchor="middle" fontSize="38" fontWeight="500" letterSpacing="4" fill="#0b2f63">ENGINEERING SERVICES</text>
+        </svg>
+      </div>
 
       <button
         type="button"
@@ -158,3 +197,6 @@ export default function IntroSplash() {
     </div>
   );
 }
+
+// The landing page re-renders while its settings load; the intro has no props, so skip those renders.
+export default memo(IntroSplash);

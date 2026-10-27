@@ -1,4 +1,5 @@
-/* "Sun to Panel" opening intro (4 s). Timings mirror the approved preview. */
+/* "Sun to Panel" opening intro (4 s). Only transform and opacity animate, on separate layers,
+   so frames are composited instead of repainted. Timings mirror the approved preview. */
 .afn-intro {
   position: fixed;
   inset: 0;
@@ -6,22 +7,44 @@
   display: grid;
   place-items: center;
   cursor: pointer;
+  contain: layout paint;
   background: linear-gradient(180deg, #d6eaff 0%, #f7fbff 72%);
   transition: opacity 0.5s ease;
 }
+/* The page keeps loading underneath but is not painted until the intro starts to fade. */
+.afn-intro:not(.afn-intro--leaving):not(.afn-intro--skipping) ~ * { visibility: hidden; }
 .afn-intro--leaving { opacity: 0; }
 .afn-intro--skipping { opacity: 0; transition-duration: 0.25s; }
 
-.afn-intro__logo { width: min(54vw, 62vh, 560px); height: auto; overflow: visible; }
-.afn-intro__logo text { font-family: inherit; }
-.afn-intro__logo * { transform-box: fill-box; transform-origin: center; }
-.afn-intro__sun { transform-box: view-box; transform-origin: 325px 200px; }
-.afn-intro__panel { transform-box: view-box; transform-origin: 333px 242px; opacity: 0; }
-.afn-intro__beam { stroke-dasharray: 1; opacity: 0; }
-.afn-intro__bar { transform-origin: left center; }
-.afn-intro__dash--left { transform-origin: right center; }
-.afn-intro__dash--right { transform-origin: left center; }
-.afn-intro__cell { fill: #ffc21a; }
+.afn-intro__stage {
+  position: relative;
+  width: min(54vw, 62vh, 560px);
+  aspect-ratio: 650 / 570;
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  .afn-intro__stage { width: min(84vw, 62vh); }
+}
+.afn-intro__layer { position: absolute; display: block; overflow: visible; will-change: transform, opacity; }
+.afn-intro__layer text { font-family: inherit; }
+
+.afn-intro__beam { position: absolute; height: 3px; margin-top: -1.5px; transform-origin: 0 50%; }
+.afn-intro__beam span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: #ffc21a;
+  transform-origin: 0 50%;
+  will-change: transform, opacity;
+}
+
+.afn-intro__sun { transform-origin: 50% 95.7%; }
+.afn-intro__bar { border-radius: 2px; background: linear-gradient(90deg, #f6a800, #ffe24d); }
+.afn-intro__panel { border-radius: 2px; background: #0a3f80; box-shadow: 0 0 0 1.5px #c9d6e8; }
+.afn-intro__panel span { position: absolute; border-radius: 1px; background: #ffc21a; will-change: opacity; }
+.afn-intro__dash { border-radius: 2px; background: #f5a300; }
+.afn-intro__dash--left { transform-origin: 100% 50%; }
+.afn-intro__dash--right { transform-origin: 0 50%; }
 
 .afn-intro__skip {
   position: absolute;
@@ -37,19 +60,20 @@
 }
 .afn-intro__skip:focus-visible { outline: 3px solid #f5a300; outline-offset: 2px; }
 
-@keyframes afn-intro-sun { 0%, 40% { transform: translate(-205px, -100px) scale(0.55); } 100% { transform: none; } }
-@keyframes afn-intro-beam { 0% { opacity: 0.9; stroke-dashoffset: 1; } 40% { opacity: 0.9; stroke-dashoffset: 0; } 75% { opacity: 0.9; stroke-dashoffset: 0; } 100% { opacity: 0; stroke-dashoffset: 0; } }
-@keyframes afn-intro-dock { 0%, 45% { opacity: 1; transform: translate(0, 140px) scale(2.2); } 85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; } }
-@keyframes afn-intro-cell { from { fill: #0a3f80; } to { fill: #ffc21a; } }
+/* Sun: starts small at the top left (-205, -100 grid units), then glides into the logo. */
+@keyframes afn-intro-sun { 0%, 40% { transform: translate(-58.571%, -53.763%) scale(0.55); } 100% { transform: none; } }
+@keyframes afn-intro-beam { 0% { opacity: 0.9; transform: scaleX(0); } 40% { opacity: 0.9; transform: none; } 75% { opacity: 0.9; transform: none; } 100% { opacity: 0; transform: none; } }
+/* Panel: starts 140 grid units lower at 2.2x, then docks as the F bar. */
+@keyframes afn-intro-dock { 0%, 45% { opacity: 1; transform: translateY(350%) scale(2.2); } 85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; } }
 @keyframes afn-intro-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes afn-intro-pop { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: none; } }
-@keyframes afn-intro-rise { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+@keyframes afn-intro-rise { from { opacity: 0; transform: translateY(46%); } to { opacity: 1; transform: none; } }
 @keyframes afn-intro-grow { from { transform: scaleX(0); } to { transform: none; } }
 
 .afn-intro__sun { animation: afn-intro-sun 2.6s cubic-bezier(0.6, 0, 0.25, 1) both; }
-.afn-intro__beam { animation: afn-intro-beam 1.8s ease 0.28s both; }
+.afn-intro__beam span { animation: afn-intro-beam 1.8s ease 0.28s both; }
 .afn-intro__panel { animation: afn-intro-dock 2.9s cubic-bezier(0.6, 0, 0.25, 1) both; }
-.afn-intro__cell { animation: afn-intro-cell 0.4s ease calc(0.76s + var(--i) * 97ms) both; }
+.afn-intro__panel span { animation: afn-intro-fade 0.4s ease calc(0.76s + var(--i) * 97ms) both; }
 .afn-intro__bar { animation: afn-intro-fade 0.48s ease 2.42s both; }
 .afn-intro__a { animation: afn-intro-pop 0.69s cubic-bezier(0.2, 0.9, 0.3, 1.2) 2.14s both; }
 .afn-intro__f { animation: afn-intro-pop 0.69s cubic-bezier(0.2, 0.9, 0.3, 1.2) 2.24s both; }

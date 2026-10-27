@@ -101,7 +101,7 @@ test.describe('Responsive and keyboard smoke coverage', () => {
 
   test('public login is usable without horizontal overflow', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByRole('heading', { name: /welcome back/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^welcome( back)?$/i })).toBeVisible();
     await expect(page.locator('input[autocomplete="username"]')).toBeVisible();
     await expect(page.locator('input[autocomplete="current-password"]')).toBeVisible();
     await expectNoHorizontalOverflow(page);
