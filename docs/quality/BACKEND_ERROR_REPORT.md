@@ -17,12 +17,12 @@ Classification: **Confirmed** means reproduced or directly observed; **Hypothesi
 
 | ID | Severity | Status | Finding |
 |---|---|---|---|
-| SEC-001 | Critical | Remediated locally; deploy pending | DRF is pinned to 3.18.3 and the fresh dependency audit clears the reported parser/content-negotiation advisories |
+| SEC-001 | Critical | Remediated and deployed | DRF 3.18.3 is live and the fresh dependency audit clears the reported parser/content-negotiation advisories |
 | REL-001 | High | Remediated on staging; authenticated UAT pending | PostgreSQL rejected the technician ticket lock query because it combined `FOR UPDATE` and `DISTINCT` |
 | SEC-002 | High | Confirmed vulnerable dependency; exploitability conditional | Twisted/Daphne HTTP stack has a request-smuggling advisory; proxy-chain exploitability was not proven |
 | OPS-001 | High | Confirmed configuration gap | Scheduled SLA, maintenance, analytics and cleanup commands have no deployed scheduler |
 | AUTH-001 | High | Confirmed design gap | Static API tokens have no expiry/refresh lifecycle |
-| PERF-001 | High | Core proof routes remediated locally; deploy/UAT pending | Proof storage is staged before short ticket-locking transactions and bounded to 20 files/50 MB combined |
+| PERF-001 | High | Core proof routes deployed; authenticated UAT pending | Proof storage is staged before short ticket-locking transactions and bounded to 20 files/50 MB combined |
 | DEPLOY-001 | High | Confirmed configuration gap | Every web process start runs migrations before Daphne |
 | HOST-001 | High | Confirmed platform mismatch | Free Render/Aiven topology is not an appropriate client-production service level |
 | FLOW-001 | Medium | Confirmed design; failure observed at step 2 | Inspection submit is a recoverable but non-atomic three-request workflow |
@@ -45,10 +45,9 @@ Classification: **Confirmed** means reproduced or directly observed; **Hypothesi
 
 ### SEC-001 — Django REST Framework unauthenticated resource exhaustion
 
-Status update (2026-10-27): **Remediated locally; deployment pending.** DRF is
-pinned to 3.18.3, `pip check` and the complete release gate pass, and a fresh
-`pip-audit` no longer reports the three DRF advisories. No deployed fix is
-claimed until this batch is committed, pushed, deployed, and health-checked.
+Status update (2026-10-27): **Remediated and deployed.** DRF 3.18.3 is live in
+Render deploy `dep-dbg8ii8473hc73fgvkmg`; `pip check`, the complete release
+gate, a fresh `pip-audit`, startup, and deployed health/perimeter checks pass.
 
 - Severity/status: **Critical / Confirmed dependency exposure**.
 - Module/path: `backend/requirements.txt` (`djangorestframework==3.17.2`); global DRF parser/renderer configuration in `backend/afn_service_management/settings.py`.
@@ -119,8 +118,8 @@ Other Twisted advisories reported for IMAP, Telnet, XMPP and IRC are not exposed
 
 ### PERF-001 — External upload work inside locked transactions
 
-Status update (2026-10-27): **Core proof routes remediated locally; deployment
-and Cloudinary UAT pending.** Direct ticket proof upload, the legacy checklist,
+Status update (2026-10-27): **Core proof routes deployed; authenticated
+Cloudinary UAT pending.** Direct ticket proof upload, the legacy checklist,
 and both ticket-completion implementations validate/store evidence before the
 short ticket-locking transaction, recheck authorization/state during finalize,
 and delete request-owned writes when finalization fails. A combined 20-file,
@@ -321,7 +320,8 @@ separate pre-production work.
 The root package audit reports zero vulnerabilities. The 2026-10-27 hardening
 batch raises `cryptography` from 49.0.0 to 50.0.2; `pip check`, the complete
 release gate, and a fresh `pip-audit` pass without the prior cryptography
-finding. Deployment remains pending.
+finding. The exact versions are installed in live backend deploy
+`dep-dbg8ii8473hc73fgvkmg`.
 
 ### WS-001 — WebSocket robustness and gate coverage
 

@@ -36,7 +36,7 @@ Exit evidence:
 
 ## Phase 1 — Stabilize critical backend workflows
 
-Status update (2026-10-27): the REL-001 shared ticket-lock repair is live and stable on PostgreSQL-backed staging. The uncommitted hardening batch upgrades DRF to 3.18.3 and cryptography to 50.0.2; dependency integrity, the complete release gate, and a fresh audit pass with only the unresolved Twisted findings remaining. Deployment and authenticated UAT are pending. Public-error-safety work in this phase is not yet complete.
+Status update (2026-10-27): the REL-001 shared ticket-lock repair is live and stable on PostgreSQL-backed staging. Commit `a0b5bdc` upgrades DRF to 3.18.3 and cryptography to 50.0.2; dependency integrity, the complete release gate, a fresh audit, Render startup, health/readiness, and perimeter checks pass with only the unresolved Twisted findings remaining. Authenticated upload/finish-job UAT is pending. Public-error-safety work in this phase is not yet complete.
 
 Objective: restore core technician workflows and remove immediately actionable security exposure.
 
@@ -50,7 +50,7 @@ Objective: restore core technician workflows and remove immediately actionable s
 ### 1B. Dependency remediation
 
 Implementation update (2026-10-27): the DRF and cryptography upgrades below
-are complete and locally validated. Twisted 26.4.0 remains because the current
+are deployed and health-verified. Twisted 26.4.0 remains because the current
 audit lists five fixes only in 26.10.0rc1 and one advisory without a fix; do not
 replace stable production infrastructure with that release candidate without a
 separate compatibility/proxy review. Frontend build/dev advisories remain.
@@ -114,7 +114,7 @@ Implementation update (2026-10-27): the core proof-media paths now stage
 validated object writes outside ticket row locks and finalize inside short
 atomic blocks with authorization/state rechecks and compensating cleanup. A
 combined 20-file/50-MB backend budget and matching technician UI preflight are
-implemented and covered by regressions. Durable quarantine/scanning, an orphan
+implemented, covered by regressions, and deployed. Durable quarantine/scanning, an orphan
 ledger/sweeper, provider idempotency, and non-proof external calls remain.
 
 Objective: remove external network work and unreliable threads from request-critical transactions.

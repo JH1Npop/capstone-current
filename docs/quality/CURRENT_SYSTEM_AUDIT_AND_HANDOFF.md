@@ -1,8 +1,8 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-27 (proof-upload and dependency hardening validated locally) Asia/Singapore**
-Current objective (latest): **Continue production hardening without changing the free Render/Aiven service tiers. The current uncommitted batch raises Django REST Framework from 3.17.2 to 3.18.3 and cryptography from 49.0.0 to 50.0.2; a fresh `pip-audit` confirms those advisories are cleared, while Twisted 26.4.0 remains explicitly accepted for now because no fixed stable release is available. Proof photo/video storage for ticket upload, legacy checklist, and both completion endpoints now occurs before the short row-locking transaction, is cleaned up when finalization fails, and is bounded to 20 files/50 MB combined on the backend; the technician checklist rejects the same invalid batches before submission. The complete release gate passes all 628 backend tests with six expected PostgreSQL-only skips, the 2,543-module production build, and all 20 browser smoke scenarios. No schema, migration, API route, business rule, environment value, hosting tier, or persistent-data change. Commit, push, deployment, and live Cloudinary UAT are not yet authorized or claimed.**
+Last updated: **2026-10-27 (proof-upload and dependency hardening deployed and health-verified) Asia/Singapore**
+Current objective (latest): **Keep the deployed proof-upload and dependency hardening stable and complete an authenticated technician Cloudinary UAT. Commit `a0b5bdc9ee03504f17db6d10cdb0407238eb44d2` raises Django REST Framework to 3.18.3 and cryptography to 50.0.2; stages proof photo/video storage outside ticket row locks for direct upload, legacy checklist, and both completion endpoints; cleans request-owned uploads when finalization fails; and enforces a combined 20-file/50-MB budget in the backend and technician UI. It is live through Render backend deploy `dep-dbg8ii8473hc73fgvkmg` and frontend deploy `dep-dbg8ii8473hc73fgvlag`. Startup installed the exact patched versions, used PostgreSQL, reported no migrations, and started Daphne; liveness, full dependency readiness, frontend HTTP availability, the guarded perimeter, deployed bundle checks, and post-cutover ERROR/HTTP-5xx log searches passed. The complete local gate passed all 628 backend tests with six expected PostgreSQL-only skips, the 2,543-module production build, and all 20 browser smoke scenarios. No schema, migration, API route, business rule, environment value, hosting tier, or persistent-data change. Because verification did not mutate a staging ticket or upload client media, one authorized technician upload/finish-job retry remains the final live UAT boundary.**
 Current objective (latest): **Keep the deployed authorization-safe PostgreSQL ticket-lock repair stable and complete a short authenticated technician UAT retry. Commit `a9da39758cfc466b896b6e9a7c7adba9149d3cfc` moved the permission-scoped lead-or-crew `DISTINCT` query into a primary-key subquery and applies `SELECT ... FOR UPDATE OF self` only to a clean outer `ServiceTicket` query. Render deployment `dep-dbg4feoae00c73fo0ml0` reached `live` on that exact commit at 2026-10-27 06:43:39 UTC. Startup used PostgreSQL, reported no migrations to apply, and started Daphne; liveness, dependency readiness, and the guarded staging perimeter passed. Post-cutover inspection found no HTTP 5xx or recurrence of the original `FOR UPDATE is not allowed with DISTINCT clause` error. Focused checks passed 22 tests with six expected PostgreSQL-only skips; the complete release gate passed all 626 backend tests with six expected PostgreSQL-only skips, the 2,543-module frontend build, and 20/20 browser smoke scenarios. No schema, migration, API response, business rule, environment value, or persistent-data change. Because verification intentionally did not mutate staging business records, a technician retry of photo upload/start/completion remains the final manual UAT step, not a deployment-health blocker.**
 Current objective (latest): **Treat the current free deployed staging environment as defense/staging, not client production, until the audit release blockers are closed. Read-only live evidence confirms six `POST /api/services/service-tickets/16/upload_photos/` 503 responses caused by PostgreSQL rejecting `FOR UPDATE` on the technician ticket queryset's `DISTINCT`; the same shared lock helper also places technician start, completion, and equipment-return actions at risk. The complete 624-test SQLite/isolated-browser quality gate still passes, which proves the release gate does not currently exercise this PostgreSQL dialect path. Dependency audit also finds production-relevant DRF 3.17.2 resource-exhaustion advisories fixed in 3.18.2 and a potentially relevant Twisted/Daphne HTTP parsing advisory. No separate production target was inspected. No code, configuration, schema, migration, environment value, external data, commit, push, or deployment was changed in this audit. Six audit reports under `docs/quality/` now define architecture, evidence, database/deployment risks, remediation phases, and hosting options.**
 Current objective (latest): **Keep the deployed notification channel stable without weakening Redis health checks or HTTP fallbacks. Live evidence after the row-lock deployment proves technician job 13 now completes with HTTP 200. The independent five-second notification WebSocket churn was caused by redis-py 8's five-second default socket read timeout colliding with channels-redis 4.3.0's five-second blocking `BZPOPMIN`; commit `e92db58` now passes the Render Redis URL as a structured channel-layer host with `socket_timeout=None`, leaves the command-level blocking interval in control, and pins redis-py at `8.1.0`. Render backend deploy `dep-dbg14l7b9u1s73fpbt90` reached `live` on that exact application commit. Two authenticated notification sockets connected after cutover and post-cutover logs through more than eight idle minutes contain no Redis timeout, WebSocket disconnect, application ERROR, or HTTP 5xx match. Liveness, dependency readiness, and the guarded staging perimeter pass. The full release gate passed all 624 backend tests with five expected PostgreSQL-only skips, the 2,543-module production build, and all 20 browser smoke scenarios. No schema, migration, route, frontend, environment-value, or persistent-data change was required; a live notification-push delivery remains a short manual UAT check rather than a deployment blocker.**
@@ -964,12 +964,14 @@ deployment authorization.
 
 ## 8. Validation ledger
 
-2026-10-27 (proof-upload and dependency hardening; local, not deployed):
+2026-10-27 (proof-upload and dependency hardening; deployed and health-verified):
 - Raised Django REST Framework to 3.18.3 and cryptography to 50.0.2. `pip check` passed; a fresh `pip-audit -r backend/requirements.txt` no longer reports either package and reports only six Twisted 26.4.0 advisories. Five list 26.10.0rc1 as the first fix and one lists no fixed release, so production was not moved to a release candidate.
 - Refactored ticket proof upload, legacy checklist submission, `complete_work`, and technician status completion so validated object-storage writes finish before the ticket row is locked. Each path rechecks authorization/state inside a short atomic finalization block, and failed finalization deletes files written by that request.
 - Added one combined proof-upload budget of at most 20 files and 50 MB per request. The technician checklist applies the same combined budget plus the existing per-file type/size rules before submission. Added regressions proving storage precedes the ticket lock and an oversized batch is rejected before storage.
 - Focused backend coverage passed 96 tests, and the new two-regression selection passed four tests. The superseding `npm.cmd run quality` gate passed Django checks, dependency integrity, migration drift (`No changes detected`), all 628 backend tests with six expected PostgreSQL-only skips in 59.516 seconds, the 2,543-module Vite production build in 8.45 seconds, and all 20 isolated browser smoke scenarios in 3.3 minutes. Expected failure-injection responses and non-ASGI Vite WebSocket fallback noise remained non-failing test behavior.
-- Tests used isolated SQLite/E2E databases. No development/staging business record, schema, migration, environment value, hosting tier, external service configuration, commit, push, or deployment changed. Live Cloudinary behavior still requires controlled staging UAT after deployment authorization.
+- Tests used isolated SQLite/E2E databases. No development/staging business record, schema, migration, environment value, hosting tier, or external service configuration changed.
+- Commit `a0b5bdc9ee03504f17db6d10cdb0407238eb44d2` was pushed fast-forward to `origin/staging-deploy`. Render backend deploy `dep-dbg8ii8473hc73fgvkmg` and frontend deploy `dep-dbg8ii8473hc73fgvlag` reached `live` on that exact commit. Backend startup installed DRF 3.18.3 and cryptography 50.0.2, used PostgreSQL, reported `No migrations to apply`, and started Daphne on port 10000.
+- Direct liveness returned HTTP 200, readiness returned HTTP 200 with database/cache/realtime/storage all `ready`, the frontend returned HTTP 200, and the guarded staging perimeter passed. Deployed entry `/assets/index-sdcMNyvj.js` references `TechnicianChecklist-D7ytfbd0.js`, whose content contains both new combined-budget messages. Post-cutover HTTP-5xx and ERROR log queries returned no entries; the first ERROR query briefly received a Render Loki 503 and passed immediately on retry. No staging business record or media was mutated, so an authenticated technician Cloudinary upload/finish-job retry remains manual UAT rather than claimed evidence.
 
 2026-10-27 (authorization-safe PostgreSQL ticket-lock repair; deployed and health-verified):
 - Replaced the shared lock query's invalid outer `DISTINCT ... FOR UPDATE` shape with one SQL statement whose permission-scoped IDs remain in a subquery while a clean outer `ServiceTicket` SELECT receives `FOR UPDATE OF self`. This retains lead/crew/client/admin visibility and the existing object-permission call without a check-then-lock race.
@@ -1566,15 +1568,15 @@ Python code on 8000/5174. Restart a development server after backend changes.
   technician retries it; do not create or mutate a staging business ticket only
   for verification.
 
-- **2026-10-27 production-hardening batch validated locally, deployment pending:**
+- **2026-10-27 production-hardening batch deployed; authenticated UAT pending:**
   the confirmed PostgreSQL `FOR UPDATE` plus `DISTINCT` incident remains
   remediated on staging by `a9da397`; authenticated workflow UAT remains. The
-  uncommitted dependency batch clears the DRF and cryptography advisories and
+  deployed dependency batch clears the DRF and cryptography advisories and
   the upload refactor removes object-storage waits from ticket row locks, but
-  neither is deployed yet. Twisted/Daphne remains on stable 26.4.0 because the
+  both Render services are live and healthy. Twisted/Daphne remains on stable 26.4.0 because the
   available advisory fixes require 26.10.0rc1 and one advisory has no listed
-  fix. Do not claim client-production readiness until the batch is deployed,
-  controlled PostgreSQL/Cloudinary UAT passes, and the Twisted proxy-chain risk
+  fix. Do not claim client-production readiness until controlled
+  PostgreSQL/Cloudinary UAT passes and the Twisted proxy-chain risk
   is resolved or formally accepted.
 
 - **2026-10-27 operations and hosting audit:** the free Render/Aiven topology
@@ -1802,7 +1804,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
-- 2026-10-27 (proof-upload and dependency hardening; validated locally):
+- 2026-10-27 (proof-upload and dependency hardening; committed/deployed in `a0b5bdc`):
   `backend/requirements.txt` raises DRF and cryptography to patched stable
   releases; `backend/services/views/{helpers.py,tickets.py,technician.py}` and
   `backend/api/views.py` stage validated proof uploads outside row locks, apply
@@ -2559,10 +2561,11 @@ All paths below are preserved work, not cleanup candidates.
 
 ## 13. Change ledger
 
-2026-10-27 (proof-upload and dependency hardening; validated locally):
+2026-10-27 (proof-upload and dependency hardening; deployed):
 - Raised pinned DRF and cryptography versions to patched stable releases. `pip check` passes and the fresh Python audit clears both packages; unresolved Twisted findings are retained because the available fix is a release candidate or absent.
 - Moved proof storage out of ticket-locking transactions across direct ticket upload, legacy checklist, and both completion endpoints; added failed-write cleanup, authorization/state rechecks at finalization, and a 20-file/50-MB combined backend/UI budget.
-- Added storage-before-lock and reject-before-storage regressions. The complete gate passed 628 backend tests with six expected skips, a 2,543-module build, and 20/20 browser scenarios. Free hosting tiers remain unchanged; no commit, push, deployment, or live UAT is claimed.
+- Added storage-before-lock and reject-before-storage regressions. The complete gate passed 628 backend tests with six expected skips, a 2,543-module build, and 20/20 browser scenarios. Free hosting tiers remain unchanged.
+- Commit `a0b5bdc` was pushed fast-forward to `origin/staging-deploy`; backend deploy `dep-dbg8ii8473hc73fgvkmg` and frontend deploy `dep-dbg8ii8473hc73fgvlag` are live on the exact commit. Startup, liveness, all readiness dependencies, frontend/bundle activation, the guarded perimeter, and post-cutover ERROR/HTTP-5xx searches passed. Authenticated Cloudinary upload/finish-job UAT remains because verification intentionally created no staging business record or media.
 
 2026-10-27 (authorization-safe shared ticket-lock repair; deployed):
 - Preserved the permission-scoped lead/crew `DISTINCT` queryset as a primary-key subquery and applied `FOR UPDATE OF self` only to a clean outer `ServiceTicket` query. This corrects all shared-helper actions rather than special-casing photo upload and avoids a permission check/lock race.
