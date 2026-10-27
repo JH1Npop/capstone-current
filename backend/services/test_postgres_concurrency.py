@@ -7,7 +7,11 @@ from django.test import TransactionTestCase, skipUnlessDBFeature
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from inventory.automation import create_pending_reservation
+from inventory.automation import (
+    cancel_pending_reservation,
+    create_pending_reservation,
+    fulfill_pending_reservation,
+)
 from inventory.models import InventoryCategory, InventoryItem, InventoryReservation, InventoryTransaction
 from services.models import ServiceRequest, ServiceTicket, ServiceType
 from users.models import User
@@ -126,3 +130,56 @@ class PostgreSQLConcurrencyContractTests(TransactionTestCase):
         self.assertEqual(sorted(outcome for outcome, _pk in outcomes), ['created', 'rejected'])
         self.assertEqual(item.reserved_quantity, 4)
         self.assertEqual(InventoryReservation.objects.filter(item=item, status='pending').count(), 1)
+
+    def _create_nullable_ticket_reservation(self, *, sku):
+        category, _created = InventoryCategory.objects.get_or_create(name='Nullable Ticket Parts')
+        item = InventoryItem.objects.create(
+            name=f'Nullable Ticket Item {sku}',
+            sku=sku,
+            category=category,
+            item_type='part',
+            quantity=5,
+            minimum_stock=0,
+        )
+        reservation = create_pending_reservation(
+            item=item,
+            quantity=2,
+            technician=self.technician,
+            required_date=timezone.localdate(),
+            service_ticket=None,
+            performed_by=self.admin,
+            notes='PostgreSQL nullable-join row-lock probe',
+        )
+        return item, reservation
+
+    def test_fulfilling_reservation_locks_only_reservation_row(self):
+        item, reservation = self._create_nullable_ticket_reservation(sku='NULL-FULFILL-001')
+
+        changed = fulfill_pending_reservation(
+            reservation,
+            performed_by=self.admin,
+            notes='Fulfilled by PostgreSQL lock-scope probe',
+        )
+
+        self.assertTrue(changed)
+        reservation.refresh_from_db()
+        item.refresh_from_db()
+        self.assertEqual(reservation.status, 'fulfilled')
+        self.assertEqual(item.quantity, 3)
+        self.assertEqual(item.reserved_quantity, 0)
+
+    def test_cancelling_reservation_locks_only_reservation_row(self):
+        item, reservation = self._create_nullable_ticket_reservation(sku='NULL-CANCEL-001')
+
+        changed = cancel_pending_reservation(
+            reservation,
+            performed_by=self.admin,
+            notes='Cancelled by PostgreSQL lock-scope probe',
+        )
+
+        self.assertTrue(changed)
+        reservation.refresh_from_db()
+        item.refresh_from_db()
+        self.assertEqual(reservation.status, 'cancelled')
+        self.assertEqual(item.quantity, 5)
+        self.assertEqual(item.reserved_quantity, 0)

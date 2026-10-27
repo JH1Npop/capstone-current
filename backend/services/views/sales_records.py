@@ -397,7 +397,7 @@ class SalesRecordViewSet(viewsets.ModelViewSet):
             return Response({'ticket_id': ['A valid ticket is required.']}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            ticket = ServiceTicket.objects.select_for_update().select_related(
+            ticket = ServiceTicket.objects.select_for_update(of=('self',)).select_related(
                 'request__client', 'request__service_type'
             ).get(pk=ticket_id)
         except ServiceTicket.DoesNotExist:
@@ -417,7 +417,7 @@ class SalesRecordViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def confirm(self, request, pk=None):
-        record = get_object_or_404(SalesRecord.objects.select_for_update().select_related(
+        record = get_object_or_404(SalesRecord.objects.select_for_update(of=('self',)).select_related(
             'ticket__request__client', 'ticket__request__service_type'
         ), pk=pk)
         if record.status != 'draft':

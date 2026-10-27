@@ -318,7 +318,10 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
     def _get_locked_schedule(self, pk):
-        return get_object_or_404(self._base_queryset().select_for_update(), pk=pk)
+        return get_object_or_404(
+            self._base_queryset().select_for_update(of=('self',)),
+            pk=pk,
+        )
 
     @staticmethod
     def _required_reason(request):

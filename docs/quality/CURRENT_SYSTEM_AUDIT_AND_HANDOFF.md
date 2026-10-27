@@ -1,8 +1,8 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-27 (confirmed service controls, intro smoothness, and image-style DFD deployed to staging) Asia/Singapore**
-Current objective (latest): **Keep staging release `08dc94c` healthy after deploying the confirmed service availability controls, intro performance repair, and regenerated image-style DFD. Admin Services shows a confirmed Deactivate action for every active service and a confirmed Activate action for every inactive service; unused services additionally retain their separate permanent Delete action. The Edit form displays status read-only so it cannot silently bypass confirmation. The real browser regression proves active to inactive to active through two PUT requests and no DELETE. The combined release gate passed all 621 backend tests with 3 expected skips, a 2,543-module production build, and all 20 public/authentication browser smoke scenarios. Render frontend deploy `dep-dbfvdmbrjlhs73ck4kjg` and backend deploy `dep-dbfvdmbrjlhs73ck4k00` are live on exact commit `08dc94cd498edb86df1b95bf5e93f21f378b7e42`. The deployed bundle contains both status confirmations; live Aiven database, cache, realtime, and storage readiness plus the guarded perimeter check pass. No schema, migration, dependency, environment, persistent database, staging business record, or production system changed.**
+Last updated: **2026-10-27 (validated PostgreSQL nullable-join row-lock hardening) Asia/Singapore**
+Current objective (latest): **Repair and comprehensively prevent the PostgreSQL `FOR UPDATE cannot be applied to the nullable side of an outer join` failure observed while technician job 13 attempted to complete and issue reserved inventory on staging. Every mutation that combines `select_for_update` with eager optional relations now locks only its primary model row through `of=('self',)`: reservation fulfillment/cancellation and grouped equipment decisions, auto-dispatch, maintenance actions, quotation response/deposit actions, sales preparation/confirmation, inspection/commissioning/turnover/TDS actions, and solar-estimate conversion. Two production-shaped PostgreSQL regressions cover fulfilling and cancelling a reservation whose service ticket is null. The full release gate passes all 623 backend tests with five expected PostgreSQL-only skips, a 2,543-module production build, and all 20 browser smoke scenarios. No schema, migration, dependency, environment, persistent database, staging business record, deployment, commit, or push is included in this candidate. Staging still serves application release `08dc94c` with handoff successor `62fbd23` and remains affected until an explicitly authorized deployment.**
 Current focused objective: **Document status chips now distinguish draft/submitted/reviewed/finalized/signed states where a canonical record exists and printable-draft-only state where appropriate. Technical Data Sheet round-trips its load, generator, attachment, brownout, power, and client-confirmation fields; Contract normalizes formatted money before its decimal API fields; Turnover retains custom rows and signatures after save/reload. The isolated all-stage E2E journey proved these paths. The local accepted quotation for ticket 626 still has a blank legacy total and remains unchanged. The inspection-photo and business-hours fixes remain deployed through `08dc94c`; details and paths are in sections 8–10 and 13.**
 Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the inspection-first path, allow guarded same-day continuation on the same ticket with a fresh service dispatch, keep installation inventory out of inspection assignments, and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
@@ -632,18 +632,25 @@ other repository path must include this living handoff file.
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
 | Branch | `feature/analytics-decision-workspace`; releases are pushed to `origin/staging-deploy` |
-| HEAD | Application release commit `08dc94c Improve service controls intro and DFD`; this handoff-only deployment record is the next commit |
+| HEAD | `62fbd23 Record service controls staging deployment` |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | Rechecked locally on 2026-10-27: `origin/staging-deploy` and application HEAD both point to `08dc94c` before this required handoff-only follow-up |
-| Worktree | Application paths are clean after `08dc94c`; only this required deployment-evidence handoff update is pending |
+| Remote comparison | Rechecked locally on 2026-10-27: `origin/staging-deploy` and HEAD both point to `62fbd23`; the row-lock repair is uncommitted and undeployed |
+| Worktree | Nine backend runtime/test paths plus this required handoff are modified for the PostgreSQL nullable-join row-lock repair; no unrelated untracked or deleted path was found |
 | Tracked deletions | None |
-| Commit/push status | `08dc94c` was pushed to `origin/staging-deploy`. Render frontend deploy `dep-dbfvdmbrjlhs73ck4kjg` and backend deploy `dep-dbfvdmbrjlhs73ck4k00` are live on that exact commit; production was not accessed or changed. |
+| Commit/push status | The current row-lock repair is uncommitted and undeployed. `62fbd23` is pushed to `origin/staging-deploy`; Render runtime remains application commit `08dc94c`. Production was not accessed or changed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
 The real `.env` exists locally but must not be inspected merely to populate docs.
 
 ## 3. System architecture
+
+PostgreSQL mutation querysets that eagerly load optional relations scope
+`select_for_update` to `of=('self',)`. Related rows used only for validation or
+serialization remain read-only; rows that are themselves mutated are locked by
+their own explicit query. This avoids PostgreSQL attempting to lock the nullable
+side of an outer join while preserving the reservation/item and workflow-row
+concurrency boundaries.
 
 Scheduling now has a central application policy in
 `backend/services/scheduling_policy.py`: new service starts are permitted from
@@ -953,6 +960,14 @@ production database still requires backup, release review, and explicit
 deployment authorization.
 
 ## 8. Validation ledger
+
+2026-10-27 (PostgreSQL nullable-join row-lock repair):
+- Read-only Render logs for `/api/technician/jobs/13/status/` proved that the first four completion attempts returned HTTP 503 from `django.db.utils.NotSupportedError: FOR UPDATE cannot be applied to the nullable side of an outer join`; the failing query was `fulfill_pending_reservation` locking `InventoryReservation` plus nullable `service_ticket`. The later three HTTP 400 responses contained no server exception and were separate validation responses. The atomic completion requests rolled back; no staging record was intentionally mutated during diagnosis.
+- Repository-wide audit of every `select_for_update` call found and repaired all mutation querysets that also carry eager optional joins. Each now uses `of=('self',)`; standalone single-table locks remain unchanged.
+- `venv\Scripts\python.exe backend\manage.py check` passed with no issues. `venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run` reported `No changes detected`.
+- `venv\Scripts\python.exe backend\manage.py test inventory.tests services.test_postgres_concurrency --noinput --verbosity 1` passed 47 tests with five expected skips on local SQLite. The exercised completion paths returned HTTP 200 and the intentional invalid-usage path returned HTTP 400 with rollback. The two new nullable-ticket lock regressions are among the PostgreSQL-only skips and require the separately provisioned disposable `test_...` PostgreSQL gate.
+- The superseding `npm.cmd run quality` gate passed Django checks, Python dependency integrity, migration drift (`No changes detected`), all 623 backend tests with five expected PostgreSQL-only skips, the 2,543-module frontend production build, and all 20 public/authentication browser smoke scenarios in 3.4 minutes. Expected negative-path API logs and Vite WebSocket teardown messages were non-failing exercised behavior.
+- `git diff --check` passed before and after the handoff update. All automated tests used disposable SQLite databases. No development/staging database migration, persistent-data edit, deployment, commit, push, or production access occurred.
 
 2026-10-27 (confirmed service activation/deactivation controls and staging deployment):
 - `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules.
@@ -1496,6 +1511,17 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
 
+- **2026-10-27 PostgreSQL row-lock repair:** the candidate passed the full local
+  gate, but staging remains affected until an explicit deployment is authorized. The
+  local suite uses SQLite, so it proves workflow behavior but cannot execute
+  PostgreSQL's outer-join locking rule; the two new production-shaped tests are
+  intentionally part of `services.test_postgres_concurrency` and will run only
+  when a separately provisioned disposable `test_...` PostgreSQL database is
+  available. Do not point that destructive test runner at the staging Aiven
+  business database. The failed job-13 attempts were atomic and rolled back;
+  retry completion only after deployment, then confirm the ticket, inventory
+  reservation, item quantity, and issue/cancellation ledger entries together.
+
 - **2026-10-27 intro and DFD (uncommitted):** staging still serves the slower first intro until this change is deployed. The hero glows no longer drift. The redrawn DFD follows the user's reference image (single page, processes 1.0-8.0, stores D1-D14) and replaces the previous structured DFD and its store numbering (previous figure in git at `23abc72`); the user mentioned "level 2" but declined the question about per-process Level 2 pages, so the reference's single-page structure was kept. With one copy of Admin, Technician, and Client each linked to 1.0, 3.0, and 7.0, the graph is non-planar, so some crossings cannot be removed; the user chose all-connected single symbols over repeated * symbols. The router accepts a bridged crossing instead of a detour longer than about 900px (`CROSSING_COST`). Re-export the DFD PNG/PDF for the paper.
 
 - **2026-10-27 service retirement:** deactivation intentionally preserves a used
@@ -1692,6 +1718,8 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
+- 2026-10-27 (uncommitted and undeployed, PostgreSQL nullable-join row-lock repair): `backend/inventory/{automation.py,views.py}`; `backend/services/{auto_dispatch.py,test_postgres_concurrency.py,views_follow_up.py,views/{inspection.py,sales_records.py,solar_estimates.py,tickets.py}}`; and this handoff. The runtime paths scope eager-loading mutation locks to their primary row, and the PostgreSQL-only tests exercise reservation fulfillment and cancellation with a null optional ticket. No schema, migration, route, API shape, dependency, environment, frontend, or persistent-data change.
+
 - 2026-10-27 (committed and deployed in `08dc94c`, confirmed service activation/deactivation): `frontend/src/pages/admin/AdminServices.jsx` gives every active service a Deactivate action and every inactive service an Activate action, keeps permanent Delete separate for unused rows, requires confirmation for all three actions, locks the confirmation while saving, and makes status read-only in Edit; `e2e/03-admin-workspace.spec.js` proves the active/inactive round trip through PUT without DELETE; and this handoff records the contract and evidence.
 - 2026-10-27 (committed and deployed in `08dc94c`, intro smoothness and DFD): `frontend/src/components/{IntroSplash.jsx,IntroSplash.css}`, `frontend/src/index.css`, `e2e/08-responsive-accessibility.spec.js`, new `backend/scripts/generate_afn_dfd_drawio.py`, `docs/models/AFN_DETAILED_DFD_STRUCTURED.drawio`, `docs/academic/final_diagrams/README.md`, and this handoff.
 - 2026-10-27 (committed and deployed in `dc95ae0`, safe service deactivation):
@@ -1746,7 +1774,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 - 2026-10-23 (committed in "Speed up dashboards and fix minor-flow defects found by UI journeys"), minor flows: `backend/services/serializers/commercial_records.py` (declined-quotation revision), `backend/services/views/tickets.py` (service dispatch after a completed inspection), `backend/afn_service_management/settings_e2e.py` (E2E-only request throttle), new `backend/services/business_time.py`, `backend/users/serializers.py` (project date), new `backend/services/tests/test_business_day.py`, `backend/services/tests/test_business_flow_controls.py` (future date on the business day), new `backend/services/tests/test_quotation_revision.py`, `backend/services/tests/test_end_to_end_journeys.py` (awaiting-materials dispatch), `frontend/src/api/core.js` (`ticketType`, `inspectionCompleted`), `frontend/src/pages/admin/AdminDispatchBoard.jsx` (stage decision, alert role, 8-second refusal), `frontend/src/components/ui/StatusBadge.jsx`, `frontend/src/components/sales/QuotationDepositPanel.jsx`, `frontend/src/components/shared/RescheduleTicketModal.jsx`, `frontend/src/pages/technician/TechnicianJobs.jsx` (equipment list closes), `frontend/src/pages/client/ClientRequestDetail.jsx` (named rating stars; reloads keep unsaved rating/reschedule input), `frontend/src/pages/admin/AdminServiceTickets.jsx` (linked ticket opens once), `e2e/04-technician-workspace.spec.js` (4.5 selects the seeded ticket), new `e2e/11-minor-flow-journeys.spec.js`.
 - 2026-10-23 (committed in "Speed up dashboards and fix minor-flow defects found by UI journeys"): `backend/services/views_dashboard.py` (`DashboardChangesView`), `backend/api/urls.py` (`dashboard/changes/`), new `backend/services/tests/test_dashboard_changes.py`, new `frontend/src/utils/dashboardRefresh.js`, `frontend/src/api/services.js` (`fetchDashboardChanges`), `frontend/src/pages/{admin/AdminDashboard.jsx,client/ClientDashboard.jsx,technician/TechnicianDashboard.jsx}`, `frontend/src/pages/admin/AdminDocuments.jsx` (`resolveSelectedClientId`), `e2e/03-admin-workspace.spec.js` (3.1 change-token reload), `e2e/10-major-flow-journey.spec.js` (10.2), and this handoff.
 
-- No application work remains uncommitted. The paths below describe earlier releases and are retained as their historical manifests. The current combined frontend/backend runtime is application commit `08dc94c`; this deployment-evidence update to the living handoff is the only subsequent path before its own documentation commit.
+- The row-lock repair above is the only current application work. The paths below describe earlier releases and are retained as their historical manifests. The deployed application runtime remains `08dc94c`; handoff successor `62fbd23` contains documentation only.
 
 - Post-review defect remediation (committed in `09fe7cb`) touches `backend/services/{models/core.py,serializers/requests.py,views/{helpers.py,service_requests.py,technician.py,tickets.py},tests/{proof_fixtures.py (new),test_end_to_end_journeys.py,test_maintenance_workflow.py,test_scheduling_warranty_and_assignment.py,test_service_request_ticket_lifecycle.py}}`, `backend/{api/tests.py,inventory/tests.py}`, `backend/users/views/admin_users.py`, `frontend/src/{components/LandingLocationMap.jsx,hooks/useTechnicianJobs.js,pages/{LandingPage.jsx,technician/TechnicianMapNavigation.jsx}}`, `e2e/{01-public-pages.spec.js,04-technician-workspace.spec.js}`, `docs/security/{AUTHENTICATION_ACCOUNT_SECURITY_CONTRACT.md,WORKFLOW_STATE_MACHINES.md}`, and this handoff. This entry supersedes the older Audit fixes description below where it says completion URL references are kept: new completion submissions now reject every caller-supplied reference. It adds no model field, migration, route, dependency, or environment variable.
 
@@ -2407,6 +2435,11 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-27 (PostgreSQL nullable-join row-lock hardening, uncommitted and undeployed):
+- Render staging logs identified job 13's completion failure as a PostgreSQL outer-join locking error in reservation fulfillment, not a normal job-completion validation error.
+- Reservation fulfillment/cancellation and grouped equipment review now lock only the `InventoryReservation` row before separately locking the inventory item. The same primary-row scope was applied proactively to every eager-join mutation queryset found in auto-dispatch, maintenance, quotations/deposits, sales records, inspection/commissioning/turnover/TDS, and solar-estimate conversion.
+- Added PostgreSQL-gated regressions for fulfillment and cancellation when the optional reservation ticket is null. No schema, migration, route, response contract, dependency, environment, frontend, or persistent-data change.
 
 2026-10-27 (confirmed service activation/deactivation controls, committed and deployed in `08dc94c`):
 - Every active service card now exposes amber Deactivate and every inactive card exposes green Activate. Unused rows keep a separate red permanent Delete action, so retirement and deletion are no longer mutually exclusive or hidden in Edit.

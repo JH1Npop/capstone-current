@@ -492,7 +492,7 @@ class InventoryReservationViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             pending_reservations = list(
-                InventoryReservation.objects.select_for_update().select_related(
+                InventoryReservation.objects.select_for_update(of=('self',)).select_related(
                     'item', 'technician', 'service_ticket',
                     'service_ticket__request', 'service_ticket__request__service_type',
                 ).filter(

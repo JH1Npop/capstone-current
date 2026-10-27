@@ -2618,7 +2618,10 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
         """The client accepts or declines a quotation that was sent to them."""
         if request.user.role != 'client':
             return Response({'error': 'Only the client can respond to a quotation.'}, status=status.HTTP_403_FORBIDDEN)
-        quotation = get_object_or_404(self.get_queryset().select_for_update(), pk=pk)
+        quotation = get_object_or_404(
+            self.get_queryset().select_for_update(of=('self',)),
+            pk=pk,
+        )
         if quotation.status != 'Sent':
             return Response(
                 {'error': 'Only a quotation that has been sent to you can be accepted or declined.'},
@@ -2658,7 +2661,7 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
     def payments(self, request, pk=None):
         """Record money received toward the required pre-service deposit."""
         quotation = get_object_or_404(
-            self.get_queryset().select_for_update().select_related('ticket__request'), pk=pk,
+            self.get_queryset().select_for_update(of=('self',)).select_related('ticket__request'), pk=pk,
         )
         if quotation.status != 'Accepted':
             return Response(
@@ -2705,7 +2708,10 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='void-deposit-payment')
     @transaction.atomic
     def void_payment(self, request, pk=None):
-        quotation = get_object_or_404(self.get_queryset().select_for_update(), pk=pk)
+        quotation = get_object_or_404(
+            self.get_queryset().select_for_update(of=('self',)),
+            pk=pk,
+        )
         payment = get_object_or_404(
             SalesPayment.objects.select_for_update(),
             pk=request.data.get('payment_id'),

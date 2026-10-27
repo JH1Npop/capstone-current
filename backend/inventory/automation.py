@@ -93,7 +93,9 @@ def create_pending_reservation(*, item, quantity, technician, required_date, ser
 def cancel_pending_reservation(reservation, *, performed_by, notes=''):
     # Lock the reservation itself so competing cancellation/fulfillment
     # requests cannot both apply stock movements.
-    reservation = InventoryReservation.objects.select_for_update().select_related(
+    # service_ticket is nullable, so PostgreSQL cannot lock every table pulled
+    # in by select_related(). Only the reservation is being mutated here.
+    reservation = InventoryReservation.objects.select_for_update(of=('self',)).select_related(
         'item',
         'technician',
         'service_ticket',
@@ -119,7 +121,9 @@ def cancel_pending_reservation(reservation, *, performed_by, notes=''):
 
 @transaction.atomic
 def fulfill_pending_reservation(reservation, *, performed_by, notes=''):
-    reservation = InventoryReservation.objects.select_for_update().select_related(
+    # Scope the lock to the reservation row. Locking the nullable
+    # service_ticket outer join is rejected by PostgreSQL.
+    reservation = InventoryReservation.objects.select_for_update(of=('self',)).select_related(
         'item',
         'technician',
         'service_ticket',

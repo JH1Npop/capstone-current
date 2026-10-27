@@ -167,7 +167,7 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def complete(self, request, pk=None):
         """Mark inspection as completed"""
-        checklist = self.get_queryset().select_for_update().get(pk=pk)
+        checklist = self.get_queryset().select_for_update(of=('self',)).get(pk=pk)
         if checklist.is_completed:
             return Response({'status': 'Inspection completed'})
         self._require_technician_on_site(checklist.ticket)
@@ -300,7 +300,7 @@ class SolarCommissioningChecklistViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def complete(self, request, pk=None):
-        checklist = self.get_queryset().select_for_update().get(pk=pk)
+        checklist = self.get_queryset().select_for_update(of=('self',)).get(pk=pk)
         if checklist.status == 'finalized':
             return Response(
                 {'error': 'Finalized commissioning checklists are immutable.'},
@@ -365,7 +365,7 @@ class TurnoverAcceptanceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def finalize(self, request, pk=None):
-        turnover = self.get_queryset().select_for_update().select_related('ticket').get(pk=pk)
+        turnover = self.get_queryset().select_for_update(of=('self',)).select_related('ticket').get(pk=pk)
         if turnover.status in {'finalized', 'accepted'}:
             return Response(
                 {'error': 'This turnover acceptance has already been finalized.'},
@@ -433,7 +433,7 @@ class TurnoverAcceptanceViewSet(viewsets.ModelViewSet):
         if request.user.role != 'client':
             return Response({'error': 'Only the client can confirm the handover.'}, status=status.HTTP_403_FORBIDDEN)
         turnover = get_object_or_404(
-            self.get_queryset().select_for_update().select_related('ticket__request'),
+            self.get_queryset().select_for_update(of=('self',)).select_related('ticket__request'),
             pk=pk, ticket__request__client=request.user,
         )
         if turnover.status == 'accepted':
@@ -495,7 +495,7 @@ class TechnicalDataSheetViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def submit(self, request, pk=None):
-        tds = self.get_queryset().select_for_update().get(pk=pk)
+        tds = self.get_queryset().select_for_update(of=('self',)).get(pk=pk)
         if tds.status != 'draft':
             return Response(
                 {'error': f'Only draft technical data sheets can be submitted; this sheet is {tds.status}.'},
@@ -509,7 +509,7 @@ class TechnicalDataSheetViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def review(self, request, pk=None):
-        tds = self.get_queryset().select_for_update().get(pk=pk)
+        tds = self.get_queryset().select_for_update(of=('self',)).get(pk=pk)
         if not is_admin_workspace_role(request.user.role):
             raise PermissionDenied("Only admins can review the TDS.")
         if tds.status != 'submitted':

@@ -167,7 +167,7 @@ def auto_assign_technician(ticket: ServiceTicket) -> bool:
 
     try:
         with transaction.atomic():
-            ticket = ServiceTicket.objects.select_for_update().select_related(
+            ticket = ServiceTicket.objects.select_for_update(of=('self',)).select_related(
                 'request__service_type',
                 'request__location',
                 'assigned_admin',

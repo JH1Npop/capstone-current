@@ -69,7 +69,7 @@ class SolarEstimateViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('You can only convert your own estimate.')
 
         with transaction.atomic():
-            estimate = SolarEstimate.objects.select_for_update().select_related('service_request').get(
+            estimate = SolarEstimate.objects.select_for_update(of=('self',)).select_related('service_request').get(
                 pk=pk,
                 client=request.user,
             )
