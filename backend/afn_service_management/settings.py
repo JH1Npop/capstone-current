@@ -596,17 +596,30 @@ REDIS_URL = os.environ.get(
     '' if IS_PRODUCTION else 'redis://127.0.0.1:6379/0',
 ).strip()
 
-if USE_REDIS:
-    CHANNEL_LAYERS = {
+
+def build_redis_channel_layer_config(redis_url):
+    """Build a channel layer that can safely perform blocking Redis reads."""
+    return {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
             'CONFIG': {
-                'hosts': [REDIS_URL],
+                # redis-py 8 defaults socket_timeout to five seconds, exactly
+                # matching channels-redis' BZPOPMIN interval. Disable the
+                # client read timeout so an idle socket is not disconnected;
+                # channels-redis supplies the blocking-command timeout itself.
+                'hosts': [{
+                    'address': redis_url,
+                    'socket_timeout': None,
+                }],
                 'capacity': int(os.environ.get('CHANNEL_CAPACITY', '10000')),
                 'expiry': int(os.environ.get('CHANNEL_EXPIRY_SECONDS', str(10 * 60))),
             },
         }
     }
+
+
+if USE_REDIS:
+    CHANNEL_LAYERS = build_redis_channel_layer_config(REDIS_URL)
 else:
     # Each process has its own isolated layer. This is suitable only for local
     # development and tests, never for a multi-process production deployment.

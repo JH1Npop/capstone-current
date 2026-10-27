@@ -9,6 +9,7 @@ from django.test import SimpleTestCase, override_settings
 
 from afn_service_management import settings as project_settings
 from afn_service_management.settings import build_postgres_config_from_url
+from channels_redis.utils import create_pool
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -70,6 +71,20 @@ class HostedDatabaseConnectionTests(SimpleTestCase):
 
         self.assertEqual(config['CONN_MAX_AGE'], 30)
         self.assertIs(config['CONN_HEALTH_CHECKS'], False)
+
+
+class RedisChannelLayerSafetyTests(SimpleTestCase):
+    def test_blocking_channel_receive_has_no_client_read_timeout(self):
+        config = project_settings.build_redis_channel_layer_config(
+            'redis://example.invalid:6379/0'
+        )
+
+        host = config['default']['CONFIG']['hosts'][0]
+        pool = create_pool(host)
+
+        self.assertEqual(host['address'], 'redis://example.invalid:6379/0')
+        self.assertIsNone(host['socket_timeout'])
+        self.assertIsNone(pool.connection_kwargs['socket_timeout'])
 
 
 class BrevoConfigurationSafetyTests(SimpleTestCase):

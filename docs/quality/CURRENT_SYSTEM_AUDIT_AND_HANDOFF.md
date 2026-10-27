@@ -1,8 +1,8 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-27 (deployed PostgreSQL nullable-join row-lock hardening) Asia/Singapore**
-Current objective (latest): **The PostgreSQL `FOR UPDATE cannot be applied to the nullable side of an outer join` failure observed while technician job 13 attempted to complete and issue reserved inventory is repaired and deployed to staging in runtime commit `391b97e`. Every mutation that combines `select_for_update` with eager optional relations now locks only its primary model row through `of=('self',)`: reservation fulfillment/cancellation and grouped equipment decisions, auto-dispatch, maintenance actions, quotation response/deposit actions, sales preparation/confirmation, inspection/commissioning/turnover/TDS actions, and solar-estimate conversion. Two production-shaped PostgreSQL regressions cover fulfilling and cancelling a reservation whose service ticket is null. The full release gate passes all 623 backend tests with five expected PostgreSQL-only skips, a 2,543-module production build, and all 20 browser smoke scenarios. Render backend deploy `dep-dbg0oi7f3r2c73b3b7lg` is live on exact commit `391b97efb9372323537df6e522482354e6cc4cec`; startup applied no migrations, readiness reports database/cache/realtime/storage ready, and the guarded staging perimeter passes. No schema, migration, dependency, environment, frontend, persistent database, or staging business-record change was required. Production was not accessed or changed.**
+Last updated: **2026-10-27 (validated Redis 8 idle-WebSocket timeout repair) Asia/Singapore**
+Current objective (latest): **Stop the deployed notification WebSocket disconnect/reconnect storm without weakening Redis health checks or HTTP fallbacks. Live evidence after the row-lock deployment proves technician job 13 now completes with HTTP 200, while idle notification sockets continue failing every five seconds because redis-py 8 changed its default socket read timeout to five seconds and `channels-redis` 4.3.0 uses a five-second blocking `BZPOPMIN`. The candidate now passes the Render Redis URL as a structured channel-layer host with `socket_timeout=None`, leaving the command-level blocking interval in control, and pins the already-deployed redis-py line at `8.1.0` to prevent another silent transitive drift. A configuration regression proves the effective connection pool has no client read timeout. The full release gate passes all 624 backend tests with five expected PostgreSQL-only skips, the 2,543-module production build, and all 20 browser smoke scenarios. No schema, migration, route, frontend, environment-value, or persistent-data change is required. This Redis repair is local and uncommitted; staging remains on backend runtime `391b97e` with handoff successor `f1252fa` until a new commit/deployment is explicitly authorized.**
 Current focused objective: **Document status chips now distinguish draft/submitted/reviewed/finalized/signed states where a canonical record exists and printable-draft-only state where appropriate. Technical Data Sheet round-trips its load, generator, attachment, brownout, power, and client-confirmation fields; Contract normalizes formatted money before its decimal API fields; Turnover retains custom rows and signatures after save/reload. The isolated all-stage E2E journey proved these paths. The local accepted quotation for ticket 626 still has a blank legacy total and remains unchanged. The inspection-photo and business-hours fixes remain deployed through `08dc94c`; details and paths are in sections 8–10 and 13.**
 Current objective: **Keep the maintained academic schema and workflow artifacts aligned with the deployed model contract. Deliver and validate administrator-configurable per-service deposit rules, quotation snapshots, externally recorded deposit payments, client-visible balances, and a hard pre-service dispatch gate; preserve the inspection-first path, allow guarded same-day continuation on the same ticket with a fresh service dispatch, keep installation inventory out of inspection assignments, and credit every deposit to the later Sales Record balance. Restore real deployed registration and authentication by delivering verification and password-reset email through an HTTPS transactional-email provider while preserving the verification boundary; complete the repository-controlled industry-readiness baseline: optional administrator TOTP MFA with one-time recovery codes, correlated structured request logging, guarded PostgreSQL backup/restore drills, a bounded read-only load smoke, and incident/privacy operating contracts; retain external provider, UAT, restore, concurrency, SMTP, malware-scanning, and penetration-test evidence as explicit pre-production gates. Keep the authenticated Documents workspace free of corrupted currency text, keep development-only connectivity probes out of the public API surface, maintain the live `staging-deploy` Render environment,
 keep ordinary development isolated on SQLite with a fail-closed guard against
@@ -632,12 +632,12 @@ other repository path must include this living handoff file.
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
 | Branch | `feature/analytics-decision-workspace`; releases are pushed to `origin/staging-deploy` |
-| Application release commit | `391b97e Harden PostgreSQL workflow row locks` |
+| HEAD | `f1252fa Record row-lock staging deployment` |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | Rechecked on 2026-10-27: application commit `391b97e` was pushed fast-forward to `origin/staging-deploy` and Render deployed that exact commit |
-| Worktree | Runtime/test changes are committed in `391b97e`; this required handoff carries the post-deployment evidence follow-up |
+| Remote comparison | Rechecked on 2026-10-27: HEAD and `origin/staging-deploy` point to `f1252fa`; Render backend runtime remains application commit `391b97e` |
+| Worktree | `backend/afn_service_management/{settings.py,test_settings_safety.py}`, `backend/requirements.txt`, and this handoff are modified for the Redis 8 idle-WebSocket repair; no unrelated untracked or deleted path was found |
 | Tracked deletions | None |
-| Commit/push status | Runtime commit `391b97e` is pushed to `origin/staging-deploy` and live on the staging backend. The frontend correctly retained its compatible `08dc94c` artifact because this release changed no frontend path. Production was not accessed or changed. |
+| Commit/push status | The Redis WebSocket repair is uncommitted and undeployed. Runtime commit `391b97e` remains live on the staging backend; the compatible frontend remains on `08dc94c`. Production was not accessed or changed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -960,6 +960,13 @@ production database still requires backup, release review, and explicit
 deployment authorization.
 
 ## 8. Validation ledger
+
+2026-10-27 (Redis 8 idle-WebSocket timeout repair):
+- Live Render logs proved the PostgreSQL completion repair worked: `POST /api/technician/jobs/13/status/` returned HTTP 200 at 02:36:49 UTC. The remaining recurring deployed error was independent: every idle notification WebSocket raised `redis.exceptions.TimeoutError: Timeout reading from ...:6379` through `channels_redis.core.RedisChannelLayer.receive` and reconnected.
+- Local dependency inspection and the redis-py 8 release contract identified the exact timeout collision: redis-py 8 defaults `socket_timeout` to five seconds, while channels-redis 4.3.0 waits five seconds in blocking `BZPOPMIN`. The production channel layer now explicitly supplies `{'address': REDIS_URL, 'socket_timeout': None}` so the channel layer's command timeout governs idle receives. `redis==8.1.0` is explicitly pinned instead of floating transitively.
+- `venv\Scripts\python.exe backend\manage.py test afn_service_management.test_settings_safety afn_service_management.tests_health notifications.test_realtime --noinput --verbosity 1` passed 17/17. The new regression creates the actual channels-redis pool and proves its effective `socket_timeout` is `None`.
+- Django `check`, migration drift (`No changes detected`), and `pip check` passed. After upgrading the local virtual environment from redis-py 8.0.0 to the exact pinned/deployed 8.1.0, the superseding `npm.cmd run quality` gate passed all 624 backend tests with five expected PostgreSQL-only skips, the 2,543-module Vite production build, and all 20 public/authentication browser smoke scenarios in 2.7 minutes. Intentional negative-path API responses, simulated dependency/storage failures, and Vite development-proxy WebSocket teardown noise were exercised non-failing behavior.
+- Tests used disposable SQLite/E2E databases. No persistent database, staging business record, migration, deployment, commit, push, or production system was changed.
 
 2026-10-27 (PostgreSQL nullable-join row-lock repair):
 - Read-only Render logs for `/api/technician/jobs/13/status/` proved that the first four completion attempts returned HTTP 503 from `django.db.utils.NotSupportedError: FOR UPDATE cannot be applied to the nullable side of an outer join`; the failing query was `fulfill_pending_reservation` locking `InventoryReservation` plus nullable `service_ticket`. The later three HTTP 400 responses contained no server exception and were separate validation responses. The atomic completion requests rolled back; no staging record was intentionally mutated during diagnosis.
@@ -1514,6 +1521,15 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
 
+- **2026-10-27 Redis 8 idle-WebSocket repair:** staging still runs the affected
+  channel-layer configuration until this tested candidate is committed and
+  deployed. HTTP APIs and polling fallbacks continue to work, and readiness can
+  pass because short Redis send/receive probes finish before five seconds, but
+  idle signed-in sockets reconnect repeatedly and generate server/client noise.
+  After deployment, keep an authenticated socket idle for at least 30 seconds,
+  trigger one notification push, and confirm both delivery and the absence of
+  `redis.exceptions.TimeoutError` in Render logs.
+
 - **2026-10-27 PostgreSQL row-lock repair:** runtime commit `391b97e` is live on
   staging and the read-only deployment checks pass. The local suite uses SQLite,
   so it proves workflow behavior but cannot execute
@@ -1720,6 +1736,14 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Medium product decision | Sales Records use a read-only accepted-quotation or signed-contract value when available. A reasoned manual reference value remains available for legacy completed work with neither source; it is not independently approved and is not payment evidence | Periodically review manual-value records and decide whether future exports need tax/accounting integration; keep payment collection and accounting state outside this service-management system |
 
 ## 10. Current worktree manifest
+
+- 2026-10-27 (uncommitted and undeployed, Redis 8 idle-WebSocket repair):
+  `backend/afn_service_management/settings.py` builds the Redis channel host
+  with `socket_timeout=None`; `backend/afn_service_management/test_settings_safety.py`
+  proves that value reaches the effective channels-redis connection pool;
+  `backend/requirements.txt` pins `redis==8.1.0`; and this handoff records the
+  cause, evidence, release state, and required live verification. No schema,
+  migration, route, frontend, environment-value, or persistent-data change.
 
 - 2026-10-27 (committed and deployed in `391b97e`, PostgreSQL nullable-join row-lock repair): `backend/inventory/{automation.py,views.py}`; `backend/services/{auto_dispatch.py,test_postgres_concurrency.py,views_follow_up.py,views/{inspection.py,sales_records.py,solar_estimates.py,tickets.py}}`; and this handoff. The runtime paths scope eager-loading mutation locks to their primary row, and the PostgreSQL-only tests exercise reservation fulfillment and cancellation with a null optional ticket. No schema, migration, route, API shape, dependency, environment, frontend, or persistent-data change.
 
@@ -2438,6 +2462,11 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+2026-10-27 (Redis 8 idle-WebSocket timeout repair, uncommitted and undeployed):
+- Confirmed from live logs that job 13 completion now returns HTTP 200 and separated that repaired workflow from the continuing notification-socket churn.
+- Replaced the bare Redis channel-layer URL with the supported structured host form and explicitly disabled the client read timeout for channels-redis blocking receives. Short command-level timeouts, readiness probes, polling fallbacks, and reconnect behavior remain intact.
+- Pinned redis-py 8.1.0, added an effective-pool configuration regression, and passed the complete 624-test/build/browser release gate. No schema, migration, route, frontend, environment-value, or persistent-data change.
 
 2026-10-27 (PostgreSQL nullable-join row-lock hardening, committed and deployed in `391b97e`):
 - Render staging logs identified job 13's completion failure as a PostgreSQL outer-join locking error in reservation fulfillment, not a normal job-completion validation error.
