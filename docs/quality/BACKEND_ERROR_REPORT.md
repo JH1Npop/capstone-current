@@ -18,7 +18,7 @@ Classification: **Confirmed** means reproduced or directly observed; **Hypothesi
 | ID | Severity | Status | Finding |
 |---|---|---|---|
 | SEC-001 | Critical | Confirmed dependency exposure | Public DRF parsing/content negotiation is affected by unauthenticated resource-exhaustion advisories fixed in 3.18.2 |
-| REL-001 | High | Confirmed live defect | PostgreSQL rejects the technician ticket lock query because it combines `FOR UPDATE` and `DISTINCT` |
+| REL-001 | High | Remediated on staging; authenticated UAT pending | PostgreSQL rejected the technician ticket lock query because it combined `FOR UPDATE` and `DISTINCT` |
 | SEC-002 | High | Confirmed vulnerable dependency; exploitability conditional | Twisted/Daphne HTTP stack has a request-smuggling advisory; proxy-chain exploitability was not proven |
 | OPS-001 | High | Confirmed configuration gap | Scheduled SLA, maintenance, analytics and cleanup commands have no deployed scheduler |
 | AUTH-001 | High | Confirmed design gap | Static API tokens have no expiry/refresh lifecycle |
@@ -59,9 +59,9 @@ Classification: **Confirmed** means reproduced or directly observed; **Hypothesi
 
 ### REL-001 — PostgreSQL `FOR UPDATE` with `DISTINCT`
 
-Remediation status (2026-10-27): an authorization-safe outer-row-lock/subquery repair and two regressions pass the complete local release gate. Deployment and live UAT evidence are pending; the original finding remains the authoritative incident evidence until those checks complete.
+Remediation status (2026-10-27): the authorization-safe outer-row-lock/subquery repair and two regressions pass the complete local release gate. Commit `a9da39758cfc466b896b6e9a7c7adba9149d3cfc` is live on staging through Render deployment `dep-dbg4feoae00c73fo0ml0`; startup, liveness, dependency readiness, perimeter checks, and post-cutover error-log review passed with no recurrence. The original incident evidence remains relevant history, while an authenticated technician retry is the only outstanding live UAT step.
 
-- Severity/status: **High / Confirmed live defect**.
+- Severity/status: **High / Confirmed incident; remediated on staging, authenticated UAT pending**.
 - Module/path: `backend/services/views/tickets.py:308-317`, `backend/services/views/helpers.py:466-472`; confirmed action `tickets.py:1950-1952`.
 - Evidence: six deployed-staging requests to `POST /api/services/service-tickets/16/upload_photos/` returned 503 after the current deployment. Correlated Render traces show `psycopg2.errors.FeatureNotSupported: FOR UPDATE is not allowed with DISTINCT clause`, raised from `get_locked_ticket()`. Durations were approximately 592–724 ms. The response was correctly sanitized by the centralized database-error handler. No separate production service was inspected.
 - Root cause: `get_locked_ticket()` applies `select_for_update(of=('self',))` after `filter_queryset(self.get_queryset())`; the technician lead-or-crew queryset uses `.distinct()`.

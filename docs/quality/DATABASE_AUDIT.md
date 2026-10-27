@@ -38,7 +38,7 @@ Local migration checks report no model drift and no planned operations. This is 
 
 ### Confirmed locking defect
 
-Remediation status (2026-10-27): the local candidate now retains the permission-scoped `DISTINCT` inside an ID subquery and applies `FOR UPDATE OF self` only to the non-distinct outer ticket query. Query-shape/full release tests pass; disposable-PostgreSQL execution and deployed live evidence remain the final gates.
+Remediation status (2026-10-27): the repair retains the permission-scoped `DISTINCT` inside an ID subquery and applies `FOR UPDATE OF self` only to the non-distinct outer ticket query. Query-shape/full release tests pass, and commit `a9da39758cfc466b896b6e9a7c7adba9149d3cfc` is live on PostgreSQL-backed staging through Render deployment `dep-dbg4feoae00c73fo0ml0`. Startup, database readiness, perimeter checks, and post-cutover error-log review passed without recurrence. The exact authenticated technician action remains a manual live-UAT step; the PostgreSQL-only regression remains available for a disposable PostgreSQL gate.
 
 `ServiceTicketViewSet.get_locked_ticket()` builds this logical sequence:
 

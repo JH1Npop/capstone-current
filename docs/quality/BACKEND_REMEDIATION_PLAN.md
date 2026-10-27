@@ -36,7 +36,7 @@ Exit evidence:
 
 ## Phase 1 — Stabilize critical backend workflows
 
-Status update (2026-10-27): the REL-001 shared ticket-lock code repair and regression coverage are implemented locally and the complete release gate passes. PostgreSQL/deployment/live-UAT evidence remains pending. Dependency and public-error-safety work in this phase is not yet complete.
+Status update (2026-10-27): the REL-001 shared ticket-lock code repair and regression coverage pass the complete release gate. Commit `a9da39758cfc466b896b6e9a7c7adba9149d3cfc` is live on PostgreSQL-backed staging through Render deployment `dep-dbg4feoae00c73fo0ml0`; startup, health, perimeter, and post-cutover error-log checks passed without recurrence. The exact authenticated technician action remains a manual live-UAT step. Dependency and public-error-safety work in this phase is not yet complete.
 
 Objective: restore core technician workflows and remove immediately actionable security exposure.
 

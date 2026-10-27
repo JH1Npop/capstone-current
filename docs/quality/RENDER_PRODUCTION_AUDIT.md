@@ -20,11 +20,18 @@ At audit time:
 - the frontend was a Render static site;
 - Channels used a free Render Key Value/Redis service.
 
+Deployment update (2026-10-27): backend deploy `dep-dbg4feoae00c73fo0ml0`
+reached `live` on application commit
+`a9da39758cfc466b896b6e9a7c7adba9149d3cfc` at 06:43:39 UTC. Startup logs
+confirmed PostgreSQL, no pending migrations, and Daphne listening; liveness,
+dependency readiness, the guarded perimeter, and post-cutover error-log checks
+passed.
+
 This proves reachability and dependency readiness at the observation time. It does not prove production reliability, capacity or the absence of route-specific failures.
 
-## Confirmed post-deploy application failure
+## Historical confirmed post-deploy application failure
 
-Current deployed-staging logs contain six repeated 503 responses for:
+Historical deployed-staging logs contain six repeated 503 responses for:
 
 ```text
 POST /api/services/service-tickets/16/upload_photos/
@@ -38,6 +45,8 @@ FOR UPDATE is not allowed with DISTINCT clause
 ```
 
 The trace reaches `ServiceTicketViewSet.upload_photos` and `get_locked_ticket`. Response durations were approximately 592–724 ms. This is a confirmed application/PostgreSQL query defect, not evidence that Render or Aiven was down. Retrying deployment without changing the query cannot repair it.
+
+Remediation status (2026-10-27): commit `a9da39758cfc466b896b6e9a7c7adba9149d3cfc` corrected the shared lock query and is live on staging through Render deployment `dep-dbg4feoae00c73fo0ml0`. Startup confirmed PostgreSQL, no pending migrations, and Daphne listening. Liveness, dependency readiness, and the guarded perimeter returned healthy results; post-cutover logs contained no HTTP 5xx or recurrence of the original PostgreSQL error. No staging business action was submitted during verification, so an authenticated technician retry remains manual UAT rather than claimed endpoint evidence.
 
 The centralized error handler correctly returned a sanitized 503 rather than the database traceback. The failure happened during locked ticket lookup, before media or database mutation.
 
