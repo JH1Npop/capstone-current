@@ -295,7 +295,6 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def login(self, request):
         """User login"""
-        delete_expired_unverified_clients()
         serializer = UserLoginSerializer(data=request.data)
         if serializer.is_valid():
             user = authenticate_user_credentials(

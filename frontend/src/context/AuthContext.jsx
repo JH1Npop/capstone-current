@@ -4,6 +4,13 @@ import { API_BASE_URL, api, clearStoredAuth, getApiErrorMessage } from '../api/c
 
 const AuthContext = createContext(null);
 const TECHNICIAN_HEARTBEAT_MS = 45_000;
+const AUTH_WAKE_TIMEOUT_MS = 60_000;
+const AUTH_REQUEST_TIMEOUT_MS = 60_000;
+
+const wakeAuthenticationBackend = () => axios.get(
+  `${API_BASE_URL.replace(/\/$/, '')}/health/liveness/`,
+  { timeout: AUTH_WAKE_TIMEOUT_MS },
+);
 
 const normalizeRegisterErrors = (data) => {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
@@ -188,16 +195,22 @@ export const AuthProvider = ({ children }) => {
    * Authenticate against the Django backend.
    * Returns { success: true } or { success: false, message: string }
    */
-  const login = useCallback(async (username, password, mfaCode = '') => {
+  const login = useCallback(async (username, password, mfaCode = '', onProgress = null) => {
+    let phase = 'waking';
     try {
       clearStoredAuth();
       setToken(null);
       setUser(null);
 
+      onProgress?.('waking');
+      await wakeAuthenticationBackend();
+
+      phase = 'authenticating';
+      onProgress?.('authenticating');
       const response = await api.post(
         '/users/login/',
         { username, password, ...(mfaCode ? { mfa_code: mfaCode } : {}) },
-        { timeout: 15_000 },
+        { timeout: AUTH_REQUEST_TIMEOUT_MS },
       );
       if (response.data?.mfa_required) {
         return {
@@ -227,7 +240,9 @@ export const AuthProvider = ({ children }) => {
       const mfaRequired = Boolean(err.response?.data?.mfa_required);
       const message = getApiErrorMessage(
         err,
-        mfaRequired
+        phase === 'waking'
+          ? 'Unable to prepare the secure login service. Please try again.'
+          : mfaRequired
           ? 'The authentication code is incorrect or expired.'
           : 'The username/email or password is incorrect.',
       );

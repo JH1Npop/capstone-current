@@ -52,6 +52,11 @@ export const getApiValidationErrors = (error) => {
 };
 
 export const getApiErrorMessage = (error, fallbackMessage = 'Something went wrong. Please try again.') => {
+  const timedOut = error?.code === 'ECONNABORTED'
+    || /timeout/i.test(String(error?.message || ''));
+  if (timedOut) {
+    return 'The server is taking longer than expected. Please wait a moment and try again.';
+  }
   if (!error?.response && error?.message && error.message !== 'Network Error') {
     return error.message;
   }

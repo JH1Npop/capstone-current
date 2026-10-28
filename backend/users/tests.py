@@ -287,6 +287,23 @@ class UserLoginTests(APITestCase):
         self.assertEqual(response.data['user']['username'], user.username)
         self.assertIn('token', response.data)
 
+    def test_login_does_not_run_expired_account_cleanup(self):
+        user = User.objects.create_user(
+            username='fast_login_user',
+            email='fast-login@example.com',
+            password='Password123!',
+            role='client',
+        )
+
+        with patch('users.views.auth.delete_expired_unverified_clients') as cleanup:
+            response = self.client.post(self.login_url, {
+                'username': user.username,
+                'password': 'Password123!',
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        cleanup.assert_not_called()
+
     def test_login_rejects_legacy_plain_text_password(self):
         user = User.objects.create(
             username='legacy_user',

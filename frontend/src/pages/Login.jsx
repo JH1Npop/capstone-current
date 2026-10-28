@@ -39,6 +39,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [errorField, setErrorField] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState('');
   const [returningVisitor] = useState(hasSignedInBefore);
 
   const handleSubmit = async (e) => {
@@ -55,9 +56,15 @@ export default function Login() {
     }
 
     setLoading(true);
+    setLoadingStage('waking');
 
     try {
-      const result = await login(submittedUsername, submittedPassword, mfaCode.trim());
+      const result = await login(
+        submittedUsername,
+        submittedPassword,
+        mfaCode.trim(),
+        setLoadingStage,
+      );
 
       if (!result || typeof result !== 'object') {
         setError('Login service error. Please try again.');
@@ -83,6 +90,7 @@ export default function Login() {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
+      setLoadingStage('');
     }
   };
 
@@ -185,7 +193,7 @@ export default function Login() {
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
                 <path fill="currentColor" className="opacity-75" d="M4 12a8 8 0 018-8V0C5.3 0 0 5.3 0 12h4z" />
               </svg>
-              Signing in...
+              {loadingStage === 'waking' ? 'Connecting securely...' : 'Signing in...'}
             </span>
           ) : (
             <>
