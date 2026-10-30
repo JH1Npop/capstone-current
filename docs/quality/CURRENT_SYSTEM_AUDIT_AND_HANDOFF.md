@@ -1,8 +1,8 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-28 (login cold-start timeout hardening validated locally) Asia/Singapore**
-Current objective (latest): **Publish the locally validated login cold-start hardening only after explicit commit/deploy authorization. The login UI now warms the public liveness endpoint before submitting credentials, allows up to 60 seconds for both wake-up and authentication, shows separate Connecting securely and Signing in states, and translates Axios timeouts into an actionable message. The backend no longer performs unrelated expired-unverified-account cleanup synchronously on every login; cleanup remains on registration, verification, administrator, and queryset paths. Focused authentication coverage passed 13 backend tests, the 2,543-module production build, and all 8 browser authentication scenarios. No password-hashing strength, schema, migration, route, environment value, hosting tier, persistent data, commit, push, or deployment changed. Free-tier cold starts can still delay the first request, but no longer hit the former client-side 15-second cutoff.**
+Last updated: **2026-10-30 (login cold-start timeout hardening deployed and health-verified) Asia/Singapore**
+Current objective (latest): **Keep the deployed login cold-start hardening stable and complete one user-authenticated cold/warm login UAT when the free backend has slept. Commit `5331dc43c423a9093bb17d8d9308791a0fa794ad` warms the public liveness endpoint before submitting credentials, allows up to 60 seconds for both wake-up and authentication, shows separate Connecting securely and Signing in states, translates Axios timeouts into an actionable message, and removes unrelated expired-unverified-account cleanup from the synchronous login path without weakening password hashing. Backend deploy `dep-dbgvtgtg1s2s73egrbmg` and frontend deploy `dep-dbgvtgtg1s2s73egrca0` are live on that exact commit. Startup reported no migrations and started Daphne; liveness, full dependency readiness, frontend and login bundle activation, the guarded perimeter, and post-cutover ERROR/HTTP-5xx searches passed. Local validation passed 13 authentication/MFA tests, the 2,543-module production build, and all 8 browser authentication scenarios. No schema, migration, route, environment value, hosting tier, or persistent-data change. Free-tier cold starts can still delay the first request, but no longer hit the former client-side 15-second cutoff.**
 Current objective (latest): **Keep the deployed proof-upload and dependency hardening stable and complete an authenticated technician Cloudinary UAT. Commit `a0b5bdc9ee03504f17db6d10cdb0407238eb44d2` raises Django REST Framework to 3.18.3 and cryptography to 50.0.2; stages proof photo/video storage outside ticket row locks for direct upload, legacy checklist, and both completion endpoints; cleans request-owned uploads when finalization fails; and enforces a combined 20-file/50-MB budget in the backend and technician UI. It is live through Render backend deploy `dep-dbg8ii8473hc73fgvkmg` and frontend deploy `dep-dbg8ii8473hc73fgvlag`. Startup installed the exact patched versions, used PostgreSQL, reported no migrations, and started Daphne; liveness, full dependency readiness, frontend HTTP availability, the guarded perimeter, deployed bundle checks, and post-cutover ERROR/HTTP-5xx log searches passed. The complete local gate passed all 628 backend tests with six expected PostgreSQL-only skips, the 2,543-module production build, and all 20 browser smoke scenarios. No schema, migration, API route, business rule, environment value, hosting tier, or persistent-data change. Because verification did not mutate a staging ticket or upload client media, one authorized technician upload/finish-job retry remains the final live UAT boundary.**
 Current objective (latest): **Keep the deployed authorization-safe PostgreSQL ticket-lock repair stable and complete a short authenticated technician UAT retry. Commit `a9da39758cfc466b896b6e9a7c7adba9149d3cfc` moved the permission-scoped lead-or-crew `DISTINCT` query into a primary-key subquery and applies `SELECT ... FOR UPDATE OF self` only to a clean outer `ServiceTicket` query. Render deployment `dep-dbg4feoae00c73fo0ml0` reached `live` on that exact commit at 2026-10-27 06:43:39 UTC. Startup used PostgreSQL, reported no migrations to apply, and started Daphne; liveness, dependency readiness, and the guarded staging perimeter passed. Post-cutover inspection found no HTTP 5xx or recurrence of the original `FOR UPDATE is not allowed with DISTINCT clause` error. Focused checks passed 22 tests with six expected PostgreSQL-only skips; the complete release gate passed all 626 backend tests with six expected PostgreSQL-only skips, the 2,543-module frontend build, and 20/20 browser smoke scenarios. No schema, migration, API response, business rule, environment value, or persistent-data change. Because verification intentionally did not mutate staging business records, a technician retry of photo upload/start/completion remains the final manual UAT step, not a deployment-health blocker.**
 Current objective (latest): **Treat the current free deployed staging environment as defense/staging, not client production, until the audit release blockers are closed. Read-only live evidence confirms six `POST /api/services/service-tickets/16/upload_photos/` 503 responses caused by PostgreSQL rejecting `FOR UPDATE` on the technician ticket queryset's `DISTINCT`; the same shared lock helper also places technician start, completion, and equipment-return actions at risk. The complete 624-test SQLite/isolated-browser quality gate still passes, which proves the release gate does not currently exercise this PostgreSQL dialect path. Dependency audit also finds production-relevant DRF 3.17.2 resource-exhaustion advisories fixed in 3.18.2 and a potentially relevant Twisted/Daphne HTTP parsing advisory. No separate production target was inspected. No code, configuration, schema, migration, environment value, external data, commit, push, or deployment was changed in this audit. Six audit reports under `docs/quality/` now define architecture, evidence, database/deployment risks, remediation phases, and hosting options.**
@@ -636,12 +636,12 @@ other repository path must include this living handoff file.
 | --- | --- |
 | Repository root | `C:\Users\Iman\Desktop\current\finals-revision\capstone-1` |
 | Branch | `feature/analytics-decision-workspace`; releases are pushed to `origin/staging-deploy` |
-| Application release | `e92db58 Stabilize Redis notification WebSockets` |
+| Application release | `5331dc4 Harden login against staging cold starts` |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
-| Remote comparison | Rechecked on 2026-10-27: application commit `e92db58fc88a78f833afbba26fa5e518cc312f5e` was pushed to `origin/staging-deploy` and Render backend deploy `dep-dbg14l7b9u1s73fpbt90` is live on that exact commit |
-| Worktree | Login cold-start hardening is uncommitted in `backend/users/{tests.py,views/auth.py}`, `frontend/src/{context/AuthContext.jsx,pages/Login.jsx,utils/apiErrors.js}`, and this handoff. No unrelated untracked or deleted path was found. |
+| Remote comparison | Rechecked on 2026-10-28: application commit `5331dc43c423a9093bb17d8d9308791a0fa794ad` was pushed to `origin/staging-deploy`; backend deploy `dep-dbgvtgtg1s2s73egrbmg` and frontend deploy `dep-dbgvtgtg1s2s73egrca0` are live on that exact commit |
+| Worktree | Application commit `5331dc4` is committed, pushed, and live. This handoff contains the post-deployment evidence for the documentation-only follow-up commit. No unrelated untracked or deleted path was found. |
 | Tracked deletions | None |
-| Commit/push status | The previously documented staging runtime remains deployed. The 2026-10-28 login hardening is local and uncommitted; it has not been pushed or deployed. Production was not accessed or changed. |
+| Commit/push status | Login hardening commit `5331dc4` is pushed to `origin/staging-deploy` and live on both Render services. Production was not accessed or changed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
@@ -965,12 +965,15 @@ deployment authorization.
 
 ## 8. Validation ledger
 
-2026-10-28 (login cold-start timeout hardening; local and uncommitted):
+2026-10-28 (login cold-start timeout hardening; deployed and health-verified):
 - `git diff --check` passed before and after the handoff update.
 - `venv\Scripts\python.exe backend\manage.py test users.tests.UserLoginTests users.test_mfa --noinput --verbosity 1` passed all 13 focused login/MFA tests.
 - `npm.cmd --prefix frontend run build` passed and generated the 2,543-module production bundle.
 - `npm.cmd run test:e2e -- e2e/02-authentication.spec.js` passed all 8 Chromium authentication scenarios in 2.3 minutes. The run exercised the new liveness warm-up before successful superadmin, admin, technician, and client authentication, plus logout, route guards, and greeting behavior. Expected non-ASGI Vite WebSocket fallback `ECONNABORTED` messages remained non-failing harness noise; HTTP authentication and application assertions passed.
-- Validation used isolated Django/E2E databases. No development or deployed business data, schema, migration, environment value, hosting tier, commit, push, or deployment changed.
+- Local validation used isolated Django/E2E databases and changed no development or deployed business data, schema, migration, environment value, or hosting tier.
+- Commit `5331dc43c423a9093bb17d8d9308791a0fa794ad` was pushed fast-forward to `origin/staging-deploy`. Render backend deploy `dep-dbgvtgtg1s2s73egrbmg` and frontend deploy `dep-dbgvtgtg1s2s73egrca0` reached `live` on that exact commit. Backend startup reported `No migrations to apply` and started Daphne on port 10000.
+- Direct liveness and readiness returned HTTP 200 with database, cache, realtime, and storage ready. The frontend `/login`, main bundle `index-uL1LvJ3o.js`, and lazy login bundle `Login-WQBHVqsQ.js` returned HTTP 200; the deployed main bundle references `/health/liveness/` and the login chunk contains `Connecting securely...`.
+- Post-cutover Render searches returned no application ERROR or HTTP 5xx entry. The first guarded perimeter run reached its final `TRACE` request but timed out during a transient network interval in which Render API and frontend queries also experienced connection timeouts; an immediate independent retry passed HTTPS, readiness, security headers, CORS, anonymous access, and TRACE controls. No staging business record or credential was mutated for deployment verification.
 
 2026-10-27 (proof-upload and dependency hardening; deployed and health-verified):
 - Raised Django REST Framework to 3.18.3 and cryptography to 50.0.2. `pip check` passed; a fresh `pip-audit -r backend/requirements.txt` no longer reports either package and reports only six Twisted 26.4.0 advisories. Five list 26.10.0rc1 as the first fix and one lists no fixed release, so production was not moved to a release candidate.
@@ -1564,14 +1567,15 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
 
-- **2026-10-28 login cold-start hardening is not deployed:** the former explicit
-  15-second login timeout is replaced locally by a liveness warm-up and separate
+- **2026-10-28 login cold-start hardening is deployed:** the former explicit
+  15-second login timeout is replaced by a liveness warm-up and separate
   60-second wake/authentication budgets. This improves free-tier first-login
   behavior but cannot prevent a provider outage or a cold start longer than one
   minute. Do not weaken secure password hashing to reduce latency. The credential
   POST is intentionally not retried automatically, avoiding duplicate token and
-  audit activity. Commit and deployment still require explicit authorization;
-  after deployment, verify one cold first login and one warm repeat login.
+  audit activity. Automated and read-only live checks pass; retain one manual
+  cold first login and one warm repeat login with an authorized user because
+  deployment verification intentionally did not use or mutate credentials.
 
 - **2026-10-27 shared ticket-lock repair deployed; authenticated UAT pending:**
   commit `a9da39758cfc466b896b6e9a7c7adba9149d3cfc` removes outer `DISTINCT` from the
@@ -1821,7 +1825,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 10. Current worktree manifest
 
-- 2026-10-28 (login cold-start timeout hardening; local and uncommitted):
+- 2026-10-28 (login cold-start timeout hardening; committed and deployed in `5331dc4`):
   `frontend/src/context/AuthContext.jsx` warms `/health/liveness/`, separates
   wake/authentication progress, and raises both authentication budgets to 60
   seconds; `frontend/src/pages/Login.jsx` displays the current connection phase;
@@ -2588,11 +2592,12 @@ All paths below are preserved work, not cleanup candidates.
 
 ## 13. Change ledger
 
-2026-10-28 (login cold-start timeout hardening; local and uncommitted):
+2026-10-28 (login cold-start timeout hardening; committed and deployed in `5331dc4`):
 - Replaced the login page's hard 15-second cutoff with a public liveness warm-up followed by a 60-second credential request budget, while keeping credential submission single-shot and the button disabled throughout.
 - Added clear Connecting securely and Signing in states and a shared, actionable timeout message instead of exposing Axios's `timeout of 15000ms exceeded` text.
 - Removed expired-unverified-account cleanup from the latency-sensitive login request while preserving cleanup at the existing registration, verification, administrator, and queryset boundaries; added a regression proving login does not invoke it.
-- Passed 13 focused backend authentication/MFA tests, the 2,543-module production build, and all 8 authentication browser scenarios. No commit, push, deployment, schema, migration, environment, hosting-tier, or persistent-data change was made.
+- Passed 13 focused backend authentication/MFA tests, the 2,543-module production build, and all 8 authentication browser scenarios. No schema, migration, environment, hosting-tier, or persistent-data change was made.
+- Pushed exact commit `5331dc43c423a9093bb17d8d9308791a0fa794ad` to `origin/staging-deploy`; backend deploy `dep-dbgvtgtg1s2s73egrbmg` and frontend deploy `dep-dbgvtgtg1s2s73egrca0` are live. Startup, liveness, full readiness, frontend/login bundle activation, guarded perimeter, and post-cutover ERROR/HTTP-5xx searches passed. Authorized cold/warm login remains manual UAT because deployment verification intentionally used no real credential.
 
 2026-10-27 (proof-upload and dependency hardening; deployed):
 - Raised pinned DRF and cryptography versions to patched stable releases. `pip check` passes and the fresh Python audit clears both packages; unresolved Twisted findings are retained because the available fix is a release candidate or absent.
