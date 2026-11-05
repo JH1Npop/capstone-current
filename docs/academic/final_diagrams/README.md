@@ -102,3 +102,11 @@ records.
 - ERD entity: reference green (`#B7E36D`)
 - ERD relationship: reference orange (`#F6B26B`)
 - ERD attribute: reference yellow (`#FFD966`)
+
+## Four-page diagram pack (2026-11-05)
+
+`AFN-SERVE-System-Diagrams.drawio` is one editable file with four pages: Chen ERD, System Context, DFD Level 0, and DFD Level 1 (process 3.0 Manage Ticket Dispatch). Open it in diagrams.net. It supersedes `01_CONTEXT_DIAGRAM.drawio` for the paper, which is left untouched.
+
+- `AFN-SERVE-Paper-Schema.dbml` holds the same 53 entities and 346 attributes as the ERD (both generated from the live Django models, so paste the pair together). The full physical schema remains `docs/models/AFN_ERD.dbml`.
+- `AFN-SERVE-Diagram-Validation-Report.md` has the counts, the checks that were run, what was not done, the discrepancies found, and the evidence table.
+- Rebuild and validation tools are in `backend/scripts/diagram_pack/` (see its README). Visual style: purple external entities, turquoise processes, yellow data stores, gray connectors.

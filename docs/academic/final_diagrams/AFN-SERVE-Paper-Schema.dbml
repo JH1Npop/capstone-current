@@ -1,0 +1,558 @@
+Project AFN_SERVE_Paper_Schema {
+  database_type: 'PostgreSQL'
+  Note: 'Paper schema: 53 entities; every table is named after its entity and its primary key is <table>_id; relationships and core business attributes. Generated from the active Django models by generate_afn_paper_schema.py; the Chen ERD is generated from this same file.'
+}
+
+Table equipment_return_request {
+  equipment_return_request_id bigint [pk, increment]
+  service_ticket_id bigint [not null, ref: > service_ticket.service_ticket_id]
+  technician_id bigint [not null, ref: > user.user_id]
+  status varchar(20) [not null]
+}
+
+Table equipment_return_request_item {
+  equipment_return_request_item_id bigint [pk, increment]
+  return_request_id bigint [not null, ref: > equipment_return_request.equipment_return_request_id]
+  item_id bigint [not null, ref: > inventory_item.inventory_item_id]
+  quantity integer [not null]
+}
+
+Table inventory_category {
+  inventory_category_id bigint [pk, increment]
+  name varchar(100) [not null]
+  parent_id bigint [ref: > inventory_category.inventory_category_id]
+}
+
+Table inventory_item {
+  inventory_item_id bigint [pk, increment]
+  name varchar(200) [not null]
+  sku varchar(50) [not null, unique]
+  category_id bigint [not null, ref: > inventory_category.inventory_category_id]
+  item_type varchar(20) [not null]
+  capacity varchar(100) [not null]
+  quantity integer [not null]
+  minimum_stock integer [not null]
+  reserved_quantity integer [not null]
+  unit_price decimal(10,2) [not null]
+}
+
+Table inventory_reservation {
+  inventory_reservation_id bigint [pk, increment]
+  item_id bigint [not null, ref: > inventory_item.inventory_item_id]
+  technician_id bigint [not null, ref: > user.user_id]
+  quantity integer [not null]
+  required_date date [not null]
+  service_ticket_id bigint [ref: > service_ticket.service_ticket_id]
+  status varchar(20) [not null]
+}
+
+Table inventory_transaction {
+  inventory_transaction_id bigint [pk, increment]
+  item_id bigint [not null, ref: > inventory_item.inventory_item_id]
+  transaction_type varchar(20) [not null]
+  quantity integer [not null]
+  technician_id bigint [ref: > user.user_id]
+  service_ticket_id bigint [ref: > service_ticket.service_ticket_id]
+  reference_number varchar(50)
+  transaction_date timestamp [not null]
+}
+
+Table service_type_inventory_requirement {
+  service_type_inventory_requirement_id bigint [pk, increment]
+  service_type_id bigint [not null, ref: > service_type.service_type_id]
+  item_id bigint [not null, ref: > inventory_item.inventory_item_id]
+  quantity integer [not null]
+}
+
+Table customer_support_case {
+  customer_support_case_id bigint [pk, increment]
+  client_id bigint [not null, ref: > user.user_id]
+  ticket_id bigint [ref: > service_ticket.service_ticket_id]
+  group_key varchar(80) [not null, unique]
+  subject varchar(160) [not null]
+  category varchar(30) [not null]
+  priority varchar(20) [not null]
+  status varchar(20) [not null]
+}
+
+Table message {
+  message_id bigint [pk, increment]
+  ticket_id bigint [ref: > service_ticket.service_ticket_id]
+  sender_id bigint [ref: > user.user_id]
+  receiver_id bigint [ref: > user.user_id]
+  room_type varchar(20) [not null]
+  message_text text [not null]
+}
+
+Table notification {
+  notification_id bigint [pk, increment]
+  user_id bigint [not null, ref: > user.user_id]
+  ticket_id bigint [ref: > service_ticket.service_ticket_id]
+  request_id bigint [ref: > service_request.service_request_id]
+  message text [not null]
+  title varchar(255) [not null]
+  type varchar(50) [not null]
+  status varchar(50) [not null]
+  send_email boolean [not null]
+  email_sent boolean [not null]
+}
+
+Table ticket_progress {
+  ticket_progress_id bigint [pk, increment]
+  ticket_id bigint [not null, ref: > service_ticket.service_ticket_id]
+  progress_status varchar(100) [not null]
+}
+
+Table after_sales_case {
+  after_sales_case_id bigint [pk, increment]
+  service_ticket_id bigint [not null, ref: > service_ticket.service_ticket_id]
+  client_id bigint [not null, ref: > user.user_id]
+  assigned_to_id bigint [ref: > user.user_id]
+  case_type varchar(20) [not null]
+  status varchar(20) [not null]
+  priority varchar(20) [not null]
+  due_date date
+}
+
+Table after_sales_case_event {
+  after_sales_case_event_id bigint [pk, increment]
+  case_id bigint [not null, ref: > after_sales_case.after_sales_case_id]
+  actor_id bigint [ref: > user.user_id]
+  event_type varchar(30) [not null]
+  from_status varchar(20) [not null]
+  to_status varchar(20) [not null]
+}
+
+Table arrival_validation_log {
+  arrival_validation_log_id bigint [pk, increment]
+  ticket_id bigint [not null, ref: > service_ticket.service_ticket_id]
+  technician_id bigint [ref: > user.user_id]
+  action varchar(30) [not null]
+  technician_latitude decimal(9,6)
+  technician_longitude decimal(9,6)
+  service_latitude decimal(9,6)
+  service_longitude decimal(9,6)
+}
+
+Table calendar_closure {
+  calendar_closure_id bigint [pk, increment]
+  date date [not null]
+  time_slot varchar(20) [not null]
+  availability_status varchar(20) [not null]
+  reason varchar(255) [not null]
+  is_active boolean [not null]
+  created_by_id bigint [ref: > user.user_id]
+  updated_by_id bigint [ref: > user.user_id]
+  reopened_by_id bigint [ref: > user.user_id]
+}
+
+Table demand_forecast {
+  demand_forecast_id bigint [pk, increment]
+  service_type_id bigint [not null, ref: > service_type.service_type_id]
+  forecast_date date [not null]
+  confidence_level double [not null]
+}
+
+Table field_service_report {
+  field_service_report_id bigint [pk, increment]
+  ticket_id bigint [not null, ref: > service_ticket.service_ticket_id]
+  serial_number varchar(100)
+}
+
+Table generated_document {
+  generated_document_id bigint [pk, increment]
+  ticket_id bigint [not null, ref: > service_ticket.service_ticket_id]
+  document_type varchar(64) [not null]
+  title varchar(255) [not null]
+  status varchar(32) [not null]
+}
+
+Table inspection_checklist {
+  inspection_checklist_id bigint [pk, increment]
+  ticket_id bigint [not null, unique, ref: - service_ticket.service_ticket_id]
+  service_type_label varchar(255)
+  follow_up_case_type varchar(20)
+  follow_up_due_date date
+}
+
+Table installation_contract {
+  installation_contract_id bigint [pk, increment]
+  ticket_id bigint [not null, unique, ref: - service_ticket.service_ticket_id]
+  start_date date
+  total_contract_amount decimal(12,2)
+  status varchar(20) [not null]
+}
+
+Table installed_equipment {
+  installed_equipment_id bigint [pk, increment]
+  ticket_id bigint [ref: > service_ticket.service_ticket_id]
+  client_id bigint [not null, ref: > user.user_id]
+  equipment_type varchar(100) [not null]
+  serial_number varchar(255)
+  capacity varchar(100)
+}
+
+Table maintenance_schedule {
+  maintenance_schedule_id bigint [pk, increment]
+  service_ticket_id bigint [not null, unique, ref: - service_ticket.service_ticket_id]
+  client_id bigint [not null, ref: > user.user_id]
+  service_type_id bigint [not null, ref: > service_type.service_type_id]
+  last_service_date date [not null]
+  next_due_date date [not null]
+  notify_on_date date [not null]
+  status varchar(20) [not null]
+  risk_level varchar(20) [not null]
+  risk_score double [not null]
+}
+
+Table quotation_record {
+  quotation_record_id bigint [pk, increment]
+  ticket_id bigint [not null, unique, ref: - service_ticket.service_ticket_id]
+  client_id bigint [not null, ref: > user.user_id]
+  quotation_number varchar(100)
+  total_amount varchar(255)
+  downpayment_amount varchar(255)
+  balance_amount varchar(255)
+  required_deposit_amount decimal(14,2) [not null]
+  status varchar(20) [not null]
+}
+
+Table sales_payment {
+  sales_payment_id bigint [pk, increment]
+  sales_record_id bigint [ref: > sales_record.sales_record_id]
+  quotation_id bigint [ref: > quotation_record.quotation_record_id]
+  amount decimal(14,2) [not null]
+  method varchar(20) [not null]
+  reference varchar(120) [not null]
+  void_reason text [not null]
+}
+
+Table sales_record {
+  sales_record_id bigint [pk, increment]
+  record_number varchar(32) [not null, unique]
+  ticket_id bigint [not null, ref: > service_ticket.service_ticket_id]
+  client_id bigint [not null, ref: > user.user_id]
+  quotation_id bigint [ref: > quotation_record.quotation_record_id]
+  status varchar(20) [not null]
+  sale_date date
+  currency_code varchar(3) [not null]
+  agreed_total decimal(14,2)
+  void_reason text [not null]
+  replaces_id bigint [unique, ref: - sales_record.sales_record_id]
+}
+
+Table sales_record_line {
+  sales_record_line_id bigint [pk, increment]
+  sales_record_id bigint [not null, ref: > sales_record.sales_record_id]
+  line_type varchar(20) [not null]
+  service_type_id bigint [ref: > service_type.service_type_id]
+  inventory_item_id bigint [ref: > inventory_item.inventory_item_id]
+  installed_equipment_id bigint [ref: > installed_equipment.installed_equipment_id]
+  name varchar(255) [not null]
+  sku varchar(80) [not null]
+  quantity decimal(12,3) [not null]
+  unit_price decimal(14,2)
+  line_total decimal(14,2)
+}
+
+Table service_analytics {
+  service_analytics_id bigint [pk, increment]
+  date date [not null]
+  service_type_id bigint [ref: > service_type.service_type_id]
+  total_requests integer [not null]
+  avg_response_time_hours double [not null]
+  avg_completion_time_hours double [not null]
+  satisfaction_score double [not null]
+}
+
+Table service_location {
+  service_location_id bigint [pk, increment]
+  request_id bigint [not null, unique, ref: - service_request.service_request_id]
+  address text [not null]
+  latitude decimal(9,6)
+  longitude decimal(9,6)
+}
+
+Table service_request {
+  service_request_id bigint [pk, increment]
+  client_id bigint [not null, ref: > user.user_id]
+  service_type_id bigint [not null, ref: > service_type.service_type_id]
+  priority varchar(50) [not null]
+  status varchar(50) [not null]
+  preferred_date date
+  preferred_time_slot varchar(20)
+  request_date timestamp [not null]
+}
+
+Table service_request_service {
+  service_request_service_id bigint [pk, increment]
+  request_id bigint [not null, ref: > service_request.service_request_id]
+  service_type_id bigint [not null, ref: > service_type.service_type_id]
+  status varchar(50) [not null]
+}
+
+Table service_status_history {
+  service_status_history_id bigint [pk, increment]
+  ticket_id bigint [not null, ref: > service_ticket.service_ticket_id]
+  status varchar(50) [not null]
+}
+
+Table service_ticket {
+  service_ticket_id bigint [pk, increment]
+  request_id bigint [not null, ref: > service_request.service_request_id]
+  ticket_type varchar(20) [not null]
+  technician_id bigint [ref: > user.user_id]
+  assigned_admin_id bigint [ref: > user.user_id]
+  scheduled_date date [not null]
+  scheduled_time time
+  scheduled_time_slot varchar(20)
+  start_time timestamp
+  end_time timestamp
+  completed_date timestamp
+}
+
+Table service_trend {
+  service_trend_id bigint [pk, increment]
+  service_type_id bigint [not null, ref: > service_type.service_type_id]
+  trend_type varchar(20) [not null]
+}
+
+Table service_type {
+  service_type_id bigint [pk, increment]
+  name varchar(255) [not null]
+  category varchar(100) [not null]
+  estimated_cost decimal(10,2) [not null]
+  is_active boolean [not null]
+}
+
+Table sla_rule {
+  sla_rule_id bigint [pk, increment]
+  key varchar(40) [not null, unique]
+  is_active boolean [not null]
+}
+
+Table solar_commissioning_checklist {
+  solar_commissioning_checklist_id bigint [pk, increment]
+  ticket_id bigint [not null, unique, ref: - service_ticket.service_ticket_id]
+  site_name varchar(255) [not null]
+  inverter_type varchar(255) [not null]
+  inverter_serial_number varchar(255) [not null]
+  commissioned_date date
+  status varchar(20) [not null]
+}
+
+Table solar_estimate {
+  solar_estimate_id bigint [pk, increment]
+  client_id bigint [not null, ref: > user.user_id]
+  service_request_id bigint [unique, ref: - service_request.service_request_id]
+  status varchar(20) [not null]
+}
+
+Table solar_project_profile {
+  solar_project_profile_id bigint [pk, increment]
+  location_id bigint [not null, unique, ref: - service_location.service_location_id]
+  original_ticket_id bigint [unique, ref: - service_ticket.service_ticket_id]
+  system_capacity varchar(100)
+  number_of_panels integer
+  number_of_inverters integer
+}
+
+Table technical_data_sheet {
+  technical_data_sheet_id bigint [pk, increment]
+  ticket_id bigint [not null, unique, ref: - service_ticket.service_ticket_id]
+  status varchar(20) [not null]
+  premise_type varchar(100)
+  premise_category varchar(100)
+  ownership_type varchar(100)
+  private_or_government_type varchar(100)
+  rooftop_type varchar(100)
+  client_confirmation_date date
+}
+
+Table technician_location_history {
+  technician_location_history_id bigint [pk, increment]
+  technician_id bigint [not null, ref: > user.user_id]
+  latitude decimal(9,6) [not null]
+  longitude decimal(9,6) [not null]
+}
+
+Table technician_performance {
+  technician_performance_id bigint [pk, increment]
+  technician_id bigint [not null, ref: > user.user_id]
+  date date [not null]
+  total_work_hours double [not null]
+  avg_response_time_hours double [not null]
+  avg_completion_time_hours double [not null]
+}
+
+Table technician_skill {
+  technician_skill_id bigint [pk, increment]
+  technician_id bigint [not null, ref: > user.user_id]
+  service_type_id bigint [not null, ref: > service_type.service_type_id]
+  skill_level varchar(50) [not null]
+}
+
+Table ticket_crew_assignment {
+  ticket_crew_assignment_id bigint [pk, increment]
+  ticket_id bigint [not null, ref: > service_ticket.service_ticket_id]
+  technician_id bigint [not null, ref: > user.user_id]
+}
+
+Table turnover_acceptance {
+  turnover_acceptance_id bigint [pk, increment]
+  ticket_id bigint [not null, unique, ref: - service_ticket.service_ticket_id]
+  generated_document_id bigint [ref: > generated_document.generated_document_id]
+  turnover_date date
+  accepted_by_client_name varchar(255) [not null]
+  warranty_start_date date
+  status varchar(20) [not null]
+}
+
+Table activity_log {
+  activity_log_id bigint [pk, increment]
+  actor_id bigint [ref: > user.user_id]
+  actor_role varchar(20) [not null]
+  actor_display_name varchar(150) [not null]
+  category varchar(30) [not null]
+  action varchar(30) [not null]
+  message varchar(255) [not null]
+}
+
+Table admin_settings {
+  admin_settings_id bigint [pk, increment]
+  system_name varchar(255) [not null]
+  support_email varchar(254) [not null]
+  enable_email_notifications boolean [not null]
+  overtime_daily_capacity_minutes smallint [not null]
+  default_time_zone varchar(100) [not null]
+  business_open_time time [not null]
+  business_close_time time [not null]
+  location_validation_updated_by_id bigint [ref: > user.user_id]
+  updated_by_id bigint [ref: > user.user_id]
+}
+
+Table change_log {
+  change_log_id bigint [pk, increment]
+  content_type_id integer [not null, note: 'References framework table django_content_type.id outside this application diagram']
+  action varchar(20) [not null]
+  field_name varchar(100) [not null]
+}
+
+Table client_profile {
+  client_profile_id bigint [pk, increment]
+  user_id bigint [not null, unique, ref: - user.user_id]
+  client_type varchar(20) [not null]
+  company_name varchar(255)
+  billing_address text
+  preferred_contact_method varchar(20) [not null]
+  account_balance decimal(10,2) [not null]
+}
+
+Table landing_page_asset {
+  landing_page_asset_id bigint [pk, increment]
+  original_name varchar(255) [not null]
+  content_type varchar(100) [not null]
+  uploaded_by_id bigint [ref: > user.user_id]
+}
+
+Table management_profile {
+  management_profile_id bigint [pk, increment]
+  user_id bigint [not null, unique, ref: - user.user_id]
+}
+
+Table technician_profile {
+  technician_profile_id bigint [pk, increment]
+  user_id bigint [not null, unique, ref: - user.user_id]
+  current_latitude decimal(9,6)
+  current_longitude decimal(9,6)
+  skill_level varchar(20) [not null]
+}
+
+Table user {
+  username varchar(150) [not null, unique]
+  first_name varchar(150) [not null]
+  last_name varchar(150) [not null]
+  email varchar(254) [not null]
+  is_active boolean [not null]
+  user_id bigint [pk, increment]
+  role varchar(20) [not null]
+  middle_name varchar(150) [not null]
+  phone varchar(20)
+}
+
+Table user_capability_grant {
+  user_capability_grant_id bigint [pk, increment]
+  user_id bigint [not null, ref: > user.user_id]
+  capability_code varchar(100) [not null]
+}
+
+TableGroup "Identity, Access, Configuration and Audit" {
+  activity_log
+  admin_settings
+  change_log
+  client_profile
+  landing_page_asset
+  management_profile
+  technician_profile
+  user
+  user_capability_grant
+}
+
+TableGroup "Service Intake, Dispatch and Progress" {
+  arrival_validation_log
+  calendar_closure
+  service_location
+  service_request
+  service_request_service
+  service_status_history
+  service_ticket
+  service_type
+  sla_rule
+  solar_estimate
+  technician_location_history
+  technician_skill
+  ticket_crew_assignment
+  ticket_progress
+}
+
+TableGroup "Field Evidence and Documents" {
+  field_service_report
+  generated_document
+  inspection_checklist
+  installation_contract
+  installed_equipment
+  quotation_record
+  solar_commissioning_checklist
+  solar_project_profile
+  technical_data_sheet
+  turnover_acceptance
+}
+
+TableGroup "Inventory, Returns and Sales" {
+  equipment_return_request
+  equipment_return_request_item
+  inventory_category
+  inventory_item
+  inventory_reservation
+  inventory_transaction
+  sales_payment
+  sales_record
+  sales_record_line
+  service_type_inventory_requirement
+}
+
+TableGroup "After-Sales and Communication" {
+  after_sales_case
+  after_sales_case_event
+  customer_support_case
+  maintenance_schedule
+  message
+  notification
+}
+
+TableGroup "Analytics" {
+  demand_forecast
+  service_analytics
+  service_trend
+  technician_performance
+}

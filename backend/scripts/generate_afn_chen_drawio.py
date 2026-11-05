@@ -90,6 +90,7 @@ RELATIONSHIP_LABELS = {
     "generated_document": "USES DOCUMENT", "location": "AT LOCATION",
     "replaces": "REPLACES",
     "location_validation_updated_by": "LOCATION SETTINGS UPDATED BY",
+    "client_confirmed_by": "CONFIRMED BY",
 }
 
 TABLE_RE = re.compile(r"^Table\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{")
@@ -192,9 +193,13 @@ def paper_name(table_name: str) -> str:
     return ENTITY_NAMES.get(table_name, display_name(table_name))
 
 
+VERB_ONLY = False  # when True a relationship diamond shows only its verb (no R-code, no foreign-key column)
+
+
 def relationship_title(field_name: str) -> str:
     logical_name = field_name[:-3] if field_name.endswith("_id") else field_name
-    return RELATIONSHIP_LABELS.get(logical_name, f"HAS {logical_name.replace('_', ' ').upper()}")
+    fallback = logical_name.replace('_', ' ').upper()
+    return RELATIONSHIP_LABELS.get(logical_name, fallback if VERB_ONLY and fallback.endswith(" BY") else f"HAS {fallback}")
 
 
 def cardinality(relation: Relationship) -> str:
@@ -362,7 +367,7 @@ def place_entities(tables: dict[str, list[Attribute]], relationships: list[Relat
 def diamond_width(relation: Relationship) -> float:
     """Wide enough for the verb on the middle line and the field on the narrower lower line."""
     verb_width = len(relationship_title(relation.source_field)) * 6.7
-    field_width = len(relation.source_field) * 5.2
+    field_width = 0 if VERB_ONLY else len(relation.source_field) * 5.2
     # At 12px from the centre a rhombus of height 84 keeps about 71% of its width.
     return float(max(DIAMOND_MIN_WIDTH, ceil(verb_width / 0.85 + 16), ceil(field_width / 0.71 + 16)))
 
@@ -725,6 +730,7 @@ def generate() -> str:
         dx, dy, width = diamond["x"], diamond["y"], diamond["width"]
         nodes.append(cell(
             f"relationship_{diamond['index']}",
+            relationship_title(relation.source_field).lower() if VERB_ONLY else
             f"<b>{diamond['code']}</b><br>{relationship_title(relation.source_field)}<br><i>{relation.source_field}</i>",
             STYLES["relationship"], dx - width / 2, dy - DIAMOND_HEIGHT / 2, width, DIAMOND_HEIGHT,
         ))
@@ -774,6 +780,9 @@ def generate() -> str:
     legend_y = grid_bottom + 60
     nodes.extend([
         cell("note", (
+            "Every diamond sits on the path between its two entities; cardinality (1, 0..1, N) is printed beside each diamond. "
+            "Audit-trail links to User (created by, updated by, reviewed by, voided by, and similar) are omitted for readability."
+            if VERB_ONLY else
             f"Every diamond sits on the path between its two entities, and every line has its own track. "
             f"R001-R{len(relations):03d} match ERD_CURRENT_CONNECTIONS.md; cardinality (1, 0..1, N) is printed beside each diamond; "
             "bridge arcs mark where two lines cross without connecting."

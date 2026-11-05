@@ -1,0 +1,3018 @@
+[
+ {
+  "number": 1,
+  "name": "User",
+  "table": "user",
+  "rows": [
+   {
+    "field": "user_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the user."
+   },
+   {
+    "field": "username",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Unique username used for login."
+   },
+   {
+    "field": "first_name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "First name of the user."
+   },
+   {
+    "field": "last_name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Last name of the user."
+   },
+   {
+    "field": "email",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Email address of the user."
+   },
+   {
+    "field": "is_active",
+    "type": "BOOLEAN",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Indicates whether the account is active."
+   },
+   {
+    "field": "role",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Defines the user role: superadmin, admin, technician, or client."
+   },
+   {
+    "field": "middle_name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Middle name of the user."
+   },
+   {
+    "field": "phone",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Contact number of the user."
+   }
+  ],
+  "description": "Stores the account information of all users in the system, including superadmin, admin, technician, and client accounts."
+ },
+ {
+  "number": 2,
+  "name": "Client Profile",
+  "table": "client_profile",
+  "rows": [
+   {
+    "field": "client_profile_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the client profile."
+   },
+   {
+    "field": "user_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user."
+   },
+   {
+    "field": "client_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of the client: individual, business, or corporate."
+   },
+   {
+    "field": "company_name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Company name of the client."
+   },
+   {
+    "field": "billing_address",
+    "type": "TEXT",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Billing address of the client."
+   },
+   {
+    "field": "preferred_contact_method",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Contact method preferred by the client: email or phone."
+   },
+   {
+    "field": "account_balance",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current account balance of the client."
+   }
+  ],
+  "description": "Stores client-specific details such as client type, company name, billing address, preferred contact method, and account balance. Each profile belongs to exactly one user account."
+ },
+ {
+  "number": 3,
+  "name": "Technician Profile",
+  "table": "technician_profile",
+  "rows": [
+   {
+    "field": "technician_profile_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the technician profile."
+   },
+   {
+    "field": "user_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user."
+   },
+   {
+    "field": "current_latitude",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Latest latitude of the technician."
+   },
+   {
+    "field": "current_longitude",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Latest longitude of the technician."
+   },
+   {
+    "field": "skill_level",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Overall skill level of the technician: beginner, intermediate, or expert."
+   }
+  ],
+  "description": "Stores technician-specific details such as the current GPS position and skill level. Each profile belongs to exactly one user account."
+ },
+ {
+  "number": 4,
+  "name": "Management Profile",
+  "table": "management_profile",
+  "rows": [
+   {
+    "field": "management_profile_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the management profile."
+   },
+   {
+    "field": "user_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user."
+   }
+  ],
+  "description": "Stores the management profile of an administrator or superadmin account. Each profile belongs to exactly one user account."
+ },
+ {
+  "number": 5,
+  "name": "User Capability Grant",
+  "table": "user_capability_grant",
+  "rows": [
+   {
+    "field": "user_capability_grant_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the user capability grant."
+   },
+   {
+    "field": "user_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user."
+   },
+   {
+    "field": "capability_code",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Code of the capability granted to the user."
+   }
+  ],
+  "description": "Records each capability code granted to a user. The system uses these grants, together with the user role, to control which actions a user may perform."
+ },
+ {
+  "number": 6,
+  "name": "Admin Settings",
+  "table": "admin_settings",
+  "rows": [
+   {
+    "field": "admin_settings_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the admin settings."
+   },
+   {
+    "field": "system_name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Name of the system shown to users."
+   },
+   {
+    "field": "support_email",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Email address used for support."
+   },
+   {
+    "field": "enable_email_notifications",
+    "type": "BOOLEAN",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Indicates whether email notifications are turned on."
+   },
+   {
+    "field": "overtime_daily_capacity_minutes",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Daily overtime capacity, in minutes, available for scheduling."
+   },
+   {
+    "field": "default_time_zone",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Default time zone of the system."
+   },
+   {
+    "field": "business_open_time",
+    "type": "TIME",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Time the business day starts."
+   },
+   {
+    "field": "business_close_time",
+    "type": "TIME",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Time the business day ends."
+   },
+   {
+    "field": "location_validation_updated_by_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who last updated the location validation setting."
+   },
+   {
+    "field": "updated_by_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who last updated the record."
+   }
+  ],
+  "description": "Stores the system-wide settings managed by administrators, such as the system name, support email, email notification switch, business hours, time zone, and overtime capacity."
+ },
+ {
+  "number": 7,
+  "name": "Landing Page Asset",
+  "table": "landing_page_asset",
+  "rows": [
+   {
+    "field": "landing_page_asset_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the landing page asset."
+   },
+   {
+    "field": "original_name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Original file name of the uploaded asset."
+   },
+   {
+    "field": "content_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Content type of the uploaded file."
+   },
+   {
+    "field": "uploaded_by_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who uploaded the file."
+   }
+  ],
+  "description": "Stores the files uploaded for the public landing page, with their original names and content types."
+ },
+ {
+  "number": 8,
+  "name": "Activity Log",
+  "table": "activity_log",
+  "rows": [
+   {
+    "field": "activity_log_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the activity log."
+   },
+   {
+    "field": "actor_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who performed the action."
+   },
+   {
+    "field": "actor_role",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Role of the user at the time the action was performed."
+   },
+   {
+    "field": "actor_display_name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Display name of the user who performed the action."
+   },
+   {
+    "field": "category",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Category of the logged action: security, users, requests, tickets, inventory, settings, sla, communication, or system."
+   },
+   {
+    "field": "action",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Action that was performed: login, logout, create, update, delete, assign, reschedule, complete, cancel, error, or system."
+   },
+   {
+    "field": "message",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Description of what happened."
+   }
+  ],
+  "description": "Records the actions performed by users in the system, grouped by category and action, to provide an audit trail."
+ },
+ {
+  "number": 9,
+  "name": "Change Log",
+  "table": "change_log",
+  "rows": [
+   {
+    "field": "change_log_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the change log."
+   },
+   {
+    "field": "content_type_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Identifier of the type of record that was changed. It refers to the framework content type table, which is outside this diagram."
+   },
+   {
+    "field": "action",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of change: create, update, or delete."
+   },
+   {
+    "field": "field_name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Name of the field that was changed."
+   }
+  ],
+  "description": "Records the changes made to the data in the system, including the type of action and the field that was changed."
+ },
+ {
+  "number": 10,
+  "name": "Service Type",
+  "table": "service_type",
+  "rows": [
+   {
+    "field": "service_type_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the service type."
+   },
+   {
+    "field": "name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Name of the service type."
+   },
+   {
+    "field": "category",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Category of the service type, such as solar or air conditioning."
+   },
+   {
+    "field": "estimated_cost",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Estimated cost of the service type."
+   },
+   {
+    "field": "is_active",
+    "type": "BOOLEAN",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Indicates whether the service type can currently be requested."
+   }
+  ],
+  "description": "Stores the services offered by the company, with their category, estimated cost, and whether they are currently active."
+ },
+ {
+  "number": 11,
+  "name": "Sla Rule",
+  "table": "sla_rule",
+  "rows": [
+   {
+    "field": "sla_rule_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the sla rule."
+   },
+   {
+    "field": "key",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Identifier of the delay that the rule monitors: approval_delay, assignment_delay, start_delay, execution_delay, reschedule_delay, inspection_delay, or service_ready_delay."
+   },
+   {
+    "field": "is_active",
+    "type": "BOOLEAN",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Indicates whether the rule is currently enforced."
+   }
+  ],
+  "description": "Stores the service-level agreement rules that define the delay checks used to monitor requests and tickets."
+ },
+ {
+  "number": 12,
+  "name": "Service Request",
+  "table": "service_request",
+  "rows": [
+   {
+    "field": "service_request_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the service request."
+   },
+   {
+    "field": "client_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who is the client."
+   },
+   {
+    "field": "service_type_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service type."
+   },
+   {
+    "field": "priority",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Priority of the service request: Low, Normal, High, or Urgent."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the service request: Pending, Approved, In Progress, Completed, or Cancelled."
+   },
+   {
+    "field": "preferred_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date preferred by the client for the service."
+   },
+   {
+    "field": "preferred_time_slot",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Time slot preferred by the client: morning, midday, afternoon, or evening."
+   },
+   {
+    "field": "request_date",
+    "type": "TIMESTAMP",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date and time the request was submitted."
+   }
+  ],
+  "description": "Stores the service requests submitted by clients, including the requested service type, priority, status, and preferred date and time slot."
+ },
+ {
+  "number": 13,
+  "name": "Calendar Closure",
+  "table": "calendar_closure",
+  "rows": [
+   {
+    "field": "calendar_closure_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the calendar closure."
+   },
+   {
+    "field": "date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date that is closed or limited."
+   },
+   {
+    "field": "time_slot",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Time slot affected by the closure: all_day, morning, midday, or afternoon."
+   },
+   {
+    "field": "availability_status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Availability of the date or time slot: limited or closed."
+   },
+   {
+    "field": "reason",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Reason for closing or limiting the date."
+   },
+   {
+    "field": "is_active",
+    "type": "BOOLEAN",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Indicates whether the closure is currently in effect."
+   },
+   {
+    "field": "created_by_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who created the record."
+   },
+   {
+    "field": "updated_by_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who last updated the record."
+   },
+   {
+    "field": "reopened_by_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who reopened the closure."
+   }
+  ],
+  "description": "Stores the dates and time slots that administrators have closed or limited for scheduling, with the reason."
+ },
+ {
+  "number": 14,
+  "name": "Service Request Service",
+  "table": "service_request_service",
+  "rows": [
+   {
+    "field": "service_request_service_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the service request service."
+   },
+   {
+    "field": "request_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service request."
+   },
+   {
+    "field": "service_type_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service type."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the service within the request: Pending, Approved, In Progress, Completed, or Cancelled."
+   }
+  ],
+  "description": "Stores each individual service included in a service request, so that one request can contain several services."
+ },
+ {
+  "number": 15,
+  "name": "Service Location",
+  "table": "service_location",
+  "rows": [
+   {
+    "field": "service_location_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the service location."
+   },
+   {
+    "field": "request_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service request."
+   },
+   {
+    "field": "address",
+    "type": "TEXT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Complete address of the service site."
+   },
+   {
+    "field": "latitude",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Latitude of the service site."
+   },
+   {
+    "field": "longitude",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Longitude of the service site."
+   }
+  ],
+  "description": "Stores the address and map coordinates of the site where the requested service will be performed."
+ },
+ {
+  "number": 16,
+  "name": "Solar Estimate",
+  "table": "solar_estimate",
+  "rows": [
+   {
+    "field": "solar_estimate_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the solar estimate."
+   },
+   {
+    "field": "client_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who is the client."
+   },
+   {
+    "field": "service_request_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service request."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the solar estimate: draft, submitted, reviewed, converted, or expired."
+   }
+  ],
+  "description": "Stores the solar estimate prepared for a client and, once converted, the service request it became."
+ },
+ {
+  "number": 17,
+  "name": "Service Ticket",
+  "table": "service_ticket",
+  "rows": [
+   {
+    "field": "service_ticket_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the service ticket."
+   },
+   {
+    "field": "request_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service request."
+   },
+   {
+    "field": "ticket_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of the ticket: inspection or installation."
+   },
+   {
+    "field": "technician_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who acts as the technician."
+   },
+   {
+    "field": "assigned_admin_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user assigned as the administrator."
+   },
+   {
+    "field": "scheduled_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date the ticket is scheduled for."
+   },
+   {
+    "field": "scheduled_time",
+    "type": "TIME",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Exact time the ticket is scheduled for."
+   },
+   {
+    "field": "scheduled_time_slot",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Time slot the ticket is scheduled for: morning, midday, afternoon, or evening."
+   },
+   {
+    "field": "start_time",
+    "type": "TIMESTAMP",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date and time the technician started the job."
+   },
+   {
+    "field": "end_time",
+    "type": "TIMESTAMP",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date and time the job ended."
+   },
+   {
+    "field": "completed_date",
+    "type": "TIMESTAMP",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date and time the ticket was completed."
+   }
+  ],
+  "description": "Stores the work tickets created from approved service requests, including the ticket type, assigned technician and administrator, schedule, and start and completion times."
+ },
+ {
+  "number": 18,
+  "name": "Ticket Crew Assignment",
+  "table": "ticket_crew_assignment",
+  "rows": [
+   {
+    "field": "ticket_crew_assignment_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the ticket crew assignment."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "technician_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who acts as the technician."
+   }
+  ],
+  "description": "Stores the technicians assigned to the crew of a service ticket."
+ },
+ {
+  "number": 19,
+  "name": "Service Status History",
+  "table": "service_status_history",
+  "rows": [
+   {
+    "field": "service_status_history_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the service status history."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Status that the ticket was changed to."
+   }
+  ],
+  "description": "Stores each status that a service ticket has passed through, providing a history of its progress."
+ },
+ {
+  "number": 20,
+  "name": "Ticket Progress",
+  "table": "ticket_progress",
+  "rows": [
+   {
+    "field": "ticket_progress_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the ticket progress."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "progress_status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Progress status recorded for the ticket."
+   }
+  ],
+  "description": "Stores the progress status recorded for a service ticket while the job is being carried out."
+ },
+ {
+  "number": 21,
+  "name": "Technician Skill",
+  "table": "technician_skill",
+  "rows": [
+   {
+    "field": "technician_skill_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the technician skill."
+   },
+   {
+    "field": "technician_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who acts as the technician."
+   },
+   {
+    "field": "service_type_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service type."
+   },
+   {
+    "field": "skill_level",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Skill level of the technician for the service type: beginner, intermediate, or expert."
+   }
+  ],
+  "description": "Stores the service types that a technician is able to perform and the skill level for each."
+ },
+ {
+  "number": 22,
+  "name": "Technician Location History",
+  "table": "technician_location_history",
+  "rows": [
+   {
+    "field": "technician_location_history_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the technician location history."
+   },
+   {
+    "field": "technician_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who acts as the technician."
+   },
+   {
+    "field": "latitude",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Latitude reported by the technician."
+   },
+   {
+    "field": "longitude",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Longitude reported by the technician."
+   }
+  ],
+  "description": "Stores the GPS positions reported by technicians over time for location tracking."
+ },
+ {
+  "number": 23,
+  "name": "Arrival Validation Log",
+  "table": "arrival_validation_log",
+  "rows": [
+   {
+    "field": "arrival_validation_log_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the arrival validation log."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "technician_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who acts as the technician."
+   },
+   {
+    "field": "action",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Action recorded for the technician: navigate, arrival_attempt, arrival_success, arrival_blocked, arrival_bypassed, job_started, or job_completed."
+   },
+   {
+    "field": "technician_latitude",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Latitude of the technician when the action was recorded."
+   },
+   {
+    "field": "technician_longitude",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Longitude of the technician when the action was recorded."
+   },
+   {
+    "field": "service_latitude",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Latitude of the service site."
+   },
+   {
+    "field": "service_longitude",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Longitude of the service site."
+   }
+  ],
+  "description": "Records the navigation, arrival, job start, and job completion actions of a technician, together with the technician and site coordinates used to validate arrival."
+ },
+ {
+  "number": 24,
+  "name": "Inspection Checklist",
+  "table": "inspection_checklist",
+  "rows": [
+   {
+    "field": "inspection_checklist_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the inspection checklist."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "service_type_label",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Label of the service type that was inspected."
+   },
+   {
+    "field": "follow_up_case_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Type of follow-up case requested after the inspection: follow_up, complaint, warranty, revisit, or feedback."
+   },
+   {
+    "field": "follow_up_due_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date the follow-up case is due."
+   }
+  ],
+  "description": "Stores the inspection checklist completed by the technician for a ticket, including any follow-up case type and due date."
+ },
+ {
+  "number": 25,
+  "name": "Generated Document",
+  "table": "generated_document",
+  "rows": [
+   {
+    "field": "generated_document_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the generated document."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "document_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of the generated document: field_service_report, turnover_acceptance, commissioning_checklist, technical_data_sheet, installation_contract, or quotation_proposal."
+   },
+   {
+    "field": "title",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Title of the generated document."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the document: draft or finalized."
+   }
+  ],
+  "description": "Stores the documents generated for a ticket, such as the field service report, quotation proposal, or installation contract, with their title and status."
+ },
+ {
+  "number": 26,
+  "name": "Technical Data Sheet",
+  "table": "technical_data_sheet",
+  "rows": [
+   {
+    "field": "technical_data_sheet_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the technical data sheet."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the technical data sheet: draft, submitted, or reviewed."
+   },
+   {
+    "field": "premise_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Type of the premises, such as residential or commercial."
+   },
+   {
+    "field": "premise_category",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Category of the premises."
+   },
+   {
+    "field": "ownership_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Ownership type of the premises."
+   },
+   {
+    "field": "private_or_government_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Indicates whether the premises are private or government owned."
+   },
+   {
+    "field": "rooftop_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Type of the rooftop where the system is installed."
+   },
+   {
+    "field": "client_confirmation_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date the client confirmed the technical data sheet."
+   }
+  ],
+  "description": "Stores the technical data sheet gathered during the site inspection, describing the premises, ownership, and rooftop type, and the date the client confirmed it."
+ },
+ {
+  "number": 27,
+  "name": "Solar Commissioning Checklist",
+  "table": "solar_commissioning_checklist",
+  "rows": [
+   {
+    "field": "solar_commissioning_checklist_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the solar commissioning checklist."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "site_name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Name of the site being commissioned."
+   },
+   {
+    "field": "inverter_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of the installed inverter."
+   },
+   {
+    "field": "inverter_serial_number",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Serial number of the installed inverter."
+   },
+   {
+    "field": "commissioned_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date the system was commissioned."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the checklist: draft, completed, or finalized."
+   }
+  ],
+  "description": "Stores the commissioning checklist of a solar installation, including the site, inverter details, commissioning date, and status."
+ },
+ {
+  "number": 28,
+  "name": "Turnover Acceptance",
+  "table": "turnover_acceptance",
+  "rows": [
+   {
+    "field": "turnover_acceptance_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the turnover acceptance."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "generated_document_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the generated document."
+   },
+   {
+    "field": "turnover_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date the installation was turned over to the client."
+   },
+   {
+    "field": "accepted_by_client_name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Name of the client who accepted the turnover."
+   },
+   {
+    "field": "warranty_start_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date the warranty begins."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the turnover acceptance: draft, finalized, or accepted."
+   }
+  ],
+  "description": "Stores the turnover acceptance signed off by the client after an installation, with the turnover date, the name of the accepting client, and the warranty start date."
+ },
+ {
+  "number": 29,
+  "name": "Quotation Record",
+  "table": "quotation_record",
+  "rows": [
+   {
+    "field": "quotation_record_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the quotation record."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "client_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who is the client."
+   },
+   {
+    "field": "quotation_number",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Number that identifies the quotation."
+   },
+   {
+    "field": "total_amount",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Total amount of the quotation."
+   },
+   {
+    "field": "downpayment_amount",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Down payment amount of the quotation."
+   },
+   {
+    "field": "balance_amount",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Remaining balance of the quotation."
+   },
+   {
+    "field": "required_deposit_amount",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Deposit the client must pay before work can be scheduled."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the quotation: Draft, Sent, Accepted, or Rejected."
+   }
+  ],
+  "description": "Stores the quotation prepared for a ticket, including the quotation number, amounts, required deposit, and status."
+ },
+ {
+  "number": 30,
+  "name": "Installation Contract",
+  "table": "installation_contract",
+  "rows": [
+   {
+    "field": "installation_contract_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the installation contract."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "start_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date the installation is to start."
+   },
+   {
+    "field": "total_contract_amount",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Total amount of the contract."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the contract: draft, finalized, or signed."
+   }
+  ],
+  "description": "Stores the installation contract of a ticket, including its start date, total amount, and status."
+ },
+ {
+  "number": 31,
+  "name": "Solar Project Profile",
+  "table": "solar_project_profile",
+  "rows": [
+   {
+    "field": "solar_project_profile_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the solar project profile."
+   },
+   {
+    "field": "location_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service location."
+   },
+   {
+    "field": "original_ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service ticket from which the project originated."
+   },
+   {
+    "field": "system_capacity",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Total capacity of the solar system."
+   },
+   {
+    "field": "number_of_panels",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Number of solar panels installed."
+   },
+   {
+    "field": "number_of_inverters",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Number of inverters installed."
+   }
+  ],
+  "description": "Stores the solar project details of a service location, such as the system capacity and the number of panels and inverters."
+ },
+ {
+  "number": 32,
+  "name": "Field Service Report",
+  "table": "field_service_report",
+  "rows": [
+   {
+    "field": "field_service_report_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the field service report."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "serial_number",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Serial number of the equipment serviced."
+   }
+  ],
+  "description": "Stores the field service report of a ticket, including the serial number of the serviced equipment."
+ },
+ {
+  "number": 33,
+  "name": "Installed Equipment",
+  "table": "installed_equipment",
+  "rows": [
+   {
+    "field": "installed_equipment_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the installed equipment."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "client_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who is the client."
+   },
+   {
+    "field": "equipment_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of the installed equipment."
+   },
+   {
+    "field": "serial_number",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Serial number of the installed equipment."
+   },
+   {
+    "field": "capacity",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Capacity or rating of the installed equipment."
+   }
+  ],
+  "description": "Stores the equipment installed for a client, with its type, serial number, and capacity, to support warranty and maintenance follow-up."
+ },
+ {
+  "number": 34,
+  "name": "Inventory Category",
+  "table": "inventory_category",
+  "rows": [
+   {
+    "field": "inventory_category_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the inventory category."
+   },
+   {
+    "field": "name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Name of the inventory category."
+   },
+   {
+    "field": "parent_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the inventory category that is the parent category."
+   }
+  ],
+  "description": "Stores the categories used to group inventory items. A category can belong to a parent category."
+ },
+ {
+  "number": 35,
+  "name": "Inventory Item",
+  "table": "inventory_item",
+  "rows": [
+   {
+    "field": "inventory_item_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the inventory item."
+   },
+   {
+    "field": "name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Name of the inventory item."
+   },
+   {
+    "field": "sku",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Unique stock keeping unit code of the item."
+   },
+   {
+    "field": "category_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the inventory category."
+   },
+   {
+    "field": "item_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of the inventory item: equipment, part, tool, consumable, or other."
+   },
+   {
+    "field": "capacity",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Capacity or rating of the item, such as the wattage of a panel."
+   },
+   {
+    "field": "quantity",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Number of units currently in stock."
+   },
+   {
+    "field": "minimum_stock",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Stock level at or below which a low-stock alert is raised."
+   },
+   {
+    "field": "reserved_quantity",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Number of units currently reserved for jobs."
+   },
+   {
+    "field": "unit_price",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Price of one unit of the item."
+   }
+  ],
+  "description": "Stores the items kept in inventory, with their SKU, type, capacity, stock on hand, minimum stock, reserved quantity, and unit price."
+ },
+ {
+  "number": 36,
+  "name": "Service Type Inventory Requirement",
+  "table": "service_type_inventory_requirement",
+  "rows": [
+   {
+    "field": "service_type_inventory_requirement_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the service type inventory requirement."
+   },
+   {
+    "field": "service_type_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service type."
+   },
+   {
+    "field": "item_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the inventory item."
+   },
+   {
+    "field": "quantity",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Number of units of the item that the service type requires."
+   }
+  ],
+  "description": "Stores the inventory items, and how many of each, that a service type requires."
+ },
+ {
+  "number": 37,
+  "name": "Inventory Reservation",
+  "table": "inventory_reservation",
+  "rows": [
+   {
+    "field": "inventory_reservation_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the inventory reservation."
+   },
+   {
+    "field": "item_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the inventory item."
+   },
+   {
+    "field": "technician_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who acts as the technician."
+   },
+   {
+    "field": "quantity",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Number of units reserved."
+   },
+   {
+    "field": "required_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date on which the reserved items are needed."
+   },
+   {
+    "field": "service_ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the reservation: pending, fulfilled, or cancelled."
+   }
+  ],
+  "description": "Stores the inventory items reserved for a technician or ticket, with the quantity, required date, and status."
+ },
+ {
+  "number": 38,
+  "name": "Inventory Transaction",
+  "table": "inventory_transaction",
+  "rows": [
+   {
+    "field": "inventory_transaction_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the inventory transaction."
+   },
+   {
+    "field": "item_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the inventory item."
+   },
+   {
+    "field": "transaction_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of stock movement: purchase, issue, return, transfer, adjustment, reservation, or cancellation."
+   },
+   {
+    "field": "quantity",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Number of units moved by the transaction."
+   },
+   {
+    "field": "technician_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who acts as the technician."
+   },
+   {
+    "field": "service_ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "reference_number",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Reference number of the document or ticket related to the transaction."
+   },
+   {
+    "field": "transaction_date",
+    "type": "TIMESTAMP",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date and time the transaction was recorded."
+   }
+  ],
+  "description": "Records every stock movement of an inventory item, such as purchase, issue, return, and adjustment, with its quantity and date."
+ },
+ {
+  "number": 39,
+  "name": "Equipment Return Request",
+  "table": "equipment_return_request",
+  "rows": [
+   {
+    "field": "equipment_return_request_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the equipment return request."
+   },
+   {
+    "field": "service_ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "technician_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who acts as the technician."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the equipment return request: pending, verified, or rejected."
+   }
+  ],
+  "description": "Stores the requests made by technicians to return unused equipment after a job, with the verification status."
+ },
+ {
+  "number": 40,
+  "name": "Equipment Return Request Item",
+  "table": "equipment_return_request_item",
+  "rows": [
+   {
+    "field": "equipment_return_request_item_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the equipment return request item."
+   },
+   {
+    "field": "return_request_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the equipment return request."
+   },
+   {
+    "field": "item_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the inventory item."
+   },
+   {
+    "field": "quantity",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Number of units of the item being returned."
+   }
+  ],
+  "description": "Stores each inventory item, and its quantity, included in an equipment return request."
+ },
+ {
+  "number": 41,
+  "name": "Sales Record",
+  "table": "sales_record",
+  "rows": [
+   {
+    "field": "sales_record_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the sales record."
+   },
+   {
+    "field": "record_number",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Unique number that identifies the sales record."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "client_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who is the client."
+   },
+   {
+    "field": "quotation_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the quotation record."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the sales record: draft, confirmed, or voided."
+   },
+   {
+    "field": "sale_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date of the sale."
+   },
+   {
+    "field": "currency_code",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Three-letter code of the currency used."
+   },
+   {
+    "field": "agreed_total",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Total amount agreed with the client."
+   },
+   {
+    "field": "void_reason",
+    "type": "TEXT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Reason the sales record was voided, if it was cancelled."
+   },
+   {
+    "field": "replaces_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the sales record that this record replaces."
+   }
+  ],
+  "description": "Stores the sales record of a ticket, including the record number, sale date, currency, agreed total, status, and the record it replaces if it was corrected."
+ },
+ {
+  "number": 42,
+  "name": "Sales Record Line",
+  "table": "sales_record_line",
+  "rows": [
+   {
+    "field": "sales_record_line_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the sales record line."
+   },
+   {
+    "field": "sales_record_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the sales record."
+   },
+   {
+    "field": "line_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of the sold line: service, product, equipment, or other."
+   },
+   {
+    "field": "service_type_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service type."
+   },
+   {
+    "field": "inventory_item_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the inventory item."
+   },
+   {
+    "field": "installed_equipment_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the installed equipment."
+   },
+   {
+    "field": "name",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Name of the item or service sold."
+   },
+   {
+    "field": "sku",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Stock keeping unit code of the item sold."
+   },
+   {
+    "field": "quantity",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Quantity sold."
+   },
+   {
+    "field": "unit_price",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Price of one unit."
+   },
+   {
+    "field": "line_total",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Total amount of the line."
+   }
+  ],
+  "description": "Stores the lines of a sales record, each describing a service, product, or equipment sold with its quantity, unit price, and line total."
+ },
+ {
+  "number": 43,
+  "name": "Sales Payment",
+  "table": "sales_payment",
+  "rows": [
+   {
+    "field": "sales_payment_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the sales payment."
+   },
+   {
+    "field": "sales_record_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the sales record."
+   },
+   {
+    "field": "quotation_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the quotation record."
+   },
+   {
+    "field": "amount",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Amount of the payment."
+   },
+   {
+    "field": "method",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Method used to pay: cash, bank_transfer, gcash, maya, check, card, or other."
+   },
+   {
+    "field": "reference",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Reference number of the payment, such as a transaction or receipt number."
+   },
+   {
+    "field": "void_reason",
+    "type": "TEXT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Reason the payment was voided, if it was cancelled."
+   }
+  ],
+  "description": "Stores the payments received against a sales record or quotation, with the amount, payment method, reference, and void reason if the payment was cancelled."
+ },
+ {
+  "number": 44,
+  "name": "After Sales Case",
+  "table": "after_sales_case",
+  "rows": [
+   {
+    "field": "after_sales_case_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the after sales case."
+   },
+   {
+    "field": "service_ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "client_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who is the client."
+   },
+   {
+    "field": "assigned_to_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user assigned to the case."
+   },
+   {
+    "field": "case_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of the after-sales case: follow_up, maintenance, complaint, warranty, revisit, or feedback."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the after-sales case: open, in_progress, resolved, or closed."
+   },
+   {
+    "field": "priority",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Priority of the after-sales case: low, normal, high, or urgent."
+   },
+   {
+    "field": "due_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Date by which the case should be resolved."
+   }
+  ],
+  "description": "Stores the after-sales cases opened for a completed ticket, such as follow-ups, maintenance, complaints, and warranty claims, with their priority, status, and due date."
+ },
+ {
+  "number": 45,
+  "name": "After Sales Case Event",
+  "table": "after_sales_case_event",
+  "rows": [
+   {
+    "field": "after_sales_case_event_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the after sales case event."
+   },
+   {
+    "field": "case_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the after sales case."
+   },
+   {
+    "field": "actor_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who performed the action."
+   },
+   {
+    "field": "event_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of event recorded for the case: created, status_changed, assigned, reassigned, or updated."
+   },
+   {
+    "field": "from_status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Status of the case before the event."
+   },
+   {
+    "field": "to_status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Status of the case after the event."
+   }
+  ],
+  "description": "Stores the history of an after-sales case, recording each creation, assignment, and status change with the user who made it."
+ },
+ {
+  "number": 46,
+  "name": "Maintenance Schedule",
+  "table": "maintenance_schedule",
+  "rows": [
+   {
+    "field": "maintenance_schedule_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the maintenance schedule."
+   },
+   {
+    "field": "service_ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "client_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who is the client."
+   },
+   {
+    "field": "service_type_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service type."
+   },
+   {
+    "field": "last_service_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date the equipment was last serviced."
+   },
+   {
+    "field": "next_due_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date the next maintenance is due."
+   },
+   {
+    "field": "notify_on_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date on which the client is reminded of the maintenance."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the maintenance schedule: scheduled, due_soon, due, completed, or dismissed."
+   },
+   {
+    "field": "risk_level",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Maintenance risk level calculated for the equipment, such as low, medium, or high."
+   },
+   {
+    "field": "risk_score",
+    "type": "FLOAT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Numeric maintenance risk score calculated for the equipment."
+   }
+  ],
+  "description": "Stores the maintenance schedule of a completed ticket, including the last service date, next due date, reminder date, status, and risk level."
+ },
+ {
+  "number": 47,
+  "name": "Customer Support Case",
+  "table": "customer_support_case",
+  "rows": [
+   {
+    "field": "customer_support_case_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the customer support case."
+   },
+   {
+    "field": "client_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who is the client."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "group_key",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Unique key that groups the messages belonging to the support case."
+   },
+   {
+    "field": "subject",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Subject of the support case."
+   },
+   {
+    "field": "category",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Category of the support case: general, billing, schedule, technical, complaint, or warranty."
+   },
+   {
+    "field": "priority",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Priority of the support case: low, normal, high, or urgent."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the support case: open, in_review, resolved, or closed."
+   }
+  ],
+  "description": "Stores the support conversations opened by clients, with their subject, category, priority, and status."
+ },
+ {
+  "number": 48,
+  "name": "Message",
+  "table": "message",
+  "rows": [
+   {
+    "field": "message_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the message."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "sender_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who sent the message."
+   },
+   {
+    "field": "receiver_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the user who received the message."
+   },
+   {
+    "field": "room_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of conversation the message belongs to: direct or group."
+   },
+   {
+    "field": "message_text",
+    "type": "TEXT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Text content of the message."
+   }
+  ],
+  "description": "Stores the messages exchanged between users, either directly or in a group, optionally linked to a ticket."
+ },
+ {
+  "number": 49,
+  "name": "Notification",
+  "table": "notification",
+  "rows": [
+   {
+    "field": "notification_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the notification."
+   },
+   {
+    "field": "user_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user."
+   },
+   {
+    "field": "ticket_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service ticket."
+   },
+   {
+    "field": "request_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service request."
+   },
+   {
+    "field": "message",
+    "type": "TEXT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Full text of the notification."
+   },
+   {
+    "field": "title",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Short title of the notification."
+   },
+   {
+    "field": "type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of the notification: ticket_assigned, status_update, reminder, urgent, task_completed, customer_inquiry, message, info, success, warning, or error."
+   },
+   {
+    "field": "status",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Current status of the notification, such as unread or read."
+   },
+   {
+    "field": "send_email",
+    "type": "BOOLEAN",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Indicates whether an email should also be sent for the notification."
+   },
+   {
+    "field": "email_sent",
+    "type": "BOOLEAN",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Indicates whether the email for the notification was sent."
+   }
+  ],
+  "description": "Stores the notifications sent to users, with their title, message, type, status, and whether an email was requested and sent."
+ },
+ {
+  "number": 50,
+  "name": "Service Analytics",
+  "table": "service_analytics",
+  "rows": [
+   {
+    "field": "service_analytics_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the service analytics."
+   },
+   {
+    "field": "date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date the analytics figures apply to."
+   },
+   {
+    "field": "service_type_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service type."
+   },
+   {
+    "field": "total_requests",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Total number of service requests received."
+   },
+   {
+    "field": "avg_response_time_hours",
+    "type": "FLOAT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Average time, in hours, taken to respond to requests."
+   },
+   {
+    "field": "avg_completion_time_hours",
+    "type": "FLOAT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Average time, in hours, taken to complete requests."
+   },
+   {
+    "field": "satisfaction_score",
+    "type": "FLOAT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Average client satisfaction score."
+   }
+  ],
+  "description": "Stores the daily service analytics, including the number of requests, average response and completion times, and satisfaction score."
+ },
+ {
+  "number": 51,
+  "name": "Technician Performance",
+  "table": "technician_performance",
+  "rows": [
+   {
+    "field": "technician_performance_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the technician performance."
+   },
+   {
+    "field": "technician_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the user who acts as the technician."
+   },
+   {
+    "field": "date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date the performance figures apply to."
+   },
+   {
+    "field": "total_work_hours",
+    "type": "FLOAT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Total hours the technician worked."
+   },
+   {
+    "field": "avg_response_time_hours",
+    "type": "FLOAT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Average time, in hours, the technician took to respond."
+   },
+   {
+    "field": "avg_completion_time_hours",
+    "type": "FLOAT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Average time, in hours, the technician took to complete jobs."
+   }
+  ],
+  "description": "Stores the daily performance of each technician, including total work hours and average response and completion times."
+ },
+ {
+  "number": 52,
+  "name": "Demand Forecast",
+  "table": "demand_forecast",
+  "rows": [
+   {
+    "field": "demand_forecast_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the demand forecast."
+   },
+   {
+    "field": "service_type_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service type."
+   },
+   {
+    "field": "forecast_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Date the forecast applies to."
+   },
+   {
+    "field": "confidence_level",
+    "type": "FLOAT",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Confidence level of the forecast."
+   }
+  ],
+  "description": "Stores the forecasted demand for each service type on a given date, with the confidence level of the forecast."
+ },
+ {
+  "number": 53,
+  "name": "Service Trend",
+  "table": "service_trend",
+  "rows": [
+   {
+    "field": "service_trend_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the service trend."
+   },
+   {
+    "field": "service_type_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the service type."
+   },
+   {
+    "field": "trend_type",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Type of the trend: seasonal, weekly, monthly, or yearly."
+   }
+  ],
+  "description": "Stores the demand trends detected for each service type, such as seasonal, weekly, monthly, or yearly patterns."
+ }
+]
