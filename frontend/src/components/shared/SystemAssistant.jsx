@@ -415,8 +415,27 @@ function isSensitiveDisclosureRequest(text) {
   return sensitiveTerms.some((term) => text.includes(term)) && disclosureVerbs.some((verb) => text.includes(verb));
 }
 
+// Everyday words for AFN's own records. A typed question that mentions any of them is about the business data the
+// assistant can read, so it goes on to the answer instead of being refused. Matched as whole words (plurals allowed)
+// so that, for example, "rate" does not match "generate".
+const BUSINESS_SCOPE_WORDS = [
+  'request', 'ticket', 'job', 'service', 'client', 'customer', 'technician', 'staff', 'crew',
+  'revenue', 'sale', 'sales', 'income', 'earning', 'profit', 'payment', 'paid', 'unpaid', 'deposit', 'balance',
+  'quotation', 'quote', 'invoice', 'contract', 'inventory', 'stock', 'item', 'material', 'equipment', 'part',
+  'pending', 'approved', 'approval', 'cancelled', 'canceled', 'rejected', 'dismissed', 'finished', 'done', 'open', 'closed',
+  'schedule', 'scheduled', 'appointment', 'booking', 'visit', 'dispatch', 'assigned', 'unassigned',
+  'installation', 'install', 'inspection', 'repair', 'solar', 'panel', 'inverter', 'battery', 'aircon', 'cctv',
+  'feedback', 'review', 'warranty', 'case', 'location', 'area', 'site',
+  'today', 'yesterday', 'month', 'year', 'quarter', 'daily', 'weekly', 'yearly',
+  'total', 'average', 'percent', 'percentage', 'rate', 'count', 'number', 'compare', 'comparison',
+  'best', 'worst', 'top', 'most', 'least', 'highest', 'lowest', 'busy', 'slow',
+];
+const BUSINESS_SCOPE_PATTERN = new RegExp(String.raw`\b(?:${BUSINESS_SCOPE_WORDS.join('|')})s?\b`);
+const GREETING_PATTERN = /^\s*(hi|hello|hey|good (morning|afternoon|evening|day)|thanks?|thank you|salamat|kumusta)\b/;
+const GREETING_RESPONSE = 'Hello! Ask me about your AFN data, for example: "How many requests did we get this month?", "Which service is requested the most?", "Who is the busiest technician?", or "Show the request trend".';
+
 function isAnalyticsForecastQuestion(text) {
-  return includesAny(text, ANALYTICS_SCOPE_TERMS);
+  return includesAny(text, ANALYTICS_SCOPE_TERMS) || BUSINESS_SCOPE_PATTERN.test(text);
 }
 
 function findKnowledgeAnswer(text) {
@@ -1169,6 +1188,16 @@ export default function SystemAssistant() {
       return;
     }
 
+    if (GREETING_PATTERN.test(text.toLowerCase()) && !isAnalyticsForecastQuestion(text.toLowerCase())) {
+      setMessages((current) => [
+        ...current,
+        { sender: 'user', text },
+        { sender: 'assistant', text: GREETING_RESPONSE }
+      ].slice(-8));
+      setInput('');
+      return;
+    }
+
     if (!isAnalyticsForecastQuestion(text.toLowerCase())) {
       setMessages((current) => [
         ...current,
@@ -1338,6 +1367,7 @@ export default function SystemAssistant() {
             onChange={(event) => setInput(event.target.value)}
             className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
             placeholder="Ask about analytics or forecasts..."
+            maxLength={500}
           />
           <button
             type="submit"

@@ -258,7 +258,8 @@ class AdminAnalyticsViewSet(viewsets.ViewSet):
         """Explain summarized AFN analytics without exposing raw records."""
         today = timezone.localdate()
         start_date, end_date, days = self._resolve_analytics_period(request, today)
-        question = str(request.query_params.get('question') or '').strip()
+        # Typed questions are capped so a very long text cannot bloat the prompt sent to the AI service.
+        question = str(request.query_params.get('question') or '').strip()[:500]
         analytics_summary = self._build_ai_analytics_summary(end_date, days, request.query_params)
         analytics_summary['periodStartDate'] = start_date.isoformat()
         analytics_summary['periodEndDate'] = end_date.isoformat()
