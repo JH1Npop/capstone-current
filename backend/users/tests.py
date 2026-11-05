@@ -1472,6 +1472,20 @@ class AdminAnalyticsTests(APITestCase):
         self.assertNotIn('Cut off mid sent', response.data['summary'])
         self.assertIn('Forecasts are unavailable', response.data['summary'])
 
+    @override_settings(GEMINI_API_KEY='configured-for-test', GEMINI_ANALYTICS_MODEL='test-model')
+    @patch('users.views.admin_services.AdminAnalyticsViewSet._call_gemini_generate_content', return_value='Typed question answered.')
+    def test_admin_analytics_ai_summary_passes_a_typed_question_and_caps_its_length(self, mocked_call):
+        response = self.client.get('/api/admin/analytics/ai-summary/', {'days': 30, 'question': 'How many tickets are pending?'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['summary'], 'Typed question answered.')
+        self.assertIn('Admin question: How many tickets are pending?', mocked_call.call_args.kwargs['prompt'])
+
+        long_question = 'x' * 2000
+        self.client.get('/api/admin/analytics/ai-summary/', {'days': 30, 'question': long_question})
+        prompt = mocked_call.call_args.kwargs['prompt']
+        self.assertIn('Admin question: ' + 'x' * 500, prompt)
+        self.assertNotIn('x' * 501, prompt)
+
     @override_settings(GEMINI_API_KEY='')
     def test_admin_analytics_ai_summary_includes_issued_inventory_demand(self):
         category = InventoryCategory.objects.create(name='Solar Parts')
