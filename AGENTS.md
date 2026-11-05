@@ -35,3 +35,34 @@ without explicit approval. Browser tests use the isolated E2E database.
 
 No commit or push is authorized unless the user explicitly asks for it in the
 current conversation.
+
+## Engineering rules
+
+Shared by Claude Code and Codex. `CLAUDE.md` holds commands and architecture;
+do not duplicate them here. Verify docs against the code, because the code wins.
+
+- **Scope:** inspect existing code first and reuse existing modules. Add no
+  dependency or plugin without approval. Preserve existing behavior.
+- **Django:** keep business rules in the standalone `backend/services/*.py`
+  modules (scheduling, SLA, dispatch, deposits, ...), not in views. Keep
+  models, serializers, and views in their existing packages.
+- **Database:** every model change needs a migration that is reviewed but not
+  applied to dev or production without approval. Follow
+  `docs/development/DATABASE_NAMING_GUIDE.md` and update the schema section of
+  the handoff. Local work stays on SQLite.
+- **API consistency:** match the existing DRF serializer, error, and URL
+  patterns. When a route or payload changes, update `frontend/src/api/*` and
+  `docs/security/ROUTE_API_CAPABILITY_MATRIX.md`.
+- **Permissions:** access is capability-based. Backend constants in
+  `backend/users/rbac.py` and `permissions.py` are authoritative, and
+  `frontend/src/rbac.js` mirrors them for UI gating. Never gate only in the
+  UI. Change both sides together and keep the capability matrix current.
+- **Workflows:** status changes follow `docs/security/WORKFLOW_STATE_MACHINES.md`.
+  Update it with any new or changed transition.
+- **React:** put new pages in the role folder under `frontend/src/pages/`,
+  reuse `components/shared` and `components/ui`, and make API calls through
+  `frontend/src/api/`, not inline axios.
+- **Testing:** add or update a backend test near the changed code and run only
+  the affected tests (single-test commands are in `CLAUDE.md`). UI or role
+  flow changes need the matching Playwright spec plus seed data in
+  `e2e/seed-test-data-exec.py`. Record only commands actually run.
