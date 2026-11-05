@@ -46,20 +46,6 @@
 .afn-intro__dash--left { transform-origin: 100% 50%; }
 .afn-intro__dash--right { transform-origin: 0 50%; }
 
-.afn-intro__skip {
-  position: absolute;
-  right: calc(20px + env(safe-area-inset-right, 0px));
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-  border-radius: 8px;
-  border: 1px solid rgba(13, 27, 46, 0.2);
-  background: rgba(255, 255, 255, 0.9);
-  padding: 8px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #0d1b2e;
-}
-.afn-intro__skip:focus-visible { outline: 3px solid #f5a300; outline-offset: 2px; }
-
 /* Sun: starts small at the top left (-205, -100 grid units), then glides into the logo. */
 @keyframes afn-intro-sun { 0%, 40% { transform: translate(-58.571%, -53.763%) scale(0.55); } 100% { transform: none; } }
 @keyframes afn-intro-beam { 0% { opacity: 0.9; transform: scaleX(0); } 40% { opacity: 0.9; transform: none; } 75% { opacity: 0.9; transform: none; } 100% { opacity: 0; transform: none; } }

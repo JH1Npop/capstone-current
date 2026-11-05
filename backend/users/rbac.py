@@ -49,6 +49,12 @@ SERVICE_CATALOG_VIEW = 'services.catalog.view'
 SERVICE_CATALOG_MANAGE = 'services.catalog.manage'
 DOCUMENTS_VIEW = 'documents.view'
 DOCUMENTS_MANAGE = 'documents.manage'
+DOCUMENT_TEMPLATES_UPLOAD = 'documents.templates.upload'
+DOCUMENT_TEMPLATES_MANAGE = 'documents.templates.manage'
+DOCUMENT_TEMPLATES_PUBLISH = 'documents.templates.publish'
+DOCUMENT_TEMPLATES_ROLLBACK = 'documents.templates.rollback'
+DOCUMENT_DEFINITIONS_MANAGE = 'documents.definitions.manage'
+DOCUMENT_ATTACHMENTS_MANAGE = 'documents.attachments.manage'
 ANALYTICS_VIEW = 'analytics.view'
 REPORTS_VIEW = 'reports.view'
 REPORTS_EXPORT = 'reports.export'
@@ -408,6 +414,12 @@ CAPABILITY_DEFINITIONS = OrderedDict([
             'assignable': True,
         },
     ),
+    (DOCUMENT_TEMPLATES_UPLOAD, {'label': 'Upload document templates', 'description': 'Upload inactive DOCX template versions for validation.', 'category': 'Documents', 'assignable': True}),
+    (DOCUMENT_TEMPLATES_MANAGE, {'label': 'Manage document templates', 'description': 'Create and configure document template designs.', 'category': 'Documents', 'assignable': True}),
+    (DOCUMENT_TEMPLATES_PUBLISH, {'label': 'Publish document templates', 'description': 'Activate a validated company document template.', 'category': 'Documents', 'assignable': True}),
+    (DOCUMENT_TEMPLATES_ROLLBACK, {'label': 'Roll back document templates', 'description': 'Restore an earlier validated document template version.', 'category': 'Documents', 'assignable': True}),
+    (DOCUMENT_DEFINITIONS_MANAGE, {'label': 'Manage custom document definitions', 'description': 'Register custom document types and their approved manual fields.', 'category': 'Documents', 'assignable': True}),
+    (DOCUMENT_ATTACHMENTS_MANAGE, {'label': 'Manage document attachments', 'description': 'Upload and download supporting files for custom document instances.', 'category': 'Documents', 'assignable': True}),
     (
         ANALYTICS_VIEW,
         {
@@ -504,6 +516,12 @@ ADMIN_ASSIGNABLE_CAPABILITIES = {
     SERVICE_CATALOG_MANAGE,
     DOCUMENTS_VIEW,
     DOCUMENTS_MANAGE,
+    DOCUMENT_TEMPLATES_UPLOAD,
+    DOCUMENT_TEMPLATES_MANAGE,
+    DOCUMENT_TEMPLATES_PUBLISH,
+    DOCUMENT_TEMPLATES_ROLLBACK,
+    DOCUMENT_DEFINITIONS_MANAGE,
+    DOCUMENT_ATTACHMENTS_MANAGE,
     ANALYTICS_VIEW,
     REPORTS_VIEW,
     REPORTS_EXPORT,
@@ -686,6 +704,13 @@ DOCUMENTS_VIEW_CAPABILITIES = {
 DOCUMENTS_MANAGE_CAPABILITIES = {
     DOCUMENTS_MANAGE,
 }
+
+DOCUMENT_TEMPLATES_UPLOAD_CAPABILITIES = {DOCUMENT_TEMPLATES_UPLOAD}
+DOCUMENT_TEMPLATES_MANAGE_CAPABILITIES = {DOCUMENT_TEMPLATES_MANAGE}
+DOCUMENT_TEMPLATES_PUBLISH_CAPABILITIES = {DOCUMENT_TEMPLATES_PUBLISH}
+DOCUMENT_TEMPLATES_ROLLBACK_CAPABILITIES = {DOCUMENT_TEMPLATES_ROLLBACK}
+DOCUMENT_DEFINITIONS_MANAGE_CAPABILITIES = {DOCUMENT_DEFINITIONS_MANAGE}
+DOCUMENT_ATTACHMENTS_MANAGE_CAPABILITIES = {DOCUMENT_ATTACHMENTS_MANAGE}
 
 ANALYTICS_VIEW_CAPABILITIES = {ANALYTICS_VIEW}
 REPORTS_VIEW_CAPABILITIES = {REPORTS_VIEW, REPORTS_EXPORT}

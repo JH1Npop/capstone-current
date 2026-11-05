@@ -65,7 +65,7 @@ export const STATUS_META = {
     dot: 'bg-rose-500'
   },
   cancelled: {
-    label: 'Cancelled',
+    label: 'Dismissed',
     tone: 'bg-zinc-100 text-zinc-700 ring-zinc-200',
     dot: 'bg-zinc-400'
   },

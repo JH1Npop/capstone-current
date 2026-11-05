@@ -166,6 +166,16 @@ export default function AdminLandingPage() {
       setMessage({ type: 'error', text: `"${FIELD_META[blankKey]?.label || blankKey}" cannot be blank.` });
       return;
     }
+    const invalidCalculatorField = calculatorFields.find(([key, , min, max]) => {
+      const value = Number(calculator[key]);
+      return calculator[key] === '' || !Number.isFinite(value) || value < min || value > max;
+    });
+    if (invalidCalculatorField) {
+      const [, label, min, max] = invalidCalculatorField;
+      openTab('calculator');
+      setMessage({ type: 'error', text: `${label} must be between ${min} and ${max}.` });
+      return;
+    }
     const invalidPromotion = promotions.find((promotion) => !promotion.name.trim() || (promotion.startDate && promotion.endDate && promotion.startDate > promotion.endDate));
     if (invalidPromotion) {
       setMessage({ type: 'error', text: 'Each promotion needs a name and an end date that is not before its start date.' });
@@ -190,7 +200,10 @@ export default function AdminLandingPage() {
     try {
       const response = await updateAdminSettings({
         landingPageContent: content,
-        solarCalculatorSettings: calculator,
+        solarCalculatorSettings: {
+          ...calculator,
+          ...Object.fromEntries(calculatorFields.map(([key]) => [key, Number(calculator[key])])),
+        },
         landingPagePromotions: promotions,
         landingPageProjects: projects,
       });
@@ -396,7 +409,7 @@ export default function AdminLandingPage() {
                 {calculatorFields.map(([key, label, min, max, step]) => (
                   <label key={key} className="block">
                     <span className="text-sm font-medium text-slate-700">{label}</span>
-                    <input type="number" min={min} max={max} step={step} className={inputClass} value={calculator[key]} onChange={(event) => setCalculator((current) => ({ ...current, [key]: Number(event.target.value) }))} />
+                    <input type="number" min={min} max={max} step={step} className={inputClass} value={calculator[key]} onChange={(event) => setCalculator((current) => ({ ...current, [key]: event.target.value }))} />
                   </label>
                 ))}
               </div>

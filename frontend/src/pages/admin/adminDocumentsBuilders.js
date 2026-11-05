@@ -1,5 +1,4 @@
 import {
-  COMMISSIONING_TEMPLATE_ITEMS,
   createInitialForm,
   createInitialTdsForm,
   createRows,
@@ -15,6 +14,37 @@ import {
   pickNumericId,
   splitClientName
 } from './adminDocumentsSupport';
+import { adaptFieldServiceReportDraft } from '../../documents/fieldServiceReportSchema';
+import {
+  adaptSolarCommissioningDraft,
+  createSolarCommissioningDraft,
+  createSolarCommissioningItems,
+} from '../../documents/solarCommissioningSchema';
+import {
+  adaptTechnicalDataSheetDraft,
+} from '../../documents/technicalDataSheetSchema';
+import {
+  adaptInstallationContractDraft,
+  createInstallationContractDraft,
+} from '../../documents/installationContractSchema';
+import {
+  adaptQuotationDraft,
+  createQuotationBomRows as createSchemaQuotationBomRows,
+  createQuotationBrandRows as createSchemaQuotationBrandRows,
+  createQuotationDraft,
+  createQuotationPriceRows as createSchemaQuotationPriceRows,
+  createQuotationRow as createSchemaQuotationRow,
+  createQuotationWarrantyRows as createSchemaQuotationWarrantyRows,
+} from '../../documents/quotationSchema';
+import {
+  adaptTurnoverDraft,
+  createTurnoverCommissioningRows as createSchemaTurnoverCommissioningRows,
+  createTurnoverComponentsRows as createSchemaTurnoverComponentsRows,
+  createTurnoverDocumentsRows as createSchemaTurnoverDocumentsRows,
+  createTurnoverDraft,
+  createTurnoverPerformanceRows as createSchemaTurnoverPerformanceRows,
+  createTurnoverRow as createSchemaTurnoverRow,
+} from '../../documents/turnoverAcceptanceSchema';
 
 export const buildTicketContextFromPrefill = (ticket, prefill = null) => {
   if (!ticket || !prefill) {
@@ -204,68 +234,15 @@ export const buildTdsFormFromTicket = (ticket) => {
   };
 };
 
-export const createCommissioningItems = () =>
-  COMMISSIONING_TEMPLATE_ITEMS.map((item) => ({
-    ...item,
-    check_status: '',
-    remarks: ''
-  }));
+export const createCommissioningItems = createSolarCommissioningItems;
 
-export const createInitialCommissioningForm = () => ({
-  id: null,
-  ticket: null,
-  site_name: '',
-  inverter_type: '',
-  system_designation: '',
-  inverter_serial_number: '',
-  commissioned_date: '',
-  irradiance: '',
-  ambient_temperature: '',
-  status: 'draft',
-  checklist_items_json: createCommissioningItems(),
-  readings_json: {
-    inverter_display: {
-      phase_a_voltage: '',
-      phase_b_voltage: '',
-      phase_c_voltage: '',
-      phase_a_current: '',
-      phase_b_current: '',
-      phase_c_current: ''
-    },
-    field_measured: {
-      phase_a_voltage: '',
-      phase_b_voltage: '',
-      phase_c_voltage: '',
-      phase_a_current: '',
-      phase_b_current: '',
-      phase_c_current: ''
-    }
-  }
-});
+export const createInitialCommissioningForm = createSolarCommissioningDraft;
 
-export const createQuotationPriceRows = () => ([
-  {
-    id: 'quote-price-1',
-    description: 'SUPPLY, INSTALLATION AND COMMISSIONING OF SOLAR PV SYSTEM',
-    unit: '1 lot',
-    totalPrice: ''
-  }
-]);
+export const createQuotationPriceRows = createSchemaQuotationPriceRows;
 
-export const createQuotationBrandRows = () => ([
-  { id: 'quote-brand-1', label: 'PV Modules', value: 'JA Solar / Aiko Solar' },
-  { id: 'quote-brand-2', label: 'PV Inverter', value: 'Ningbo Deye Technology' },
-  { id: 'quote-brand-3', label: 'Battery', value: 'Alltopelec Power Wall / NPP' }
-]);
+export const createQuotationBrandRows = createSchemaQuotationBrandRows;
 
-export const createQuotationBomRows = () => ([
-  { id: 'quote-bom-1', itemNo: '1', description: 'Solar panels', unit: 'pcs', qty: '', unitPrice: '', amount: '' },
-  { id: 'quote-bom-2', itemNo: '2', description: 'Hybrid inverter', unit: 'unit', qty: '', unitPrice: '', amount: '' },
-  { id: 'quote-bom-3', itemNo: '3', description: 'Battery bank / power wall', unit: 'unit', qty: '', unitPrice: '', amount: '' },
-  { id: 'quote-bom-4', itemNo: '4', description: 'Mounting kit and rails', unit: 'lot', qty: '1', unitPrice: '', amount: '' },
-  { id: 'quote-bom-5', itemNo: '5', description: 'DC/AC wirings, protections, and accessories', unit: 'lot', qty: '1', unitPrice: '', amount: '' },
-  { id: 'quote-bom-6', itemNo: '6', description: 'Design, engineering, and manpower', unit: 'lot', qty: '1', unitPrice: '', amount: '' }
-]);
+export const createQuotationBomRows = createSchemaQuotationBomRows;
 
 const normalizeInventoryLookup = (value) => String(value || '')
   .trim()
@@ -374,49 +351,17 @@ const priceUnsavedQuotationRows = (rows, inventoryItems) => rows.map((row) => {
   return matchedItem ? applyInventoryToQuotationRow(row, matchedItem) : row;
 });
 
-export const createQuotationWarrantyRows = () => ([
-  { id: 'quote-warranty-1', item: 'Solar Panels', brand: 'JA Solar / Aiko Solar', period: '12 Years enhanced manufacturer\'s product warranty\n30 Years linear power output warranty' },
-  { id: 'quote-warranty-2', item: 'Inverter', brand: 'Ningbo Deye Technology', period: '5 Years product warranty from material defect' },
-  { id: 'quote-warranty-3', item: 'Battery', brand: 'ATE / NPP / Alltopelec Power Wall', period: '5 Years product warranty from material defect' },
-  { id: 'quote-warranty-4', item: 'PV System Workmanship', brand: 'AFN Solar Power Engineering Services', period: '1 Year semi-annual O&M after project acceptance' }
-]);
+export const createQuotationWarrantyRows = createSchemaQuotationWarrantyRows;
 
-export const createTurnoverComponentsRows = () => ([
-  { id: 'turnover-component-1', label: 'Number of Solar Panels', valueA: '', valueB: '' },
-  { id: 'turnover-component-2', label: 'Number of Inverters', valueA: '', valueB: '' },
-  { id: 'turnover-component-3', label: 'Mounting Structure', valueA: '', valueB: '' },
-  { id: 'turnover-component-4', label: 'Other Components', valueA: '', valueB: '' },
-  { id: 'turnover-component-5', label: 'Location of Panels', valueA: '', valueB: '' },
-  { id: 'turnover-component-6', label: 'Inverter Location', valueA: '', valueB: '' }
-]);
+export const createTurnoverComponentsRows = createSchemaTurnoverComponentsRows;
 
-export const createTurnoverPerformanceRows = () => ([
-  { id: 'turnover-performance-1', label: 'Expected Energy Production (Estimated Daily/Monthly/Annual energy harvest)', daily: '', monthly: '', annual: '' },
-  { id: 'turnover-performance-2', label: 'Inverter Output Power (rated power)', daily: '', monthly: '', annual: '' },
-  { id: 'turnover-performance-3', label: 'System Voltage (Single Phase/Three Phase)', daily: '', monthly: '', annual: '' },
-  { id: 'turnover-performance-4', label: 'Performance Monitoring System (software or app used if applicable)', daily: '', monthly: '', annual: '' },
-  { id: 'turnover-performance-5', label: 'Net Metering Status (if applicable)', daily: '', monthly: '', annual: '' }
-]);
+export const createTurnoverPerformanceRows = createSchemaTurnoverPerformanceRows;
 
-export const createTurnoverCommissioningRows = () => ([
-  { id: 'turnover-commissioning-1', label: 'Inverter Commissioning', dateConducted: '', values: '', results: '' },
-  { id: 'turnover-commissioning-2', label: 'System Performance Test', dateConducted: '', values: '', results: '' },
-  { id: 'turnover-commissioning-3', label: 'Voltage and Current Measurements (per string)', dateConducted: '', values: 'Ioc / Voc / Imp / Vmp', results: '' },
-  { id: 'turnover-commissioning-4', label: 'Insulation Resistance Test (if applicable)', dateConducted: '', values: '', results: '' },
-  { id: 'turnover-commissioning-5', label: 'Safety and Grounding Check', dateConducted: '', values: '', results: '' },
-  { id: 'turnover-commissioning-6', label: 'System Energization', dateConducted: '', values: '', results: '' }
-]);
+export const createTurnoverCommissioningRows = createSchemaTurnoverCommissioningRows;
 
-export const createTurnoverDocumentsRows = () => ([
-  { id: 'turnover-document-1', label: 'As-built Electrical Plans (if applicable)', status: '', date: '' },
-  { id: 'turnover-document-2', label: 'Installation Diagram (if applicable)', status: '', date: '' },
-  { id: 'turnover-document-3', label: 'Equipment Manuals (Inverters, Panels, etc.)', status: '', date: '' },
-  { id: 'turnover-document-4', label: 'Maintenance Guidelines', status: '', date: '' },
-  { id: 'turnover-document-5', label: 'Warranty Certificates', status: '', date: '' },
-  { id: 'turnover-document-6', label: 'Net Metering Application (if applicable)', status: '', date: '' }
-]);
+export const createTurnoverDocumentsRows = createSchemaTurnoverDocumentsRows;
 
-export const createInitialQuotationForm = () => ({
+const createLegacyQuotationForm = () => ({
   quotationNumber: '',
   quotationDate: '',
   attention: '',
@@ -440,7 +385,7 @@ export const createInitialQuotationForm = () => ({
   warrantyRows: createQuotationWarrantyRows()
 });
 
-export const createInitialTurnoverForm = () => ({
+const createLegacyTurnoverForm = () => ({
   projectInstallationOf: '',
   locationAddress: '',
   dateOfCompletion: '',
@@ -466,7 +411,7 @@ export const createInitialTurnoverForm = () => ({
   documentsRows: createTurnoverDocumentsRows()
 });
 
-export const createInitialInstallationContractForm = () => ({
+const createLegacyInstallationContractForm = () => ({
   contractDate: formatTicketDateForInput(new Date().toISOString()),
   clientName: '',
   clientAddress: '',
@@ -501,7 +446,7 @@ export const createInitialInstallationContractForm = () => ({
   contractStatus: 'draft'
 });
 
-export const createQuotationRow = (type, index = 0) => {
+const createLegacyQuotationRow = (type, index = 0) => {
   const suffix = `${Date.now()}-${index}`;
   if (type === 'brand') {
     return { id: `quote-brand-${suffix}`, label: '', value: '' };
@@ -515,7 +460,7 @@ export const createQuotationRow = (type, index = 0) => {
   return { id: `quote-warranty-${suffix}`, item: '', brand: '', period: '' };
 };
 
-export const createTurnoverRow = (type, index = 0) => {
+const createLegacyTurnoverRow = (type, index = 0) => {
   const suffix = `${Date.now()}-${index}`;
   if (type === 'components') {
     return { id: `turnover-component-${suffix}`, label: '', valueA: '', valueB: '' };
@@ -529,51 +474,21 @@ export const createTurnoverRow = (type, index = 0) => {
   return { id: `turnover-document-${suffix}`, label: '', status: '', date: '' };
 };
 
+export const createInitialQuotationForm = createQuotationDraft;
+export const createInitialTurnoverForm = createTurnoverDraft;
+export const createInitialInstallationContractForm = createInstallationContractDraft;
+export const createQuotationRow = createSchemaQuotationRow;
+export const createTurnoverRow = createSchemaTurnoverRow;
+
 export const buildCommissioningFormFromTicket = (ticket, existing = null) => {
-  const base = createInitialCommissioningForm();
   const siteName = ticket?.locationDesc || ticket?.request_details?.location?.address || '';
   const commissionedDate = formatTicketDateForInput(ticket?.scheduledDate || ticket?.preferredDate);
-
-  if (!existing) {
-    return {
-      ...base,
-      ticket: ticket?.id || null,
-      site_name: siteName,
-      commissioned_date: commissionedDate
-    };
-  }
-
-  const existingItems = Array.isArray(existing.checklist_items_json) ? existing.checklist_items_json : [];
-  const mergedItems = COMMISSIONING_TEMPLATE_ITEMS.map((item) => {
-    const matched = existingItems.find((row) => Number(row.item_no) === item.item_no);
-    return {
-      ...item,
-      check_status: matched?.check_status || '',
-      remarks: matched?.remarks || ''
-    };
+  return adaptSolarCommissioningDraft({
+    ...(existing || {}),
+    ticket: ticket?.id || existing?.ticket || null,
+    site_name: existing?.site_name || siteName,
+    commissioned_date: formatTicketDateForInput(existing?.commissioned_date || commissionedDate),
   });
-
-  return {
-    ...base,
-    ...existing,
-    id: existing.id || null,
-    ticket: ticket?.id || existing.ticket || null,
-    site_name: existing.site_name || siteName,
-    commissioned_date: formatTicketDateForInput(existing.commissioned_date || commissionedDate),
-    checklist_items_json: mergedItems,
-    readings_json: {
-      ...base.readings_json,
-      ...(existing.readings_json || {}),
-      inverter_display: {
-        ...base.readings_json.inverter_display,
-        ...(existing.readings_json?.inverter_display || {})
-      },
-      field_measured: {
-        ...base.readings_json.field_measured,
-        ...(existing.readings_json?.field_measured || {})
-      }
-    }
-  };
 };
 
 export const buildQuotationFormFromTicket = (ticket, quotationRecord, inventoryItems = []) => {
@@ -748,38 +663,12 @@ export const buildInstallationContractFormFromTicket = (ticket, quotationData = 
   };
 };
 
-export const hydrateFieldServiceReportForm = (data) => ({
-  ...createInitialForm(),
-  ...(data || {}),
-  rows: Array.isArray(data?.rows) && data.rows.length ? data.rows : createRows()
-});
+export const hydrateFieldServiceReportForm = adaptFieldServiceReportDraft;
 
-export const hydrateQuotationForm = (data) => ({
-  ...createInitialQuotationForm(),
-  ...(data || {}),
-  brandRows: Array.isArray(data?.brandRows) && data.brandRows.length ? data.brandRows : createQuotationBrandRows(),
-  priceRows: Array.isArray(data?.priceRows) && data.priceRows.length ? data.priceRows : createQuotationPriceRows(),
-  bomRows: Array.isArray(data?.bomRows) && data.bomRows.length ? data.bomRows : createQuotationBomRows(),
-  warrantyRows: Array.isArray(data?.warrantyRows) && data.warrantyRows.length ? data.warrantyRows : createQuotationWarrantyRows()
-});
+export const hydrateQuotationForm = adaptQuotationDraft;
 
-export const hydrateTdsForm = (data) => ({
-  ...createInitialTdsForm(),
-  ...(data || {}),
-  loadRows: Array.isArray(data?.loadRows) && data.loadRows.length ? data.loadRows : createTdsLoadRows(),
-  purposeRows: Array.isArray(data?.purposeRows) && data.purposeRows.length ? data.purposeRows : createTdsPurposeRows()
-});
+export const hydrateTdsForm = adaptTechnicalDataSheetDraft;
 
-export const hydrateInstallationContractForm = (data) => ({
-  ...createInitialInstallationContractForm(),
-  ...(data || {})
-});
+export const hydrateInstallationContractForm = adaptInstallationContractDraft;
 
-export const hydrateTurnoverForm = (data) => ({
-  ...createInitialTurnoverForm(),
-  ...(data || {}),
-  componentsRows: Array.isArray(data?.componentsRows) && data.componentsRows.length ? data.componentsRows : createTurnoverComponentsRows(),
-  performanceRows: Array.isArray(data?.performanceRows) && data.performanceRows.length ? data.performanceRows : createTurnoverPerformanceRows(),
-  commissioningRows: Array.isArray(data?.commissioningRows) && data.commissioningRows.length ? data.commissioningRows : createTurnoverCommissioningRows(),
-  documentsRows: Array.isArray(data?.documentsRows) && data.documentsRows.length ? data.documentsRows : createTurnoverDocumentsRows()
-});
+export const hydrateTurnoverForm = adaptTurnoverDraft;

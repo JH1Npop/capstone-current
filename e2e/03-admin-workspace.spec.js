@@ -140,14 +140,16 @@ test.describe('Admin Workspace - All Pages', () => {
       await requestDetailsButton.click();
       const requestDetails = page.getByRole('dialog', { name: 'Service Request Details' });
       await expect(requestDetails).toBeVisible();
-      await requestDetails.getByRole('button', { name: 'Reject Request' }).click();
+      await expect(requestDetails.getByRole('button', { name: 'Reject request' })).toBeHidden();
+      await requestDetails.getByText('More actions', { exact: true }).click();
+      await requestDetails.getByRole('button', { name: 'Reject request' }).click();
       const rejectionDialog = page.getByRole('dialog', { name: 'Reject request?' });
       const rejectionReason = rejectionDialog.getByLabel('Reason for rejection');
       await expect(rejectionReason).toBeFocused();
       await expect(rejectionDialog.getByRole('button', { name: 'Reject request' })).toBeDisabled();
       await rejectionReason.fill('The requested scope needs clarification before approval.');
       await expect(rejectionDialog.getByRole('button', { name: 'Reject request' })).toBeEnabled();
-      await rejectionDialog.getByRole('button', { name: 'Cancel' }).click();
+      await rejectionDialog.getByRole('button', { name: 'Dismiss' }).click();
       await requestDetails.getByRole('button', { name: 'Close request details' }).click();
       await expect(requestDetailsButton).toBeFocused();
     }
@@ -170,7 +172,7 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(logoutDialog).toBeVisible();
     await expect(logoutDialog).toContainText("You'll need to sign in again to access your account.");
     await expect(logoutDialog.getByRole('button', { name: 'Log out' })).toBeVisible();
-    await logoutDialog.getByRole('button', { name: 'Cancel' }).click();
+    await logoutDialog.getByRole('button', { name: 'Dismiss' }).click();
 
     await expect(logoutDialog).toBeHidden();
     await expect(logoutButton).toBeFocused();
@@ -204,50 +206,88 @@ test.describe('Admin Workspace - All Pages', () => {
   test('3.2 - Admin Calendar supports operational filtering and event details', async ({ page }) => {
     const today = new Date().toISOString().slice(0, 10);
     await page.route('**/api/admin/calendar/**', async (route) => {
+      const showCompleted = new URL(route.request().url()).searchParams.get('show_completed') === '1';
+      const scheduledEvent = {
+        id: 'ticket-9001',
+        entity_type: 'ticket',
+        ticket_id: 9001,
+        request_id: 8001,
+        client: 'E2E Calendar Client',
+        client_email: 'calendar@example.com',
+        client_phone: '+63 900 000 0000',
+        service_type: 'E2E Solar Installation',
+        service_type_color: '#2563eb',
+        estimated_duration: 120,
+        date: today,
+        time: '09:00:00',
+        time_slot: 'morning',
+        status: 'Not Started',
+        request_status: 'Approved',
+        calendar_status: 'scheduled',
+        assignment_status: 'assigned',
+        priority: 'High',
+        workflow_type: 'installation',
+        assigned_technician: 'E2E Technician',
+        crew_members: ['E2E Crew'],
+        assigned_admin: 'E2E Admin',
+        location: '100 E2E Solar Street',
+        description: 'Install and commission the solar equipment.',
+        scheduling_notes: 'Coordinate access with the client.',
+        reschedule_requested: false,
+      };
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           start: today,
           end: today,
-          events: [{
-            id: 'ticket-9001',
-            entity_type: 'ticket',
-            ticket_id: 9001,
-            request_id: 8001,
-            client: 'E2E Calendar Client',
-            client_email: 'calendar@example.com',
-            client_phone: '+63 900 000 0000',
-            service_type: 'E2E Solar Installation',
-            service_type_color: '#2563eb',
-            estimated_duration: 120,
-            date: today,
-            time: '09:00:00',
-            time_slot: 'morning',
-            status: 'Not Started',
-            request_status: 'Approved',
-            calendar_status: 'scheduled',
-            assignment_status: 'assigned',
-            priority: 'High',
-            workflow_type: 'installation',
-            assigned_technician: 'E2E Technician',
-            crew_members: ['E2E Crew'],
-            assigned_admin: 'E2E Admin',
-            location: '100 E2E Solar Street',
-            description: 'Install and commission the solar equipment.',
-            scheduling_notes: 'Coordinate access with the client.',
-            reschedule_requested: false,
-          }],
+          events: showCompleted ? [scheduledEvent, {
+            ...scheduledEvent,
+            id: 'ticket-9002',
+            ticket_id: 9002,
+            request_id: 8002,
+            client: 'E2E Completed Client',
+            time: '13:00:00',
+            status: 'Completed',
+            calendar_status: 'completed',
+          }] : [scheduledEvent],
         }),
       });
     });
     await visitWorkspacePage(page, '/admin/calendar', 'test-results/screenshots/03-admin-calendar.png');
+    await expect(page.getByRole('heading', { name: 'Service Calendar', exact: true })).toHaveCount(1);
     await expect(page.getByLabel('Calendar operations summary').getByText('Today')).toBeVisible();
     await expect(page.getByLabel('Filter by workflow')).toBeVisible();
+    const configureAvailability = page.getByRole('button', { name: 'Configure Availability' });
+    await expect(configureAvailability).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('dialog', { name: /Configure availability for/ })).toHaveCount(0);
     await page.getByLabel('Filter by technician').selectOption('E2E Technician');
     await expect(page.getByText('Showing 1 of 1 event')).toBeVisible();
 
-    await page.getByRole('button', { name: /E2E Solar Installation/ }).last().click();
+    const includeCompleted = page.getByLabel('Include completed');
+    await includeCompleted.check();
+    await expect(page.getByText('Showing 2 of 2 events')).toBeVisible();
+    await expect(page.getByRole('button', { name: /E2E Solar Installation.*Done/ })).toBeVisible();
+    await includeCompleted.uncheck();
+    await expect(page.getByText('Showing 1 of 1 event')).toBeVisible();
+
+    const todayLabel = new Date(`${today}T00:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    const selectedDayButton = page.getByRole('button', { name: new RegExp(`^${todayLabel}, 1 visible scheduled item`) }).last();
+    // An empty part of the date cell (below the date row) opens the day; the date-row button is the keyboard target.
+    await selectedDayButton.locator('xpath=..').click({ position: { x: 8, y: 104 } });
+    const agendaDialog = page.getByRole('dialog', { name: new RegExp(`Appointments for ${todayLabel}`) });
+    await expect(agendaDialog).toBeVisible();
+    await expect(agendaDialog.getByText('1 visible scheduled item')).toBeVisible();
+    await expect(agendaDialog.getByText('E2E Calendar Client')).toBeVisible();
+    await page.screenshot({ path: 'test-results/screenshots/03-admin-calendar-day-agenda.png', fullPage: false });
+    await page.keyboard.press('Escape');
+    await expect(agendaDialog).toBeHidden();
+    await expect(selectedDayButton).toBeFocused();
+
+    // An empty part of the date cell (below the date row) opens the day; the date-row button is the keyboard target.
+    await selectedDayButton.locator('xpath=..').click({ position: { x: 8, y: 104 } });
+    await agendaDialog.getByRole('button', { name: /E2E Solar Installation/ }).click();
+    await expect(agendaDialog).toBeHidden();
     const dialog = page.getByRole('dialog', { name: /TKT-9001/ });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('E2E Calendar Client')).toBeVisible();
@@ -257,6 +297,67 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(dialog.getByRole('button', { name: 'Reschedule' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileDayButton = page.getByRole('button', { name: new RegExp(`^${todayLabel}, 1 visible scheduled item`) }).first();
+    await mobileDayButton.click();
+    await expect(agendaDialog).toBeVisible();
+    const agendaBox = await agendaDialog.boundingBox();
+    expect(agendaBox).not.toBeNull();
+    expect(agendaBox.x).toBeGreaterThanOrEqual(0);
+    expect(agendaBox.x + agendaBox.width).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await agendaDialog.getByRole('button', { name: 'Close selected day appointments' }).click();
+    await expect(agendaDialog).toBeHidden();
+  });
+
+  test('3.2b - Admin Calendar closes and reopens a client appointment slot', async ({ page }) => {
+    await visitWorkspacePage(page, '/admin/calendar');
+    const configureAvailability = page.getByRole('button', { name: 'Configure Availability' });
+    await expect(configureAvailability).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('dialog', { name: /Configure availability for/ })).toHaveCount(0);
+    await configureAvailability.click();
+    await expect(page.getByRole('button', { name: 'Done Configuring' })).toHaveAttribute('aria-pressed', 'true');
+
+    const todayLabel = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    // Click the date corner, as an operator would: the middle of a busy date is covered by its job cards, which open the job.
+    await page.getByRole('button', { name: new RegExp(`^${todayLabel}.*open availability configuration$`) }).last().click({ position: { x: 12, y: 12 } });
+    const configuration = page.getByRole('dialog', { name: /Configure availability for/ });
+    await expect(configuration).toBeVisible();
+    await expect(configuration.getByText('3 jobs maximum per date')).toBeVisible();
+    await configuration.getByRole('button', { name: 'Bulk Edit' }).click();
+    await expect(configuration.getByLabel('Start date')).toBeVisible();
+    await expect(configuration.getByLabel('End date')).toBeVisible();
+    await configuration.getByRole('button', { name: 'Bulk Edit' }).click();
+    await configuration.getByLabel('Affected time').selectOption('afternoon');
+    await configuration.getByLabel('Reason').fill('E2E team safety training');
+
+    const closeResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/admin/calendar/closures/')
+      && response.request().method() === 'POST'
+    ));
+    await configuration.getByRole('button', { name: 'Close availability', exact: true }).click();
+    expect((await closeResponse).status()).toBe(201);
+    const restrictions = configuration.getByRole('region', { name: 'Existing manual restrictions' });
+    await expect(restrictions.getByText(/Afternoon \(2 PM - 5 PM\).*Closed/)).toBeVisible();
+    await expect(restrictions.getByText(/E2E team safety training/)).toBeVisible();
+    await expect(page.getByLabel(/Closure for .*Afternoon \(2 PM - 5 PM\) closed: E2E team safety training/)).toBeVisible();
+    await page.screenshot({ path: 'test-results/screenshots/03-admin-calendar-closed-date.png', fullPage: false });
+
+    const reopenResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/admin/calendar/closures/')
+      && response.request().method() === 'POST'
+    ));
+    await configuration.getByRole('button', { name: 'Reopen', exact: true }).click();
+    expect((await reopenResponse).status()).toBe(200);
+    await expect(restrictions.getByText('No manual restrictions for this date.')).toBeVisible();
+
+    await configuration.getByLabel('Reason').fill('Unsaved availability note');
+    await configuration.getByRole('button', { name: 'Close availability configuration' }).click();
+    const discardDialog = page.getByRole('dialog', { name: 'Discard availability changes?' });
+    await expect(discardDialog).toBeVisible();
+    await discardDialog.getByRole('button', { name: 'Keep configuring' }).click();
+    await expect(configuration).toBeVisible();
   });
 
   test('3.3 - Service Tickets list loads', async ({ page }) => {
@@ -293,8 +394,11 @@ test.describe('Admin Workspace - All Pages', () => {
     await dialog.getByLabel('Client').selectOption({ index: 1 });
     await dialog.getByRole('group', { name: 'Services' }).getByRole('button').first().click();
     await dialog.getByLabel('Request details').fill('E2E walk-in request for an on-site electrical assessment.');
-    const preferredDate = new Date(Date.now() + (7 * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10);
-    await dialog.getByLabel('Preferred date').fill(preferredDate);
+    await expect(dialog.getByRole('heading', { name: 'Choose an appointment date' })).toBeVisible();
+    const availableDate = dialog.locator('button[role="gridcell"]:not([disabled])').first();
+    await expect(availableDate).toBeEnabled();
+    await availableDate.click();
+    await expect(availableDate).toHaveAttribute('aria-selected', 'true');
     await dialog.getByLabel('Service address').fill('123 E2E Street, Barangay Test');
     await dialog.getByLabel('City').fill('Antipolo');
     await dialog.getByLabel('Province').fill('Rizal');
@@ -482,16 +586,79 @@ test.describe('Admin Workspace - All Pages', () => {
 
   test('3.7 - Services Management loads', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/services', 'test-results/screenshots/03-admin-services.png');
+    const controls = page.getByRole('region', { name: 'Service catalog controls' });
+    await expect(controls.getByText(/\d+ active · \d+ deactivated/)).toBeVisible();
+    await expect(controls.getByLabel('Service visibility')).toHaveValue('active');
+    const addService = controls.getByRole('button', { name: 'Add Service' });
+    await expect(addService).toBeVisible();
+    await addService.click();
+    await expect(page.getByRole('heading', { name: 'Create Service' })).toBeVisible();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(controls.getByLabel('Service visibility')).toBeVisible();
+    await expect(addService).toBeVisible();
+    const actionButton = page.getByRole('button', { name: /Actions for/ }).first();
+    await actionButton.click();
+    const actionMenu = page.getByRole('menu', { name: /Service actions for/ }).first();
+    await expect(actionMenu).toBeVisible();
+    const menuBox = await actionMenu.boundingBox();
+    expect(menuBox).not.toBeNull();
+    expect(menuBox.x).toBeGreaterThanOrEqual(0);
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
+    await page.keyboard.press('Escape');
   });
 
   test('3.7b - Admin saves service inspection checks and deposit rule', async ({ page }) => {
     const serviceName = 'E2E Electrical Safety Check';
     await visitWorkspacePage(page, '/admin/services');
-    await page.locator('div.rounded-xl.border.bg-white.shadow-sm')
+    const serviceCard = page.locator('div.rounded-xl.border.bg-white.shadow-sm')
       .filter({ hasText: serviceName })
-      .first()
-      .getByRole('button', { name: 'Edit', exact: true })
-      .click();
+      .first();
+    await serviceCard.getByRole('button', { name: 'Details', exact: true }).click();
+    await expect(serviceCard.getByRole('button', { name: 'Hide', exact: true })).toBeVisible();
+    await expect(serviceCard.getByText('Inventory Templates', { exact: true })).toBeVisible();
+    await serviceCard.getByRole('button', { name: 'Hide', exact: true }).click();
+
+    const serviceActions = serviceCard.getByRole('button', { name: `Actions for ${serviceName}` });
+    await serviceActions.click();
+    await expect(serviceCard.getByRole('menu', { name: `Service actions for ${serviceName}` })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(serviceCard.getByRole('menu', { name: `Service actions for ${serviceName}` })).toBeHidden();
+    await expect(serviceActions).toBeFocused();
+    await serviceActions.click();
+    await serviceCard.getByRole('menuitem', { name: 'Edit Service' }).click();
+
+    const durationDays = page.getByLabel('Service duration days');
+    const durationHours = page.getByLabel('Service duration hours');
+    const durationMinutes = page.getByLabel('Service duration minutes');
+    await expect(durationDays).toBeVisible();
+    const originalDuration = {
+      days: await durationDays.inputValue(),
+      hours: await durationHours.inputValue(),
+      minutes: await durationMinutes.inputValue(),
+    };
+    await durationDays.fill('1');
+    await durationHours.fill('2');
+    await durationMinutes.fill('30');
+    await expect(page.getByText('1d 2h 30m total. One day equals 8 working hours for technician scheduling.')).toBeVisible();
+    await durationDays.fill(originalDuration.days);
+    await durationHours.fill(originalDuration.hours);
+    await durationMinutes.fill(originalDuration.minutes);
+
+    const maxDailyAssignments = page.getByLabel('Max daily assignments per technician');
+    const originalMaxDailyAssignments = await maxDailyAssignments.inputValue();
+    await maxDailyAssignments.fill('');
+    await expect(maxDailyAssignments).toHaveValue('');
+    await maxDailyAssignments.fill(originalMaxDailyAssignments);
+    await page.getByRole('button', { name: 'Add Tool' }).click();
+    const equipmentQuantity = page.getByLabel(/Equipment quantity/).last();
+    await expect(equipmentQuantity).toHaveValue('1');
+    await equipmentQuantity.fill('');
+    await expect(equipmentQuantity).toHaveValue('');
+    await equipmentQuantity.fill('1');
+    await page.getByRole('button', { name: /Remove equipment item/ }).last().click();
 
     await page.getByLabel('Requires site inspection first').check();
     await expect(page.getByText('Site Inspection Checks')).toBeVisible();
@@ -537,13 +704,24 @@ test.describe('Admin Workspace - All Pages', () => {
     const services = Array.isArray(catalogPayload) ? catalogPayload : catalogPayload.results || [];
     const usedService = services.find((service) => service.is_active !== false && service.can_delete === false);
     expect(usedService).toBeTruthy();
+    const originalActiveCount = services.filter((service) => service.is_active !== false).length;
+    const originalDeactivatedCount = services.length - originalActiveCount;
+    const visibilityFilter = page.getByLabel('Service visibility');
+    await expect(visibilityFilter).toHaveValue('active');
 
     const serviceCard = page.locator('div.rounded-xl.border.bg-white.shadow-sm')
       .filter({ hasText: usedService.name })
       .first();
-    await expect(serviceCard.getByRole('button', { name: 'Deactivate', exact: true })).toBeVisible();
-    await expect(serviceCard.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
-    await serviceCard.getByRole('button', { name: 'Deactivate', exact: true }).click();
+    const serviceActions = serviceCard.getByRole('button', { name: `Actions for ${usedService.name}` });
+    await serviceActions.click();
+    const actionMenu = serviceCard.getByRole('menu', { name: `Service actions for ${usedService.name}` });
+    await expect(actionMenu.getByRole('menuitem', { name: 'Edit Service' })).toBeVisible();
+    await expect(actionMenu.getByRole('menuitem', { name: 'Deactivate', exact: true })).toBeVisible();
+    await expect(actionMenu.getByRole('menuitem', { name: /delete/i })).toHaveCount(0);
+    await page.getByRole('region', { name: 'Service catalog controls' }).click();
+    await expect(actionMenu).toBeHidden();
+    await serviceActions.click();
+    await actionMenu.getByRole('menuitem', { name: 'Deactivate', exact: true }).click();
 
     await expect(page.getByRole('heading', { name: 'Deactivate service?' })).toBeVisible();
     await expect(page.getByText(/historical reference/)).toBeVisible();
@@ -556,11 +734,19 @@ test.describe('Admin Workspace - All Pages', () => {
     expect(response.ok(), await response.text()).toBeTruthy();
     expect((await response.json()).is_active).toBe(false);
     await expect(page.getByText(/hidden from new requests.*Historical records were preserved/i)).toBeVisible();
-    await expect(serviceCard.getByText('Inactive', { exact: true })).toBeVisible();
-    await expect(serviceCard.getByRole('button', { name: 'Activate', exact: true })).toBeVisible();
-    await expect(serviceCard.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+    await expect(serviceCard).toBeHidden();
+    await expect(visibilityFilter.locator('option[value="active"]')).toHaveText(`Active Services (${originalActiveCount - 1})`);
+    await expect(visibilityFilter.locator('option[value="deactivated"]')).toHaveText(`Deactivated Services (${originalDeactivatedCount + 1})`);
+    await visibilityFilter.selectOption('all');
+    await expect(serviceCard).toBeVisible();
+    await expect(serviceCard.getByText('Deactivated', { exact: true })).toBeVisible();
+    await visibilityFilter.selectOption('deactivated');
+    await expect(serviceCard).toBeVisible();
+    await serviceActions.click();
+    await expect(actionMenu.getByRole('menuitem', { name: 'Reactivate', exact: true })).toBeVisible();
+    await expect(actionMenu.getByRole('menuitem', { name: /delete/i })).toHaveCount(0);
 
-    await serviceCard.getByRole('button', { name: 'Activate', exact: true }).click();
+    await actionMenu.getByRole('menuitem', { name: 'Reactivate', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Activate service?' })).toBeVisible();
     await expect(page.getByText(/available for new client and staff requests again/i)).toBeVisible();
     const activateResponse = page.waitForResponse((candidate) => (
@@ -572,14 +758,49 @@ test.describe('Admin Workspace - All Pages', () => {
     expect(activated.ok(), await activated.text()).toBeTruthy();
     expect((await activated.json()).is_active).toBe(true);
     await expect(page.getByText(/active and available for new requests again/i)).toBeVisible();
+    await expect(serviceCard).toBeHidden();
+    await visibilityFilter.selectOption('active');
+    await expect(serviceCard).toBeVisible();
     await expect(serviceCard.getByText('Active', { exact: true })).toBeVisible();
-    await expect(serviceCard.getByRole('button', { name: 'Deactivate', exact: true })).toBeVisible();
+    await expect(visibilityFilter.locator('option[value="active"]')).toHaveText(`Active Services (${originalActiveCount})`);
+    await expect(visibilityFilter.locator('option[value="deactivated"]')).toHaveText(`Deactivated Services (${originalDeactivatedCount})`);
   });
 
   test('3.8 - Inventory Management loads', async ({ page }) => {
+    const pagedReservations = Array.from({ length: 11 }, (_, index) => ({
+      id: 98000 + index,
+      reservation_code: `RSV-0980${String(index).padStart(2, '0')}`,
+      item: 500 + index,
+      item_name: `E2E Reserved Item ${index + 1}`,
+      item_sku: `E2E-RSV-${index + 1}`,
+      item_available_quantity: 10,
+      item_physical_quantity: 10,
+      technician: 42,
+      technician_name: 'E2E Technician',
+      service_ticket: 700 + index,
+      ticket_code: `TKT-${String(700 + index).padStart(4, '0')}`,
+      ticket_status: 'Not Started',
+      service_name: 'E2E Inventory Paging Service',
+      quantity: 1,
+      required_date: '2026-10-31',
+      status: 'pending',
+      created_at: '2026-10-31T08:00:00Z',
+    }));
+    await page.route(/\/api\/inventory\/reservations\/pending\/(?:\?.*)?$/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pagedReservations) });
+    });
     await visitWorkspacePage(page, '/admin/inventory', 'test-results/screenshots/03-admin-inventory.png');
     await expect(page.getByText('Physical units')).toBeVisible();
     await expect(page.getByLabel('Inventory summary')).toBeVisible();
+    const reservationQueue = page.getByRole('region', { name: 'Pending equipment requests' });
+    await expect(reservationQueue.getByText('TKT-0700')).toBeHidden();
+    await reservationQueue.getByRole('button', { name: /Pending Equipment Requests/ }).click();
+    await expect(reservationQueue.locator('article:visible')).toHaveCount(10);
+    await expect(reservationQueue.getByText('Showing 1-10 of 11 requests')).toBeVisible();
+    await reservationQueue.getByRole('button', { name: 'Next' }).click();
+    await expect(reservationQueue.locator('article:visible')).toHaveCount(1);
+    await expect(reservationQueue.getByText('TKT-0710')).toBeVisible();
+    await expect(reservationQueue.getByText('Page 2 of 2')).toBeVisible();
     await expect(page.getByLabel('Stock level')).toBeHidden();
     await page.getByRole('button', { name: /^Filters/ }).click();
     await page.getByLabel('Stock level').selectOption('low');
@@ -609,12 +830,16 @@ test.describe('Admin Workspace - All Pages', () => {
 
     await page.getByRole('button', { name: 'Add Item' }).last().click();
     await expect(page.getByRole('heading', { name: 'Add Item' })).toBeVisible();
+    const addItemDialog = page.getByRole('dialog', { name: 'Add inventory item' });
+    await expect(addItemDialog.getByText('Automatic status')).toBeVisible();
+    await expect(addItemDialog.getByText('Out of stock', { exact: true })).toBeVisible();
+    await expect(addItemDialog.getByRole('combobox', { name: 'Status' })).toHaveCount(0);
     await page.getByLabel('Item name').fill(itemName);
     await page.getByLabel('SKU').fill(sku.toLowerCase());
     await page.getByLabel('Inventory category').selectOption({ label: categoryName });
     await page.getByLabel('Item type').selectOption('consumable');
     await page.getByLabel('Unit of measurement').fill('coil');
-    await page.getByLabel('Opening quantity').fill('25');
+    await page.getByLabel('Opening quantity').fill('0');
     const itemResponse = page.waitForResponse((response) => (
       response.url().includes('/api/inventory/items/')
       && response.request().method() === 'POST'
@@ -624,28 +849,139 @@ test.describe('Admin Workspace - All Pages', () => {
 
     const itemRow = page.locator('tbody tr').filter({ hasText: sku });
     await expect(itemRow).toContainText(itemName);
-    await itemRow.getByTitle('Details').click();
-    await expect(page.getByText('Opening inventory balance')).toBeVisible();
-    await expect(page.getByText('Qty 25')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Ticket Reservations' })).toBeVisible();
-    await page.getByRole('button', { name: 'Receive Stock' }).click();
-    const movementDialog = page.getByRole('dialog', { name: `Stock movement for ${itemName}` });
+    const statusCell = itemRow.locator('td').nth(7);
+    const statusPill = statusCell.getByText('Out of stock', { exact: true });
+    await expect(statusPill).toBeVisible();
+    await expect(itemRow.getByText('Out', { exact: true })).toHaveCount(0);
+    const [statusCellBox, statusPillBox] = await Promise.all([statusCell.boundingBox(), statusPill.boundingBox()]);
+    expect(statusCellBox).not.toBeNull();
+    expect(statusPillBox).not.toBeNull();
+    expect(statusPillBox.x).toBeGreaterThanOrEqual(statusCellBox.x);
+    expect(statusPillBox.x + statusPillBox.width).toBeLessThanOrEqual(statusCellBox.x + statusCellBox.width + 1);
+    await expect(itemRow.getByRole('button', { name: 'Receive', exact: true })).toHaveCount(0);
+    const itemViewReservations = Array.from({ length: 11 }, (_, index) => ({
+      id: 99500 + index,
+      reservation_code: `RSV-${String(99500 + index).padStart(6, '0')}`,
+      item: 1,
+      technician_name: 'E2E Technician',
+      service_ticket: 800 + index,
+      ticket_code: `TKT-${String(800 + index).padStart(4, '0')}`,
+      quantity: index + 1,
+      required_date: '2026-10-31',
+      status: index === 10 ? 'fulfilled' : 'approved',
+    }));
+    await page.route(/\/api\/inventory\/reservations\/\?item_id=\d+$/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(itemViewReservations) });
+    });
+    const itemTransactionRoute = /\/api\/inventory\/transactions\/by_item\/\?item_id=\d+$/;
+    const itemViewTransactions = Array.from({ length: 11 }, (_, index) => ({
+      id: 99600 + index,
+      transaction_code: `ITX-${String(99600 + index).padStart(6, '0')}`,
+      transaction_type: index === 10 ? 'adjustment' : 'purchase',
+      quantity: 20 + index,
+      notes: `E2E movement ${index + 1}`,
+      reference_number: `E2E-MOVE-${index + 1}`,
+      performed_by_name: 'E2E Administrator',
+      transaction_date: `2026-10-${String(20 + index).padStart(2, '0')}T08:00:00Z`,
+    }));
+    await page.route(itemTransactionRoute, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(itemViewTransactions) });
+    });
+    await itemRow.getByRole('button', { name: 'Manage', exact: true }).click();
+    const manageDialog = page.getByRole('dialog', { name: `Manage ${itemName}` });
+    await expect(manageDialog).toBeVisible();
+    await expect(manageDialog.getByRole('heading', { name: 'Ticket Reservations' })).toBeVisible();
+    const itemReservationsToggle = manageDialog.getByRole('button', { name: /Ticket Reservations/ });
+    await expect(itemReservationsToggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(manageDialog.getByText('TKT-0800')).toBeHidden();
+    await itemReservationsToggle.click();
+    await expect(itemReservationsToggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(manageDialog.getByText('Showing 1-10 of 11 reservations')).toBeVisible();
+    await expect(manageDialog.getByText('TKT-0800')).toBeVisible();
+    await expect(manageDialog.getByText('TKT-0810')).toBeHidden();
+    await manageDialog.getByRole('button', { name: 'Next' }).click();
+    await expect(manageDialog.getByText('Page 2 of 2')).toBeVisible();
+    await expect(manageDialog.getByText('TKT-0810')).toBeVisible();
+    const stockHistorySection = manageDialog.getByRole('region', { name: 'Stock Movement History' });
+    const stockHistoryToggle = stockHistorySection.getByRole('button', { name: /Stock Movement History/ });
+    await expect(stockHistoryToggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(stockHistorySection.getByText('E2E movement 1', { exact: true })).toBeHidden();
+    await stockHistoryToggle.click();
+    await expect(stockHistoryToggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(stockHistorySection.getByText('Showing 1-10 of 11 movements')).toBeVisible();
+    await expect(stockHistorySection.getByText('E2E movement 1', { exact: true })).toBeVisible();
+    await expect(stockHistorySection.getByText('E2E movement 11', { exact: true })).toBeHidden();
+    await stockHistorySection.getByRole('button', { name: 'Next' }).click();
+    await expect(stockHistorySection.getByText('E2E movement 11', { exact: true })).toBeVisible();
+    await page.unroute(itemTransactionRoute);
+    await expect(manageDialog.getByRole('button', { name: 'Adjust Stock' })).toBeVisible();
+    await expect(manageDialog.getByRole('button', { name: 'Edit Item' })).toBeVisible();
+    await expect(manageDialog.getByRole('button', { name: 'Delete Item' })).toBeVisible();
+    await expect(manageDialog.getByRole('button', { name: 'Retire Item' })).toHaveCount(0);
+    await manageDialog.getByRole('button', { name: 'Adjust Stock' }).click();
+    const adjustmentDialog = page.getByRole('dialog', { name: `Adjust Stock for ${itemName}` });
+    await expect(adjustmentDialog).toBeVisible();
+    await expect(adjustmentDialog.getByRole('combobox')).toHaveCount(0);
+    await expect(adjustmentDialog.getByLabel('Actual counted quantity')).toHaveValue('0');
+    await expect(adjustmentDialog.getByText('Replace the recorded total with the quantity physically counted in storage.')).toBeVisible();
+    await expect(adjustmentDialog.getByText('Replaces recorded total')).toBeVisible();
+    await expect(adjustmentDialog.getByText('Difference from system:', { exact: false })).toBeVisible();
+    await adjustmentDialog.getByRole('button', { name: 'Dismiss' }).click();
+    await itemRow.getByRole('button', { name: 'Manage', exact: true }).click();
+    await manageDialog.getByRole('button', { name: 'Receive Stock' }).click();
+    const movementDialog = page.getByRole('dialog', { name: `Receive Stock for ${itemName}` });
     await expect(movementDialog).toBeVisible();
-    await expect(movementDialog.getByRole('combobox')).toHaveValue('purchase');
-    await movementDialog.getByRole('spinbutton').fill('5');
-    await movementDialog.getByLabel(/Reference number/).fill(`DR-${uniqueId}`);
-    await movementDialog.getByLabel(/Reason \/ notes/).fill('E2E supplier delivery');
+    await expect(movementDialog.getByRole('combobox')).toHaveCount(0);
+    await expect(movementDialog.getByText('Add newly delivered units to the quantity already recorded.')).toBeVisible();
+    await expect(movementDialog.getByText('Adds to stock')).toBeVisible();
+    await movementDialog.getByLabel('Quantity received').fill('');
+    await expect(movementDialog.getByLabel('Quantity received')).toHaveValue('');
+    await movementDialog.getByLabel('Quantity received').fill('5');
+    await expect(movementDialog.getByLabel('Recorded 0, change 5, resulting 5')).toBeVisible();
+    await movementDialog.getByLabel(/Delivery reference/).fill(`DR-${uniqueId}`);
+    await movementDialog.getByLabel(/Receipt notes/).fill('E2E supplier delivery');
     const movementResponse = page.waitForResponse((response) => (
       response.url().includes('/api/inventory/transactions/')
       && response.request().method() === 'POST'
     ));
-    await movementDialog.getByRole('button', { name: 'Save Movement' }).click();
+    await movementDialog.getByRole('button', { name: 'Receive Stock' }).click();
     expect((await movementResponse).ok()).toBeTruthy();
     await expect(movementDialog).toBeHidden();
+    await expect(itemRow.getByText('In stock', { exact: true })).toBeVisible();
     await itemRow.getByTitle('Details').click();
-    await expect(page.getByText('E2E supplier delivery')).toBeVisible();
-    await expect(page.getByText(`Reference: DR-${uniqueId}`)).toBeVisible();
-    await expect(page.getByText('Qty 5')).toBeVisible();
+    const detailsDialog = page.getByRole('dialog', { name: `Details for ${itemName}` });
+    await expect(detailsDialog.getByRole('button', { name: 'Receive Stock' })).toHaveCount(0);
+    await expect(detailsDialog.getByRole('button', { name: 'Adjust Stock' })).toHaveCount(0);
+    await expect(detailsDialog.getByRole('button', { name: 'Edit Item' })).toHaveCount(0);
+    const detailsStockHistory = detailsDialog.getByRole('region', { name: 'Stock Movement History' });
+    await expect(detailsStockHistory.getByRole('button', { name: /Stock Movement History/ })).toHaveAttribute('aria-expanded', 'false');
+    await detailsStockHistory.getByRole('button', { name: /Stock Movement History/ }).click();
+    await expect(detailsDialog.getByText('E2E supplier delivery')).toBeVisible();
+    await expect(detailsDialog.getByText(`Reference: DR-${uniqueId}`)).toBeVisible();
+    const stockHistory = detailsDialog
+      .getByRole('heading', { name: 'Stock Movement History' })
+      .locator('xpath=ancestor::section');
+    await expect(stockHistory.getByText('Qty 5')).toBeVisible();
+    await detailsDialog.getByRole('button', { name: 'Close' }).click();
+    await itemRow.getByRole('button', { name: 'Manage', exact: true }).click();
+    await expect(manageDialog.getByRole('button', { name: 'Delete Item' })).toHaveCount(0);
+    await expect(manageDialog.getByRole('button', { name: 'Retire Item' })).toBeVisible();
+    await expect(manageDialog.getByText('Permanent deletion is unavailable.')).toHaveCount(0);
+    await manageDialog.getByRole('button', { name: 'Retire Item' }).click();
+    const retireDialog = page.getByRole('dialog', { name: `Retire "${itemName}"?` });
+    await expect(retireDialog.getByText(/Permanent deletion is unavailable because this item has 1 protected reference/)).toBeVisible();
+    await expect(retireDialog.getByText(/Retiring it will stop future use while preserving its inventory history/)).toBeVisible();
+    const retireResponse = page.waitForResponse((response) => (
+      response.url().includes(`/api/inventory/items/`)
+      && response.request().method() === 'PATCH'
+      && response.ok()
+    ));
+    await retireDialog.getByRole('button', { name: 'Retire item' }).click();
+    await retireResponse;
+    await expect(itemRow).toHaveCount(0);
+    await page.getByRole('button', { name: /^Filters/ }).click();
+    await page.getByLabel('Item usage state').selectOption('retired');
+    await expect(page.locator('tbody tr').filter({ hasText: sku })).toBeVisible();
   });
 
   test('3.8c - View-only inventory access does not expose management controls', async ({ page }) => {
@@ -897,6 +1233,41 @@ test.describe('Admin Workspace - All Pages', () => {
   test('3.9 - Document draft saves and reloads end to end', async ({ page }) => {
     page.on('pageerror', (error) => console.error('Documents page error:', error.message));
     await visitWorkspacePage(page, '/admin/documents', 'test-results/screenshots/03-admin-documents.png');
+    await expect(page.getByText('Editor preview')).toBeVisible();
+    await page.getByRole('button', { name: 'Template library' }).click();
+    const templateManager = page.getByRole('dialog', { name: 'Document templates' });
+    await expect(templateManager).toBeVisible();
+    await expect(templateManager.getByLabel('Document type')).toHaveValue(/\d+/);
+    await expect(templateManager.getByRole('button', { name: /Standard/ })).toBeVisible();
+    await templateManager.getByText(/Approved placeholders \(\d+\)/).click();
+    await expect(templateManager.getByText('{{client_name}}', { exact: true })).toBeVisible();
+    await expect(templateManager.getByText('canonical_document_context.client_name', { exact: true })).toBeVisible();
+    await templateManager.getByRole('button', { name: 'New document type' }).click();
+    const registrationForm = templateManager.locator('form').filter({ hasText: 'AFN record used to fill it' });
+    await registrationForm.getByLabel('Document name').fill('E2E Maintenance Certificate');
+    await registrationForm.getByLabel('Description').fill('Browser-tested custom document registration.');
+    await registrationForm.getByRole('button', { name: 'Create document type' }).click();
+    await expect(templateManager.getByRole('status')).toContainText('Custom document registered as inactive');
+    await templateManager.getByLabel('Design name').fill('E2E Temporary Design');
+    await templateManager.locator('input[type="file"]').setInputFiles('backend/document_templates/field_service_report.docx');
+    await templateManager.getByRole('button', { name: 'Save new design' }).click();
+    await expect(templateManager.getByRole('status')).toContainText('Template saved');
+    await expect(templateManager.getByText('Custom document setup')).toBeVisible();
+    await templateManager.getByLabel('Field key').fill('e2e_note');
+    await templateManager.getByLabel('Label').fill('E2E note');
+    await templateManager.getByRole('button', { name: 'Add field' }).click();
+    await expect(templateManager.getByText('{{e2e_note}}').first()).toBeVisible();
+    await templateManager.getByRole('button', { name: 'Retire' }).click();
+    await expect(templateManager.getByRole('status')).toContainText('Design retired');
+    await templateManager.getByRole('button', { name: 'Delete', exact: true }).click();
+    const deleteDesignDialog = page.getByRole('dialog', { name: 'Delete this design?' });
+    await expect(deleteDesignDialog).toContainText('E2E Temporary Design');
+    await deleteDesignDialog.getByRole('button', { name: 'Delete design' }).click();
+    await expect(deleteDesignDialog).toBeHidden();
+    await expect(templateManager.getByRole('status')).toContainText('Document design deleted');
+    await expect(templateManager.getByRole('button', { name: /E2E Temporary Design/ })).toHaveCount(0);
+    await templateManager.getByRole('button', { name: 'Close template manager' }).click();
+    await expect(templateManager).toBeHidden();
     await page.getByRole('button', { name: 'Quotation Proposal' }).click();
     await expect(page.getByText(/payments are collected and verified outside this system/i)).toBeVisible();
 
@@ -908,6 +1279,24 @@ test.describe('Admin Workspace - All Pages', () => {
     await firstTicket.click();
     // The ticket bar links to the loaded ticket; the fill rules sit in the folded help.
     await expect(page.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: 'Generate active design' })).toBeVisible();
+    await page.getByRole('button', { name: 'Fill template' }).click();
+    const fillWorkspace = page.getByRole('dialog', { name: 'Fill a document' });
+    await expect(fillWorkspace.getByText('Edit document data')).toBeVisible();
+    await expect(fillWorkspace.getByText('Use the protected Quotation / Proposal editor')).toBeVisible();
+    await expect(fillWorkspace.getByText('Final generated layout')).toBeVisible();
+    await fillWorkspace.getByRole('button', { name: 'Open interactive editor' }).click();
+    await expect(fillWorkspace).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Quotation Proposal' })).toHaveAttribute('aria-pressed', 'true');
+    const generatedResponse = page.waitForResponse((response) => (
+      response.url().includes('/generate-document/')
+      && response.request().method() === 'POST'
+    ));
+    const generatedDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Generate active design' }).click();
+    expect((await generatedResponse).ok()).toBeTruthy();
+    expect((await generatedDownload).suggestedFilename()).toMatch(/quotation_proposal.*\.docx$/i);
+    await expect(page.getByRole('status')).toContainText('Active design generated and downloaded');
     await page.getByText('How this document is filled').click();
     await expect(page.getByText(/Template wording:.*Review it before printing/)).toBeVisible();
     await expect(page.locator('body')).not.toContainText('â‚±');
@@ -962,6 +1351,7 @@ test.describe('Admin Workspace - All Pages', () => {
     const savedDraftResponse = await saveResponse;
     expect(savedDraftResponse.ok()).toBeTruthy();
     const savedDraftPayload = savedDraftResponse.request().postDataJSON();
+    expect(savedDraftPayload.data_json._documentSchema).toEqual({ code: 'quotation_proposal', version: 1 });
     expect(savedDraftPayload.data_json.bomRows[0].description).toBe(pricedItem.name);
     expect(savedDraftPayload.data_json.bomRows[0].unitPrice).toBe(String(pricedItem.unit_price));
     expect(savedDraftPayload.data_json.bomRows[0].amount).toBe(expectedAmount);
@@ -1015,7 +1405,12 @@ test.describe('Admin Workspace - All Pages', () => {
     ));
     await page.getByRole('button', { name: 'Save data sheet' }).click();
     expect((await tdsRecordResponse).ok()).toBeTruthy();
-    expect((await tdsDraftResponse).ok()).toBeTruthy();
+    const savedTdsDraftResponse = await tdsDraftResponse;
+    expect(savedTdsDraftResponse.ok()).toBeTruthy();
+    expect(savedTdsDraftResponse.request().postDataJSON().data_json._documentSchema).toEqual({
+      code: 'technical_data_sheet',
+      version: 1,
+    });
     await expect(page.getByText('Technical data sheet and printable draft saved successfully.')).toBeVisible();
 
     await openStage('Solar Installation Contract');
@@ -1029,17 +1424,29 @@ test.describe('Admin Workspace - All Pages', () => {
     ));
     await page.getByRole('button', { name: 'Save contract' }).click();
     expect((await contractRecordResponse).ok()).toBeTruthy();
-    expect((await contractDraftResponse).ok()).toBeTruthy();
+    const savedContractDraftResponse = await contractDraftResponse;
+    expect(savedContractDraftResponse.ok()).toBeTruthy();
+    expect(savedContractDraftResponse.request().postDataJSON().data_json._documentSchema).toEqual({
+      code: 'installation_contract',
+      version: 1,
+    });
     await expect(page.getByText('Installation contract and printable draft saved successfully.')).toBeVisible();
 
     await openStage('PV Solar Site Commissioning Checklist');
     await page.getByLabel('Site Name').fill('E2E commissioning site');
+    await page.locator('.commissioning-checklist select').first().selectOption('Pass');
     const commissioningResponse = page.waitForResponse((response) => (
       response.url().includes('/api/services/solar-commissioning-checklists/')
       && ['POST', 'PATCH'].includes(response.request().method())
     ));
     await page.getByRole('button', { name: 'Save checklist' }).click();
-    expect((await commissioningResponse).ok()).toBeTruthy();
+    const savedCommissioningResponse = await commissioningResponse;
+    expect(savedCommissioningResponse.ok()).toBeTruthy();
+    const savedCommissioningPayload = savedCommissioningResponse.request().postDataJSON();
+    expect(savedCommissioningPayload.checklist_items_json).toHaveLength(54);
+    expect(savedCommissioningPayload.checklist_items_json[0].check_status).toBe('Pass');
+    expect(savedCommissioningPayload.items).toBeUndefined();
+    expect(savedCommissioningPayload.solar_irradiance).toBeUndefined();
     await expect(page.getByText('Solar commissioning checklist saved.')).toBeVisible();
 
     await openStage('Turnover / Acceptance Form');
@@ -1053,18 +1460,29 @@ test.describe('Admin Workspace - All Pages', () => {
       && ['POST', 'PATCH'].includes(response.request().method())
     ));
     await page.getByRole('button', { name: 'Save draft' }).click();
-    expect((await turnoverDraftResponse).ok()).toBeTruthy();
+    const savedTurnoverDraftResponse = await turnoverDraftResponse;
+    expect(savedTurnoverDraftResponse.ok()).toBeTruthy();
+    expect(savedTurnoverDraftResponse.request().postDataJSON().data_json._documentSchema).toEqual({
+      code: 'turnover_acceptance',
+      version: 1,
+    });
     expect((await turnoverRecordResponse).ok()).toBeTruthy();
     await expect(page.getByText('Turnover draft saved.')).toBeVisible();
     await expect(page.getByLabel('Project Installation Of')).toHaveValue('E2E preserved handover scope');
 
     await openStage('Field Service Report');
     await page.getByLabel('Reference').fill('E2E preserved service report reference');
+    await page.getByRole('button', { name: 'Add row', exact: true }).click();
+    await page.getByLabel('Equipment readings row 13 Brand / Model').fill('E2E schema-added unit');
     const reportDraftResponse = page.waitForResponse((response) => (
       response.url().includes('/document-draft/') && response.request().method() === 'POST'
     ));
     await page.getByRole('button', { name: 'Save draft' }).click();
-    expect((await reportDraftResponse).ok()).toBeTruthy();
+    const savedReportDraftResponse = await reportDraftResponse;
+    expect(savedReportDraftResponse.ok()).toBeTruthy();
+    const savedReportDraftPayload = savedReportDraftResponse.request().postDataJSON();
+    expect(savedReportDraftPayload.data_json._documentSchema).toEqual({ code: 'field_service_report', version: 1 });
+    expect(savedReportDraftPayload.data_json.rows.at(-1).brandModel).toBe('E2E schema-added unit');
     await expect(page.getByText('Document draft saved successfully.')).toBeVisible();
 
     await page.reload();
@@ -1076,11 +1494,63 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.getByPlaceholder('[Solar PV System Description]')).toHaveValue('E2E preserved contract scope');
     await openStage('PV Solar Site Commissioning Checklist');
     await expect(page.getByLabel('Site Name')).toHaveValue('E2E commissioning site');
+    await expect(page.locator('.commissioning-checklist select').first()).toHaveValue('Pass');
     await openStage('Turnover / Acceptance Form');
     await page.getByText('Document details', { exact: true }).click();
     await expect(page.getByLabel('Project Installation Of')).toHaveValue('E2E preserved handover scope');
     await openStage('Field Service Report');
     await expect(page.getByLabel('Reference')).toHaveValue('E2E preserved service report reference');
+    await expect(page.getByLabel('Equipment readings row 13 Brand / Model')).toHaveValue('E2E schema-added unit');
+  });
+
+  test('3.9c - Guided replacement validates, tests, and activates a new design', async ({ page }) => {
+    await visitWorkspacePage(page, '/admin/documents');
+    await page.getByRole('button', { name: 'Quotation Proposal' }).click();
+    await page.getByPlaceholder(/search ticket by id/i).click();
+    await page.getByRole('button', { name: /TKT-\d+/ }).first().click();
+    await expect(page.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
+
+    await page.getByRole('button', { name: 'Replace design' }).click();
+    const wizard = page.getByRole('dialog', { name: 'Use a new Word or PDF design' });
+    await expect(wizard).toBeVisible();
+    await expect(wizard.getByLabel('Replacement progress')).toContainText('Choose document');
+    await wizard.getByLabel('Document type').selectOption({ label: 'Quotation / Proposal' });
+    await expect(wizard.getByLabel('Current design')).not.toHaveValue('');
+    await wizard.getByRole('button', { name: /Continue/ }).click();
+
+    await wizard.locator('input[type="file"]').setInputFiles('backend/document_templates/quotation_proposal.docx');
+    const uploadResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/services/document-template-versions/')
+      && response.request().method() === 'POST'
+    ));
+    await wizard.getByRole('button', { name: 'Upload and check file' }).click();
+    expect((await uploadResponse).status()).toBe(201);
+    await expect(wizard.getByText('The file passed validation')).toBeVisible();
+    await wizard.getByRole('button', { name: /Continue/ }).click();
+    await expect(wizard.getByRole('heading', { name: 'Confirm how the design is filled' })).toBeVisible();
+    await expect(wizard.getByText('Word areas checked')).toBeVisible();
+    await expect(wizard.getByText('Repeating sections', { exact: true })).toBeVisible();
+    await expect(wizard.getByText('What can I configure in Word?')).toBeVisible();
+    await wizard.getByRole('checkbox', { name: /I reviewed these field connections/ }).check();
+    await wizard.getByRole('button', { name: /Continue/ }).click();
+
+    const testResponse = page.waitForResponse((response) => (
+      response.url().includes('/test-render/') && response.request().method() === 'POST'
+    ));
+    const testDownload = page.waitForEvent('download');
+    await wizard.getByRole('button', { name: 'Download test DOCX' }).click();
+    expect((await testResponse).ok()).toBeTruthy();
+    expect((await testDownload).suggestedFilename()).toMatch(/\.docx$/i);
+    await expect(wizard.getByText(/Test generation completed/)).toBeVisible();
+    await wizard.getByRole('button', { name: /Continue/ }).click();
+
+    const activateResponse = page.waitForResponse((response) => (
+      response.url().includes('/activate/') && response.request().method() === 'POST'
+    ));
+    await wizard.getByRole('button', { name: 'Activate new design' }).click();
+    expect((await activateResponse).ok()).toBeTruthy();
+    await expect(wizard.getByRole('status')).toContainText(/design is ready/i);
+    await expect(wizard.getByRole('button', { name: 'Design is active' })).toBeDisabled();
   });
 
   test('3.10 - Analytics page with charts', async ({ page }) => {
@@ -1368,6 +1838,16 @@ test.describe('Admin Workspace - All Pages', () => {
   test('3.14 - Admin Settings form loads', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/settings', 'test-results/screenshots/03-admin-settings.png');
     await expect(page.locator('input, select, textarea, [class*="setting"]').first()).toBeVisible({ timeout: 10000 });
+    const reminderDays = page.getByLabel('Maintenance Reminder');
+    const originalReminderDays = await reminderDays.inputValue();
+    await reminderDays.fill('');
+    await expect(reminderDays).toHaveValue('');
+    await reminderDays.fill(originalReminderDays);
+    const arrivalRadius = page.getByRole('spinbutton', { name: /Allowed Radius/ });
+    const originalArrivalRadius = await arrivalRadius.inputValue();
+    await arrivalRadius.fill('');
+    await expect(arrivalRadius).toHaveValue('');
+    await arrivalRadius.fill(originalArrivalRadius);
   });
 
   test('3.14b - Admin publishes a permitted completed project to the public landing page', async ({ page }) => {
@@ -1375,6 +1855,12 @@ test.describe('Admin Workspace - All Pages', () => {
     // The editor opens on the hero tab with nothing to publish until something changes.
     await expect(page.getByText('Everything here is published.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Publish changes' })).toBeDisabled();
+    await page.getByRole('navigation', { name: 'Landing page sections' }).getByRole('button', { name: 'Calculator' }).click();
+    const peakSunHours = page.getByLabel('Default peak sun hours');
+    const originalPeakSunHours = await peakSunHours.inputValue();
+    await peakSunHours.fill('');
+    await expect(peakSunHours).toHaveValue('');
+    await peakSunHours.fill(originalPeakSunHours);
     await page.getByRole('navigation', { name: 'Landing page sections' }).getByRole('button', { name: 'Projects' }).click();
     await expect(page).toHaveURL(/tab=projects/);
     await expect(page.getByRole('link', { name: /view on the published page/i })).toHaveAttribute('href', '/admin/landing-page/preview#our-work');
@@ -1496,7 +1982,7 @@ test.describe('Admin Workspace - All Pages', () => {
     const firstName = page.getByLabel('First Name');
     const originalFirstName = await firstName.inputValue();
     await firstName.fill('Unsaved Admin Name');
-    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('button', { name: 'Dismiss' }).click();
     await page.getByRole('button', { name: 'Edit Profile' }).click();
     await expect(page.getByLabel('First Name')).toHaveValue(originalFirstName);
   });
@@ -1636,6 +2122,26 @@ test.describe('Admin Workspace - All Pages', () => {
   });
 
   test('3.21 - Admin Job History loads', async ({ page, request }) => {
+    const extensionlessProofUrl = 'https://res.cloudinary.com/drkmsxdct/image/upload/v1/media/checklists/e2e-extensionless-proof';
+    await page.route(extensionlessProofUrl, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'image/svg+xml',
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#dbeafe"/><text x="160" y="96" text-anchor="middle" font-family="Arial" font-size="18" fill="#1e3a8a">E2E proof photo</text></svg>',
+      });
+    });
+    await page.route('**/api/services/coverage-heatmap/completed_jobs/**', async (route) => {
+      const response = await route.fetch();
+      const payload = await response.json();
+      if (Array.isArray(payload.results) && payload.results.length > 0) {
+        payload.results[0].completion_proof_images = [{
+          type: 'photo',
+          name: 'Extensionless Cloudinary proof',
+          url: extensionlessProofUrl,
+        }];
+      }
+      await route.fulfill({ response, json: payload });
+    });
     const technicianAuthState = loadAuthStateFromBackend('tech_test');
     const historyResponse = await request.get('/api/technician/history/?techName=tech_test', {
       headers: { Authorization: `Token ${technicianAuthState.token}` },
@@ -1675,6 +2181,9 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(details.getByText('Official Documents')).toBeVisible();
     await expect(details.getByText('Assigned Team')).toBeVisible();
     await expect(details.getByText('Close details', { exact: true })).toBeVisible();
+    const extensionlessProof = details.getByRole('img', { name: 'Extensionless Cloudinary proof' });
+    await expect(extensionlessProof).toBeVisible();
+    await expect(extensionlessProof).toHaveAttribute('src', extensionlessProofUrl);
 
     await details.getByRole('button', { name: 'Review equipment returns' }).click();
     const returnDialog = page.getByRole('dialog', { name: /Verify equipment returns/i });

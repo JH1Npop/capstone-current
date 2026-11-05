@@ -16,6 +16,7 @@ from ..models import (
 from ..solar_calculator import CALCULATION_VERSION, SolarCalculationError, calculate_solar_estimate
 from ..scheduling_policy import (
     BUSINESS_HOURS_ERROR,
+    get_calendar_closure_error,
     is_bookable_time_slot,
     is_business_start_time,
 )
@@ -424,6 +425,22 @@ class ServiceTicketSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'scheduled_time': BUSINESS_HOURS_ERROR,
             })
+
+        schedule_submitted = self.instance is None or any(
+            field in attrs for field in ('scheduled_date', 'scheduled_time_slot', 'scheduled_time')
+        )
+        if schedule_submitted:
+            scheduled_date = attrs.get('scheduled_date', getattr(self.instance, 'scheduled_date', None))
+            scheduled_time_slot = attrs.get('scheduled_time_slot', getattr(self.instance, 'scheduled_time_slot', None))
+            scheduled_time = attrs.get('scheduled_time', getattr(self.instance, 'scheduled_time', None))
+            closure_error = get_calendar_closure_error(
+                scheduled_date,
+                scheduled_time_slot,
+                scheduled_time,
+                exclude_ticket_id=getattr(self.instance, 'pk', None),
+            )
+            if closure_error:
+                raise serializers.ValidationError({'scheduled_date': closure_error})
 
         return attrs
 

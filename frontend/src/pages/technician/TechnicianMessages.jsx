@@ -564,7 +564,7 @@ export default function TechnicianMessages() {
                   onClick={() => setEditingMessage(null)}
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  Cancel
+                  Dismiss
                 </button>
                 <button
                   type="button"
@@ -586,7 +586,7 @@ export default function TechnicianMessages() {
             tone="danger"
             icon="warning"
             confirmLabel="Unsend"
-            cancelLabel="Cancel"
+            cancelLabel="Dismiss"
             onCancel={() => setConfirmUnsendMessage(null)}
             onConfirm={handleUnsendMessage}
           />

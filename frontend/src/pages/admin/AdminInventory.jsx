@@ -3,7 +3,7 @@ import Layout from '../../components/layout/Layout';
 import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { api, fetchAllPages, fetchInventorySummary } from '../../api/api';
-import { FiAlertCircle, FiCheckCircle, FiEye, FiPlus, FiRefreshCw, FiTrash2 } from 'react-icons/fi';
+import { FiAlertCircle, FiCheckCircle, FiChevronDown, FiEye, FiPlus, FiRefreshCw, FiTrash2 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { hasAnyCapability, INVENTORY_MANAGE_CAPABILITIES } from '../../rbac';
@@ -29,13 +29,6 @@ const ITEM_TYPE_OPTIONS = [
 ];
 
 const UNIT_SUGGESTIONS = ['piece', 'unit', 'set', 'box', 'pack', 'roll', 'meter', 'kilogram', 'liter'];
-
-const STOCK_ACTION_OPTIONS = [
-  { value: 'purchase', label: 'Receive stock' },
-  { value: 'return', label: 'Record non-ticket return' },
-  { value: 'adjustment', label: 'Correct physical count' },
-  { value: 'issue', label: 'Manual deduction' }
-];
 
 const STOCK_CONDITION_OPTIONS = [
   { value: 'all', label: 'All stock conditions' },
@@ -71,6 +64,9 @@ const buildDefaultItem = (categoryId = '') => ({
 const extractList = (data) =>
   Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
 const ITEMS_PER_PAGE = 10;
+const PENDING_REQUESTS_PER_PAGE = 10;
+const ITEM_RESERVATIONS_PER_PAGE = 10;
+const ITEM_TRANSACTIONS_PER_PAGE = 10;
 
 const normalizeCategory = (category) => ({
   ...category,
@@ -87,7 +83,10 @@ const normalizeInventoryItem = (item) => ({
   quantity: Number(item?.quantity || 0),
   minimum_stock: Number(item?.minimum_stock || 0),
   available_quantity: Number(item?.available_quantity ?? item?.quantity ?? 0),
-  is_low_stock: Boolean(item?.is_low_stock)
+  is_low_stock: Boolean(item?.is_low_stock),
+  can_delete: item?.can_delete !== false,
+  delete_reference_count: Number(item?.delete_reference_count || 0),
+  delete_blockers: Array.isArray(item?.delete_blockers) ? item.delete_blockers : []
 });
 
 const normalizeTransaction = (transaction) => ({
@@ -117,6 +116,28 @@ const parseIntegerInput = (value, fallback = 0) => {
 
 const formatStatusLabel = (value) => String(value || '').replace(/_/g, ' ').toUpperCase();
 
+const getInventoryDisplayStatus = (item) => {
+  if (item.status === 'retired') {
+    return { label: 'Retired', classes: 'bg-slate-100 text-slate-700 ring-slate-200' };
+  }
+  if (item.status === 'maintenance') {
+    return { label: 'Maintenance', classes: 'bg-violet-50 text-violet-700 ring-violet-200' };
+  }
+  if (item.status === 'in_use') {
+    return { label: 'In use', classes: 'bg-blue-50 text-blue-700 ring-blue-200' };
+  }
+  if (item.status === 'reserved') {
+    return { label: 'Reserved', classes: 'bg-blue-50 text-blue-700 ring-blue-200' };
+  }
+  if (item.status === 'out_of_stock' || Number(item.available_quantity || 0) <= 0) {
+    return { label: 'Out of stock', classes: 'bg-red-50 text-red-700 ring-red-200' };
+  }
+  if (item.is_low_stock) {
+    return { label: 'Low stock', classes: 'bg-amber-50 text-amber-700 ring-amber-200' };
+  }
+  return { label: 'In stock', classes: 'bg-emerald-50 text-emerald-700 ring-emerald-200' };
+};
+
 const formatDateTime = (value) => {
   if (!value) return '-';
 
@@ -138,6 +159,78 @@ const buildDefaultStockAdjustment = () => ({
   quantity: 1,
   reference_number: '',
   notes: ''
+});
+
+const getStockMovementCopy = (transactionType) => ({
+  purchase: {
+    eyebrow: 'Stock receipt',
+    title: 'Receive Stock',
+    description: 'Add newly delivered units to the quantity already recorded.',
+    quantityLabel: 'Quantity received',
+    referenceLabel: 'Delivery reference',
+    referencePlaceholder: 'Delivery receipt or supplier invoice number',
+    reasonLabel: 'Receipt notes',
+    submitLabel: 'Receive Stock',
+    notesPlaceholder: 'Example: Supplier delivery received in good condition',
+    accentClass: 'text-emerald-700',
+    summaryClass: 'border-emerald-200 bg-emerald-50',
+    buttonClass: 'bg-emerald-600 hover:bg-emerald-700'
+  },
+  adjustment: {
+    eyebrow: 'Physical count correction',
+    title: 'Adjust Stock',
+    description: 'Replace the recorded total with the quantity physically counted in storage.',
+    quantityLabel: 'Actual counted quantity',
+    referenceLabel: 'Count reference',
+    referencePlaceholder: 'Cycle count sheet or audit reference (optional)',
+    reasonLabel: 'Correction reason',
+    submitLabel: 'Save Correction',
+    notesPlaceholder: 'Example: Corrected after warehouse cycle count',
+    accentClass: 'text-amber-700',
+    summaryClass: 'border-amber-200 bg-amber-50',
+    buttonClass: 'bg-amber-600 hover:bg-amber-700'
+  },
+  return: {
+    eyebrow: 'Exceptional stock movement',
+    title: 'Record Non-ticket Return',
+    description: 'Add units returned outside a service-ticket return workflow.',
+    quantityLabel: 'Quantity returned',
+    referenceLabel: 'Return reference',
+    referencePlaceholder: 'Return document or source reference',
+    reasonLabel: 'Return reason',
+    submitLabel: 'Record Return',
+    notesPlaceholder: 'Explain where the returned stock came from',
+    accentClass: 'text-blue-700',
+    summaryClass: 'border-blue-200 bg-blue-50',
+    buttonClass: 'bg-blue-600 hover:bg-blue-700'
+  },
+  issue: {
+    eyebrow: 'Exceptional stock movement',
+    title: 'Manual Deduction',
+    description: 'Subtract units only for exceptional loss, damage, or an authorized correction.',
+    quantityLabel: 'Quantity deducted',
+    referenceLabel: 'Deduction reference',
+    referencePlaceholder: 'Incident, approval, or audit reference',
+    reasonLabel: 'Deduction reason',
+    submitLabel: 'Deduct Stock',
+    notesPlaceholder: 'Explain the loss, damage, or authorized correction',
+    accentClass: 'text-rose-700',
+    summaryClass: 'border-rose-200 bg-rose-50',
+    buttonClass: 'bg-rose-600 hover:bg-rose-700'
+  }
+}[transactionType] || {
+  eyebrow: 'Stock movement',
+  title: 'Update Stock',
+  description: 'Record a manual inventory movement.',
+  quantityLabel: 'Quantity',
+  referenceLabel: 'Reference number',
+  referencePlaceholder: 'Related document reference (optional)',
+  reasonLabel: 'Reason / notes',
+  submitLabel: 'Save Movement',
+  notesPlaceholder: 'Explain this stock movement',
+  accentClass: 'text-slate-700',
+  summaryClass: 'border-slate-200 bg-slate-50',
+  buttonClass: 'bg-slate-700 hover:bg-slate-800'
 });
 
 const getApiErrorMessage = (error, fallback) => {
@@ -174,22 +267,32 @@ export default function AdminInventory() {
   const [editingId, setEditingId] = useState(null);
   const [editingItem, setEditingItem] = useState(buildDefaultItem());
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [lifecycleTarget, setLifecycleTarget] = useState(null);
+  const [lifecycleLoading, setLifecycleLoading] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedItemMode, setSelectedItemMode] = useState('details');
   const [itemTransactions, setItemTransactions] = useState([]);
   const [transactionLoading, setTransactionLoading] = useState(false);
+  const [itemTransactionsOpen, setItemTransactionsOpen] = useState(false);
+  const [itemTransactionsPage, setItemTransactionsPage] = useState(1);
   const [itemReservations, setItemReservations] = useState([]);
   const [reservationLoading, setReservationLoading] = useState(false);
+  const [itemReservationsOpen, setItemReservationsOpen] = useState(false);
+  const [itemReservationsPage, setItemReservationsPage] = useState(1);
   const [adjustTarget, setAdjustTarget] = useState(null);
   const [adjustForm, setAdjustForm] = useState(buildDefaultStockAdjustment());
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [stockConditionFilter, setStockConditionFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [inventorySummary, setInventorySummary] = useState(null);
   const [lowStockItems, setLowStockItems] = useState([]);
   const [pendingReservations, setPendingReservations] = useState([]);
   const [pendingReservationsLoading, setPendingReservationsLoading] = useState(false);
+  const [pendingReservationsOpen, setPendingReservationsOpen] = useState(false);
+  const [pendingReservationsPage, setPendingReservationsPage] = useState(1);
   const [reviewingReservationGroup, setReviewingReservationGroup] = useState(null);
   const [reservationLineDecisions, setReservationLineDecisions] = useState({});
   const [reservationDecisionReason, setReservationDecisionReason] = useState('');
@@ -223,7 +326,8 @@ export default function AdminInventory() {
     setAdjustTarget(item);
     setAdjustForm({
       ...buildDefaultStockAdjustment(),
-      transaction_type: transactionType
+      transaction_type: transactionType,
+      quantity: transactionType === 'adjustment' ? Number(item.quantity || 0) : 1
     });
     setError('');
   };
@@ -257,8 +361,13 @@ export default function AdminInventory() {
     }
   };
 
-  const openItemDetails = async (item) => {
+  const openItemDetails = async (item, mode = 'details') => {
+    setSelectedItemMode(mode);
     setSelectedItem(item);
+    setItemReservationsOpen(false);
+    setItemReservationsPage(1);
+    setItemTransactionsOpen(false);
+    setItemTransactionsPage(1);
     await Promise.all([
       loadItemTransactions(item.id),
       loadItemReservations(item.id)
@@ -359,8 +468,7 @@ export default function AdminInventory() {
     supplier_contact: item.supplier_contact || '',
     purchase_date: item.purchase_date || null,
     warranty_expiry: item.warranty_expiry || null,
-    notes: item.notes || '',
-    status: item.status
+    notes: item.notes || ''
   });
 
   const buildUpdatePayload = (item) => ({
@@ -382,8 +490,7 @@ export default function AdminInventory() {
     supplier_contact: item.supplier_contact || '',
     purchase_date: item.purchase_date || null,
     warranty_expiry: item.warranty_expiry || null,
-    notes: item.notes || '',
-    status: item.status
+    notes: item.notes || ''
   });
 
   const addItem = async () => {
@@ -430,6 +537,30 @@ export default function AdminInventory() {
       await loadData();
     } catch (deleteError) {
       setError(getApiErrorMessage(deleteError, 'Failed to delete item. Please try again.'));
+    }
+  };
+
+  const changeItemLifecycle = async () => {
+    if (!lifecycleTarget) return;
+
+    const { item, status: nextStatus } = lifecycleTarget;
+    setLifecycleLoading(true);
+    setLifecycleError('');
+    setError('');
+    try {
+      await api.patch(`/inventory/items/${item.id}/`, { status: nextStatus });
+      setLifecycleTarget(null);
+      setSelectedItem(null);
+      setNotice(
+        nextStatus === 'retired'
+          ? `${item.name} was retired. Its history remains available.`
+          : `${item.name} was reactivated and is available for inventory operations.`,
+      );
+      await loadData();
+    } catch (lifecycleError) {
+      setLifecycleError(getApiErrorMessage(lifecycleError, 'Failed to update the item lifecycle.'));
+    } finally {
+      setLifecycleLoading(false);
     }
   };
 
@@ -494,12 +625,20 @@ export default function AdminInventory() {
 
     const stockTarget = adjustTarget || editingItem;
     const quantity = Number(adjustForm.quantity || 0);
-    if (quantity < 0 || (adjustForm.transaction_type !== 'adjustment' && quantity <= 0)) {
-      setError('Stock quantity must be greater than zero.');
+    if (quantity < 0) {
+      setError('Stock quantity cannot be negative.');
+      return;
+    }
+    if (adjustForm.transaction_type !== 'adjustment' && quantity === 0) {
+      setError('Movement quantity must be greater than zero.');
       return;
     }
     if (adjustForm.transaction_type === 'issue' && quantity > stockTarget.available_quantity) {
       setError(`Only ${stockTarget.available_quantity} unit(s) are available to deduct.`);
+      return;
+    }
+    if (adjustForm.transaction_type === 'adjustment' && quantity < Number(stockTarget.reserved_quantity || 0)) {
+      setError(`The physical count cannot be lower than ${stockTarget.reserved_quantity} reserved unit(s).`);
       return;
     }
     if (!adjustForm.notes.trim()) {
@@ -604,7 +743,10 @@ export default function AdminInventory() {
     if (categoryFilter !== 'all' && String(item.category) !== categoryFilter) {
       return false;
     }
-    if (statusFilter !== 'all' && item.status !== statusFilter) {
+    if (statusFilter === 'active' && item.status === 'retired') {
+      return false;
+    }
+    if (!['all', 'active'].includes(statusFilter) && item.status !== statusFilter) {
       return false;
     }
     if (stockConditionFilter === 'low' && (item.status === 'retired' || !item.is_low_stock)) return false;
@@ -666,6 +808,27 @@ export default function AdminInventory() {
     }
     return groups;
   }, {}));
+  const pendingReservationsTotalPages = Math.max(1, Math.ceil(pendingRequestGroups.length / PENDING_REQUESTS_PER_PAGE));
+  const safePendingReservationsPage = Math.min(pendingReservationsPage, pendingReservationsTotalPages);
+  const pendingReservationsStartIndex = (safePendingReservationsPage - 1) * PENDING_REQUESTS_PER_PAGE;
+  const paginatedPendingRequestGroups = pendingRequestGroups.slice(
+    pendingReservationsStartIndex,
+    pendingReservationsStartIndex + PENDING_REQUESTS_PER_PAGE
+  );
+  const itemReservationsTotalPages = Math.max(1, Math.ceil(itemReservations.length / ITEM_RESERVATIONS_PER_PAGE));
+  const safeItemReservationsPage = Math.min(itemReservationsPage, itemReservationsTotalPages);
+  const itemReservationsStartIndex = (safeItemReservationsPage - 1) * ITEM_RESERVATIONS_PER_PAGE;
+  const paginatedItemReservations = itemReservations.slice(
+    itemReservationsStartIndex,
+    itemReservationsStartIndex + ITEM_RESERVATIONS_PER_PAGE
+  );
+  const itemTransactionsTotalPages = Math.max(1, Math.ceil(itemTransactions.length / ITEM_TRANSACTIONS_PER_PAGE));
+  const safeItemTransactionsPage = Math.min(itemTransactionsPage, itemTransactionsTotalPages);
+  const itemTransactionsStartIndex = (safeItemTransactionsPage - 1) * ITEM_TRANSACTIONS_PER_PAGE;
+  const paginatedItemTransactions = itemTransactions.slice(
+    itemTransactionsStartIndex,
+    itemTransactionsStartIndex + ITEM_TRANSACTIONS_PER_PAGE
+  );
   const itemModalOpen = adding || Boolean(editingId);
   const activeItem = adding ? newItem : editingItem;
   const updateActiveItem = (updates) => {
@@ -683,11 +846,44 @@ export default function AdminInventory() {
   }, [currentPage, safeCurrentPage]);
 
   useEffect(() => {
+    if (pendingReservationsPage !== safePendingReservationsPage) {
+      setPendingReservationsPage(safePendingReservationsPage);
+    }
+  }, [pendingReservationsPage, safePendingReservationsPage]);
+
+  useEffect(() => {
+    if (itemReservationsPage !== safeItemReservationsPage) {
+      setItemReservationsPage(safeItemReservationsPage);
+    }
+  }, [itemReservationsPage, safeItemReservationsPage]);
+
+  useEffect(() => {
+    if (itemTransactionsPage !== safeItemTransactionsPage) {
+      setItemTransactionsPage(safeItemTransactionsPage);
+    }
+  }, [itemTransactionsPage, safeItemTransactionsPage]);
+
+  useEffect(() => {
+    setPendingReservationsPage(1);
+  }, [focusedTicketId]);
+
+  useEffect(() => {
     if (!focusedTicketId && location.hash !== '#pending-equipment-requests') return;
+    setPendingReservationsOpen(true);
     window.requestAnimationFrame(() => {
       document.getElementById('pending-equipment-requests')?.scrollIntoView({ block: 'start' });
     });
   }, [focusedTicketId, location.hash, pendingReservationsLoading]);
+
+  const stockMovementCopy = getStockMovementCopy(adjustForm.transaction_type);
+  const movementQuantity = Number(adjustForm.quantity || 0);
+  const currentMovementTotal = Number(adjustTarget?.quantity || 0);
+  const stockDifference = adjustForm.transaction_type === 'adjustment'
+    ? movementQuantity - currentMovementTotal
+    : (adjustForm.transaction_type === 'issue' ? -movementQuantity : movementQuantity);
+  const resultingStockTotal = adjustForm.transaction_type === 'adjustment'
+    ? movementQuantity
+    : currentMovementTotal + stockDifference;
 
   return (
     <Layout>
@@ -754,9 +950,13 @@ export default function AdminInventory() {
             key: 'item-state',
             label: 'Item usage state',
             value: statusFilter,
-            defaultValue: 'all',
+            defaultValue: 'active',
             onChange: setStatusFilter,
-            options: [{ value: 'all', label: 'Any usage state' }, ...STATUS_OPTIONS],
+            options: [
+              { value: 'active', label: 'Active items' },
+              { value: 'all', label: 'All items including retired' },
+              ...STATUS_OPTIONS,
+            ],
             helpText: 'Whether the item itself is available, in use, under maintenance, or retired.',
           },
           {
@@ -775,7 +975,7 @@ export default function AdminInventory() {
         onClear={() => {
           setSearchTerm('');
           setCategoryFilter('all');
-          setStatusFilter('all');
+          setStatusFilter('active');
           setStockConditionFilter('all');
         }}
       />
@@ -833,10 +1033,10 @@ export default function AdminInventory() {
                 <th className="w-[8%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Minimum
                 </th>
-                <th className="w-[8%] px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[13%] px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Status
                 </th>
-                <th className="w-[18%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[13%] px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Actions
                 </th>
               </tr>
@@ -856,8 +1056,9 @@ export default function AdminInventory() {
                   </td>
                 </tr>
               ) : (
-                paginatedInventory.map((item) => (
-                  <tr key={item.id} className="transition hover:bg-slate-50">
+                paginatedInventory.map((item) => {
+                  const displayStatus = getInventoryDisplayStatus(item);
+                  return <tr key={item.id} className="transition hover:bg-slate-50">
                     <td className="px-3 py-2">
                       <div className="truncate font-semibold text-slate-900" title={item.name}>{item.name}</div>
                       {[item.brand, item.model].filter(Boolean).length > 0 ? (
@@ -883,16 +1084,9 @@ export default function AdminInventory() {
                     <td className="px-3 py-2 text-right font-semibold text-slate-900">{item.available_quantity}</td>
                     <td className="px-3 py-2 text-right font-semibold text-slate-900">{item.minimum_stock}</td>
                     <td className="px-3 py-2 text-center">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        Number(item.available_quantity || 0) <= 0
-                          ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
-                          : item.is_low_stock
-                            ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
-                            : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-                      }`}>
-                        {Number(item.available_quantity || 0) <= 0 ? 'Out' : item.is_low_stock ? 'Low' : 'OK'}
+                      <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${displayStatus.classes}`}>
+                        {displayStatus.label}
                       </span>
-                      {item.status !== 'available' ? <div className="mt-1 text-xs text-slate-500">{formatStatusLabel(item.status)}</div> : null}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-1.5">
@@ -904,30 +1098,16 @@ export default function AdminInventory() {
                         <FiEye size={15} />
                       </button>
                       {canManageInventory ? <button
-                        onClick={() => openStockMovement(item, 'purchase')}
-                        className="rounded-lg border border-emerald-200 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
-                        title="Receive stock"
-                      >
-                        Receive
-                      </button> : null}
-                      {canManageInventory ? <button
-                        onClick={() => openEditItem(item)}
+                        onClick={() => openItemDetails(item, 'manage')}
                         className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                         title="Manage item"
                       >
                         Manage
                       </button> : null}
-                      {canManageInventory ? <button
-                        onClick={() => setDeleteTarget(item)}
-                        className="rounded-lg p-1.5 text-red-500 transition hover:bg-red-50 hover:text-red-700"
-                        title="Delete"
-                      >
-                        <FiTrash2 size={18} />
-                      </button> : null}
                       </div>
                     </td>
-                  </tr>
-                ))
+                  </tr>;
+                })
               )}
             </tbody>
           </table>
@@ -940,15 +1120,16 @@ export default function AdminInventory() {
               <p className="font-semibold text-slate-900">{inventory.length === 0 ? 'Set up your service inventory' : 'No matching inventory items'}</p>
               <p className="mt-1 text-sm text-slate-500">{inventory.length === 0 ? 'Create a category, then add parts and equipment.' : 'Try changing the current filters.'}</p>
             </div>
-          ) : paginatedInventory.map((item) => (
-            <article key={item.id} className="space-y-4 p-4">
+          ) : paginatedInventory.map((item) => {
+            const displayStatus = getInventoryDisplayStatus(item);
+            return <article key={item.id} className="space-y-4 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h4 className="truncate font-semibold text-slate-950">{item.name}</h4>
                   <p className="mt-1 truncate text-xs text-slate-500">{item.sku || 'No SKU'} · {item.category_name}</p>
                 </div>
-                <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${Number(item.available_quantity || 0) <= 0 ? 'bg-red-50 text-red-700' : item.is_low_stock ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                  {Number(item.available_quantity || 0) <= 0 ? 'Out' : item.is_low_stock ? 'Low' : 'OK'}
+                <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ring-1 ${displayStatus.classes}`}>
+                  {displayStatus.label}
                 </span>
               </div>
               <dl className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center">
@@ -956,13 +1137,12 @@ export default function AdminInventory() {
                 <div><dt className="text-xs uppercase tracking-wide text-slate-400">Reserved</dt><dd className="mt-1 font-semibold text-blue-700">{item.reserved_quantity || 0}</dd></div>
                 <div><dt className="text-xs uppercase tracking-wide text-slate-400">Available</dt><dd className="mt-1 font-semibold text-emerald-700">{item.available_quantity}</dd></div>
               </dl>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => openItemDetails(item)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Details</button>
-                {canManageInventory ? <button type="button" onClick={() => openStockMovement(item, 'purchase')} className="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700">Receive</button> : null}
-                {canManageInventory ? <button type="button" onClick={() => openEditItem(item)} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white">Manage</button> : null}
+                {canManageInventory ? <button type="button" onClick={() => openItemDetails(item, 'manage')} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white">Manage</button> : null}
               </div>
-            </article>
-          ))}
+            </article>;
+          })}
         </div>
         {filteredInventory.length > ITEMS_PER_PAGE && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 text-sm">
@@ -1001,13 +1181,22 @@ export default function AdminInventory() {
 
       <section id="pending-equipment-requests" className="mt-6 scroll-mt-24 rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Pending equipment requests">
         <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <button
+            type="button"
+            onClick={() => setPendingReservationsOpen((open) => !open)}
+            aria-expanded={pendingReservationsOpen}
+            aria-controls="pending-equipment-request-list"
+            className="group flex min-w-0 items-start gap-3 rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-brand-200"
+          >
+            <FiChevronDown className={`mt-1 shrink-0 text-slate-500 transition-transform ${pendingReservationsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+            <span className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base font-semibold text-slate-950">Pending Equipment Requests</h2>
               <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">{pendingRequestGroups.length}</span>
             </div>
-            <p className="mt-1 text-sm text-slate-500">Each service ticket appears once, with all of its reserved item lines reviewed together.</p>
-          </div>
+            <span className="mt-1 block text-sm text-slate-500">Each service ticket appears once, with all of its reserved item lines reviewed together.</span>
+            </span>
+          </button>
           <div className="flex flex-wrap gap-2">
             {focusedTicketId ? (
               <button type="button" onClick={() => setSearchParams({})} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
@@ -1020,6 +1209,7 @@ export default function AdminInventory() {
           </div>
         </div>
 
+        <div id="pending-equipment-request-list" hidden={!pendingReservationsOpen}>
         {Boolean(focusedTicketId) && (
           <div className="border-b border-brand-100 bg-brand-50 px-5 py-3 text-sm text-brand-800">
             Showing pending requests for {formatTicketId(focusedTicketId)} from the selected notification.
@@ -1036,7 +1226,7 @@ export default function AdminInventory() {
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {pendingRequestGroups.map((group) => {
+            {paginatedPendingRequestGroups.map((group) => {
               const itemCount = group.reservations.length;
               const unavailableCount = group.reservations.filter(
                 (reservation) => reservation.item_physical_quantity < reservation.quantity
@@ -1067,6 +1257,33 @@ export default function AdminInventory() {
             })}
           </div>
         )}
+        {pendingRequestGroups.length > PENDING_REQUESTS_PER_PAGE ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm">
+            <span className="text-slate-500">
+              Showing {pendingReservationsStartIndex + 1}-{Math.min(pendingReservationsStartIndex + PENDING_REQUESTS_PER_PAGE, pendingRequestGroups.length)} of {pendingRequestGroups.length} requests
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingReservationsPage((page) => Math.max(1, page - 1))}
+                disabled={safePendingReservationsPage === 1}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-slate-500">Page {safePendingReservationsPage} of {pendingReservationsTotalPages}</span>
+              <button
+                type="button"
+                onClick={() => setPendingReservationsPage((page) => Math.min(pendingReservationsTotalPages, page + 1))}
+                disabled={safePendingReservationsPage === pendingReservationsTotalPages}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
+        </div>
       </section>
 
       {selectedItem && (
@@ -1075,11 +1292,15 @@ export default function AdminInventory() {
           onClick={() => setSelectedItem(null)}
         >
           <div
-            className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${selectedItemMode === 'manage' ? 'Manage' : 'Details for'} ${selectedItem.name}`}
+            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
-              <div className="min-w-0">
+            <div className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={selectedItem.status} />
                   {selectedItem.is_low_stock && (
@@ -1091,28 +1312,71 @@ export default function AdminInventory() {
                 <h3 className="mt-3 text-lg font-semibold leading-6 text-slate-950">{selectedItem.name}</h3>
                 <p className="mt-1 text-sm text-slate-500">{selectedItem.sku || 'No SKU'} · {selectedItem.category_name}</p>
               </div>
-              <div className="flex gap-2">
-                {canManageInventory ? <button
+                <div className="flex flex-wrap justify-end gap-2">
+                {canManageInventory && selectedItemMode === 'manage' && selectedItem.status !== 'retired' ? <button
                   type="button"
                   onClick={() => {
                     const item = selectedItem;
                     setSelectedItem(null);
                     openStockMovement(item, 'purchase');
                   }}
-                  className="rounded-xl border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
                 >
                   Receive Stock
                 </button> : null}
-                {canManageInventory ? <button
+                {canManageInventory && selectedItemMode === 'manage' && selectedItem.status !== 'retired' ? <button
+                  type="button"
+                  onClick={() => {
+                    const item = selectedItem;
+                    setSelectedItem(null);
+                    openStockMovement(item, 'adjustment');
+                  }}
+                  className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-50"
+                >
+                  Adjust Stock
+                </button> : null}
+                {canManageInventory && selectedItemMode === 'manage' ? <button
                   type="button"
                   onClick={() => {
                     setSelectedItem(null);
                     openEditItem(selectedItem);
                   }}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  Manage
+                  Edit Item
                 </button> : null}
+                {canManageInventory && selectedItemMode === 'manage' ? (
+                  selectedItem.status === 'retired' ? (
+                    <button
+                      type="button"
+                      onClick={() => setLifecycleTarget({ item: selectedItem, status: 'available' })}
+                      className="rounded-xl border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                    >
+                      Reactivate Item
+                    </button>
+                  ) : selectedItem.can_delete ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteTarget(selectedItem);
+                        setSelectedItem(null);
+                      }}
+                      className="rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                    >
+                      Delete Item
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={Number(selectedItem.reserved_quantity || 0) > 0}
+                      title={Number(selectedItem.reserved_quantity || 0) > 0 ? 'Release or fulfill reserved stock before retiring this item.' : 'Retire this item while preserving its history.'}
+                      onClick={() => setLifecycleTarget({ item: selectedItem, status: 'retired' })}
+                      className="rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Retire Item
+                    </button>
+                  )
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setSelectedItem(null)}
@@ -1120,54 +1384,103 @@ export default function AdminInventory() {
                 >
                   Close
                 </button>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-6 px-6 py-5">
-              <section>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-slate-50/60 px-4 py-4 sm:px-6 sm:py-5">
+              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Stock Position</h4>
-                <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
                     <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total quantity</dt>
                     <dd className="mt-1 text-xl font-semibold text-slate-950">{selectedItem.quantity}</dd>
                   </div>
-                  <div>
+                  <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-3">
                     <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Available</dt>
                     <dd className="mt-1 text-xl font-semibold text-emerald-700">{selectedItem.available_quantity}</dd>
                   </div>
-                  <div>
+                  <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-3">
                     <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Reserved</dt>
                     <dd className="mt-1 text-xl font-semibold text-blue-700">{selectedItem.reserved_quantity || 0}</dd>
                   </div>
-                  <div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
                     <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Minimum stock</dt>
                     <dd className="mt-1 text-xl font-semibold text-slate-950">{selectedItem.minimum_stock}</dd>
                   </div>
                 </dl>
               </section>
 
-              <section className="border-t border-slate-100 pt-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Ticket Reservations</h4>
-                    <p className="mt-1 text-sm text-slate-500">See which service jobs are holding this stock.</p>
+              {canManageInventory && selectedItemMode === 'manage' && selectedItem.status !== 'retired' ? (
+                <details className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-700">Other stock actions</summary>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Use these only for movements outside the normal service-ticket workflow.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const item = selectedItem;
+                        setSelectedItem(null);
+                        openStockMovement(item, 'return');
+                      }}
+                      className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50"
+                    >
+                      Record Non-ticket Return
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const item = selectedItem;
+                        setSelectedItem(null);
+                        openStockMovement(item, 'issue');
+                      }}
+                      className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-50"
+                    >
+                      Manual Deduction
+                    </button>
                   </div>
+                </details>
+              ) : null}
+
+              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="item-ticket-reservations-heading">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <button
                     type="button"
-                    onClick={() => loadItemReservations(selectedItem.id)}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                    onClick={() => setItemReservationsOpen((open) => !open)}
+                    aria-expanded={itemReservationsOpen}
+                    aria-controls="item-ticket-reservations-list"
+                    className="flex min-w-0 flex-1 items-start gap-2 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   >
-                    Refresh
+                    <FiChevronDown className={`mt-0.5 shrink-0 text-slate-500 transition-transform ${itemReservationsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span id="item-ticket-reservations-heading" role="heading" aria-level="4" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Ticket Reservations</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{itemReservations.length}</span>
+                      </span>
+                      <span className="mt-1 block text-sm text-slate-500">See which service jobs are holding or previously held this stock.</span>
+                    </span>
                   </button>
+                  {itemReservationsOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => loadItemReservations(selectedItem.id)}
+                      disabled={reservationLoading}
+                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      Refresh
+                    </button>
+                  ) : null}
                 </div>
-                <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+                <div id="item-ticket-reservations-list" hidden={!itemReservationsOpen} className="mt-3 overflow-hidden rounded-xl border border-slate-200">
                   {reservationLoading ? (
                     <TableSkeleton rows={3} columns={3} compact />
                   ) : itemReservations.length === 0 ? (
                     <div className="px-4 py-5 text-sm text-slate-500">No ticket reservations for this item.</div>
                   ) : (
                     <div className="divide-y divide-slate-100">
-                      {itemReservations.map((reservation) => (
+                      {paginatedItemReservations.map((reservation) => (
                         <div key={reservation.id} className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_120px_120px] sm:items-center">
                           <div className="min-w-0">
                             <div className="font-semibold text-slate-900">{reservation.ticket_code || formatTicketId(reservation.service_ticket)}</div>
@@ -1184,9 +1497,35 @@ export default function AdminInventory() {
                     </div>
                   )}
                 </div>
+                {itemReservationsOpen && itemReservations.length > ITEM_RESERVATIONS_PER_PAGE ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs font-medium text-slate-600">
+                    <span>
+                      Showing {itemReservationsStartIndex + 1}-{Math.min(itemReservationsStartIndex + ITEM_RESERVATIONS_PER_PAGE, itemReservations.length)} of {itemReservations.length} reservations
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setItemReservationsPage((page) => Math.max(1, page - 1))}
+                        disabled={safeItemReservationsPage === 1}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-slate-500">Page {safeItemReservationsPage} of {itemReservationsTotalPages}</span>
+                      <button
+                        type="button"
+                        onClick={() => setItemReservationsPage((page) => Math.min(itemReservationsTotalPages, page + 1))}
+                        disabled={safeItemReservationsPage === itemReservationsTotalPages}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </section>
 
-              <section className="border-t border-slate-100 pt-5">
+              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Item Details</h4>
                 <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
                   <div>
@@ -1252,25 +1591,43 @@ export default function AdminInventory() {
                 </dl>
               </section>
 
-              <section className="border-t border-slate-100 pt-5">
+              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="item-stock-history-heading">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Stock Movement History</h4>
                   <button
                     type="button"
-                    onClick={() => loadItemTransactions(selectedItem.id)}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                    onClick={() => setItemTransactionsOpen((open) => !open)}
+                    aria-expanded={itemTransactionsOpen}
+                    aria-controls="item-stock-history-list"
+                    className="flex min-w-0 flex-1 items-start gap-2 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   >
-                    Refresh History
+                    <FiChevronDown className={`mt-0.5 shrink-0 text-slate-500 transition-transform ${itemTransactionsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span id="item-stock-history-heading" role="heading" aria-level="4" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Stock Movement History</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{itemTransactions.length}</span>
+                      </span>
+                      <span className="mt-1 block text-sm text-slate-500">Review receipts, adjustments, returns, and deductions for this item.</span>
+                    </span>
                   </button>
+                  {itemTransactionsOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => loadItemTransactions(selectedItem.id)}
+                      disabled={transactionLoading}
+                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      Refresh
+                    </button>
+                  ) : null}
                 </div>
-                <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+                <div id="item-stock-history-list" hidden={!itemTransactionsOpen} className="mt-3 overflow-hidden rounded-xl border border-slate-200">
                   {transactionLoading ? (
                     <TableSkeleton rows={4} columns={4} compact />
                   ) : itemTransactions.length === 0 ? (
                     <div className="px-4 py-5 text-sm text-slate-500">No stock movements recorded yet.</div>
                   ) : (
                     <div className="divide-y divide-slate-100">
-                      {itemTransactions.map((transaction) => (
+                      {paginatedItemTransactions.map((transaction) => (
                         <div key={transaction.id} className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[150px_90px_1fr_150px] sm:items-center">
                           <div>
                              <div className="font-semibold text-slate-900">{formatStatusLabel(transaction.transaction_type)}</div>
@@ -1292,6 +1649,32 @@ export default function AdminInventory() {
                     </div>
                   )}
                 </div>
+                {itemTransactionsOpen && itemTransactions.length > ITEM_TRANSACTIONS_PER_PAGE ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs font-medium text-slate-600">
+                    <span>
+                      Showing {itemTransactionsStartIndex + 1}-{Math.min(itemTransactionsStartIndex + ITEM_TRANSACTIONS_PER_PAGE, itemTransactions.length)} of {itemTransactions.length} movements
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setItemTransactionsPage((page) => Math.max(1, page - 1))}
+                        disabled={safeItemTransactionsPage === 1}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-slate-500">Page {safeItemTransactionsPage} of {itemTransactionsTotalPages}</span>
+                      <button
+                        type="button"
+                        onClick={() => setItemTransactionsPage((page) => Math.min(itemTransactionsTotalPages, page + 1))}
+                        disabled={safeItemTransactionsPage === itemTransactionsTotalPages}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </section>
             </div>
           </div>
@@ -1306,38 +1689,25 @@ export default function AdminInventory() {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label={`Stock movement for ${adjustTarget.name}`}
+            aria-label={`${stockMovementCopy.title} for ${adjustTarget.name}`}
             className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="border-b border-slate-100 px-6 py-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Stock Movement</p>
-              <h3 className="mt-1 text-lg font-semibold text-slate-950">{adjustTarget.name}</h3>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${stockMovementCopy.accentClass}`}>{stockMovementCopy.eyebrow}</p>
+              <h3 className="mt-1 text-lg font-semibold text-slate-950">{stockMovementCopy.title}</h3>
+              <p className="mt-1 text-sm font-medium text-slate-700">{adjustTarget.name}</p>
+              <p className="mt-2 text-sm text-slate-600">{stockMovementCopy.description}</p>
+              <p className="mt-2 text-xs text-slate-500">
                 Available {adjustTarget.available_quantity} · Reserved {adjustTarget.reserved_quantity || 0} · Total {adjustTarget.quantity}
               </p>
             </div>
 
             <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Action</label>
-                <select
-                  value={adjustForm.transaction_type}
-                  onChange={(event) => setAdjustForm({ ...adjustForm, transaction_type: event.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                >
-                  {STOCK_ACTION_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  {adjustForm.transaction_type === 'adjustment' ? 'New total quantity' : 'Quantity'}
-                </label>
+                <label htmlFor="stock-movement-quantity" className="mb-1 block text-sm font-medium text-slate-700">{stockMovementCopy.quantityLabel}</label>
                 <input
+                  id="stock-movement-quantity"
                   type="number"
                   min="0"
                   value={adjustForm.quantity}
@@ -1345,9 +1715,30 @@ export default function AdminInventory() {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
+              <div className={`rounded-xl border px-4 py-3 ${stockMovementCopy.summaryClass}`}>
+                <p className={`text-xs font-bold uppercase tracking-wide ${stockMovementCopy.accentClass}`}>
+                  {adjustForm.transaction_type === 'adjustment' ? 'Replaces recorded total' : adjustForm.transaction_type === 'issue' ? 'Subtracts from stock' : 'Adds to stock'}
+                </p>
+                <div className="mt-2 flex items-center justify-center gap-3 text-xl font-bold text-slate-950" aria-label={`Recorded ${currentMovementTotal}, change ${stockDifference}, resulting ${resultingStockTotal}`}>
+                  <span>{currentMovementTotal}</span>
+                  <span className={stockMovementCopy.accentClass}>{adjustForm.transaction_type === 'adjustment' ? '→' : stockDifference < 0 ? '−' : '+'}</span>
+                  <span>{adjustForm.transaction_type === 'adjustment' ? movementQuantity : Math.abs(stockDifference)}</span>
+                  {adjustForm.transaction_type !== 'adjustment' ? <>
+                    <span className={stockMovementCopy.accentClass}>=</span>
+                    <span>{resultingStockTotal}</span>
+                  </> : null}
+                </div>
+                {adjustForm.transaction_type === 'adjustment' ? (
+                  <p className="mt-2 text-center text-xs font-medium text-slate-600">
+                    Difference from system: <span className={stockDifference < 0 ? 'text-rose-700' : stockDifference > 0 ? 'text-emerald-700' : 'text-slate-700'}>{stockDifference > 0 ? '+' : ''}{stockDifference}</span>
+                  </p>
+                ) : (
+                  <p className="mt-2 text-center text-xs font-medium text-slate-600">New total after this movement</p>
+                )}
+              </div>
               <div className="sm:col-span-2">
                 <label htmlFor="stock-movement-reference" className="mb-1 block text-sm font-medium text-slate-700">
-                  Reference number <span className="font-normal text-slate-400">(optional)</span>
+                  {stockMovementCopy.referenceLabel} <span className="font-normal text-slate-400">(optional)</span>
                 </label>
                 <input
                   id="stock-movement-reference"
@@ -1356,11 +1747,11 @@ export default function AdminInventory() {
                   value={adjustForm.reference_number}
                   onChange={(event) => setAdjustForm({ ...adjustForm, reference_number: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  placeholder="Delivery receipt, invoice, ticket, or return reference"
+                  placeholder={stockMovementCopy.referencePlaceholder}
                 />
               </div>
               <div className="sm:col-span-2">
-                <label htmlFor="stock-movement-notes" className="mb-1 block text-sm font-medium text-slate-700">Reason / notes <span className="text-red-600">*</span></label>
+                <label htmlFor="stock-movement-notes" className="mb-1 block text-sm font-medium text-slate-700">{stockMovementCopy.reasonLabel} <span className="text-red-600">*</span></label>
                 <textarea
                   id="stock-movement-notes"
                   required
@@ -1368,7 +1759,7 @@ export default function AdminInventory() {
                   onChange={(event) => setAdjustForm({ ...adjustForm, notes: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   rows="3"
-                  placeholder="Example: Restocked from supplier, damaged item, manual count correction"
+                  placeholder={stockMovementCopy.notesPlaceholder}
                 />
               </div>
               {adjustForm.transaction_type === 'issue' ? (
@@ -1389,14 +1780,14 @@ export default function AdminInventory() {
                 onClick={() => setAdjustTarget(null)}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
-                Cancel
+                Dismiss
               </button>
               <button
                 type="button"
                 onClick={adjustStock}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition ${stockMovementCopy.buttonClass}`}
               >
-                Save Movement
+                {stockMovementCopy.submitLabel}
               </button>
             </div>
           </div>
@@ -1486,6 +1877,9 @@ export default function AdminInventory() {
           onClick={() => { setCategoryModalOpen(false); resetCategoryForm(); }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Manage inventory categories"
             className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
@@ -1548,7 +1942,7 @@ export default function AdminInventory() {
                 </div>
                 {error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
                 <div className="flex justify-end gap-2">
-                  {categoryForm.id ? <button type="button" onClick={resetCategoryForm} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">Cancel edit</button> : null}
+                  {categoryForm.id ? <button type="button" onClick={resetCategoryForm} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">Dismiss edit</button> : null}
                   <button type="button" onClick={saveCategory} className="rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600">{categoryForm.id ? 'Save' : 'Add Category'}</button>
                 </div>
               </div>
@@ -1563,13 +1957,16 @@ export default function AdminInventory() {
           onClick={() => resetEditor()}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={adding ? 'Add inventory item' : `Edit ${activeItem.name || 'inventory item'}`}
             className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">Inventory</p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-950">{adding ? 'Add Item' : 'Manage Item'}</h3>
+                <h3 className="mt-1 text-lg font-semibold text-slate-950">{adding ? 'Add Item' : 'Edit Item'}</h3>
               </div>
               <button
                 type="button"
@@ -1581,8 +1978,12 @@ export default function AdminInventory() {
             </div>
 
             <div className="grid gap-4 px-6 py-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <h4 className="text-sm font-semibold text-slate-900">Item information</h4>
+                <p className="mt-1 text-xs text-slate-500">Fields marked * are required. Optional details can be completed now or edited later.</p>
+              </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Item name</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Item name *</label>
                 <input
                   aria-label="Item name"
                   value={activeItem.name || ''}
@@ -1592,11 +1993,11 @@ export default function AdminInventory() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">SKU</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">SKU *</label>
                 <input
                   aria-label="SKU"
                   value={activeItem.sku || ''}
-                  onChange={(event) => updateActiveItem({ sku: event.target.value })}
+                  onChange={(event) => updateActiveItem({ sku: event.target.value.toUpperCase() })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   placeholder="Required, e.g. SOLAR-PANEL-550W"
                 />
@@ -1629,7 +2030,7 @@ export default function AdminInventory() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Unit of Measurement</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Unit of measurement *</label>
                 <input
                   aria-label="Unit of measurement"
                   list="inventory-unit-suggestions"
@@ -1652,7 +2053,7 @@ export default function AdminInventory() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Category</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Category *</label>
                 <select
                   aria-label="Inventory category"
                   value={activeItem.category || ''}
@@ -1667,7 +2068,7 @@ export default function AdminInventory() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Item Type</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Item type *</label>
                 <select
                   aria-label="Item type"
                   value={activeItem.item_type || 'equipment'}
@@ -1678,18 +2079,19 @@ export default function AdminInventory() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
-                <select
-                  value={activeItem.status || 'available'}
-                  onChange={(event) => updateActiveItem({ status: event.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                >
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Automatic status</label>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {adding
+                      ? (Number(activeItem.quantity || 0) > 0 ? 'In stock' : 'Out of stock')
+                      : getInventoryDisplayStatus(activeItem).label}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">Derived from stock and operational activity; it cannot be entered manually.</p>
+                </div>
+              </div>
+              <div className="border-t border-slate-200 pt-4 md:col-span-2">
+                <h4 className="text-sm font-semibold text-slate-900">Stock setup</h4>
+                <p className="mt-1 text-xs text-slate-500">Opening quantity creates the first ledger entry. Future changes use Receive or Adjust in Manage.</p>
               </div>
               {adding ? (
                 <div>
@@ -1707,7 +2109,7 @@ export default function AdminInventory() {
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Current quantity</p>
                   <p className="mt-1 text-lg font-semibold text-slate-950">{activeItem.quantity}</p>
-                  <p className="mt-1 text-xs text-slate-500">Use the Receive action or item details to record count changes with history.</p>
+                  <p className="mt-1 text-xs text-slate-500">Use the stock actions in Manage to record count changes with history.</p>
                 </div>
               )}
               <div>
@@ -1741,11 +2143,15 @@ export default function AdminInventory() {
                   onChange={(event) => updateActiveItem({ low_stock_threshold: parseIntegerInput(event.target.value, 40) })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 />
+                <p className="mt-1 text-xs text-slate-500">Alert when available stock reaches this percentage of the minimum stock level.</p>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Warehouse location</label>
                 <input value={activeItem.warehouse_location || ''} onChange={(event) => updateActiveItem({ warehouse_location: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Rack, room, or warehouse" />
               </div>
+              <details className="rounded-xl border border-slate-200 p-4 md:col-span-2">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-900">Supplier and warranty <span className="font-normal text-slate-500">(optional)</span></summary>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Supplier</label>
                 <input value={activeItem.supplier || ''} onChange={(event) => updateActiveItem({ supplier: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
@@ -1762,14 +2168,21 @@ export default function AdminInventory() {
                 <label className="mb-1 block text-sm font-medium text-slate-700">Warranty expiry</label>
                 <input type="date" value={activeItem.warranty_expiry || ''} onChange={(event) => updateActiveItem({ warranty_expiry: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
-              <div className="md:col-span-2">
+                </div>
+              </details>
+              <details className="rounded-xl border border-slate-200 p-4 md:col-span-2">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-900">Description and internal notes <span className="font-normal text-slate-500">(optional)</span></summary>
+                <div className="mt-4 grid gap-4">
+              <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
                 <textarea rows="3" value={activeItem.description || ''} onChange={(event) => updateActiveItem({ description: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
-              <div className="md:col-span-2">
+              <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Internal notes</label>
                 <textarea rows="3" value={activeItem.notes || ''} onChange={(event) => updateActiveItem({ notes: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
+                </div>
+              </details>
             </div>
 
             {error ? <div className="mx-6 mb-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
@@ -1780,7 +2193,7 @@ export default function AdminInventory() {
                 onClick={() => resetEditor()}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
-                Cancel
+                Dismiss
               </button>
               <button
                 type="button"
@@ -1806,7 +2219,7 @@ export default function AdminInventory() {
           >
             <h3 className="text-lg font-semibold text-slate-950">Delete inventory item?</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              This will remove <span className="font-semibold text-slate-900">{deleteTarget.name}</span> from the inventory list.
+              This will permanently remove <span className="font-semibold text-slate-900">{deleteTarget.name}</span>. This option is available only because the item has no operational history, reservations, service requirements, or return records.
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -1814,7 +2227,7 @@ export default function AdminInventory() {
                 onClick={() => setDeleteTarget(null)}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
-                Cancel
+                Dismiss
               </button>
               <button
                 type="button"
@@ -1831,6 +2244,29 @@ export default function AdminInventory() {
           </div>
         </div>
       )}
+      {lifecycleTarget ? (
+        <ConfirmationDialog
+          title={lifecycleTarget.status === 'retired' ? `Retire "${lifecycleTarget.item.name}"?` : `Reactivate "${lifecycleTarget.item.name}"?`}
+          message={lifecycleTarget.status === 'retired'
+            ? `Permanent deletion is unavailable because this item has ${lifecycleTarget.item.delete_reference_count} protected reference${lifecycleTarget.item.delete_reference_count === 1 ? '' : 's'}${lifecycleTarget.item.delete_blockers.length ? ` (${lifecycleTarget.item.delete_blockers.map((entry) => `${entry.count} ${entry.label}`).join(', ')})` : ''}. Retiring it will stop future use while preserving its inventory history.`
+            : 'The item will return to active inventory and can be used by future inventory workflows.'}
+          tone={lifecycleTarget.status === 'retired' ? 'danger' : 'success'}
+          icon={lifecycleTarget.status === 'retired' ? 'danger' : 'success'}
+          confirmLabel={lifecycleTarget.status === 'retired' ? 'Retire item' : 'Reactivate item'}
+          loading={lifecycleLoading}
+          onCancel={() => {
+            setLifecycleTarget(null);
+            setLifecycleError('');
+          }}
+          onConfirm={changeItemLifecycle}
+        >
+          {lifecycleError ? (
+            <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {lifecycleError}
+            </p>
+          ) : null}
+        </ConfirmationDialog>
+      ) : null}
       {categoryPendingDelete ? (
         <ConfirmationDialog
           title={`Delete category "${categoryPendingDelete.name}"?`}

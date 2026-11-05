@@ -13,7 +13,7 @@ from inventory.automation import (
     fulfill_pending_reservation,
 )
 from inventory.models import InventoryCategory, InventoryItem, InventoryReservation, InventoryTransaction
-from services.models import ServiceRequest, ServiceTicket, ServiceType, TicketCrewAssignment
+from services.models import DocumentDefinition, DocumentTemplate, DocumentTemplateVersion, ServiceRequest, ServiceTicket, ServiceType, TicketCrewAssignment
 from users.models import User
 
 
@@ -130,6 +130,50 @@ class PostgreSQLConcurrencyContractTests(TransactionTestCase):
         self.assertEqual(sorted(outcome for outcome, _pk in outcomes), ['created', 'rejected'])
         self.assertEqual(item.reserved_quantity, 4)
         self.assertEqual(InventoryReservation.objects.filter(item=item, status='pending').count(), 1)
+
+    def test_competing_template_activations_leave_exactly_one_active_version(self):
+        publisher = User.objects.create_superuser(
+            username='template-concurrency-publisher',
+            password='pass',
+            role='superadmin',
+        )
+        definition = DocumentDefinition.objects.get(code='quotation_proposal')
+        template = DocumentTemplate.objects.get(definition=definition, is_default=True)
+        versions = [
+            DocumentTemplateVersion.objects.create(
+                template=template,
+                version_number=number,
+                original_filename=f'quotation-v{number}.docx',
+                file=f'document_templates/concurrency/quotation-v{number}.docx',
+                file_size=1,
+                sha256=str(number) * 64,
+                validation_status='valid',
+                publication_status='draft',
+                uploaded_by=publisher,
+            )
+            for number in (1, 2)
+        ]
+        barrier = Barrier(2)
+
+        def activate(version_id):
+            close_old_connections()
+            try:
+                barrier.wait(timeout=10)
+                api = APIClient()
+                api.force_authenticate(user=User.objects.get(pk=publisher.pk))
+                return api.post(f'/api/services/document-template-versions/{version_id}/activate/').status_code
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(activate, version.pk) for version in versions]
+            statuses = [future.result(timeout=30) for future in futures]
+
+        self.assertEqual(statuses, [200, 200])
+        self.assertEqual(
+            DocumentTemplateVersion.objects.filter(template=template, publication_status='active').count(),
+            1,
+        )
 
     def _create_nullable_ticket_reservation(self, *, sku):
         category, _created = InventoryCategory.objects.get_or_create(name='Nullable Ticket Parts')

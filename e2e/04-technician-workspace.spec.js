@@ -402,7 +402,7 @@ test.describe('Technician Workspace - All Pages', () => {
     const firstName = page.getByLabel('First Name');
     const originalFirstName = await firstName.inputValue();
     await firstName.fill('Unsaved Technician Name');
-    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('button', { name: 'Dismiss' }).click();
     await page.getByRole('button', { name: 'Edit Profile' }).click();
     await expect(page.getByLabel('First Name')).toHaveValue(originalFirstName);
   });

@@ -17,4 +17,5 @@
 *.gif binary
 *.ico binary
 *.docx binary
+*.pdf binary
 *.sqlite3 binary

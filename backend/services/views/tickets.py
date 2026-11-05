@@ -4,7 +4,7 @@ from django.db.models import Subquery
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import ValidationError
 
-from services.document_generation import generate_document as generate_ticket_document
+from services.dynamic_document_generation import DOCX_CONTENT_TYPE, generate_archived_document
 from services.views.helpers import (
     AFTER_SALES_VIEW_CAPABILITIES,
     ASSIGNABLE_TICKET_STATUSES,
@@ -105,6 +105,8 @@ from services.deposits import decimal_from_money, quotation_deposit_summary, tic
 from services.sla import evaluate_service_ticket_sla, get_ticket_dispatch_state
 from services.scheduling_policy import (
     BUSINESS_HOURS_ERROR,
+    get_calendar_closure_error,
+    lock_appointment_capacity_policy,
     is_bookable_time_slot,
     is_business_start_time,
 )
@@ -264,6 +266,16 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
     queryset = ServiceTicket.objects.all()
     serializer_class = ServiceTicketSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        lock_appointment_capacity_policy()
+        return super().create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        lock_appointment_capacity_policy()
+        return super().update(request, *args, **kwargs)
 
     def get_permissions(self):
         """Return appropriate permissions based on action"""
@@ -1000,25 +1012,37 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         else:
             report_id = None
 
+        template_id = request.data.get('template_id')
+        if template_id not in (None, ''):
+            try:
+                template_id = int(template_id)
+            except (TypeError, ValueError):
+                return Response({'error': 'template_id must be a valid integer.'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            template_id = None
+
         try:
-            output_path = generate_ticket_document(
+            output = generate_archived_document(
                 ticket,
                 document_type,
+                generated_by=request.user,
                 report_id=report_id,
+                template_id=template_id,
             )
         except FileNotFoundError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except ValueError as exc:
+        except (ValueError, ValidationError) as exc:
+            detail = exc.detail if isinstance(exc, ValidationError) else str(exc)
             return Response(
-                {'error': str(exc)},
+                {'error': detail},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         return FileResponse(
-            output_path.open('rb'),
+            output.file.open('rb'),
             as_attachment=True,
-            filename=output_path.name,
-            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            filename=output.original_filename,
+            content_type='application/pdf' if output.output_format == 'pdf' else DOCX_CONTENT_TYPE,
         )
 
     @action(detail=True, methods=['post'])
@@ -1028,6 +1052,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         Unified assignment endpoint - replaces assign_technician and old assign.
         Accepts: technician_id (required), auto_assign (bool), calculate_route (bool)
         """
+        lock_appointment_capacity_policy()
         ticket = self.get_locked_ticket()
         technician_id = request.data.get('technician_id')
         dispatch_stage = str(request.data.get('dispatch_stage') or 'service').strip().lower()
@@ -1142,6 +1167,21 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             )
             if not is_business_start_time(effective_scheduled_time):
                 return Response({'error': BUSINESS_HOURS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
+
+            schedule_submitted = any(
+                field in request.data
+                for field in ('scheduled_date', 'scheduled_time', 'scheduled_time_slot')
+            )
+            if schedule_submitted:
+                effective_time_slot = normalized_requested_time_slot or ticket.scheduled_time_slot
+                closure_error = get_calendar_closure_error(
+                    effective_scheduled_date,
+                    effective_time_slot,
+                    effective_scheduled_time,
+                    exclude_ticket_id=ticket.pk,
+                )
+                if closure_error:
+                    return Response({'error': closure_error}, status=status.HTTP_400_BAD_REQUEST)
 
             # Enforce daily assignment limit per service type
             service_type = ticket.request.service_type
@@ -2314,6 +2354,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
     def reschedule(self, request, pk=None):
         """Allow staff/admin to confirm rescheduling of a ticket"""
         with transaction.atomic():
+            lock_appointment_capacity_policy()
             ticket = self.get_locked_ticket()
             if not user_can_manage_service_requests(request.user) and not CanManageServiceTickets().has_permission(request, self):
                 raise PermissionDenied('You do not have permission to reschedule tickets.')
@@ -2374,6 +2415,15 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             )
             if not is_business_start_time(effective_scheduled_time):
                 return Response({'error': BUSINESS_HOURS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
+            effective_time_slot = normalized_time_slot or ticket.scheduled_time_slot
+            closure_error = get_calendar_closure_error(
+                effective_scheduled_date,
+                effective_time_slot,
+                effective_scheduled_time,
+                exclude_ticket_id=ticket.pk,
+            )
+            if closure_error:
+                return Response({'error': closure_error}, status=status.HTTP_400_BAD_REQUEST)
             for technician in get_ticket_team_members(ticket):
                 try:
                     validate_technician_daily_capacity(technician, effective_scheduled_date, ticket)

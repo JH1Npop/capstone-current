@@ -971,7 +971,7 @@ export default function AdminUserManagement() {
             </p>
             <div className="mt-5 flex justify-end gap-3">
               <button type="button" disabled={busyUserId === deleteTarget.id} onClick={() => setDeleteTarget(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
-                Cancel
+                Dismiss
               </button>
               <button type="button" disabled={busyUserId === deleteTarget.id} onClick={() => removeUser(deleteTarget)} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60">
                 {busyUserId === deleteTarget.id ? (isHardDeleteRole(deleteTarget.role) ? 'Deleting...' : 'Deactivating...') : (isHardDeleteRole(deleteTarget.role) ? 'Delete' : 'Deactivate')}

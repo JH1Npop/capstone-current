@@ -1,4 +1,6 @@
 # Auto-split from services/views.py
+from datetime import timedelta
+
 from services.views.helpers import (
     CanAccessServiceRequests,
     CanManageServiceRequests,
@@ -30,9 +32,20 @@ from services.views.helpers import (
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.exceptions import ValidationError
 from django.db import IntegrityError
+from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.shortcuts import get_object_or_404
+from services.models import CalendarClosure
 from services.ticket_status import COMPLETED_TICKET_STATUSES, FIELD_WORK_TICKET_STATUSES
 from services.user_display import client_technician_label
+from services.scheduling_policy import (
+    ORDERED_BOOKABLE_TIME_SLOTS,
+    get_appointment_daily_capacity,
+    get_calendar_closure_error,
+    lock_appointment_capacity_policy,
+    get_scheduled_slot_counts,
+    resolve_slot_availability,
+)
 from users.rbac import SUPERVISOR_DISPATCH_VIEW, user_has_capability
 
 
@@ -101,7 +114,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         """Return appropriate permissions based on action"""
-        if self.action in ['create']:
+        if self.action in ['create', 'appointment_availability']:
             return [permissions.IsAuthenticated()]  # Any authenticated user can create requests
         elif self.action in ['update', 'partial_update', 'destroy', 'approve', 'reject']:
             return [CanManageServiceRequests()]
@@ -168,6 +181,111 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
+    @action(detail=False, methods=['get'], url_path='appointment-availability')
+    def appointment_availability(self, request):
+        """Expose privacy-safe schedule activity for the client request calendar.
+
+        The response deliberately contains no ticket, request, client, service,
+        location, or technician identifiers. It is an advisory view of current
+        non-cancelled appointments, not a dispatch or capacity guarantee.
+        """
+        today = timezone.localdate()
+        start_date = parse_date(str(request.query_params.get('start') or '')) or today
+        end_date = parse_date(str(request.query_params.get('end') or '')) or (start_date + timedelta(days=41))
+
+        if start_date < today:
+            start_date = today
+        if end_date < start_date:
+            return Response(
+                {'error': 'End date must be on or after start date.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if (end_date - start_date).days > 62:
+            return Response(
+                {'error': 'Appointment availability can cover at most 63 days.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        daily_capacity = get_appointment_daily_capacity()
+        scheduled_counts = get_scheduled_slot_counts(start_date, end_date)
+
+        closures_by_date = {}
+        for closure in CalendarClosure.objects.filter(
+            date__range=(start_date, end_date),
+            is_active=True,
+        ).order_by('date', 'time_slot', 'id'):
+            closures_by_date.setdefault(closure.date.isoformat(), []).append(closure)
+
+        days = []
+        for date_key in sorted(set(scheduled_counts) | set(closures_by_date)):
+            counts = scheduled_counts.get(date_key, {})
+            daily_count = sum(counts.values())
+            closures = closures_by_date.get(date_key, [])
+            overrides = {closure.time_slot: closure for closure in closures}
+            slot_availability = {
+                slot: resolve_slot_availability(
+                    count=daily_count,
+                    capacity=daily_capacity,
+                    all_day_override=overrides.get('all_day'),
+                    slot_override=overrides.get(slot),
+                )
+                for slot in ORDERED_BOOKABLE_TIME_SLOTS
+            }
+            slot_statuses = [slot_availability[slot]['status'] for slot in ORDERED_BOOKABLE_TIME_SLOTS]
+            if all(slot_status in {'closed', 'full'} for slot_status in slot_statuses):
+                day_status = 'unavailable'
+            elif any(slot_status in {'closed', 'full', 'limited'} for slot_status in slot_statuses):
+                day_status = 'limited'
+            else:
+                day_status = 'available'
+            days.append({
+                'date': date_key,
+                'has_appointments': any(counts.values()),
+                'slots': {
+                    slot: bool(counts.get(slot, 0))
+                    for slot in ('morning', 'midday', 'afternoon', 'unspecified')
+                },
+                'availability': {
+                    'status': day_status,
+                    'slots': slot_availability,
+                },
+                'closure': {
+                    'all_day': bool(
+                        overrides.get('all_day')
+                        and overrides['all_day'].availability_status == 'closed'
+                    ),
+                    'slots': {
+                        slot: bool(
+                            overrides.get(slot)
+                            and overrides[slot].availability_status == 'closed'
+                        )
+                        for slot in ('morning', 'midday', 'afternoon')
+                    },
+                    'reasons': [
+                        {
+                            'time_slot': closure.time_slot,
+                            'time_slot_label': closure.get_time_slot_display(),
+                            'availability_status': closure.availability_status,
+                        }
+                        for closure in closures
+                    ],
+                },
+            })
+
+        return Response({
+            'start': start_date.isoformat(),
+            'end': end_date.isoformat(),
+            'capacity_policy': {
+                'daily_capacity': daily_capacity,
+                'limited_at_remaining_slots': 1,
+            },
+            'days': days,
+            'advisory': (
+                'Green is available, orange is limited, and red has no appointment availability. '
+                'Availability may change until the request is reviewed and confirmed; other clients\' details and counts are never shown.'
+            ),
+        })
+
     def perform_update(self, serializer):
         requested_status = serializer.validated_data.get('status')
         if requested_status and requested_status != serializer.instance.status:
@@ -186,6 +304,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         """Approve a pending request and create its operational ticket."""
         with transaction.atomic():
+            lock_appointment_capacity_policy()
             service_request = self.get_locked_request()
             require_inspection = (
                 str(request.data.get('require_inspection', '')).lower() == 'true'
@@ -197,6 +316,12 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                     {'error': f'Only pending requests can be approved; this request is {service_request.status.lower()}.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            closure_error = get_calendar_closure_error(
+                service_request.preferred_date,
+                service_request.preferred_time_slot,
+            )
+            if closure_error:
+                return Response({'error': closure_error}, status=status.HTTP_400_BAD_REQUEST)
             if service_request.status != 'Approved':
                 service_request.status = 'Approved'
                 service_request._activity_reason = 'Approved after admin review.'

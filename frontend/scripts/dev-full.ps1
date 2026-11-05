@@ -75,6 +75,24 @@ function Get-AvailableLogPath {
   }
 }
 
+function Stop-ManagedProcessTree {
+  param(
+    [Parameter(Mandatory = $true)]
+    [System.Diagnostics.Process] $Process
+  )
+
+  if ($Process.HasExited) {
+    return
+  }
+
+  # Django's Windows autoreloader starts a child process. Stopping only the
+  # parent can leave that child listening after this launcher exits.
+  & taskkill.exe /PID $Process.Id /T /F *> $null
+  if ($LASTEXITCODE -ne 0 -and -not $Process.HasExited) {
+    Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+  }
+}
+
 $backendOutLog = Get-AvailableLogPath -PreferredPath $backendOutLog
 $backendErrLog = Get-AvailableLogPath -PreferredPath $backendErrLog
 
@@ -175,7 +193,9 @@ $backendProcess = Start-Process `
   -PassThru
 
 $backendReady = $false
-for ($attempt = 0; $attempt -lt 15; $attempt++) {
+$backendStartupTimeoutSeconds = 60
+$backendStartupTimer = [System.Diagnostics.Stopwatch]::StartNew()
+while ($backendStartupTimer.Elapsed.TotalSeconds -lt $backendStartupTimeoutSeconds) {
   if ($backendProcess.HasExited) {
     break
   }
@@ -200,11 +220,11 @@ for ($attempt = 0; $attempt -lt 15; $attempt++) {
 
 if (-not $backendReady) {
   if ($backendProcess -and -not $backendProcess.HasExited) {
-    Stop-Process -Id $backendProcess.Id -Force
+    Stop-ManagedProcessTree -Process $backendProcess
   }
   $stdout = if (Test-Path $backendOutLog) { Get-Content -Path $backendOutLog -Raw } else { '' }
   $stderr = if (Test-Path $backendErrLog) { Get-Content -Path $backendErrLog -Raw } else { '' }
-  throw "Backend database health check failed before the frontend started.`n`nSTDOUT:`n$stdout`nSTDERR:`n$stderr"
+  throw "Backend database health check did not pass within $backendStartupTimeoutSeconds seconds.`n`nSTDOUT:`n$stdout`nSTDERR:`n$stderr"
 }
 
 Write-Host "Backend running on http://127.0.0.1:$backendPort"
@@ -222,6 +242,6 @@ finally {
   Pop-Location
   if ($backendProcess -and -not $backendProcess.HasExited) {
     Write-Host "Stopping Django backend..."
-    Stop-Process -Id $backendProcess.Id -Force
+    Stop-ManagedProcessTree -Process $backendProcess
   }
 }

@@ -648,7 +648,7 @@ def build_quotation_context(ticket):
     }]
 
     context.update({
-        'quotation_number': draft.get('quotationNumber') or f'QUO-{ticket.id:04d}',
+        'quotation_number': draft.get('quotationNumber') or safe_text(getattr(quotation, 'quotation_number', '')) or f'QUO-{ticket.id:04d}',
         'quotation_date': format_date(draft.get('quotationDate') or ticket.scheduled_date),
         'attention': draft.get('attention') or context['client_name'],
         'subject': draft.get('subject') or f"{context['service_type'] or 'Solar PV System'} Proposal",

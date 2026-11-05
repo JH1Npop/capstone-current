@@ -81,12 +81,13 @@ test.describe('Public Pages', () => {
     await page.screenshot({ path: 'test-results/screenshots/01-landing-page.png', fullPage: true });
   });
 
-  test('1.1f - Opening intro plays on request, can be skipped, and ends on its own', async ({ page }) => {
+  test('1.1f - Opening intro has no skip button, supports backdrop dismissal, and ends on its own', async ({ page }) => {
     await page.goto('/?intro=play');
     const intro = page.getByTestId('afn-intro');
     await expect(intro).toBeVisible();
     await expect(intro.getByRole('img', { name: 'AFN Solar Power Engineering Services' })).toBeVisible();
-    await page.getByRole('button', { name: 'Skip intro' }).click();
+    await expect(page.getByRole('button', { name: 'Skip intro' })).toHaveCount(0);
+    await intro.click({ position: { x: 10, y: 10 } });
     await expect(intro).toBeHidden();
     await expect(page.locator('h1').first()).toBeVisible();
 

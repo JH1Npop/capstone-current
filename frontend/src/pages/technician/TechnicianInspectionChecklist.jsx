@@ -466,7 +466,7 @@ export default function TechnicianInspectionChecklist() {
 
             <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur sm:static sm:mt-8 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
               <div className="mx-auto flex max-w-3xl gap-3">
-                <Link to="/technician/my-jobs" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 font-semibold text-slate-700 hover:bg-slate-50">Cancel</Link>
+                <Link to="/technician/my-jobs" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 font-semibold text-slate-700 hover:bg-slate-50">Dismiss</Link>
                 <button type="button" onClick={handleSubmit} disabled={submitting} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"><FiSend /> {submitting ? 'Submitting inspection...' : 'Review and complete inspection'}</button>
               </div>
             </div>

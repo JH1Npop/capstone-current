@@ -242,7 +242,7 @@ export function useTechnicianJobs() {
       const inventoryItem = inventoryItems.find((item) => String(item.id) === String(itemId));
       return {
         itemId,
-        quantity: Number(equipmentForm.quantities[itemId] || 1),
+        quantity: Number(equipmentForm.quantities[itemId]),
         availableQuantity: inventoryItem?.availableQuantity || 0,
         name: inventoryItem?.name || 'Equipment'
       };

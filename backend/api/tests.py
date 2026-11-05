@@ -2,7 +2,9 @@ from datetime import timedelta
 
 from django.utils import timezone
 from django.test import override_settings
+from django.core.cache import cache
 from django.core.files.storage import default_storage
+from urllib.error import URLError
 from unittest.mock import patch
 from services.tests.proof_fixtures import completion_photo
 from services.views.technician import TechnicianJobsView
@@ -794,3 +796,42 @@ class GeocodeValidationTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data['error'], 'limit must be an integer.')
+
+    @patch('api.views.time.sleep')
+    @patch('api.views.urlopen')
+    def test_reverse_geocode_retries_one_transient_timeout(self, mock_urlopen, mock_sleep):
+        cache.clear()
+        successful_response = mock_urlopen.return_value
+        successful_response.__enter__.return_value.read.return_value = (
+            b'{"lat":"13.9181","lon":"121.6091","display_name":"Quezon, Philippines","address":{}}'
+        )
+        mock_urlopen.side_effect = [URLError('timed out'), successful_response]
+
+        response = self.client.get('/api/geocode/reverse/', {
+            'lat': '13.9181',
+            'lon': '121.6091',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['display_name'], 'Quezon, Philippines')
+        self.assertEqual(response.data['lookup_status'], 'resolved')
+        self.assertEqual(mock_urlopen.call_count, 2)
+        mock_sleep.assert_called_once_with(1)
+
+    @patch('api.views.time.sleep')
+    @patch('api.views.urlopen', side_effect=URLError('timed out'))
+    def test_reverse_geocode_preserves_coordinates_after_bounded_retries(self, mock_urlopen, mock_sleep):
+        cache.clear()
+
+        response = self.client.get('/api/geocode/reverse/', {
+            'lat': '13.9003',
+            'lon': '121.6077',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['lookup_status'], 'unavailable')
+        self.assertEqual(response.data['lat'], '13.9003')
+        self.assertEqual(response.data['lon'], '121.6077')
+        self.assertEqual(response.data['address'], {})
+        self.assertEqual(mock_urlopen.call_count, 2)
+        mock_sleep.assert_called_once_with(1)

@@ -1,3 +1,6 @@
+import uuid
+from pathlib import Path
+
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
@@ -5,6 +8,23 @@ from django.utils import timezone
 from afn_service_management.fields import StructuredTextField
 from .core import ServiceType, ServiceTicket, ServiceRequest, ServiceLocation
 from .after_sales import MaintenanceSchedule, AfterSalesCase
+
+
+def document_template_upload_path(instance, filename):
+    """Opaque, version-owned path; callers never control the directory."""
+    suffix = Path(filename).suffix.lower() if filename else '.docx'
+    return f'document_templates/{instance.template_id}/{uuid.uuid4().hex}{suffix}'
+
+
+def document_output_upload_path(instance, filename):
+    suffix = Path(filename).suffix.lower() if filename else '.docx'
+    owner = f'ticket-{instance.ticket_id}' if instance.ticket_id else f'instance-{instance.instance_id}'
+    return f'generated_documents/{owner}/{uuid.uuid4().hex}{suffix}'
+
+
+def document_attachment_upload_path(instance, filename):
+    suffix = Path(filename).suffix.lower() if filename else ''
+    return f'document_attachments/{instance.instance_id}/{uuid.uuid4().hex}{suffix}'
 
 
 class TechnicalDataSheet(models.Model):
@@ -260,6 +280,184 @@ class TurnoverAcceptance(models.Model):
         ordering = ['-created_at']
 
 
+class DocumentDefinition(models.Model):
+    CATEGORY_CHOICES = [('core', 'Core workflow'), ('custom', 'Custom')]
+    SOURCE_CHOICES = [('ticket', 'Service ticket'), ('client', 'Client'), ('project', 'Project')]
+
+    code = models.SlugField(max_length=64, unique=True)
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True, default='')
+    category = models.CharField(max_length=16, choices=CATEGORY_CHOICES, default='custom')
+    data_source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default='ticket')
+    core_workflow_binding = models.CharField(max_length=64, blank=True, default='')
+    access_capabilities = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_document_definitions')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', 'name', 'id']
+
+    def __str__(self):
+        return self.name
+
+
+class DocumentTemplate(models.Model):
+    definition = models.ForeignKey(DocumentDefinition, on_delete=models.PROTECT, related_name='templates')
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True, default='')
+    is_default = models.BooleanField(default=False)
+    is_enabled = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_document_templates')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['definition__display_order', 'name', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['definition', 'name'], name='services_document_template_unique_name'),
+            models.UniqueConstraint(fields=['definition'], condition=models.Q(is_default=True), name='services_document_template_one_default'),
+        ]
+
+    def __str__(self):
+        return f'{self.definition.name} — {self.name}'
+
+
+class DocumentTemplateVersion(models.Model):
+    FORMAT_CHOICES = [('docx', 'DOCX'), ('pdf', 'PDF')]
+    VALIDATION_CHOICES = [('pending', 'Pending'), ('valid', 'Valid'), ('invalid', 'Invalid')]
+    PUBLICATION_CHOICES = [('draft', 'Draft'), ('active', 'Active'), ('retired', 'Retired')]
+    READINESS_CHOICES = [
+        ('saved', 'Saved'),
+        ('ready_fill', 'Ready to fill'),
+        ('ready_auto', 'Ready for automatic fill'),
+        ('attention', 'Needs attention'),
+    ]
+
+    template = models.ForeignKey(DocumentTemplate, on_delete=models.PROTECT, related_name='versions')
+    version_number = models.PositiveIntegerField()
+    original_filename = models.CharField(max_length=255)
+    file = models.FileField(upload_to=document_template_upload_path, max_length=500)
+    file_format = models.CharField(max_length=8, choices=FORMAT_CHOICES, default='docx')
+    mime_type = models.CharField(max_length=150, default='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    file_size = models.PositiveBigIntegerField(default=0)
+    sha256 = models.CharField(max_length=64)
+    placeholder_manifest = models.JSONField(default=dict, blank=True)
+    validation_report = models.JSONField(default=dict, blank=True)
+    validation_status = models.CharField(max_length=16, choices=VALIDATION_CHOICES, default='pending')
+    readiness_status = models.CharField(max_length=16, choices=READINESS_CHOICES, default='saved')
+    publication_status = models.CharField(max_length=16, choices=PUBLICATION_CHOICES, default='draft')
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='uploaded_document_template_versions')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    activated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='activated_document_template_versions')
+    activated_at = models.DateTimeField(null=True, blank=True)
+    change_notes = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['template_id', '-version_number']
+        constraints = [
+            models.UniqueConstraint(fields=['template', 'version_number'], name='services_document_template_version_unique'),
+            models.UniqueConstraint(fields=['template'], condition=models.Q(publication_status='active'), name='services_document_template_one_active_version'),
+        ]
+
+    def __str__(self):
+        return f'{self.template} v{self.version_number}'
+
+
+class DocumentTemplateField(models.Model):
+    FIELD_TYPE_CHOICES = [
+        ('text', 'Short text'),
+        ('multiline', 'Multiline text'),
+        ('date', 'Date'),
+        ('number', 'Number'),
+        ('currency', 'Currency'),
+        ('checkbox', 'Checkbox'),
+        ('dropdown', 'Dropdown'),
+        ('signature', 'Signature placeholder'),
+    ]
+    FILL_METHOD_CHOICES = [('manual', 'Manual'), ('system', 'AFN data')]
+
+    template_version = models.ForeignKey(DocumentTemplateVersion, on_delete=models.CASCADE, related_name='fillable_fields')
+    field_key = models.SlugField(max_length=64)
+    label = models.CharField(max_length=150)
+    field_type = models.CharField(max_length=16, choices=FIELD_TYPE_CHOICES, default='text')
+    fill_method = models.CharField(max_length=16, choices=FILL_METHOD_CHOICES, default='manual')
+    source_key = models.CharField(max_length=100, blank=True, default='')
+    is_required = models.BooleanField(default=False)
+    default_value = models.JSONField(null=True, blank=True)
+    options = models.JSONField(default=list, blank=True)
+    page_number = models.PositiveIntegerField(null=True, blank=True)
+    placement = models.JSONField(default=dict, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', 'page_number', 'label', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['template_version', 'field_key'], name='services_document_template_field_unique_key'),
+        ]
+        indexes = [models.Index(fields=['template_version', 'page_number'])]
+
+    def __str__(self):
+        return f'{self.template_version}: {self.label}'
+
+
+class DocumentFieldDefinition(models.Model):
+    FIELD_TYPE_CHOICES = [
+        ('text', 'Text'),
+        ('multiline', 'Multiline text'),
+        ('number', 'Number'),
+        ('date', 'Date'),
+        ('boolean', 'Boolean'),
+        ('dropdown', 'Dropdown'),
+    ]
+
+    definition = models.ForeignKey(DocumentDefinition, on_delete=models.CASCADE, related_name='field_definitions')
+    field_key = models.SlugField(max_length=64)
+    label = models.CharField(max_length=150)
+    field_type = models.CharField(max_length=16, choices=FIELD_TYPE_CHOICES, default='text')
+    is_required = models.BooleanField(default=False)
+    default_value = models.JSONField(null=True, blank=True)
+    validation_config = models.JSONField(default=dict, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', 'label', 'id']
+        constraints = [models.UniqueConstraint(fields=['definition', 'field_key'], name='services_document_field_unique_key')]
+
+    def __str__(self):
+        return f'{self.definition.name}: {self.label}'
+
+
+class DocumentInstance(models.Model):
+    STATUS_CHOICES = [('draft', 'Draft'), ('generated', 'Generated'), ('archived', 'Archived')]
+
+    definition = models.ForeignKey(DocumentDefinition, on_delete=models.PROTECT, related_name='instances')
+    ticket = models.ForeignKey(ServiceTicket, null=True, blank=True, on_delete=models.PROTECT, related_name='custom_document_instances')
+    client = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name='custom_document_instances')
+    project = models.ForeignKey('SolarProjectProfile', null=True, blank=True, on_delete=models.PROTECT, related_name='document_instances')
+    selected_template_version = models.ForeignKey(DocumentTemplateVersion, null=True, blank=True, on_delete=models.PROTECT, related_name='document_instances')
+    custom_field_values = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='draft')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_document_instances')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-id']
+        indexes = [models.Index(fields=['definition', 'ticket']), models.Index(fields=['definition', 'client'])]
+
+    def __str__(self):
+        return f'{self.definition.name} instance #{self.pk}'
+
+
 class GeneratedDocument(models.Model):
     id = models.BigAutoField(db_column='generated_document_id', primary_key=True)
 
@@ -312,6 +510,56 @@ class GeneratedDocument(models.Model):
 
     def __str__(self):
         return f"{self.get_document_type_display()} - TKT-{self.ticket_id:04d}"
+
+
+class DocumentOutput(models.Model):
+    FORMAT_CHOICES = [('docx', 'DOCX'), ('pdf', 'PDF')]
+    SOURCE_CHOICES = [('legacy', 'Legacy fallback'), ('dynamic', 'Active template')]
+    STATUS_CHOICES = [('ready', 'Ready'), ('failed', 'Failed')]
+
+    definition = models.ForeignKey(DocumentDefinition, on_delete=models.PROTECT, related_name='outputs')
+    ticket = models.ForeignKey(ServiceTicket, null=True, blank=True, on_delete=models.PROTECT, related_name='document_outputs')
+    instance = models.ForeignKey(DocumentInstance, null=True, blank=True, on_delete=models.PROTECT, related_name='outputs')
+    template_version = models.ForeignKey(DocumentTemplateVersion, null=True, blank=True, on_delete=models.PROTECT, related_name='outputs')
+    generated_document = models.ForeignKey(GeneratedDocument, null=True, blank=True, on_delete=models.SET_NULL, related_name='outputs')
+    output_format = models.CharField(max_length=8, choices=FORMAT_CHOICES, default='docx')
+    renderer_source = models.CharField(max_length=16, choices=SOURCE_CHOICES)
+    file = models.FileField(upload_to=document_output_upload_path, max_length=500, blank=True)
+    original_filename = models.CharField(max_length=255)
+    file_size = models.PositiveBigIntegerField(default=0)
+    sha256 = models.CharField(max_length=64, blank=True, default='')
+    source_snapshot = models.JSONField(default=dict)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='ready')
+    error_summary = models.TextField(blank=True, default='')
+    generated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='generated_document_outputs')
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-generated_at', '-id']
+        indexes = [models.Index(fields=['ticket', '-generated_at']), models.Index(fields=['instance', '-generated_at']), models.Index(fields=['definition', '-generated_at'])]
+
+    def __str__(self):
+        owner = f'TKT-{self.ticket_id:04d}' if self.ticket_id else f'instance #{self.instance_id}'
+        return f'{self.definition.name} output for {owner}'
+
+
+class DocumentAttachment(models.Model):
+    instance = models.ForeignKey(DocumentInstance, on_delete=models.PROTECT, related_name='attachments')
+    file = models.FileField(upload_to=document_attachment_upload_path, max_length=500)
+    original_filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=150)
+    file_size = models.PositiveBigIntegerField(default=0)
+    sha256 = models.CharField(max_length=64)
+    description = models.CharField(max_length=255, blank=True, default='')
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='uploaded_document_attachments')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at', '-id']
+        indexes = [models.Index(fields=['instance', '-uploaded_at'])]
+
+    def __str__(self):
+        return self.original_filename
 
 
 # Technician Location History for tracking

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { FiPlus, FiTrash2, FiEdit2, FiChevronDown, FiChevronUp, FiTool, FiClock, FiList, FiPackage, FiPower } from 'react-icons/fi';
+import { useEffect, useRef, useState } from 'react';
+import { FiPlus, FiTrash2, FiEdit2, FiChevronDown, FiChevronUp, FiTool, FiClock, FiList, FiPackage, FiPower, FiMoreVertical } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import {
@@ -103,13 +103,19 @@ const toServiceFormState = (service) => ({
   inspection_procedures: normalizeInspectionChecks(service?.inspection_procedures),
 });
 
+const WORKDAY_MINUTES = 8 * 60;
+
 const formatDuration = (minutes) => {
-  const safeMinutes = Number(minutes || 0);
-  const hours = Math.floor(safeMinutes / 60);
-  const remainder = safeMinutes % 60;
-  if (hours > 0 && remainder > 0) return `${hours}h ${remainder}m`;
-  if (hours > 0) return `${hours}h`;
-  return `${safeMinutes}m`;
+  const safeMinutes = Math.max(0, Number(minutes || 0));
+  const days = Math.floor(safeMinutes / WORKDAY_MINUTES);
+  const remainingAfterDays = safeMinutes % WORKDAY_MINUTES;
+  const hours = Math.floor(remainingAfterDays / 60);
+  const remainingMinutes = remainingAfterDays % 60;
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (remainingMinutes > 0 || parts.length === 0) parts.push(`${remainingMinutes}m`);
+  return parts.join(' ');
 };
 
 const formatCost = (cost) => {
@@ -124,9 +130,12 @@ const canPermanentlyDeleteService = (service) => (
 
 const getDurationParts = (minutes) => {
   const safeMinutes = Math.max(0, Number(minutes || 0));
+  const days = Math.floor(safeMinutes / WORKDAY_MINUTES);
+  const remainingAfterDays = safeMinutes % WORKDAY_MINUTES;
   return {
-    hours: Math.floor(safeMinutes / 60),
-    minutes: safeMinutes % 60
+    days,
+    hours: Math.floor(remainingAfterDays / 60),
+    minutes: remainingAfterDays % 60
   };
 };
 
@@ -135,9 +144,13 @@ const mergeDurationPart = (currentMinutes, part, value) => {
   const numericValue = Math.max(0, Number(value || 0));
   const next = {
     ...current,
-    [part]: part === 'minutes' ? Math.min(numericValue, 59) : numericValue
+    [part]: part === 'minutes'
+      ? Math.min(numericValue, 59)
+      : part === 'hours'
+        ? Math.min(numericValue, 7)
+        : numericValue
   };
-  return (next.hours * 60) + next.minutes;
+  return (next.days * WORKDAY_MINUTES) + (next.hours * 60) + next.minutes;
 };
 
 const normalizeRequirement = (requirement) => ({
@@ -337,12 +350,14 @@ function EquipmentEditor({ equipment, onChange }) {
                 min="1"
                 className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
                 placeholder="Qty"
+                aria-label={`Equipment quantity ${i + 1}`}
                 value={item.quantity}
-                onChange={(e) => updateItem(i, 'quantity', Number(e.target.value) || 1)}
+                onChange={(e) => updateItem(i, 'quantity', e.target.value)}
               />
               <button
                 type="button"
                 onClick={() => removeItem(i)}
+                aria-label={`Remove equipment item ${i + 1}`}
                 className="rounded-lg p-1 text-red-400 hover:bg-red-50 hover:text-red-600"
               >
                 <FiTrash2 size={14} />
@@ -359,7 +374,31 @@ function EquipmentEditor({ equipment, onChange }) {
 function ServiceCard({ service, requirements, inventoryItems, canManage, canManageInventory, onEdit, onCatalogAction, onSaveRequirement, onDeleteRequirement }) {
   const [expanded, setExpanded] = useState(false);
   const [reqForm, setReqForm] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const menuButtonRef = useRef(null);
   const selectableInventoryItems = inventoryItems.filter((item) => item.status !== 'retired');
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!menuRef.current?.contains(event.target)) setMenuOpen(false);
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [menuOpen]);
 
   const startAddRequirement = () => {
     setReqForm({
@@ -373,6 +412,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
 
   const handleSaveReq = async () => {
     if (!reqForm) return;
+    if (!Number.isFinite(Number(reqForm.quantity)) || Number(reqForm.quantity) < 1) return;
     await onSaveRequirement(reqForm);
     setReqForm(null);
   };
@@ -397,7 +437,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
                 ? 'bg-slate-100 text-slate-600'
                 : 'bg-emerald-50 text-emerald-700'
             }`}>
-              {service.is_active === false ? 'Inactive' : 'Active'}
+              {service.is_active === false ? 'Deactivated' : 'Active'}
             </span>
             {service.requires_site_inspection ? (
               <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
@@ -449,46 +489,67 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-start gap-2 sm:justify-end">
-          {canManage ? <button
-            type="button"
-            onClick={() => onEdit(service)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-            title="Edit"
-          >
-            <FiEdit2 size={15} />
-            Edit
-          </button> : null}
-          {canManage ? <button
-            type="button"
-            onClick={() => onCatalogAction(service, service.is_active === false ? 'activate' : 'deactivate')}
-            className={`inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold ${
-              service.is_active === false
-                ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                : 'border-amber-200 text-amber-700 hover:bg-amber-50'
-            }`}
-            title={service.is_active === false ? 'Activate service' : 'Deactivate service'}
-          >
-            <FiPower size={15} />
-            {service.is_active === false ? 'Activate' : 'Deactivate'}
-          </button> : null}
-          {canManage && canPermanentlyDeleteService(service) ? <button
-            type="button"
-            onClick={() => onCatalogAction(service, 'delete')}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-            title="Delete unused service"
-          >
-            <FiTrash2 size={15} />
-            Delete
-          </button> : null}
+        <div className="flex shrink-0 items-center justify-start gap-2 sm:justify-end">
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
             className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200"
           >
             {expanded ? <FiChevronUp size={16} /> : <FiChevronDown size={16} />}
             {expanded ? 'Hide' : 'Details'}
           </button>
+          {canManage ? (
+            <div className="relative" ref={menuRef}>
+              <button
+                ref={menuButtonRef}
+                type="button"
+                aria-label={`Actions for ${service.name}`}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((current) => !current)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              >
+                <FiMoreVertical size={17} aria-hidden="true" />
+              </button>
+              {menuOpen ? (
+                <div
+                  role="menu"
+                  aria-label={`Service actions for ${service.name}`}
+                  className="absolute left-0 top-10 z-20 min-w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg sm:left-auto sm:right-0"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onEdit(service);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 focus:bg-slate-100 focus:outline-none"
+                  >
+                    <FiEdit2 size={15} aria-hidden="true" />
+                    Edit Service
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onCatalogAction(service, service.is_active === false ? 'activate' : 'deactivate');
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium focus:outline-none ${
+                      service.is_active === false
+                        ? 'text-emerald-700 hover:bg-emerald-50 focus:bg-emerald-50'
+                        : 'text-amber-700 hover:bg-amber-50 focus:bg-amber-50'
+                    }`}
+                  >
+                    <FiPower size={15} aria-hidden="true" />
+                    {service.is_active === false ? 'Reactivate' : 'Deactivate'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -586,13 +647,15 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
                   type="number"
                   min="1"
                   className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  aria-label="Inventory requirement quantity"
                   value={reqForm.quantity}
-                  onChange={(e) => setReqForm({ ...reqForm, quantity: Number(e.target.value) || 1 })}
+                  onChange={(e) => setReqForm({ ...reqForm, quantity: e.target.value })}
                 />
                 <button
                   type="button"
                   onClick={handleSaveReq}
-                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                  disabled={!Number.isFinite(Number(reqForm.quantity)) || Number(reqForm.quantity) < 1}
+                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Save
                 </button>
@@ -601,7 +664,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
                   onClick={() => setReqForm(null)}
                   className="rounded-lg bg-slate-200 px-3 py-1.5 text-sm hover:bg-slate-300"
                 >
-                  Cancel
+                  Dismiss
                 </button>
               </div>
             )}
@@ -629,6 +692,7 @@ export default function AdminServices() {
   const [serviceFormData, setServiceFormData] = useState(DEFAULT_SERVICE_FORM);
   const [feedback, setFeedback] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [serviceVisibility, setServiceVisibility] = useState('active');
 
   const load = async () => {
     setLoading(true);
@@ -676,6 +740,14 @@ export default function AdminServices() {
         setFeedback('Max daily assignments must be at least 1.');
         return;
       }
+      const invalidEquipment = serviceFormData.required_equipment.find((item) => (
+        String(item?.name || '').trim()
+        && (!Number.isFinite(Number(item?.quantity)) || Number(item.quantity) < 1)
+      ));
+      if (invalidEquipment) {
+        setFeedback(`Equipment quantity must be at least 1 for ${invalidEquipment.name || 'each item'}.`);
+        return;
+      }
       if (serviceFormData.deposit_policy === 'percentage' && (Number(serviceFormData.deposit_value) <= 0 || Number(serviceFormData.deposit_value) > 100)) {
         setFeedback('Deposit percentage must be greater than 0 and no more than 100.');
         return;
@@ -721,7 +793,7 @@ export default function AdminServices() {
         await updateService(service.id, { ...service, is_active: isActivating });
         setFeedback(isActivating
           ? `${service.name} is active and available for new requests again.`
-          : `${service.name} is now inactive and hidden from new requests. Historical records were preserved.`);
+          : `${service.name} is now inactive and hidden from new requests. Historical records were preserved. Use the Deactivated services view to reactivate it.`);
       } else {
         await deleteService(service.id);
         setFeedback('Unused service deleted.');
@@ -764,30 +836,16 @@ export default function AdminServices() {
   };
 
   const durationParts = getDurationParts(serviceFormData.estimated_duration);
+  const activeServiceCount = services.filter((service) => service.is_active !== false).length;
+  const deactivatedServiceCount = services.length - activeServiceCount;
+  const visibleServices = services.filter((service) => {
+    if (serviceVisibility === 'active') return service.is_active !== false;
+    if (serviceVisibility === 'deactivated') return service.is_active === false;
+    return true;
+  });
 
   return (
     <Layout>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm text-slate-500">Manage service types, checklist procedures, tools, and inventory templates.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {canManageServices ? <button
-            type="button"
-            onClick={() => {
-              setEditingService(null);
-              setServiceFormData(DEFAULT_SERVICE_FORM);
-              setShowForm(true);
-              setFeedback('');
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
-          >
-            <FiPlus size={15} />
-            Add Service
-          </button> : null}
-        </div>
-      </div>
-
       {feedback && (
         <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
           feedback.toLowerCase().includes('error') || feedback.toLowerCase().includes('unable') || feedback.toLowerCase().includes('required') || feedback.toLowerCase().includes('cannot')
@@ -876,7 +934,7 @@ export default function AdminServices() {
                 min="0"
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                 value={serviceFormData.display_order}
-                onChange={(e) => setServiceFormData({ ...serviceFormData, display_order: Number(e.target.value) || 0 })}
+                onChange={(e) => setServiceFormData({ ...serviceFormData, display_order: e.target.value })}
               />
             </div>
             <div>
@@ -890,11 +948,27 @@ export default function AdminServices() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Service Duration</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <div className="relative">
                   <input
                     type="number"
                     min="0"
+                    aria-label="Service duration days"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 pr-12 text-sm"
+                    value={durationParts.days}
+                    onChange={(e) => setServiceFormData({
+                      ...serviceFormData,
+                      estimated_duration: mergeDurationPart(serviceFormData.estimated_duration, 'days', e.target.value)
+                    })}
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">day</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="7"
+                    aria-label="Service duration hours"
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 pr-12 text-sm"
                     value={durationParts.hours}
                     onChange={(e) => setServiceFormData({
@@ -909,6 +983,7 @@ export default function AdminServices() {
                     type="number"
                     min="0"
                     max="59"
+                    aria-label="Service duration minutes"
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 pr-12 text-sm"
                     value={durationParts.minutes}
                     onChange={(e) => setServiceFormData({
@@ -920,7 +995,7 @@ export default function AdminServices() {
                 </div>
               </div>
               <p className="mt-1 text-xs text-slate-500">
-                {formatDuration(serviceFormData.estimated_duration)} total, used for the 8-hour technician capacity.
+                {formatDuration(serviceFormData.estimated_duration)} total. One day equals 8 working hours for technician scheduling.
               </p>
             </div>
             <div>
@@ -932,7 +1007,7 @@ export default function AdminServices() {
                   step="0.01"
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 pl-12 text-sm"
                   value={serviceFormData.estimated_cost}
-                  onChange={(e) => setServiceFormData({ ...serviceFormData, estimated_cost: Number(e.target.value) || 0 })}
+                  onChange={(e) => setServiceFormData({ ...serviceFormData, estimated_cost: e.target.value })}
                 />
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500">PHP</span>
               </div>
@@ -942,15 +1017,16 @@ export default function AdminServices() {
               <input
                 type="number"
                 min="1"
+                aria-label="Max daily assignments per technician"
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                 value={serviceFormData.max_daily_assignments}
-                onChange={(e) => setServiceFormData({ ...serviceFormData, max_daily_assignments: Number(e.target.value) || 1 })}
+                onChange={(e) => setServiceFormData({ ...serviceFormData, max_daily_assignments: e.target.value })}
               />
             </div>
             <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
               <span>
                 <span className="block text-sm font-medium text-slate-700">Available for new requests</span>
-                <span className="block text-xs text-slate-500">Use the service card's Activate or Deactivate action so the status change is confirmed.</span>
+                <span className="block text-xs text-slate-500">Use the service card action menu so status changes remain confirmed.</span>
               </span>
               <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                 serviceFormData.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
@@ -995,7 +1071,7 @@ export default function AdminServices() {
                     max={serviceFormData.deposit_policy === 'percentage' ? 100 : undefined}
                     step="0.01"
                     value={serviceFormData.deposit_value}
-                    onChange={(event) => setServiceFormData({ ...serviceFormData, deposit_value: Number(event.target.value) || 0 })}
+                    onChange={(event) => setServiceFormData({ ...serviceFormData, deposit_value: event.target.value })}
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 pr-16 text-sm"
                   />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500">
@@ -1056,7 +1132,7 @@ export default function AdminServices() {
               }}
               className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
-              Cancel
+              Dismiss
             </button>
             <button
               type="button"
@@ -1070,17 +1146,62 @@ export default function AdminServices() {
         </div>
       )}
 
+      <div
+        className="mb-3 flex flex-wrap items-center justify-between gap-3"
+        role="region"
+        aria-label="Service catalog controls"
+      >
+        <p className="text-xs font-medium text-slate-500">
+          {activeServiceCount} active · {deactivatedServiceCount} deactivated
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <label>
+            <span className="sr-only">Service visibility</span>
+            <select
+              value={serviceVisibility}
+              onChange={(event) => setServiceVisibility(event.target.value)}
+              className="h-10 min-w-[190px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm"
+            >
+              <option value="active">Active Services ({activeServiceCount})</option>
+              <option value="deactivated">Deactivated Services ({deactivatedServiceCount})</option>
+              <option value="all">All Services ({services.length})</option>
+            </select>
+          </label>
+          {canManageServices ? (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingService(null);
+                setServiceFormData(DEFAULT_SERVICE_FORM);
+                setShowForm(true);
+                setFeedback('');
+              }}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+            >
+              <FiPlus size={15} aria-hidden="true" />
+              Add Service
+            </button>
+          ) : null}
+        </div>
+      </div>
+
       {/* Services List */}
       {loading ? (
         <ListSkeleton rows={5} />
       ) : services.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 py-16">
-          <FiTool size={32} className="text-slate-300" />
-          <p className="mt-3 text-sm text-slate-400">No services yet. Create your first service above.</p>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">
+          No services yet. Use Add Service to create the first catalog entry.
         </div>
       ) : (
-        <div className="space-y-3">
-          {services.map((service) => (
+        <section aria-labelledby="service-catalog-heading">
+          <h3 id="service-catalog-heading" className="sr-only">Service catalog</h3>
+
+          {visibleServices.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-5 text-sm font-medium text-slate-600">
+              {serviceVisibility === 'deactivated' ? 'No deactivated services.' : 'No active services.'}
+            </div>
+          ) : <div className="space-y-3">
+          {visibleServices.map((service) => (
             <ServiceCard
               key={service.id}
               service={service}
@@ -1100,7 +1221,8 @@ export default function AdminServices() {
               }}
             />
           ))}
-        </div>
+          </div>}
+        </section>
       )}
 
       {deleteTarget && (
@@ -1141,7 +1263,7 @@ export default function AdminServices() {
                 disabled={serviceActionBusy}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
-                Cancel
+                Dismiss
               </button>
               <button
                 type="button"
@@ -1187,7 +1309,7 @@ export default function AdminServices() {
                 onClick={() => setRequirementDeleteTarget(null)}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
-                Cancel
+                Dismiss
               </button>
               <button
                 type="button"

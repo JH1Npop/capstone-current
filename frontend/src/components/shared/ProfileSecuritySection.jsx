@@ -187,7 +187,7 @@ export default function ProfileSecuritySection({ onMessage }) {
               {loading ? 'Changing Password…' : 'Change Password'}
             </button>
             <button type="button" onClick={closeForm} disabled={loading} className="flex-1 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300 disabled:opacity-60">
-              Cancel
+              Dismiss
             </button>
           </div>
         </form>
@@ -226,7 +226,7 @@ export default function ProfileSecuritySection({ onMessage }) {
               </label>
               <div className="flex gap-3">
                 <button type="submit" disabled={loading} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">Continue</button>
-                <button type="button" onClick={resetMfaForm} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Cancel</button>
+                <button type="button" onClick={resetMfaForm} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Dismiss</button>
               </div>
             </form>
           ) : null}
@@ -241,7 +241,7 @@ export default function ProfileSecuritySection({ onMessage }) {
               </label>
               <div className="flex gap-3">
                 <button type="submit" disabled={loading} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">Verify and enable</button>
-                <button type="button" onClick={resetMfaForm} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Cancel</button>
+                <button type="button" onClick={resetMfaForm} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Dismiss</button>
               </div>
             </form>
           ) : null}
@@ -269,7 +269,7 @@ export default function ProfileSecuritySection({ onMessage }) {
               </label>
               <div className="flex gap-3">
                 <button type="submit" disabled={loading} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">Disable MFA</button>
-                <button type="button" onClick={resetMfaForm} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Cancel</button>
+                <button type="button" onClick={resetMfaForm} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Dismiss</button>
               </div>
             </form>
           ) : null}

@@ -1,6 +1,8 @@
 
 from django.db import transaction
-from django.db.models import Count, ExpressionWrapper, F, IntegerField, Sum
+from django.db.models import CharField, Count, ExpressionWrapper, F, IntegerField, Q, Sum, Value
+from django.db.models.functions import Cast, Concat
+from django.db.models.deletion import ProtectedError
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
@@ -70,7 +72,23 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
         return [CanManageInventory()]
 
     def get_queryset(self):
-        queryset = InventoryItem.objects.select_related('category').order_by('id')
+        queryset = InventoryItem.objects.select_related('category').annotate(
+            operational_transaction_count=Count(
+                'transactions',
+                filter=~Q(
+                    transactions__transaction_type='adjustment',
+                    transactions__reference_number=Concat(
+                        Value('OPENING-'),
+                        Cast(F('pk'), output_field=CharField()),
+                    ),
+                    transactions__notes='Opening inventory balance',
+                ),
+                distinct=True,
+            ),
+            reservation_reference_count=Count('reservations', distinct=True),
+            service_requirement_reference_count=Count('service_type_requirements', distinct=True),
+            return_request_reference_count=Count('equipment_return_request_items', distinct=True),
+        ).order_by('id')
 
         # Filter by category
         category = self.request.query_params.get('category')
@@ -90,28 +108,41 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
         low_stock = self.request.query_params.get('low_stock')
         if low_stock == 'true':
             low_stock_ids = [item.id for item in queryset if item.is_low_stock]
-            queryset = InventoryItem.objects.filter(id__in=low_stock_ids)
+            queryset = queryset.filter(id__in=low_stock_ids)
 
         return queryset
 
     def destroy(self, request, *args, **kwargs):
         with transaction.atomic():
             item = InventoryItem.objects.select_for_update().get(pk=self.get_object().pk)
-            if (
-                item.transactions.exists() or
-                item.reservations.exists() or
-                item.service_type_requirements.exists()
-            ):
+            deletion_contract = self.get_serializer(item).data
+            if not deletion_contract['can_delete']:
+                blockers = ', '.join(
+                    f"{entry['count']} {entry['label']}"
+                    for entry in deletion_contract['delete_blockers']
+                )
                 return Response(
                     {
                         'detail': (
-                            'This item has inventory history or service requirements and cannot be deleted. '
-                            'Set its status to retired instead.'
-                        )
+                            f'This item cannot be deleted because it has {blockers}. '
+                            'Retire it to preserve its history.'
+                        ),
+                        'can_delete': False,
+                        'delete_reference_count': deletion_contract['delete_reference_count'],
+                        'delete_blockers': deletion_contract['delete_blockers'],
                     },
                     status=status.HTTP_409_CONFLICT,
                 )
-            return super().destroy(request, *args, **kwargs)
+            try:
+                return super().destroy(request, *args, **kwargs)
+            except ProtectedError:
+                return Response(
+                    {
+                        'detail': 'This item gained protected history and cannot be deleted. Retire it instead.',
+                        'can_delete': False,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
 
     @action(detail=False, methods=['get'])
     def low_stock(self, request):

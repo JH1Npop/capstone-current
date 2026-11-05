@@ -14,7 +14,7 @@ from ..models import (
     SalesRecord, SalesRecordLine
 )
 from ..solar_calculator import CALCULATION_VERSION, SolarCalculationError, calculate_solar_estimate
-from ..scheduling_policy import BUSINESS_HOURS_ERROR, is_bookable_time_slot
+from ..scheduling_policy import BUSINESS_HOURS_ERROR, get_calendar_closure_error, is_bookable_time_slot
 from ..sla import (
     evaluate_service_request_sla,
     evaluate_service_ticket_sla,
@@ -534,6 +534,14 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'preferred_date': 'Choose an appointment date when selecting a time slot.',
             })
+
+        schedule_submitted = creating or any(
+            field in attrs for field in ('preferred_date', 'preferred_time_slot')
+        )
+        if schedule_submitted:
+            closure_error = get_calendar_closure_error(preferred_date, preferred_time_slot)
+            if closure_error:
+                raise serializers.ValidationError({'preferred_date': closure_error})
 
         latitude = attrs.pop('latitude', None)
         longitude = attrs.pop('longitude', None)

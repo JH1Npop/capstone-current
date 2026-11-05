@@ -201,6 +201,56 @@ class ServiceRequestService(models.Model):
         return f"Request #{self.request_id}: {self.service_type.name}"
 
 
+class CalendarClosure(models.Model):
+    SLOT_CHOICES = [
+        ('all_day', 'All day'),
+        ('morning', 'Morning (8 AM - 11 AM)'),
+        ('midday', 'Midday (11 AM - 2 PM)'),
+        ('afternoon', 'Afternoon (2 PM - 5 PM)'),
+    ]
+    AVAILABILITY_STATUS_CHOICES = [
+        ('limited', 'Limited'),
+        ('closed', 'Closed'),
+    ]
+
+    date = models.DateField()
+    time_slot = models.CharField(max_length=20, choices=SLOT_CHOICES, default='all_day')
+    availability_status = models.CharField(
+        max_length=20,
+        choices=AVAILABILITY_STATUS_CHOICES,
+        default='closed',
+    )
+    reason = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='created_calendar_closures',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='updated_calendar_closures',
+    )
+    reopened_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reopened_calendar_closures',
+    )
+    reopened_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['date', 'time_slot', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['date', 'time_slot'], name='unique_calendar_closure_slot'),
+        ]
+        indexes = [
+            models.Index(fields=['is_active', 'date'], name='calclosure_active_date_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.date} - {self.get_time_slot_display()} ({self.get_availability_status_display()})'
+
+
 class ServiceLocation(models.Model):
     id = models.BigAutoField(db_column='service_location_id', primary_key=True)
 

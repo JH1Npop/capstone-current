@@ -52,6 +52,12 @@ const isImageSource = (url = '') => {
   );
 };
 
+const isPhotoMedia = (media = {}) => {
+  const mediaType = String(media.type || '').trim().toLowerCase();
+  if (mediaType === 'video') return false;
+  return mediaType === 'photo' || isImageSource(media.url);
+};
+
 const resolveProofUrl = (url = '') => {
   const value = String(url || '').trim();
   if (!value) return '';
@@ -89,7 +95,7 @@ const normalizeProofMedia = (items = [], fallbackType = 'photo') =>
       if (typeof item === 'string') {
         return {
           id: `${fallbackType}-${index}`,
-          type: fallbackType,
+          type: String(fallbackType).trim().toLowerCase(),
           name: `Proof ${index + 1}`,
           rawUrl: item,
           url: resolveProofUrl(item),
@@ -101,7 +107,7 @@ const normalizeProofMedia = (items = [], fallbackType = 'photo') =>
 
       return {
         id: item.id || `${fallbackType}-${index}`,
-        type: item.type || fallbackType,
+        type: String(item.type || fallbackType).trim().toLowerCase(),
         name: item.name || item.filename || `Proof ${index + 1}`,
         rawUrl,
         url,
@@ -130,7 +136,7 @@ function ProofMediaGallery({ title, items, emptyText, onPreview }) {
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {mediaItems.map((item) => {
-          const canPreview = isImageSource(item.url);
+          const canPreview = isPhotoMedia(item);
           const content = (
             <>
               {canPreview ? (
@@ -1246,7 +1252,7 @@ export default function AdminJobHistory() {
               </div>
             </div>
             <div className="bg-slate-950 p-4">
-              {isImageSource(selectedProof.url) ? (
+              {isPhotoMedia(selectedProof) ? (
                 <img
                   src={selectedProof.url}
                   alt={selectedProof.name || 'Proof file'}

@@ -41,7 +41,6 @@ test.describe('Major flow journey through the real UI', () => {
     const adminAuth = loadAuthStateFromBackend('superadmin_test');
     const techAuth = loadAuthStateFromBackend('tech_test');
     const marker = `E2E journey ${Date.now()}`;
-    const preferred = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
 
     // 1. Client creates the request.
     const clientContext = await browser.newContext({ permissions: ['geolocation'] });
@@ -50,11 +49,11 @@ test.describe('Major flow journey through the real UI', () => {
     await seedAuthState(clientPage, clientAuth);
     await clientPage.goto('/client/service-requests');
     await clientPage.getByRole('checkbox', { name: SERVICE_NAME }).check();
-    await clientPage.getByPlaceholder('E.g., near SM Mall of Asia').fill('Journey Street, Brgy. Pulo');
+    await clientPage.getByPlaceholder('House number, street, barangay, or nearby landmark').fill('Journey Street, Brgy. Pulo');
     await clientPage.getByPlaceholder('Enter city name').fill('Cabuyao');
     await clientPage.getByPlaceholder('Enter province name').fill('Laguna');
-    await clientPage.locator('input[type="date"]').first().fill(preferred);
-    await clientPage.getByPlaceholder('Describe your request').fill(marker);
+    await clientPage.locator('[role="gridcell"]:not([disabled])').nth(3).click();
+    await clientPage.getByPlaceholder('Describe the work needed or anything the team should know before visiting').fill(marker);
     await clientPage.getByRole('button', { name: 'Use My Location' }).click();
     await clientPage.getByRole('button', { name: 'Create Service Request' }).click();
     await clientPage.getByRole('button', { name: 'Confirm submit' }).click();
@@ -192,7 +191,6 @@ test.describe('Major flow journey through the real UI', () => {
     const stamp = Date.now();
     const serviceName = `E2E Inspected Install ${stamp}`;
     const marker = `E2E inspection journey ${stamp}`;
-    const preferred = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
     const installDate = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
     const pick = (payload) => (Array.isArray(payload) ? payload : payload.results || []);
 
@@ -252,11 +250,11 @@ test.describe('Major flow journey through the real UI', () => {
     await seedAuthState(clientPage, clientAuth);
     await clientPage.goto('/client/service-requests');
     await clientPage.getByRole('checkbox', { name: serviceName }).check();
-    await clientPage.getByPlaceholder('E.g., near SM Mall of Asia').fill('Inspection Lane, Brgy. Pulo');
+    await clientPage.getByPlaceholder('House number, street, barangay, or nearby landmark').fill('Inspection Lane, Brgy. Pulo');
     await clientPage.getByPlaceholder('Enter city name').fill('Cabuyao');
     await clientPage.getByPlaceholder('Enter province name').fill('Laguna');
-    await clientPage.locator('input[type="date"]').first().fill(preferred);
-    await clientPage.getByPlaceholder('Describe your request').fill(marker);
+    await clientPage.locator('[role="gridcell"]:not([disabled])').nth(6).click();
+    await clientPage.getByPlaceholder('Describe the work needed or anything the team should know before visiting').fill(marker);
     await clientPage.getByRole('button', { name: 'Use My Location' }).click();
     await clientPage.getByRole('button', { name: 'Create Service Request' }).click();
     await clientPage.getByRole('button', { name: 'Confirm submit' }).click();

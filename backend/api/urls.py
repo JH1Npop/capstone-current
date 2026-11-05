@@ -5,7 +5,7 @@ Clean routing — all business logic lives in view modules.
 from django.urls import path, include
 from rest_framework import routers
 
-from services.views_dashboard import AdminCalendarView, DashboardChangesView, DashboardView
+from services.views_dashboard import AdminCalendarClosureView, AdminCalendarView, DashboardChangesView, DashboardView
 from services.views import (
     TechnicianDashboardView, TechnicianJobsView, TechnicianScheduleView,
     TechnicianProfileView, TechnicianHistoryView,
@@ -60,6 +60,7 @@ urlpatterns = [
     path('dashboard/stats/', DashboardView.as_view(), name='dashboard-stats'),
     path('dashboard/changes/', DashboardChangesView.as_view(), name='dashboard-changes'),
     path('admin/calendar/', AdminCalendarView.as_view(), name='admin-calendar'),
+    path('admin/calendar/closures/', AdminCalendarClosureView.as_view(), name='admin-calendar-closures'),
 
     # Technician endpoints
     path('technician/dashboard/', TechnicianDashboardView.as_view({'get': 'dashboard'}), name='technician-dashboard'),

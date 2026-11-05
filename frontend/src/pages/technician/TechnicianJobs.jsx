@@ -39,10 +39,15 @@ const formatTimeLabel = (value, slot) => {
 const formatDurationLabel = (minutes) => {
   const totalMinutes = Number(minutes || 0);
   if (totalMinutes <= 0) return 'Not specified';
-  const hours = Math.floor(totalMinutes / 60);
-  const remainingMinutes = totalMinutes % 60;
-  if (!hours) return `${remainingMinutes} min`;
-  return remainingMinutes ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`;
+  const days = Math.floor(totalMinutes / (8 * 60));
+  const remainingAfterDays = totalMinutes % (8 * 60);
+  const hours = Math.floor(remainingAfterDays / 60);
+  const remainingMinutes = remainingAfterDays % 60;
+  const parts = [];
+  if (days > 0) parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
+  if (hours > 0) parts.push(`${hours} hr`);
+  if (remainingMinutes > 0) parts.push(`${remainingMinutes} min`);
+  return parts.join(' ');
 };
 
 const getReservationStatusClasses = (status) => {
@@ -628,7 +633,7 @@ export default function TechnicianJobs() {
               {cancelledInventoryReservations.length > 0 && (
                 <details className="mt-3 border-t border-slate-200 pt-3">
                   <summary className="cursor-pointer text-sm font-medium text-slate-600">
-                    Previous requests ({cancelledInventoryReservations.length} cancelled)
+                    Previous requests ({cancelledInventoryReservations.length} dismissed)
                   </summary>
                   <div className="mt-2 space-y-2">
                     {cancelledInventoryReservations.map((reservation) => (
@@ -723,7 +728,7 @@ export default function TechnicianJobs() {
                                   type="number"
                                   min="1"
                                   max={item.availableQuantity || 1}
-                                  value={equipmentForm.quantities[itemId] || 1}
+                                  value={equipmentForm.quantities[itemId] ?? 1}
                                   onChange={(event) => updateEquipmentQuantity(itemId, event.target.value)}
                                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                                 />
@@ -812,7 +817,7 @@ export default function TechnicianJobs() {
                     onClick={() => { setHoldJobId(null); setHoldReason(''); }}
                     className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                   >
-                    Cancel
+                    Dismiss
                   </button>
                 </div>
               </form>
@@ -1124,7 +1129,7 @@ export default function TechnicianJobs() {
                   }}
                   className="rounded-lg bg-slate-200 px-6 py-3 font-medium text-slate-700 transition hover:bg-slate-300"
                 >
-                  Cancel
+                  Dismiss
                 </button>
               </div>
 

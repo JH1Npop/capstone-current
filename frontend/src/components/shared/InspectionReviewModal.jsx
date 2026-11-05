@@ -233,8 +233,8 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
               active={decision === 'cancel'}
               accent={optionAccent.cancel}
               icon={FiXCircle}
-              title="Cancel Service"
-              description="The request cannot move forward at this site."
+              title="Dismiss Service"
+              description="Close this service because it cannot move forward at this site."
               onSelect={() => setDecision('cancel')}
             />
           </div>
@@ -304,7 +304,7 @@ export default function InspectionReviewModal({ ticket, onClose, onSuccess }) {
               disabled={submitting}
               className="inline-flex items-center justify-center rounded-xl border border-surface-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-surface-50 disabled:opacity-50"
             >
-              Cancel
+              Dismiss
             </button>
             <button
               onClick={handleSubmit}

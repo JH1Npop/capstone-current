@@ -1,7 +1,78 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-10-30 (login cold-start timeout hardening deployed and health-verified) Asia/Singapore**
+Last updated: **2026-11-05 (diagram pack, data dictionary, bug sweep, client-friendly document templates steps 1-5 and 7) Asia/Singapore**
+Current objective (latest): **Replace the tracked academic context-diagram source with a current, editable Draw.io XML while preserving the professor-required single-system-process format and system database. The diagram now shows Client, Technician, Administrator, and Superadministrator; the AFN-SERVE system boundary; OpenStreetMap/Nominatim plus OpenRouteService/OSRM routing; Brevo email; Cloudinary private storage; and the PostgreSQL/development-SQLite data store. Sixteen directional, labeled flows cover the audited account, request, calendar, ticket, dispatch, field, inventory, document, financial, communication, after-sales, maintenance, analytics, file, provider, and persistence boundaries. React/Vite, Django/DRF/Daphne, Redis/Channels, and browser/PWA are explicitly identified as internal implementation components rather than external actors. PowerShell XML parsing passed with 13 vertices and 16 edges, and scoped diff checking passed aside from the existing Windows line-ending notice. No runtime code, schema, migration, dependency, database record, external service, commit, push, or deployment changed.**
+Current objective (latest): **Audit the complete `Copy of AFN-SERVE: REVISION CAPSTONE 2` Chapters 1–5 against the current repository end to end without changing application behavior or data. `docs/quality/PAPER_SYSTEM_E2E_ALIGNMENT_AUDIT.md` now records chapter-level alignment, the actual React/Vite + Django/DRF/Daphne + PostgreSQL/Redis/Cloudinary/Brevo/ORS architecture, the measured 60-model boundary, current capability/workflow maps, Chapter III corrections, the 151-versus-150 sample inconsistency, Chapter IV's unsupported perfect 5.00 results and future-tense language, and the absence of substantive Chapter V content. Django check, migration drift, and the 2,564-module build passed. The backend gate ran 693 tests with 685 passed, 7 skipped, and one reproduced 403-versus-401 authentication-contract failure. The isolated browser gate ran all 230 scenarios with 224 passed and six failures bounded to Calendar layering/collisions, commissioning-save confirmation, obsolete location selectors in two major journeys after the request redesign, and a rejection journey page-state mismatch. No runtime code, schema, migration, dependency, database record, stored object, external document, commit, push, or deployment changed.**
+Current objective (latest): **Make active custom Smart Documents discoverable from the main Admin Documents row. `AdminDocuments.jsx` now loads active definitions through the existing protected API, retains the six workflow-bound editors as items 1-6, appends active custom definitions as subsequent numbered items, and opens a selected custom item directly in the existing generic Fill template workspace. The installed local `preventive-maintenance-report` therefore appears as item 7 for document managers without becoming a hardcoded core editor or gaining workflow authority. Desktop navigation uses a responsive four-to-seven-column wrapping grid so item 7 is visible rather than hidden beyond the old horizontal strip; narrow screens retain bounded horizontal scrolling. The list refreshes after the Fill template, replacement, or library dialogs close. The Vite production build passed with 2,564 modules, and a read-only Django query confirmed the six core definitions plus active custom definition ID 9. The repository has no lint script, so the attempted lint command did not run; no lint result is claimed. No model, migration, dependency, document record, stored file, commit, push, or deployment changed.**
+Current objective (latest): **Create and prove a seventh AFN document using only the Smart Documents system just implemented. Local development now has active custom definition `preventive-maintenance-report` (ID 9), ten typed administrator-defined fields, default design `AFN Standard` (ID 13), valid/ready-auto/active private DOCX version 10, generated ticket-630 instance 1, and ready archived output 1. The branded US-Letter DOCX uses approved ticket placeholders plus registered maintenance fields for date/type, equipment condition, safety checks, work performed, findings, recommendations, next service, and acknowledgments. The real APIs created the definition/fields/design/version, validated and test-rendered it, activated/enabled it, filled/previewed/generated it, and archived it. Structural inspection found six tables, expected AFN/ticket/work/recommendation text, and zero unresolved placeholders. Authorized private output download returned HTTP 200, a valid 38,609-byte DOCX, and an exact stored SHA-256 match. A transaction-consistent pre-change SQLite backup passed integrity. A desktop Word PDF-export attempt hung; it was stopped, its exact hidden process and all temporary local artifacts were removed, and no PDF evidence is claimed. The registered Cloudinary sources/output and local development records intentionally remain. No new entity, model, migration, dependency, hardcoded core editor, staging/production record, commit, push, or deployment was added.**
+Current objective (latest): **Re-run the complete Smart Documents implementation boundary with newly created templates and real browser workflows after Phase 7 completion. The 62-test document/business lifecycle gate and 13-test storage/catalog/import gate passed 75/75 total; these tests construct fresh DOCX/PDF uploads and cover validation, unsafe rejection, activation, atomic rollback, all-six generation, archival provenance, custom documents, permissions, failure/retry, private delivery, and import behavior. Frontend document contracts passed 26/26. Chromium scenarios 3.9/3.9b/3.9c passed 3/3 in 2.6 minutes on the ignored isolated E2E database, including all-six save/reload, real generation/download, fresh Quotation-version upload, validation, ticket-backed test DOCX, and activation. The 2,564-module production build, Django check, and zero migration drift passed. Expected Vite notification WebSocket proxy-abort messages were limited to navigation/managed teardown. No development/staging/production database, configured Cloudinary object, real active design, model, migration, dependency, commit, push, or deployment changed.**
+Current objective (latest): **Close the remaining technical Smart Documents plan gates without changing a document record or publishing a design. All six protected repository DOCX baselines were rendered with representative long/repeating data, opened/exported by desktop Microsoft Word, and visually/textually inspected: FSR 2 pages, turnover 6, commissioning 6, TDS 7, installation contract 21, and quotation 14. Every page was US Letter, final content/signature sections remained present, 35-row collections were retained where applicable, and no unresolved token remained. Configured Cloudinary UAT then passed a uniquely named temporary DOCX as authenticated raw storage, byte-exact private read-back (2,356 bytes and matching SHA-256), signed HTTPS access, and successful deletion. A prior attempt hit a transient provider read timeout and is retained as superseded evidence. Generated local UAT artifacts were removed. Phases 0–7 are technically complete; AFN still must inspect and deliberately activate each actual final company design before production use. The legacy fallback, six protected workflow editors, and historical versions remain intentional compatibility/recovery paths rather than unfinished cleanup. No model, migration, dependency, document/template/database record, persistent activation, commit, push, or deployment changed.**
+Current objective (latest): **Complete the first non-destructive Smart Documents Phase 7 cleanup checkpoint. The backend version serializer now exposes the authoritative missing activation connections; the wizard and advanced Template Library consume that result instead of maintaining a second publication registry. Advanced history names blockers and disables avoidable activation attempts while previously published historical versions remain rollback-compatible. Version lists prefetch mapped fields to avoid a new per-version query. The core action/status presentation is extracted to `DocumentActionCard.jsx`, while `AdminDocuments.jsx` retains every workflow decision and callback. Evidence is 23/23 focused backend tests, 26/26 frontend document contracts, 70/70 protected backend/business tests, passing Chromium scenarios 3.9 and 3.9c, a 2,564-module build, Django check, and zero migration drift. The first frontend rerun failed 1 test because its rollback fixture reused the active ID; the corrected 26/26 run supersedes it. No dependency, model, migration, development/staging/production record, persistent activation, commit, push, or deployment changed. Legacy generation, the six editors, old templates, and broader layout extraction remain gated by representative Word/PDF and target private-Cloudinary UAT.**
+Current objective (latest): **Complete the Smart Documents Phase 6 automated acceptance gate without publishing or deleting a live design. Core DOCX/PDF activation is now blocked server-side when document-specific required connections are missing; DOCX additionally requires balanced markers for required repeating sections, while fixed PDFs are not falsely treated as expanding-table templates. The wizard mirrors the policy and names missing connections. Historical previously published versions remain rollback-eligible. Failure/retry coverage proves failed generation records provenance without a file, preserves the active design, and permits a clean retry. Evidence is 26/26 frontend tests, 70/70 protected backend tests, final successful Chromium coverage of scenarios 3.9/3.9b/3.9c, a 2,563-module production build, Django check, zero migration drift, and a bounded synthetic 100-row DOCX performance probe. No dependency, model, migration, development/staging/production record, persistent activation, commit, push, or deployment changed. Representative Word/PDF visual review and target private-Cloudinary UAT remain manual release checks, so Phase 7 legacy cleanup remains intentionally gated.**
+Current objective (latest): **Complete Smart Documents Phase 5 without replacing protected workflows. Fill template now distinguishes the six core documents from registered custom documents: core definitions show their active design and schema summary, separate editable data from final layout, and route to the existing interactive editor; custom definitions retain their dynamic field/instance/preview/generation path. Every core editor adds Generate active design through the existing ticket generator while quotation, deposit, dispatch, contract, commissioning, turnover, and report actions remain unchanged. Evidence is 25/25 frontend tests, 1/1 real Chromium routing/generation/download/draft journey, a 2,563-module production build, Django check, and zero migration drift. The Phase 3 60/60 backend gate remains current because Phase 5 changed no backend runtime. No dependency, model, migration, development/staging/production record, commit, push, or deployment changed. Phases 6–7 remain pending.**
+Current objective (latest): **Complete Smart Documents Phase 3 without paid AI or new persistence. `documentFieldSuggestions.js` provides an extensible alias registry, deterministic confidence scoring, bounded nearby-PDF-label selection, and conservative required-component checks. The PDF mapper extracts text locally through its existing PDF.js document, offers explainable approved-field suggestions, and persists nothing until staff explicitly accepts and saves through the existing version-specific field API. The replacement wizard marks DOCX placeholders Exact, shows missing-content review warnings, and requires explicit field-review confirmation before testing. Evidence is 19/19 frontend tests, 60/60 protected backend tests, 1/1 Chromium guided journey, a 2,561-module production build, Django check, and zero migration drift. No dependency, model, migration, external AI call, development/staging/production record, commit, push, or deployment changed. Phases 4–7 remain pending.**
+Current objective (latest): **Complete Smart Documents Phase 2 on the existing template infrastructure. Admin Documents now provides a six-step Replace design wizard for core-document/design selection, DOCX/PDF upload, validation, format-specific configuration review, real ticket-backed test generation, deliberate activation, and eligible-version rollback; Template library remains the advanced manager. Configured PDFs now support non-archiving test render/download through the existing field resolver and PDF renderer. Evidence is 15/15 frontend schema/wizard tests, 10/10 focused generation tests, 60/60 protected backend tests, 1/1 Chromium guided replacement journey, a 2,560-module production build, and a clean scoped diff check. No model, migration, development/staging/production database, persistent template activation, commit, push, or deployment changed. Phases 3–7 remain pending.**
+Current objective (latest): **Complete the Smart Documents master plan's Phase 1 schema extraction for all six core documents without entering Phase 2. Technical Data Sheet, Installation Contract, Quotation / Proposal, and Turnover Acceptance now join Field Service Report and Solar Commissioning with versioned field/collection/ownership contracts, backward-compatible hydration, schema-driven state helpers, printable-draft serialization, and narrowly allowlisted canonical-record projections. Existing React papers, Django models, APIs, statuses, immutability, quotation acceptance/deposit/dispatch gates, turnover effects, generation, template infrastructure, and storage remain authoritative and unchanged. Evidence is 11/11 frontend schema tests, 59/59 protected backend tests, 1/1 Chromium quotation/template-library journey, 1/1 Chromium all-stage save/reload journey, a 2,558-module build, Django check, zero migration drift, and a clean scoped diff check. Browser tests used isolated E2E SQLite; no development/staging/production data, migration, template activation, storage object, commit, push, or deployment changed. Phase 1 is complete; the generic renderer, guided replacement wizard, suggestions/mapping improvements, unified filling, full acceptance gate, and cleanup in Phases 2–7 remain pending.**
+Current objective (latest): **Continue the Smart Documents master plan one document at a time by completing the second Phase 1 schema for the Solar Commissioning Checklist. A versioned frontend schema now defines its canonical fields, workflow states, two reading groups, actions, fixed checklist columns, and the preserved 54-item catalog. Admin hydration/render controls/state updates/API serialization and the technician commissioning form use shared adapters. The adapter accepts the technician form's obsolete `items`/`check_type`/`solar_irradiance` inputs but sends only canonical `SolarCommissioningChecklist` fields; weather and remarks remain inside the existing structured readings JSON. Finalized records stay server-immutable and are disabled in the technician UI. Evidence is 6/6 schema tests, 4/4 focused generation/lock tests, 22/22 protected workflow tests, 1/1 real Chromium 54-item save/reload journey, a 2,553-module build, Django check, zero migration drift, and a clean scoped diff check. No model, migration, endpoint, development/staging/production record, template activation, storage object, commit, push, or deployment changed. Phase 1 remains incomplete: Technical Data Sheet, Installation Contract, Quotation / Proposal, and Turnover Acceptance schemas plus Phases 2–7 are pending.**
+Current objective (latest): **Complete only the master plan's Phase 0 safety baseline and Phase 1 Field Service Report proof of concept before touching the other five documents. A new versioned frontend schema records FSR field identity, types, source hints, workflow/presentation ownership, actions, and the repeating equipment-readings table. The existing paper remains in place, but its repeating columns, accessible cells, state updates, add/remove operations, legacy-draft hydration, and version-stamped serialization now use a reusable adapter. Old unversioned drafts and unknown presentation values remain compatible; canonical technician reports remain authoritative and acknowledged reports stay locked. Baseline evidence was 22/22 backend plus a 2,550-module build and a temporary five-run render median of 14.06 ms. Final evidence is 3/3 schema tests, 23/23 combined backend, 1/1 real Chromium save/reload journey, a 2,551-module build, Django check, and zero migration drift. No model, migration, endpoint, template activation, persistent development data, storage object, commit, push, or deployment changed. Phases 2–7 and the other five schemas remain deliberately pending review.**
+Current objective (latest): **Fix the PDF field editor's blank, undersized one-page preview. The loader previously stored the PDF only in a ref and relied on page-count state to trigger rendering; a one-page PDF kept the initial count at 1, so no render occurred. The renderer now has an explicit ready state, resets correctly when the source version changes, and renders once loading completes regardless of page count. It also sizes against the available viewer panel rather than the canvas wrapper's initial browser-default 300px width, allowing the real PDF page to display up to 820px while retaining high-DPI rendering and existing normalized field positions. The Vite 8.3.5 production build passes with 2,550 modules. No PDF source, saved field, backend, schema, database, or storage object changed.**
+Current objective (latest): **Prevent stale success banners in the Document templates popup. Successful operation notices such as “Design enabled” now dismiss automatically after four seconds, a newer message resets the timer, and closing the popup clears both success and error state before the next opening. Error messages remain visible for correction instead of disappearing unexpectedly. The Vite 8.3.5 production build passes with 2,550 modules. No backend, schema, migration, database, template, or storage state changed.**
+Current objective (latest): **Make quotation row creation obvious without adding controls to the printed document. The Price, System Specifications/Bill of Materials, and Warranty Terms tables no longer place a small plus icon in the blue header or a separate button below the table. Each editable row now groups a compact 12px blue-hover Add icon directly beside its compact red-hover bin icon inside the original narrow 5% action column, matching the existing table proportions. All row controls remain hidden in print, and new BOM item numbers advance from the highest existing number so deleting a middle row and adding another does not create duplicate item numbers. The Vite 8.3.5 production build passes with 2,550 modules. No backend, schema, migration, document data, or generated output changed.**
+Current objective (latest): **Make document-design deletion usable without weakening history. The Delete action is now visible on every manageable design and enabled whenever the design has no active version. The backend no longer requires a separate Retire or Set another default ceremony: it atomically deletes enabled/default designs when all versions are unreferenced and promotes another design to default when available. It still returns HTTP 409 for active versions, generated-output provenance, or prepared document-instance references. Confirmation explicitly warns that draft/retired source versions are permanently removed. The focused template lifecycle suite passes 11/11 and the Vite 8.3.5 production build passes with 2,550 modules. No existing local design or stored source was deleted during implementation.**
+Current objective (latest): **Simplify only the Document templates popup—not the application's main sidebar—by separating navigation from creation. The popup mini sidebar now contains the document-type selector, existing designs, Add new design, and New document type. Add new design and custom-type registration each open as a dedicated right-panel workflow, so a new-design upload is never shown beside the selected design's Replace source/version action. Selecting a design returns to its management view, and creating a custom type leads directly to adding its first design. Permissions, uploads, validation, activation, rollback, generation, schema, database data, and the main application navigation are unchanged. The Vite 8.3.5 production build passes with 2,550 modules.**
+Current objective (latest): **Apply the approved client-friendly Documents schema to local development, then audit—not guess—the requested entity cleanup. A transaction-consistent backup at `backend/backups/db-before-documents-0068-0069-20261103.sqlite3` passed SQLite integrity with zero foreign-key violations. `services.0068_document_template_format_and_readiness` and `services.0069_document_template_fields` are now applied locally; staging and production were untouched. Post-migration Django check and database integrity pass. The schema audit confirms the new `DocumentTemplateField` entity is required by the PDF/manual-field workflow, not redundant. Data inspection found three distinct possible cleanup records: inactive custom definition `iman` with empty default design, disabled empty Technical Data Sheet design `Iman`, and enabled Field Service Report design `Iman Template` with one draft DOCX version. No record or model was deleted because “not needed entity” does not identify which target and the latter design contains a stored version.**
+Current objective (latest): **Implement the smallest safe client-friendly Documents workflow on the existing dynamic-document infrastructure. Administrators can now save DOCX or PDF sources independently from field setup, preserve/download the original, configure version-specific PDF fields on the real multi-page document, map approved AFN data or manual values, activate/rollback designs, and use the shared Fill template workspace to save, reset, accurately preview, generate, download, and archive the correct DOCX/PDF format. Active core PDF designs now replace the six core documents' visual output without changing quotation, deposit, dispatch, completion, or turnover authority; required manual values return a controlled validation response. Existing definitions, versions, instances, outputs, private storage, permissions, and legacy fallback are reused. The combined Documents/protected-workflow gate passes 58/58, focused generation passes 9/9, the 2,550-module build passes, Django/schema/dependency/diff checks pass, and npm audit reports zero vulnerabilities. Additive migrations `services.0068` and `0069` are applied to local development only; staging and production remain unapplied. Real non-technical browser UAT with representative AFN files, malware policy, AcroForm import, image signatures, arbitrary Word visual fields, and DOCX inline preview remain pending or intentionally unsupported.**
+Current objective (latest): **Publish the requested source-verified current-state Documents audit without changing application behavior. `DOCUMENTS_CURRENT_STATUS.md` now begins with an authoritative 2026-11-03 refresh covering the implemented frontend surfaces, canonical and dynamic models, APIs, permissions, validation and rendering paths, supported formats, previews, storage, local database state, workflows, partial features, missing features, and safe next-revision boundaries. The older pre-implementation investigation remains below it as explicitly superseded historical context. No application code, schema, migration, dependency, route, environment, runtime data, generated document, commit, push, or deployment changed.**
+Current objective (latest): **Continue the original Dynamic Documents plan without prematurely entering Phase F cleanup. Document templates, generated outputs, and attachments now use Cloudinary authenticated raw resources with five-minute server-generated private download URLs; all six previously imported local baseline objects were migrated in place from public raw delivery and verified byte-exact through private reads while their former public URLs return 404. A dry-run-first `privatize_document_assets` command provides idempotent migration and audit logging. The placeholder registry now exposes typed source/format/applicability metadata to every core and custom definition, and the shared manager displays and refreshes it after custom-field changes. Word-authored marker-only rows/paragraphs now support safe repeating sections, with edge-case coverage for Unicode, XML characters, long and missing values. Template activation serializes on the shared design row and has a PostgreSQL-only competing-activation regression for the staging gate. The final combined backend gate passes 31/31, the repeating-row/catalog gate passes 4/4, the publication/render gate passes 15/15 with one expected local PostgreSQL skip, the 2,547-module build passes, the focused real-browser Documents journey passes 1/1, and checks/migration drift pass. Phase F deletion remains blocked by real Word visual approval, local approved-version replacement/rollback and archived-output UAT, PostgreSQL staging execution, retention/malware decisions, and stakeholder acceptance; PDF preview remains explicitly deferred.**
+Current objective (latest): **Resume the original Dynamic Documents plan at its first unfinished controlled-migration checkpoint rather than adding unrelated UI. A new dry-run-first, checksum-idempotent `import_legacy_document_templates` command validates the exact six runtime repository DOCX sources, requires a named active administrator for `--apply`, stores immutable valid draft versions, and never activates them. Its focused/adjacent gate passes 16/16. With explicit external-access approval, local development registered all six Standard baselines as v1 under superadmin `iman` in configured Cloudinary raw-file storage. All six remain draft/inactive; generation still uses the safe legacy fallback. A transient TLS reset interrupted the first read, then a byte-exact one-file retry and complete six-file retry succeeded: every in-memory render is a valid DOCX ZIP with zero unresolved tokens. No archive/output record, template activation, migration, commit, push, staging, or production change occurred. Phase F cleanup remains blocked only by real Word visual approval, an approved replacement-version activation/rollback drill, configured archived-output authorization/storage UAT, and staging/stakeholder acceptance.**
+Current objective (latest): **Allow administrators to permanently remove unused document designs without weakening document history. Admin Documents now shows Delete only for a retired, non-default design with no active version and requires a destructive confirmation. `DELETE /api/services/document-templates/{id}/` independently enforces retirement, non-default status, no active version, and no `DocumentOutput` or `DocumentInstance` references; it removes unreferenced draft/retired versions, schedules their stored files for best-effort post-commit deletion, and logs the action. Enabled/default/active/historically referenced designs return HTTP 409 and remain intact. The focused backend lifecycle suite passes 8/8, the 2,547-module build, Django check, and migration drift pass, and the real Admin Documents Chromium journey passes create → retire → confirm → delete. No migration, persistent development record, commit, push, or deployment changed.**
+Current objective (latest): **Repair the local Admin Documents DOCX upload HTTP 500 without changing document records or schema. The configured default storage previously used Cloudinary's image-only backend for every extension, so template `.docx` files were submitted as image resources and provider errors escaped as HTTP 500. `AFNMediaCloudinaryStorage` now routes known images to `image`, known videos to `video`, and DOCX/PDF/text/other files to `raw`; filesystem-backed test/E2E behavior remains unchanged. The focused storage and complete template-version lifecycle gate passes 8/8, Django check and migration drift pass, and effective local settings resolve DOCX to `raw` and JPG to `image`. No migration, template/document row, external Cloudinary asset, commit, push, or deployment changed; a real Cloudinary raw upload/download still requires an approved deployment-shaped check.**
+Current objective (latest): **Complete the local Phase F acceptance/readiness gate without prematurely removing active compatibility paths. The combined document and protected-workflow suite passes 48/48; both Admin Documents browser journeys pass; the 2,547-module build, Django check, migration drift, and migration plan pass. A new representative DOCX regression proves table/body/header/footer substitution while preserving styles and an embedded logo byte-for-byte. Source dependency review confirms the JSX editors, builders, technician/shared forms, canonical context mapper, and legacy renderer still have runtime consumers. Local development has six seeded definitions but zero uploaded versions, instances, outputs, or attachments, so removing the fallback would break core generation. Phase F source deletion is therefore deliberately withheld until approved templates are locally uploaded/activated/visually accepted, rollback is proven with those files, and deployment-shaped private storage plus staging acceptance are complete. No schema, dependency, business data, active template, commit, push, or deployment changed during this gate.**
+Current objective (latest): **Apply the completed Dynamic Documents Phase B/C/E schema only to local development after explicit approval and a validated transaction-consistent backup. SQLite migrations `services.0065_document_template_infrastructure`, `0066_document_output_archive`, and `0067_dynamic_custom_documents` applied successfully to `backend/db.sqlite3`; staging and production were not touched. The migration seeded exactly six protected core definitions and six inactive Standard designs, with zero uploaded versions, instances, outputs, or attachments, so the legacy renderer remains the active compatibility path until templates are deliberately uploaded, tested, and activated. The source and pre-migration backup passed SQLite integrity checks with zero foreign-key violations; post-migration integrity and foreign-key checks pass, all Services migrations are applied, no migration operations remain planned, Django check passes, and migration drift reports no changes. Phase F compatibility removal remains gated on local workflow acceptance and deployment-shaped storage/rollback evidence.**
+Current objective (latest): **Complete Dynamic Documents Phase E while keeping custom documents independent from the six protected business workflows. Administrators can now register inactive ticket/client/project-backed definitions, add typed manual fields, reuse the validated design/version lifecycle, enable only a definition with an active default template, prepare source-bound instances, generate and privately archive DOCX files, and upload/download signature-validated supporting attachments from the dynamic Custom documents workspace in Admin Documents. Definition-level capability restrictions, source allowlists, manual-value validation, exact version/source provenance, and activity logging are backend enforced. Custom documents cannot mutate quotation, deposit, dispatch, payment, completion, or turnover state; PDF conversion remains optional and absent. The combined Phase B-E backend gate passes 16/16, the 2,547-module build passes, Django check and migration drift pass, and the focused registration browser journey passes. Migration `services.0067` remains unapplied to development/staging/production; no dependency, commit, push, deployment, or non-test database change occurred.**
+Current objective (latest): **Complete Dynamic Documents Phase D without replacing the existing six-document editor or making PDF conversion a blocker. Admin Documents now has a capability-gated responsive template manager for core definitions, multiple designs, default/retired state, DOCX uploads and validation diagnostics, activation, rollback, ticket-backed Test DOCX rendering, and private generated-output history/downloads. The existing HTML paper is explicitly labeled Editor preview and remains the editable compatibility view; it is not presented as the uploaded Word layout. Default-design switching is transactional, the legacy generator remains the fallback when no enabled active default exists, and template content cannot change quotation, deposit, dispatch, completion, or turnover authority. The final frontend build, 11/11 focused backend tests, and focused Admin Documents Chromium journey pass. Migrations `services.0065`/`0066` remain unapplied to development/staging/production; no PDF service, dependency, canonical workflow/data, commit, push, or deployment changed.**
+Current objective (latest): **Complete Dynamic Documents Phase C without changing the Documents React workspace. Active validated template versions now generate all six core DOCX types through a storage-backed adapter with Word split-run support; optional selected designs and the active default are supported, while the legacy template path remains the compatibility fallback when no active version exists. New `DocumentOutput` archives preserve the exact template version, source snapshot, checksum, file size, actor, timestamp, renderer source, and failure diagnostics in configured storage; authorized history/download and non-archiving test-render APIs are available and audited. Generated quotations now use the canonical `QuotationRecord.quotation_number`. The combined Phase C/B/legacy/deposit gate passed 17/17, and the required quotation decision/revision, deposit/dispatch, turnover, and completed-history checkpoint passed 19/19; Django check and migration drift pass. Migrations `services.0065`/`0066` remain unapplied to development/staging/production, and no UI, PDF service, canonical workflow/data, dependency, commit, push, or deployment changed.**
+Current objective (latest): **Complete Dynamic Documents Phase B backend infrastructure without switching the existing renderer or UI. New normalized definition/template/version models, migration `services.0065`, six seeded core definitions/Standard designs, configured-storage uploads, bounded DOCX security/placeholder validation, immutable version metadata, separate upload/manage/publish/rollback capabilities, transactional activation/rollback, activity audit events, and read/upload/publish APIs are implemented. Unsafe archives are rejected, diagnostic-invalid drafts cannot activate, no file URL is exposed, and clients are denied. The focused 12-test Phase B + six-type legacy generation + deposit/dispatch gate passes; Django check and migration drift pass. The migration ran only on the disposable in-memory test database and remains unapplied to development/staging/production. Existing generation, React previews, canonical workflows, data, dependencies, commit, push, and deployment remain unchanged.**
+Current objective (latest): **Complete only Phase A of the Dynamic Document Management migration before adding template infrastructure. `DOCUMENT_MANAGEMENT_PHASE_A_BASELINE.md` now freezes the six stable core codes, source-template filenames and SHA-256 fingerprints, protected canonical/workflow authorities, quotation-to-deposit-to-dispatch route boundary, responsibility map, and presentation-only legacy candidates. `test_document_generation_baseline.py` proves all six current types produce structurally valid DOCX ZIPs without unresolved tokens or mutations to the accepted quotation, deposit gate, ticket, or `GeneratedDocument` rows, and freezes legacy aliases. The focused 20-test isolated gate passes across generation, quotation decisions/revisions, deposit/dispatch, Sales Record crediting, turnover, and completed history. No renderer, application model/API/UI, schema, migration, dependency, environment, development/staging/production data, commit, push, or deployment changed.**
+Current objective (latest): **Record a source-verified, investigation-only audit of the AFN Documents module before any imported-template work. `DOCUMENTS_CURRENT_STATUS.md` now classifies the six current job-document workflows, hardcoded browser previews, separate DOCX XML renderer, canonical records, snapshot and download paths, permissions, cross-module dependencies, limitations, security boundaries, and the safest versioned upload/validation/activation/rollback design. No application code, API, model, schema, migration, permission, dependency, environment, persistent data, generated file, commit, push, or deployment changed; only the requested audit and this mandatory living handoff were added/updated.**
+Current objective (latest): **Align Create Walk-in Request with the capacity-aware client booking flow without changing staff intake outcomes or the request API. The walk-in dialog now reuses the shared appointment availability calendar as its only date control, shows current time-slot status in the Time slot options, disables Full/Closed slots, and independently blocks submission when the selected date or slot is unavailable. Its desktop body uses a compact two-column client/schedule layout with a full-width location panel, while mobile retains one-column scrolling and sticky actions. Numbered explanatory section badges and the decorative header copy were removed, but client selection, multi-service selection, priority, notes, map pinning, Save for Review, Approve & Create Ticket, dirty-draft protection, and the existing payload are preserved. The 2,545-module production build passes; the final save-for-review Chromium journey returned HTTP 201, and the 390x844 responsive journey passes with no horizontal overflow. One initial combined browser run had a transient development WebSocket `ECONNABORTED` that flipped Chromium offline and correctly blocked the POST; the isolated rerun passed and supersedes that infrastructure interruption. No backend, API, schema, migration, route, permission, dependency, environment, development/staging/production data, commit, push, or deployment change was made.**
+Current objective (latest): **Restore uploaded technician proof-photo visibility in Admin Job History when Cloudinary returns an image URL without a filename extension. The completed-job API already supplies authoritative `type: photo` metadata, but the frontend gallery previously required `.jpg`, `.png`, or another image suffix in the URL and therefore treated valid extensionless Cloudinary images as generic media. The gallery and full-screen preview now normalize and trust the explicit media type while retaining URL-suffix fallback for legacy records and keeping videos separate. A read-only development-data inspection confirmed recent stored Cloudinary checklist URLs use this extensionless form; no record was changed. The 2,545-module production build and focused Admin Job History Chromium journey pass, including a real `<img>` assertion for an intercepted extensionless Cloudinary-style response. No backend, API, schema, migration, dependency, environment, persistent-data, commit, push, or deployment change was made.**
+Current objective (latest): **Replace the always-visible selected-day appointment list below Admin Calendar with an intentional responsive popup. Selecting a date in normal operations opens an accessible “Appointments for [date]” dialog containing the same filtered count, closure reason, service/client, time, technician, status, reschedule, and conflict information; selecting an appointment continues into the existing details modal. The popup supports backdrop and Escape dismissal, trapped focus, focus return, body-scroll locking, a centered desktop dialog, and a phone-width bottom sheet. Empty date selections show the same no-appointments state. Configuration Mode remains separate and continues to open its availability panel instead; direct calendar event cards continue to open event details. The 2,545-module production build and focused Chromium calendar journey pass at desktop and 390x844, and the desktop popup screenshot was inspected. No backend, API, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change was made.**
+Current objective (latest): **Remove the redundant Admin Services sentence “Manage service types, checklist procedures, tools, and inventory templates.” and its now-empty spacing so the canonical workspace header leads directly into feedback or the compact service-catalog toolbar. The focused lifecycle browser test now uses the toolbar as its outside-click target instead of depending on removed copy. The 2,545-module production build and focused deactivate/reactivate Chromium journey pass. No behavior, backend, API, schema, migration, dependency, persistent data, commit, push, or deployment changed.**
+Current objective (latest): **Complete the requested minimal cleanup of the administrator Services catalog without redesigning its cards or changing its backend contract. One compact toolbar directly above the cards now reports actual active/deactivated counts and groups the default Active/Deactivated/All filter with Add Service. Each card keeps Details visible and moves Edit Service plus confirmed Deactivate/Reactivate into an accessible three-dot menu with outside-click and Escape dismissal, focus return, and responsive mobile alignment. Filtered and zero-catalog empty states are compact, and counts update after lifecycle changes. Existing create/edit/details flows, service fields, status APIs, server-side deletion rules, and data remain intact; permanent deletion is intentionally not exposed in the routine card menu. The final 2,545-module production build and focused Chromium browser coverage pass, including desktop behavior and a 390x844 overflow check after correcting the initial menu alignment defect. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change was made.**
+Current objective (latest): **Roll back the interrupted configurable-standard-workday implementation after the user confirmed it was requested by mistake. The temporary model field, serializer/API contract, scheduling-policy changes, Admin Settings control, service-editor integration, technician display reversal, and unapplied `users.0043` migration were removed. The previously completed calendar Full/Closed wording and Service Duration Days/Hours/Minutes UI remain intact with the original fixed eight-hour workday convention and existing optional overtime ceiling. No migration was applied and no persistent data changed. Source scans confirm no configurable-workday remnants or migration file remain; diff validation and the 2,545-module production build pass. No commit, push, or deployment was performed.**
+Current objective (latest): **Replace aggressive calendar X icons with explicit state wording while preserving disabled-date behavior, privacy, reasons, and fail-closed outage handling. The client calendar says Closed when every slot is administrator-closed and Full when capacity is exhausted; an API outage still truthfully says Unavailable. Admin Calendar manual restrictions now use Closed or Partly closed badges plus the existing reason instead of X icons, while automatic capacity exhaustion remains Full. Add Days beside Hours and Minutes in the administrator Service Duration editor, defining one day as eight working hours and continuing to persist the existing minute value so the established multi-day technician-capacity allocation remains authoritative. Service cards and technician job duration labels now show day-based values. No backend, API, schema, migration, route, permission, dependency, environment, or persistent-data contract changed. The final 2,545-module production build, focused admin closure and duration E2E, all three client calendar E2E journeys, and an additional explicit Full-versus-Closed browser check pass. No commit, push, or deployment was performed.**
+Current objective (latest): **Enforce a maximum of three scheduled non-cancelled jobs for the whole date rather than three jobs independently in Morning, Midday, and Afternoon. Every scheduled ticket on the date now consumes the same shared counter, including legacy tickets with no recognized slot. At two jobs every otherwise-open slot becomes Limited/orange; at three every slot becomes Full/red and client creation, approval, assignment schedule changes, direct scheduling, and rescheduling reject a fourth job. Admin Calendar shows the authoritative 3-job daily limit and per-time occupancy; obsolete editable slot-capacity controls are removed from the calendar, settings API, and Django Admin. Administrators and superadministrators retain reasoned whole-day or time-slot Limited/Closed/Reopen controls for heavy work, and existing appointments remain scheduled. No model, migration, or new entity was added; the old database columns remain inert legacy schema. Seventy-three scheduling tests, seven settings tests, 21 dashboard/calendar tests, migration drift, the 2,545-module production build, focused admin closure E2E, and all three focused client calendar journeys pass. No development/staging/production migration, persistent-data write, commit, push, or deployment was performed.**
+Current objective (latest): **Let the client New Request location panel scroll naturally with the rest of the page. The desktop-only sticky positioning was removed from Pin service location; map interaction, search, current-location behavior, responsive columns, and all request/calendar logic remain unchanged. The 2,545-module production build passes. No backend, API, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change was made.**
+Current objective (latest): **Simplify the redesigned client New Request page so it reads like a conventional business form rather than an over-explained generated interface. The four-step tracker remains, but repeated numbered badges, decorative section icons, section descriptions, map instructions, and footer guidance are removed. Plain section headings now organize the same service, location, preferred-calendar, notes, map, and submit controls. The existing calendar and all request behavior remain unchanged. The 2,545-module production build and focused real client request/calendar journey pass, and the simplified desktop screenshot was visually inspected. No backend, API, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change was made.**
+Current objective (latest): **Redesign the complete client New Request page around a clear Service, Location, Schedule, and Details flow while preserving the existing appointment calendar component and all booking behavior. The page now has a compact progress overview, numbered section headings, clearer signed-in identity and service selection, a dedicated location section, improved notes and submission guidance, and a sticky desktop map panel with search, pin-state feedback, and current-location action. The preferred-date calendar, availability colors, disabled closure behavior, payload, validation, and APIs are unchanged. The 2,545-module production build and all three focused client browser journeys pass; the 1,440x900 desktop screenshot was visually inspected. No backend, API, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change was made.**
+Current objective (latest): **Align the client New Request schedule UI with the redesigned availability system without exposing administrator-only reasons. The request form now has a distinct Preferred schedule section; the appointment calendar uses a cleaner card header, centered month navigation, larger date targets, explicit green/amber check icons, red unavailable X icons, a Selected badge, compact status pills, and one consolidated selected-date/slot summary. Full and Closed dates remain disabled, Limited remains selectable, availability outages still fail closed with retry, and internal closure reasons remain private. The single Client identity field now uses the full form width. The 2,545-module production build and all three focused client browser journeys pass, including normal selection, a red-X admin-closed date, and the availability-outage fail-safe; desktop screenshots were visually inspected. No backend, API, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change was made.**
+Current objective (latest): **Reduce duplicate Admin Calendar chrome and make manual closures obvious in the operational month view. The redundant in-page Service Calendar title/subtitle is removed because the canonical workspace top bar already names the page. Active Closed overrides now add a red X and slot-aware reason to the desktop date cell, an X plus reason in the date's accessible name on mobile, and a full closure explanation above the selected-day agenda. Partial-slot closures say Partly Closed; whole-day closures say Closed. Existing event cards, automatic Full indicators, configuration controls, persistence, and scheduling rules are unchanged. The 2,545-module production build and focused real Chromium normal-calendar and close/reopen journeys pass, and the closed-date screenshot was visually inspected. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change was made.**
+Current objective (latest): **Complete the AFN Service Calendar redesign without expanding the existing global availability model. Admin Calendar now defaults to a clean operational month/agenda view and exposes an explicit, off-by-default Configuration Mode beside Include completed. Selecting an empty date in that mode opens a responsive configuration drawer for authoritative server-derived slot occupancy, global Morning/Midday/Afternoon capacities, reasoned Limited/Closed/Reopen actions, bounded bulk ranges, and existing restrictions; event cards continue to open job details. Availability and event failures are isolated, stale month responses are ignored, dirty edits are confirmation-protected, and client availability failures disable dates rather than assuming they are open. Backend hardening closes the manual-assignment capacity bypass, serializes first-time policy/configuration writes, classifies Turned Over/Accepted work as completed, and returns admin booked/capacity/remaining/status data from one source of truth. No new entity, migration, dependency, recurring rule, service-specific closure, or technician scheduling engine was added. Focused backend tests, production build, and admin/client browser checks pass; no development/staging/production migration, persistent-data write, commit, push, or deployment was performed.**
+Current objective (latest): **Document the current AFN Service Calendar before a proposed toggleable Configuration Mode. `CALENDAR_CURRENT_STATUS.md` now traces the custom admin/client/technician calendar UIs, configuration and automatic-capacity behavior, API/model/permission relationships, global slot policy versus technician duration/overlap policy, state/refresh behavior, dependent modules, test coverage, concrete limitations, and the exact UI/API boundary for the redesign. This was an investigation-only pass: application code, schema, migrations, dependencies, configuration, persistent data, routes, permissions, commit history, remotes, and deployment were not changed.**
+Current objective (latest): **Remove the repeated stale Cloudinary avatar request and keep map selection usable when reverse geocoding is temporarily unreachable. With explicit user authorization, local user 35's exact obsolete `media/profiles/jobposting2_pt7lxh` reference was cleared after a transaction-consistent, integrity-checked SQLite backup; `/api/users/me/` now returns an empty `profile_image_url`. Reverse Nominatim requests now retry one transient timeout after a one-second pause. If both attempts fail, the authenticated endpoint returns HTTP 200 with the selected coordinates, `lookup_status=unavailable`, empty address data, and manual-entry guidance instead of producing a browser-level 502; client and administrator request forms retain their current address fields and show that guidance. Successful lookups return `lookup_status=resolved`. Five focused backend tests, Django check, migration drift, the 2,544-module production build, real local fail-soft/profile probes, SQLite integrity, and diff validation pass. Staging/production data, dependencies, schema, migrations, commit, push, and deployment remain untouched.**
+Current objective (latest): **Restore the local development database/runtime alignment for the capacity-aware appointment calendar. With explicit user approval, the development SQLite target and exactly two pending migrations were confirmed; a transaction-consistent ignored backup was created and both source and backup passed integrity and foreign-key checks; then only `services.0064_calendarclosure_availability_status` and `users.0042_adminsettings_appointment_slot_capacities` were applied. Post-migration state marks both applied, Django check passes, SQLite integrity remains `ok` with zero foreign-key violations, all four expected physical columns exist, and an authenticated November 2026 appointment-availability request returns HTTP 200. Staging and production remain untouched. No source, dependency, environment, commit, push, or deployment change was made in this migration step.**
+Current objective (latest): **Replace the earlier advisory appointment-activity calendar with a capacity-aware scheduling contract. Authorized administrators and superadministrators can set Morning/Midday/Afternoon capacities (default 3), apply reasoned Limited or Closed overrides to one date or a bounded multi-day range, and reopen individual overrides or a range. Scheduled non-cancelled tickets automatically make the final remaining place orange/Limited and a filled slot red/Full; manual Closed is also red, while manual Limited is orange. Green and orange remain requestable, but Full and Closed are disabled in the client UI and independently rejected at request creation, approval, direct ticket scheduling, and rescheduling. Capacity-sensitive writes share a database lock to prevent simultaneous staff actions from overbooking the final slot on PostgreSQL. Clients receive statuses only, never counts, identities, or internal override reasons. Existing appointments remain intact, and service duration/SLA behavior is deliberately unchanged. New `users.0042` and `services.0064` migrations passed in disposable test/E2E databases but are not applied to local development, staging, or production. Migration drift, 86 affected backend tests, the 2,544-module production build, and focused admin/client browser journeys pass. No commit, push, deployment, or non-test database mutation was performed.**
+Current objective (latest): **Restore the local development appointment-availability endpoint after the new closure code correctly exposed that `services.0063_calendarclosure` had not yet been applied. With explicit user approval, the development SQLite target was confirmed, a transaction-consistent ignored backup was created and passed integrity/foreign-key checks, and only `services.0063` was applied. Post-migration Django checks pass; SQLite integrity is `ok` with zero foreign-key violations; the physical `services_calendarclosure` table exists with zero initial rows; and an authenticated November 2026 availability request now returns HTTP 200 instead of the logged HTTP 503 `no such table` failure. Staging and production remain untouched. No source, dependency, environment, commit, push, or deployment change.**
+Current objective (latest): **Use the client appointment calendar as the single preferred-date control. The duplicate `Selected Appointment Date` native input and its direct-entry guidance are removed; clicking an open calendar day updates the same `preferred_date` payload, visibly marks the cell selected, and now shows a formatted selected-date confirmation inside the calendar. Time-slot selection, closed-date/slot protection, request validation, and backend contracts are unchanged. The 2,544-module production build and focused real Chromium Service Requests journey pass, including assertions that the duplicate field is absent and a calendar click becomes the selected appointment date. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Give authorized administrators and superadministrators direct control over client appointment availability from Admin Calendar. They can close or reopen a future whole day or Morning/Midday/Afternoon slot with a required reason; clients see closures in red, cannot choose them, and the backend independently rejects closed choices at request creation, office approval, ticket scheduling, and rescheduling. Exact ticket times map to the same slots. Existing appointments stay visible and are not cancelled or blocked from unrelated edits. New migration `services.0063_calendarclosure` is now applied to local development SQLite with explicit approval and remains unapplied to staging and production. The expanded 83-test scheduling regression, migration drift check, 2,544-module build, and focused real admin close/reopen and client disabled-date journeys pass. No commit, push, or deployment was performed.**
+Current objective (latest): **Keep the public landing intro visually focused by removing the visible `Skip intro` button and its dedicated CSS. The four-second Sun to Panel animation, once-per-tab session behavior, reduced-motion bypass, `/?intro=play` replay, automatic completion, and existing backdrop/key dismissal remain unchanged. The regression now explicitly proves that no Skip intro button is rendered, backdrop dismissal still works, the animation still ends on its own, and normal E2E visits remain unblocked. The 2,544-module production build and focused Chromium intro journey pass. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Let an authenticated client see privacy-safe schedule activity while choosing a preferred service date. The Request Service page now includes an accessible month calendar that marks dates with no scheduled appointments in green and dates with existing non-cancelled appointments in amber, identifies affected Morning/Midday/Afternoon or unspecified slots after selection, and keeps past dates unavailable. The later calendar-only follow-up makes this calendar the sole date input. A new authenticated aggregate endpoint returns only date/slot booleans for a maximum 63-day range—never client, request, ticket, service, location, or technician identity. The display is explicitly advisory: clients may still request a busy date because skill, duration, inspection, office review, and dispatch determine final capacity. Three focused backend privacy/auth/range tests, the 2,544-module production build, and the focused authenticated Chromium request-page journey pass. No schema, migration, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Make `npm.cmd run dev:full` reliable when Django's Windows autoreloader needs longer than 15 seconds to become database-ready. The launcher now waits up to 60 seconds using elapsed time instead of a short fixed-attempt loop, reports the actual timeout in failures, and terminates the launcher-owned Django process tree so an autoreloader child cannot remain on the backend port after failure or normal frontend shutdown. The reported failure was a boundary race: logs prove Django began watching at 23:08:10 and listened at 23:08:24, just after the prior loop stopped; the surviving child later returned database health HTTP 200. PowerShell parsing passed, and a real isolated launch reached database-ready on port 8012 and Vite-ready on port 5192. The validation servers and the prior orphan on port 8001 were explicitly terminated afterward, and all three ports are free. No database migration, schema, route, dependency, environment-file, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Keep the new Services visibility control minimal. The large bordered Service catalog panel and visible duplicate field label are removed; only one slim row remains, with active/deactivated counts at left and a 36-pixel-high, 190-pixel-wide dropdown at right. Service catalog and Service visibility names remain available to assistive technology, and Active/Deactivated/All behavior is unchanged. The 2,543-module production build and focused real deactivate/hide/reveal/reactivate browser journey pass. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Keep the administrator Services catalog focused on usable offerings without losing recovery access. The workspace now defaults to Active services, reports active/deactivated counts, and provides explicit Active, Deactivated, and All visibility views. Confirmed deactivation removes the card from the default list and directs the operator to Deactivated services; that view retains the existing edit and Activate controls, and successful activation returns the service to Active. Empty filtered views explain how to reach the rest of the catalog. The existing API already returns both states, so this is a frontend-only presentation change. The 2,543-module production build and focused real deactivate/hide/reveal/reactivate browser journey pass. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Make the complete inventory item Details/Manage view easier to scan without hiding operational evidence. The dialog now has a stable header and independently scrolling body, a wider desktop canvas, card-separated content, and emphasized Total/Available/Reserved/Minimum stock summaries. Ticket Reservations keeps its collapsed 10-record pagination, while Stock Movement History now independently starts collapsed, exposes its record count, pages exactly 10 movements at a time, and resets when another item view opens. Refresh remains available inside each expanded history, item metadata remains visible, and all receive/adjust/edit/lifecycle actions retain their behavior. The 2,543-module production build and focused real create/manage/reservation/movement/receive/history/retire browser journey pass; the collapsed desktop layout was visually inspected from the generated browser screenshot. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Keep each inventory item's Details/Manage dialog readable when it has substantial reservation history. Ticket Reservations is collapsed by default, exposes its record count, expands through an accessible disclosure, and pages exactly 10 reservation records at a time with bounded Previous/Next controls. Opening another item resets the disclosure and page; refresh remains available while expanded. The separate grouped Pending Equipment Requests decision queue remains unchanged by this follow-up. The 2,543-module production build and the focused real item create/manage/receive/history/retire browser journey pass. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Keep the Inventory workspace manageable as reservation volume grows. Pending Equipment Requests is collapsed by default, retains its grouped one-ticket-per-request presentation and count badge, and pages groups at exactly 10 per page with bounded Previous/Next controls. Ticket-focused notification links and the section hash automatically expand the queue and reset it to page 1 so the requested record is not hidden; review, mixed line decisions, refresh, capability checks, and API behavior remain unchanged. The 2,543-module production build and focused collapse/pagination plus ticket-review browser journeys pass. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Make the Admin Calendar Include completed checkbox behave literally. Without the flag, `GET /api/admin/calendar/` now excludes every completed/turned-over ticket; with the flag, it includes those records inside the requested scheduled-date range. This replaces the misleading former rule that silently included completions from the last 30 days even while the checkbox was off. A focused backend regression and real Calendar browser journey pass. Completed work still requires a scheduled date inside the displayed calendar range; job history remains the complete historical workspace. No schema, migration, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Reduce visual pressure in the administrator request-review footer by moving the destructive Reject request action into an accessible More actions disclosure while keeping Require Inspection and Approve for Service immediately visible. Rejection remains permission-scoped, keyboard reachable, reason-required, and confirmation-protected; no workflow or API behavior changed. The 2,543-module production build and focused real dashboard browser journey pass. No backend, schema, migration, route, environment, data, commit, push, or deployment change.**
+Current objective (latest): **Keep the administrator ticket action compact by showing only `Dismiss ticket`; remove the redundant `— Client withdrew` suffix from the action menu while retaining the reason requirement and the detailed confirmation explaining closure effects. The 2,543-module production build passes. No backend, schema, migration, route, environment, data, commit, push, or deployment change.**
+Current objective (latest): **Use calmer, consistent Dismiss/Dismissed wording throughout the user interface for closing dialogs, requests, inspection outcomes, and service tickets. Confirmations for real workflow closure still state the consequences explicitly: active processing stops, history is retained, assigned staff are released, and pending inventory reservations are returned where applicable. Backend/API routes, decision keys, analytics fields, and persisted `Cancelled` statuses remain unchanged for compatibility; legal contract cancellation/termination clauses and technical electrical-termination language remain exact. The final 2,543-module production build and focused inspection-dismissal and client-dismissal browser journeys pass. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Make prefilled numeric values editable across system workflows instead of immediately forcing a fallback value while the operator types. Inventory receipt, Dispatch equipment planning, service checklist equipment, service inventory requirements, service capacity/cost/order/deposit fields, technician additional-equipment requests, administrator maintenance/location/document settings, and public-site calculator settings now preserve an intentional intermediate blank value. New quantity rows may still begin at `1`, but that `1` can be completely cleared; minimum/range rules remain enforced at save or submission, and API payload builders no longer silently turn blank service equipment/capacity values back into `1`. Focused browser coverage proves the behavior across inventory, services, technician requests, settings, landing calculator, and the already-covered Dispatch flow. The 2,543-module production build passes. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Make manual inventory movement intent unambiguous. Receive Stock is a fixed green additive receipt flow with a `recorded + received = new total` equation; Adjust Stock is a fixed amber physical-count correction initialized to the recorded total with a `system → counted` replacement and explicit variance. Each now has purpose-specific guidance, reference/reason labels, summary color, and confirmation styling. Their former interchangeable action selector is removed; exceptional non-ticket returns and manual deductions remain available under a collapsed Other stock actions section. Frontend validation prevents negative movement values, zero non-adjustment movements, deductions beyond available stock, and physical counts below reserved stock, while the existing append-only, row-locked backend contract remains unchanged. The 2,543-module production build and focused item/create/adjust-preview/receipt/history/retirement browser journey pass. No backend, schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Make Add Item shorter and safer: required fields are identified, SKU input normalizes immediately, stock setup is explained, supplier/warranty and long-form notes are collapsed as optional sections, the edit dialog is named accurately, and initial status is a read-only stock-derived preview rather than a manual selector. The backend independently discards caller-supplied creation status and derives Available or Out of stock through the opening-balance workflow, preventing API clients from creating unsupported Reserved, In use, Maintenance, or Retired states. All 44 inventory backend tests, the 2,543-module build, and the focused Add Item/receipt/retirement browser journey pass. No schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
+Current objective (latest): **Keep Inventory operations compact and prevent repeated doomed DELETE requests. Receive and Adjust remain inside each item's Manage workspace, while the API now exposes whether permanent deletion is safe and the protected references that require retirement instead. A canonical opening-balance ledger row alone does not block deletion, so a newly entered mistake can be removed; any operational movement, reservation, service requirement, or equipment-return record switches Manage to a red, confirmed Retire action that preserves history. The permanent-deletion explanation is shown inside that confirmation popup instead of occupying the workspace. Retired items disappear from the default Active items list but remain recoverable through the explicit Retired items or All items including retired filter, where they can be reactivated with confirmation. Reserved items cannot be retired, Details stays read-only, and ordinary Edit cannot bypass lifecycle confirmation. All 43 inventory backend tests, the 2,543-module production build, and focused administrator/view-only browser scenarios pass. No schema, migration, route, permission, dependency, environment, persistent-data, commit, push, or deployment change.**
 Current objective (latest): **Keep the deployed login cold-start hardening stable and complete one user-authenticated cold/warm login UAT when the free backend has slept. Commit `5331dc43c423a9093bb17d8d9308791a0fa794ad` warms the public liveness endpoint before submitting credentials, allows up to 60 seconds for both wake-up and authentication, shows separate Connecting securely and Signing in states, translates Axios timeouts into an actionable message, and removes unrelated expired-unverified-account cleanup from the synchronous login path without weakening password hashing. Backend deploy `dep-dbgvtgtg1s2s73egrbmg` and frontend deploy `dep-dbgvtgtg1s2s73egrca0` are live on that exact commit. Startup reported no migrations and started Daphne; liveness, full dependency readiness, frontend and login bundle activation, the guarded perimeter, and post-cutover ERROR/HTTP-5xx searches passed. Local validation passed 13 authentication/MFA tests, the 2,543-module production build, and all 8 browser authentication scenarios. No schema, migration, route, environment value, hosting tier, or persistent-data change. Free-tier cold starts can still delay the first request, but no longer hit the former client-side 15-second cutoff.**
 Current objective (latest): **Keep the deployed proof-upload and dependency hardening stable and complete an authenticated technician Cloudinary UAT. Commit `a0b5bdc9ee03504f17db6d10cdb0407238eb44d2` raises Django REST Framework to 3.18.3 and cryptography to 50.0.2; stages proof photo/video storage outside ticket row locks for direct upload, legacy checklist, and both completion endpoints; cleans request-owned uploads when finalization fails; and enforces a combined 20-file/50-MB budget in the backend and technician UI. It is live through Render backend deploy `dep-dbg8ii8473hc73fgvkmg` and frontend deploy `dep-dbg8ii8473hc73fgvlag`. Startup installed the exact patched versions, used PostgreSQL, reported no migrations, and started Daphne; liveness, full dependency readiness, frontend HTTP availability, the guarded perimeter, deployed bundle checks, and post-cutover ERROR/HTTP-5xx log searches passed. The complete local gate passed all 628 backend tests with six expected PostgreSQL-only skips, the 2,543-module production build, and all 20 browser smoke scenarios. No schema, migration, API route, business rule, environment value, hosting tier, or persistent-data change. Because verification did not mutate a staging ticket or upload client media, one authorized technician upload/finish-job retry remains the final live UAT boundary.**
 Current objective (latest): **Keep the deployed authorization-safe PostgreSQL ticket-lock repair stable and complete a short authenticated technician UAT retry. Commit `a9da39758cfc466b896b6e9a7c7adba9149d3cfc` moved the permission-scoped lead-or-crew `DISTINCT` query into a primary-key subquery and applies `SELECT ... FOR UPDATE OF self` only to a clean outer `ServiceTicket` query. Render deployment `dep-dbg4feoae00c73fo0ml0` reached `live` on that exact commit at 2026-10-27 06:43:39 UTC. Startup used PostgreSQL, reported no migrations to apply, and started Daphne; liveness, dependency readiness, and the guarded staging perimeter passed. Post-cutover inspection found no HTTP 5xx or recurrence of the original `FOR UPDATE is not allowed with DISTINCT clause` error. Focused checks passed 22 tests with six expected PostgreSQL-only skips; the complete release gate passed all 626 backend tests with six expected PostgreSQL-only skips, the 2,543-module frontend build, and 20/20 browser smoke scenarios. No schema, migration, API response, business rule, environment value, or persistent-data change. Because verification intentionally did not mutate staging business records, a technician retry of photo upload/start/completion remains the final manual UAT step, not a deployment-health blocker.**
@@ -148,6 +219,12 @@ oversized inline queue form. It separates client/service, schedule, and
 location work, makes review-versus-immediate-approval explicit, protects dirty
 drafts before closing or clearing, and closes with visible confirmation after a
 successful save while preserving the existing request API and approval rules.
+The schedule section now reuses the same capacity-aware appointment calendar as
+client booking instead of a native date field. Full/Closed dates remain
+unselectable, Full/Closed time slots are disabled and labeled, and submit-time
+guards use the selected calendar response before the unchanged backend contract
+performs its authoritative validation. Desktop places client and schedule cards
+side by side with location full width; mobile remains a single scrolling column.
 Activity Logs now operates as a usable audit workspace rather than a page-local
 timeline: filtered summary totals come from the complete server queryset,
 expanded events expose stable IDs, exact zoned timestamps, actor IDs, IP/user
@@ -171,13 +248,30 @@ failures retain the last known state, and contextual unread badges on related
 work pages remain available.
 The admin Service Calendar is now an operations workspace rather than a direct
 reschedule launcher. It provides monthly operational counts, work/service/team/
-status filters, a mobile date-led agenda, synchronized month/day navigation,
-legacy-overlap warnings, and a details-first modal with client, location,
-assignment, schedule, and work context plus explicit ticket/dispatch/reschedule
-actions. New manual assignments, crew assignments, reschedules, and automatic
+status filters, synchronized month/day navigation, legacy-overlap warnings, and
+an intentional responsive selected-day agenda popup instead of a permanently
+expanded list below the month. Normal date selection opens that filtered agenda;
+Configuration Mode date selection continues to open availability controls, and
+event selection opens the details-first modal with client, location, assignment,
+schedule, and work context plus explicit ticket/dispatch/reschedule actions. The
+agenda popup traps focus, restores it on close, locks background scrolling, and
+uses a centered desktop dialog or phone bottom sheet. Its Include completed flag is now exact: completed and turned-over
+tickets are excluded by default and included only when requested, within the
+visible scheduled-date range. New manual assignments, crew assignments, reschedules, and automatic
 assignments reject exact-time overlaps for the same technician while retaining
 the existing duration-based daily capacity limit. Calendar events now include
 the bounded staff-only fields required to explain those decisions.
+Calendar unavailability now uses direct state wording instead of red X icons.
+The client calendar derives Closed only when all returned slot states are
+administrator-closed and otherwise uses Full for capacity exhaustion;
+availability-fetch failures remain a separate Unavailable fail-closed state.
+Admin Calendar uses Closed or Partly closed badges and retains the reason for a
+manual restriction, while its automatic capacity state remains Full. The
+administrator Services editor expresses the existing
+minute-based `estimated_duration` as Days, Hours, and Minutes, with one workday
+equal to the scheduling policy's eight-hour daily capacity. No stored field or
+API shape changed, and technician job cards/details use the same day-based
+presentation for long work.
 A professor-format final diagram pack now provides exactly one manually laid
 out draw.io Context Diagram, one unified draw.io DFD, and one generated
 single-page exhaustive Chen draw.io ERD matching the approved pre-oral notation
@@ -332,7 +426,10 @@ technician search/date filtering is server-backed and recoverable on failure.
 History details now connect actual start/end/duration, team, inventory,
 checklist/proof, installed equipment, full field-report readings, warranty,
 maintenance, after-sales, official-document metadata, and status timeline where
-the role is authorized. Admin CSV export streams every filtered page and admin
+the role is authorized. Admin proof galleries use the API's explicit photo/video
+type as the primary renderer decision and URL extensions only as a legacy
+fallback, so extensionless Cloudinary photo URLs render as images in both the
+thumbnail gallery and full-screen preview. Admin CSV export streams every filtered page and admin
 document actions use the existing controlled document generator; the technician
 download is explicitly labeled as a work summary rather than an official form.
 Both history routes reset inherited document scroll on entry so their canonical
@@ -411,6 +508,12 @@ then finalizes the handover before making the generated snapshot immutable; its
 custom tables and signature fields are retained in local state and on reload.
 Field Service Report remains a generated office draft assembled from the chosen
 technician report rather than creating a second operational report record.
+Its version-1 frontend schema now makes that ownership explicit and supplies the
+existing paper's field/table metadata and state adapter. New printable saves carry
+`_documentSchema: {code: field_service_report, version: 1}`; the adapter accepts
+older unversioned snapshots, preserves unknown presentation keys, and does not
+write canonical technician state. This is the first controlled schema extraction,
+not a switch to a generic editor or an uploaded-template preview.
 The turnover relationship is established only after resolving a generated
 `turnover_acceptance` document belonging to the same ticket. Creation works in
 either order: turnover creation links an existing draft, while a later draft
@@ -419,15 +522,20 @@ document by supplying an arbitrary ID.
 Ticket-prefill requests are sequence-guarded, template controls wait for their
 canonical/draft load, and reviewed/signed/finalized/accepted records are shown
 read-only with save/reset actions disabled.
-Admin Services now separates catalog availability from deletion. Staff list and
+Admin Services separates catalog availability from deletion. Staff list and
 detail responses expose staff-only direct-request, ticket, multi-service-line,
-and maintenance reference counts plus `can_delete`. A service with any such
-reference retains the server-side HTTP 400 hard-delete guard. Every active row
-offers confirmed Deactivate and every inactive row offers confirmed Activate;
-these ordinary updates preserve history while controlling new-request choices.
-Only a catalog row with no protected references additionally offers permanent
-Delete. Status is read-only in Edit so it cannot bypass confirmation, and all
-confirmation actions are disabled while their request is in flight.
+and maintenance reference counts plus `can_delete`; a service with any such
+reference retains the server-side HTTP 400 hard-delete guard. The supported
+catalog presentation starts directly with one toolbar above the existing cards,
+without a redundant in-page descriptive subtitle:
+actual active/deactivated counts at left and a default-Active status filter plus
+Add Service at right. Cards keep Details visible and place Edit Service and the
+confirmed Deactivate/Reactivate lifecycle action in an accessible three-dot
+menu. Outside click and Escape dismiss that menu, Escape restores trigger focus,
+and the menu aligns within narrow screens. Status remains read-only in Edit so
+it cannot bypass confirmation, and lifecycle actions remain disabled while the
+request is in flight. Permanent Delete is not exposed in this routine card menu;
+the existing server-side deletion endpoint and protection contract are unchanged.
 Technician completion checklists now show all service procedures on one
 touch-friendly work-step screen instead of one wizard page per procedure, retain
 per-step photo requirements, allow proof removal, and recover non-file drafts on
@@ -639,15 +747,144 @@ other repository path must include this living handoff file.
 | Application release | `5331dc4 Harden login against staging cold starts` |
 | Remote | `origin -> https://github.com/JH1Npop/capstone-current.git` |
 | Remote comparison | Rechecked on 2026-10-28: application commit `5331dc43c423a9093bb17d8d9308791a0fa794ad` was pushed to `origin/staging-deploy`; backend deploy `dep-dbgvtgtg1s2s73egrbmg` and frontend deploy `dep-dbgvtgtg1s2s73egrca0` are live on that exact commit |
-| Worktree | Application commit `5331dc4` is committed, pushed, and live. This handoff contains the post-deployment evidence for the documentation-only follow-up commit. No unrelated untracked or deleted path was found. |
+| Worktree | Intentionally dirty with prior local backend/frontend/E2E work. The admin-controlled calendar-closure change adds its model/migration, scheduling enforcement, admin API/UI, client availability UI, tests, and contract paths recorded below; the calendar-only date follow-up further changes the client request page, calendar component, and client E2E. The earlier appointment-calendar and intro paths remain local. Existing unrelated modifications are preserved; no tracked deletion was observed at the start of this work. |
 | Tracked deletions | None |
-| Commit/push status | Login hardening commit `5331dc4` is pushed to `origin/staging-deploy` and live on both Render services. Production was not accessed or changed. |
+| Commit/push status | Login hardening commit `5331dc4` remains the live application runtime. Current local work, including Inventory, appointment calendar, admin calendar closures, and intro-control changes, is uncommitted and has not been pushed or deployed. Production was not accessed or changed. |
 
 Generated build output, Playwright output, the E2E SQLite database, local logs,
 media, dependency directories, and real secrets are intended to remain ignored.
 The real `.env` exists locally but must not be inspected merely to populate docs.
 
 ## 3. System architecture
+
+Controlled baseline registration is provided by
+`import_legacy_document_templates`. Its default mode reads and validates the
+six exact runtime sources selected by `resolve_template_path()` and reports the
+planned checksum/size without writing. `--apply` additionally requires a named
+active administrator or superadministrator, reuses an existing version by
+checksum, uploads a missing immutable file through configured storage, records
+the validator manifest/report as a draft version, and emits an audit event. It
+never publishes or changes the default renderer. This closes Phase A's baseline
+registration item while preserving Phase F's separate visual approval and
+rollback gates.
+
+Document design deletion is a guarded lifecycle endpoint rather than generic
+cascade deletion. `DELETE /api/services/document-templates/{id}/` requires the
+existing template-management capability and definition access, then permits
+deletion only after a design is retired, is no longer default, has no active
+version, and has no version referenced by `DocumentOutput` or
+`DocumentInstance`. Unreferenced draft/retired versions are deleted with the
+design; their configured-storage files are removed after the database commit so
+provider I/O cannot hold the transaction open. Storage cleanup failure is
+logged without resurrecting already-deleted database rows.
+
+Configured Cloudinary media now uses
+`afn_service_management.storage.AFNMediaCloudinaryStorage` instead of the
+package's image-only default. The backend selects Cloudinary `image` for known
+image extensions, `video` for known video extensions, and `raw` for document
+and other file extensions. This preserves profile/proof media behavior while
+allowing DOCX templates, generated documents, PDFs, and text attachments to use
+the resource type Cloudinary requires. Test/E2E settings continue to use local
+filesystem storage; storage references remain private behind authorized API
+downloads rather than being returned as direct URLs.
+
+Dynamic Documents Phase F remains a guarded retirement boundary rather than a
+new runtime layer. Local acceptance now proves dynamic generation and protected
+workflows, including representative DOCX structure/format-part preservation,
+but dependency inspection confirms that the editable JSX previews/builders,
+technician/shared forms, canonical context mapper, and legacy renderer are still
+active consumers. Because local Standard designs have no uploaded active
+versions, the legacy fallback is still required. The exact decision and
+remaining cutover gates are recorded in
+`docs/quality/DOCUMENT_MANAGEMENT_PHASE_F_READINESS.md`.
+
+Dynamic Documents Phase E extends the Phase B-D layer without adding a second
+Documents page or a workflow engine. `DocumentDefinition` now distinguishes
+protected core definitions from administrator-registered custom definitions and
+can restrict access by existing capability codes. `DocumentFieldDefinition`
+provides typed manual schema; `DocumentInstance` binds one definition and exact
+template version to an allowlisted ticket, client, or project source; and
+`DocumentAttachment` stores private supporting files. The custom renderer builds
+context only from explicit source registries plus validated manual values, then
+uses the existing versioned DOCX renderer and `DocumentOutput` archive. The
+responsive `CustomDocumentWorkspace.jsx` is launched beside Manage templates in
+Admin Documents and dynamically renders active definitions and fields. This path
+records and exports information only: it has no status-transition authority over
+quotations, deposits, dispatch, payments, tickets, completion, or turnover.
+
+Smart Documents Phase 1 has versioned frontend data schemas for all six core documents. Field Service Report keeps the technician-authored report authoritative while its office paper uses a presentation draft. Solar Commissioning projects directly to the canonical checklist and shared 54-item catalog. Technical Data Sheet, Installation Contract, Quotation / Proposal, and Turnover Acceptance each define their current scalar fields and repeating/fixed collections, preserve unknown legacy presentation values, version-stamp printable drafts, and project only allowlisted fields to their existing canonical records. Presentation schemas cannot drive review/signature locks, quotation acceptance/deposit/dispatch state, turnover finalization side effects, or any other protected workflow.
+
+Smart Documents Phase 2 adds `DocumentReplacementWizard.jsx` as the ordinary core-template replacement path while retaining `DocumentTemplateManager.jsx` for advanced administration. The wizard reuses existing definitions, designs, immutable versions, permissions, validation, PDF mappings, test rendering, activation, rollback, and source/history APIs. Activation requires that the exact candidate be valid/configured and successfully test-rendered in the current wizard session. Configured PDFs now have a temporary ticket-backed test-render response through the existing field resolver and PDF renderer; like DOCX test rendering, it creates no archived output. The document-specific React papers and protected workflow actions remain unchanged; broader mapper improvements, unified filling, full acceptance, and cleanup remain later phases.
+
+Smart Documents Phase 3 keeps matching in the lazy-loaded PDF client. `documentFieldSuggestions.js` normalizes nearby text, compares it with approved field labels plus an extensible AFN alias registry, ranks only bounded matches, and explains exact versus similar confidence. `PdfTemplateFieldEditor.jsx` derives normalized text positions from PDF.js, offers matches near the administrator's click, and requires explicit acceptance plus the existing Save field action. Weak text creates no mapping. Confirmed `DocumentTemplateField` rows remain the only persisted PDF mapping and remain bound to one immutable version. DOCX tokens remain exact source-authored placeholders. The guided wizard also reports conservative missing core components and requires an explicit review checkbox; it does not claim that absence detection proves a visual section is missing.
+
+Smart Documents Phase 4 keeps PDF fixed-layout and DOCX source-authored. `pdfFieldPlacement.js` provides bounded zoom and normalized movement/resizing primitives. The mapper rerenders only the current page for zoom, exposes saved fields through the page toolbar, updates overlays live during precise adjustment, and still persists only through Save field plus backend coordinate validation. The DOCX configuration step now surfaces validated body/header/footer parts and detected repeating collections. It explicitly states that arbitrary Word layout editing and live Word pagination are unsupported without a heavier conversion/editor service; the actual generated DOCX is the acceptance artifact.
+
+Smart Documents Phase 5 makes `CustomDocumentWorkspace.jsx` the unified **Fill template** entry without turning core workflows into generic instances. `coreDocumentWorkspace.js` classifies the six existing schema codes and summarizes their scalar fields, repeating sections, and actions. When a core definition is selected, the workspace displays its active final design, distinguishes data editing from layout generation, and routes to the retained `AdminDocuments.jsx` editor; no generic core draft is created from that surface. Registered custom definitions retain their existing `DocumentInstance` fields, preview, generation, history, and attachments. Each retained core editor now offers **Generate active design**, which uses the existing `/service-tickets/{id}/generate-document/` selection/fallback contract and saved business data without invoking its document-specific transition actions.
+
+Smart Documents Phase 6 adds a shared mandatory-publication contract for the six core documents. `document_templates.py` defines format-aware required scalar and repeating components, records detected DOCX loop regions in the immutable validation manifest, and reports missing requirements. Activation rejects an incomplete new core version with HTTP 409 and leaves the current active version untouched. A previously activated historical version is grandfathered only for rollback compatibility. The approved Quotation `attention` alias satisfies its client connection. PDF activation requires only its applicable mapped scalar values because the fixed overlay engine cannot expand table regions. Generation exceptions retain failed provenance without a file and can be retried without changing publication state. Phase 7 now exposes this server decision directly to both frontend interfaces instead of mirroring the registry in JavaScript.
+
+Smart Documents Phase 7 starts with consolidation that does not remove compatibility paths. `DocumentTemplateVersionSerializer` exposes `activation_missing_components` directly from `document_templates.py`; `templateReplacementWizard.js`, the guided wizard, and the advanced manager consume that result, so the backend is the only publication-requirement registry. Advanced history disables blocked activation and explains the missing connections; historical rollback still follows the server's activated-version exception. The version queryset prefetches `fillable_fields` and the checker consumes the cache. `DocumentActionCard.jsx` owns only the shared status/action presentation formerly embedded in `AdminDocuments.jsx`; business status selection, permissions, callbacks, saves, locks, deposits, finalization, and generation remain in the page.
+
+The seventh local document proves the custom-document path is the supported extension mechanism. `preventive-maintenance-report` is a ticket-backed custom `DocumentDefinition`, not a seventh protected core binding. Its ten `DocumentFieldDefinition` rows drive the generic Fill template form; its private DOCX `DocumentTemplateVersion` combines approved canonical ticket placeholders with those manual fields; and its `DocumentInstance`/`DocumentOutput` use the standard preview, generation, exact-version provenance, and authorized-download paths. It deliberately has no authority to complete tickets or alter maintenance, dispatch, warranty, quotation, or payment workflows.
+
+Admin Documents navigation is no longer limited to the hardcoded six core items. `AdminDocuments.jsx` fetches active `DocumentDefinition` rows for authorized document managers, appends only `category=custom` definitions after the six protected workflow steps, and routes a custom selection to `CustomDocumentWorkspace.jsx` with that definition code. The desktop navigation wraps across four columns at standard desktop widths and seven at wider widths, creating additional rows when more custom definitions exist; narrow screens keep the bounded horizontal strip. The generic workspace remains the editor/generator; no custom definition is passed into the core React paper, status, or workflow-action logic. Closing the workspace restores the selected core-paper state, and closing any document management dialog refreshes the active custom list.
+
+The Phase 7 technical release boundary is now verified against the installed Microsoft Word engine and configured Cloudinary adapter. Representative long/repeating renders of all six protected repository baselines preserve later-page data and signature/final sections without unresolved template tokens. The configured storage adapter and Cloudinary resource metadata agree that document objects use authenticated raw delivery; an isolated upload/read/delete probe returned the exact source digest through the private reader. These checks certify the current renderer/baselines and storage route, not the visual suitability of a future arbitrary company upload. Actual replacement designs still require the guided test-download and deliberate activation workflow.
+
+Dynamic Documents Phase D connects the existing Admin Documents workspace to
+the Phase B/C APIs through `DocumentTemplateManager.jsx` and the document API
+client. The responsive modal lists the six core definitions, designs, immutable
+versions, validation diagnostics, active/default state, and ticket-scoped output
+history. Separate frontend capability checks control upload, design management,
+publication, and rollback affordances; backend permissions remain authoritative.
+The current React paper is labeled Editor preview, while Test DOCX invokes the
+actual selected-version renderer. PDF conversion remains optional and absent.
+
+Dynamic Documents Phase C adds the controlled generation/archive boundary.
+`dynamic_document_generation.py` chooses an active validated default or explicit
+design, renders the uploaded storage file with split-run compatibility, and
+falls back to the legacy source template only when no dynamic version is active.
+`DocumentOutput` stores exact template/source provenance, checksum, actor, and
+the configured-storage file; metadata/history and authorized download APIs do
+not expose a public storage URL. Test rendering uses the same DOCX renderer but
+does not create historical output. Canonical models remain read-only inputs.
+The React editor/preview remains the editable compatibility presentation path;
+Phase D manages and test-renders uploaded layouts beside it without mislabeling
+the HTML representation as an exact Word preview.
+
+Dynamic Documents Phase B adds a dormant backend template-library boundary.
+`DocumentDefinition`, `DocumentTemplate`, and immutable
+`DocumentTemplateVersion` records model six seeded core definitions, multiple
+designs, diagnostic validation, configured-storage file references, and atomic
+publication history. `services/document_templates.py` performs bounded DOCX
+archive and allowlisted-placeholder inspection without executing office tools or
+template expressions. New viewsets expose metadata/upload/activation/rollback
+under four narrow RBAC capabilities and activity logging. The legacy
+`document_generation.py` resolver remains authoritative for output until Phase C;
+there is no runtime cutover or UI integration yet.
+
+Dynamic Documents Phase A adds regression evidence, not runtime architecture.
+`docs/quality/DOCUMENT_MANAGEMENT_PHASE_A_BASELINE.md` freezes the current six
+stable document codes and template fingerprints, maps canonical business versus
+presentation responsibilities, and records the quotation/deposit/dispatch
+boundary. `backend/services/tests/test_document_generation_baseline.py`
+generates every legacy type into a temporary directory and asserts valid DOCX
+structure, resolved template tokens, stable aliases, and no canonical
+quotation/deposit/document mutation. The existing renderer, filesystem template
+resolution, React previews, APIs, and schema remain unchanged pending Phase B.
+
+The 2026-11-02 Documents investigation confirms two separate presentation
+paths. `frontend/src/pages/admin/AdminDocuments.jsx` owns the editable React/HTML
+paper previews and browser printing for six job-document types, while
+`backend/services/document_generation.py` independently renders six DOCX files
+through ZIP/XML placeholder substitution. `GeneratedDocument` persists one
+current JSON snapshot per ticket/type, not a generated binary or a template
+version. There is no database-backed template, upload, validation, activation,
+rollback, placeholder-catalog, or rendered-output provenance layer. The full
+verified inventory and safe extension design are recorded in
+`DOCUMENTS_CURRENT_STATUS.md`; no runtime architecture changed during that
+investigation.
 
 PostgreSQL mutation querysets that eagerly load optional relations scope
 `select_for_update` to `of=('self',)`. Related rows used only for validation or
@@ -665,6 +902,27 @@ destructive migration. Every mutation or assignment boundary enforces the new
   policy, including generic ticket create/update serialization; old evening tickets must be rescheduled before either manual or
 automatic dispatch. Overtime capacity remains a daily workload allowance and
 does not authorize an after-hours start.
+
+Client request scheduling has a separate privacy-safe advisory read boundary:
+authenticated callers may request at most 63 days from
+`GET /api/services/service-requests/appointment-availability/`. The response
+reduces non-cancelled tickets to date and Morning/Midday/Afternoon/unspecified
+slot booleans; it does not expose identities or operational records. The client
+calendar uses those booleans as schedule-activity guidance and never claims a
+date is confirmed or fully booked because final feasibility still depends on
+review, technician skill, duration, inspection, and dispatch. It is now the
+single preferred-date input: selecting a day writes `preferred_date` and the
+calendar itself displays the formatted selection; there is no duplicate native
+date field.
+
+Admin Calendar has a separate dispatch-authorized closure boundary at
+`GET/POST /api/admin/calendar/closures/`. An administrator or superadministrator
+with `supervisor.dispatch.view` can close or reopen a future whole day or one of
+the three business-hour slots with a reason. The client aggregate merges active
+closures into its privacy-safe response; request creation, approval, and ticket
+scheduling/rescheduling enforce them again on the server. Exact start times map
+to Morning (08:00-10:59), Midday (11:00-13:59), or Afternoon (14:00-16:59).
+Closures do not cancel existing appointments or prevent unrelated edits.
 
 The commercial flow now treats a service deposit rule as a catalog default and
 copies the effective rule into a new quotation. A request containing multiple
@@ -813,6 +1071,14 @@ restriction. Password resets and pending-email changes share that backend.
 `/admin/profile`, `/admin/notifications`, `/admin/messages`,
 `/admin/client-support`, `/admin/coverage-heatmap`, `/admin/job-history`
 
+`/admin/calendar` reads and mutates future appointment closures through
+`/api/admin/calendar/closures/` under the same dispatch capability as the
+calendar workspace. The endpoint returns one fixed shared capacity of three
+scheduled jobs per date plus per-time occupancy, and supports bounded range
+reads plus reasoned, reversible Limited or Closed whole-day/time-slot overrides
+across one date or multiple dates. A manual closure can reserve the remaining
+date or time capacity for heavy work without cancelling existing appointments.
+
 ### Technician pages (10)
 
 `/technician/dashboard`, `/technician/my-jobs`, `/technician/schedule`,
@@ -826,10 +1092,28 @@ restriction. Password resets and pending-email changes share that backend.
 `/client/requests`, `/client/requests/:requestId`, `/client/service-history`,
 `/client/purchase-records`, `/client/support`, `/client/notifications`, `/client/profile`
 
+`/client/service-requests` now reads the authenticated aggregate
+`GET /api/services/service-requests/appointment-availability/` route for its
+month calendar. The route combines scheduled non-cancelled ticket load,
+the shared three-job daily capacity, and active manual overrides into Available,
+Limited, Full, or Closed slot states and a green/orange/red day state. Two jobs
+make the date Limited and three make it Full regardless of their time slots.
+It does not return
+counts, client/request/ticket identities, or internal override reasons and is
+not an ownership bypass into any operational record. Full and Closed choices
+are enforced server-side; Limited remains requestable.
+
 The route audit checks expected navigation, uncaught browser errors, HTTP 5xx,
 whole-page horizontal overflow, clipped buttons, button collisions, and unnamed
 main actions. Functional suites separately cover authentication and primary/side
 workflows. Documents has a real E2E save/reload path for quotation drafts.
+
+Authenticated `GET /api/geocode/reverse/` remains a same-origin proxy for
+Nominatim. It retries one transient timeout. A continuing provider/network
+failure is an application-level partial result rather than an HTTP 502: the
+response retains the requested coordinates, sets `lookup_status=unavailable`,
+returns no fabricated address, and tells the client to use manual address entry.
+Successful responses set `lookup_status=resolved`.
 
 ## 6. Completed implementation themes
 
@@ -932,8 +1216,21 @@ The table below distinguishes migrations already applied to the user's local
 development SQLite database (`backend/db.sqlite3`). The 2026-10-22 Render
 staging startup for commit `72cc922` reported `No migrations to apply`, so every
 repository migration through `services.0062` is current on staging Aiven.
-That staging state does not authorize migration of any future separate
-production database:
+`services.0063_calendarclosure` was applied to development SQLite with explicit
+approval on 2026-11-01 after a validated online backup. With separate explicit
+approval later that day, `services.0064_calendarclosure_availability_status` and
+`users.0042_adminsettings_appointment_slot_capacities` were also applied to
+development after a second validated online backup. All three calendar
+migrations remain unapplied to staging and production. With explicit approval
+on 2026-11-02, document migrations `services.0065` through `0067` were applied
+to development SQLite after a validated online backup; they remain unapplied to
+staging and production.
+The shared three-job daily-capacity follow-up requires no migration. Existing
+`users.0042` Morning/Midday/Afternoon capacity columns remain in the schema for
+migration-history compatibility but are no longer exposed or read by booking
+availability; the fixed shared daily policy is authoritative.
+That staging state does not authorize migration of any future separate production
+database:
 
 | Migration | Purpose |
 | --- | --- |
@@ -957,6 +1254,12 @@ production database:
 | `users.0039_user_mfa_fields` | Administrator MFA enabled state, encrypted TOTP secret, hashed one-time recovery codes, and confirmation timestamp; applied to fresh isolated test databases, staging by the successful `fa121a2` startup, and the explicitly authorized local development SQLite migration on 2026-10-08 |
 | `users.0040_technicianprofile_last_seen_at` | Technician portal heartbeat timestamp used for expiring Online/Offline presence; applied to local development SQLite on 2026-10-13 after isolated tests and current on staging by the 2026-10-22 Render startup; production remains untouched |
 | `services.0062_servicetype_inspection_procedures` | Additive `ServiceType.inspection_procedures` list (default empty) holding service-specific Yes/No site-inspection checks; applied to disposable test/E2E databases and, with explicit approval, local development SQLite after a transaction-consistent backup; current on staging by the 2026-10-22 Render startup; production remains untouched |
+| `services.0063_calendarclosure` | Reversible, reasoned whole-day or Morning/Midday/Afternoon appointment closures with creator/updater/reopener audit fields; applied to disposable backend-test/E2E databases and, with explicit approval, local development SQLite after a transaction-consistent validated backup; staging and production remain untouched |
+| `services.0064_calendarclosure_availability_status` | Adds the manual Limited/Closed override state while safely defaulting existing closure rows to Closed; applied to disposable backend-test/E2E databases and, with explicit approval, local development SQLite after a validated online backup; staging and production remain untouched |
+| `users.0042_adminsettings_appointment_slot_capacities` | Adds configurable Morning/Midday/Afternoon appointment capacities with a default of 3 per slot; applied to disposable backend-test/E2E databases and, with explicit approval, local development SQLite after a validated online backup; staging and production remain untouched |
+| `services.0065_document_template_infrastructure` | Adds the six-definition registry, multiple designs, immutable DOCX versions, validation/publication metadata, and seeded inactive Standard designs; applied to disposable tests and, after explicit approval plus validated backup, local development on 2026-11-02; staging/production untouched |
+| `services.0066_document_output_archive` | Adds private generated DOCX output history with template/source provenance, checksums, actor, status, and configured-storage file reference; applied to disposable tests and local development on 2026-11-02; staging/production untouched |
+| `services.0067_dynamic_custom_documents` | Adds definition access restrictions, typed custom fields, source-bound custom document instances, private supporting attachments, instance-linked output provenance, and nullable output tickets for client/project-backed custom documents; applied to disposable tests and local development on 2026-11-02; staging/production untouched |
 
 Playwright applies migrations only to ignored `backend/db.e2e.sqlite3`, then
 flushes and seeds that isolated database. Any migration of a future separate
@@ -964,6 +1267,387 @@ production database still requires backup, release review, and explicit
 deployment authorization.
 
 ## 8. Validation ledger
+
+- **2026-11-04 - Active custom Documents navigation (PASS with lint unavailable):** `npm run build` completed successfully with Vite 8.3.5 and **2,564 transformed modules** after `AdminDocuments.jsx` was changed to append active custom definitions and route them into the existing generic workspace. A read-only Django shell query returned the six active core definitions plus active custom definition **9**, `preventive-maintenance-report`, confirming the data contract that produces item 7 locally. `npm run lint -- --no-cache` failed before analysis because `frontend/package.json` defines no `lint` script; this is recorded as unavailable, not as a product failure or passing result. No database write, migration, dependency, storage mutation, browser claim, commit, push, or deployment occurred.
+
+- **2026-11-04 - Seventh Smart Documents type, Preventive Maintenance Report (PASS with Word PDF export unavailable):** a transaction-consistent SQLite backup at `backend/backups/db-before-preventive-maintenance-document-20261104-122059.sqlite3` returned `integrity_check=ok`. Authenticated AFN APIs created custom definition **9**, ten typed fields, default design **13**, DOCX version **10**, ticket-630 instance **1**, and archived output **1**. Upload validation returned valid/ready-auto; test render, activation, definition enablement, preview, generation, and authorized archived-output download all returned success. The generated US-Letter DOCX is **38,609 bytes**, contains six tables plus expected title/ticket/work/recommendation text, and contains zero unresolved placeholders. The downloaded private archive is a valid DOCX ZIP and its SHA-256 exactly matches `DocumentOutput.sha256`. A final authenticated list returned HTTP 200 with **seven active document types** and the new custom definition present. `manage.py check` passed and `makemigrations --check --dry-run` found no changes. A desktop Microsoft Word export attempt hung without producing a PDF; it was interrupted, exact process 6836 was stopped after it demonstrably held the unique temporary render, and all temporary builder/source/render files were deleted. The AFN definition/version/instance/output and their private configured-storage objects intentionally remain in local development. No schema, migration, dependency, staging/production data, commit, push, or deployment changed.
+
+- **2026-11-04 - Smart Documents full post-completion verification (PASS):** the document/business lifecycle suite passed **62/62** and the non-overlapping storage/private-delivery/placeholder/import suite passed **13/13**, for **75/75 backend tests**. The tests create fresh in-memory DOCX/PDF templates and exercise validation, unsafe rejection, activation, atomic rollback, test render, all-six generation, exact archive provenance, custom definitions/instances, attachments, client denial, protected business flows, failure/retry, private-storage routing, placeholder metadata, and legacy import. The combined frontend schema/wizard/suggestion/placement/workspace suite passed **26/26**. Chromium Admin Documents scenarios **3.9, 3.9b, and 3.9c passed 3/3 in 2.6 minutes** on ignored isolated E2E SQLite, covering all-six save/reload, real generation/download, a fresh Quotation template-version upload, validation, ticket-backed test DOCX, and activation. Vite 8.3.5 built **2,564 modules**; `manage.py check` passed; `makemigrations --check --dry-run` found no changes. Expected notification WebSocket proxy-abort messages occurred during browser navigation/managed teardown only. No development/staging/production record, configured Cloudinary object, real active design, migration, dependency, commit, push, or deployment changed.
+
+- **2026-11-04 - Smart Documents Phase 7 technical release UAT (PASS; final company-design approval remains operational):** rendered all six protected repository DOCX baselines with representative values, 35-row collections where applicable, and a deliberately long installation scope. Desktop Microsoft Word opened/exported every file: FSR **2 pages**, turnover **6**, commissioning **6**, TDS **7**, installation contract **21**, and quotation **14**. Word-rendered page inspection confirmed the long contract flowed to later legal/signature content, quotation row 35 and final signer content remained, TDS/turnover final confirmation areas remained, and FSR's sparse second signature page matches its source layout. Parsed exports were all US Letter, retained expected final-page text, and contained no unresolved tokens. Configured Cloudinary UAT passed a unique temporary DOCX with AFN/provider metadata `authenticated` + `raw`, **2,356-byte** byte/size and SHA-256 match on private read-back, signed HTTPS URL generation, and successful deletion. The first storage attempt hit a transient read timeout and supplied no acceptance result; the successful bounded rerun supersedes it. Local UAT scratch files were deleted. Scoped `git diff --check` passed for the tracked handoff update; the implementation report and administrator guide remain existing untracked worktree documents and were preserved. No database/document/template record, active version, migration, dependency, commit, push, staging/production state, or retained external object changed.
+
+- **2026-11-04 - Smart Documents Phase 7 safe cleanup checkpoint (PASS):** focused template infrastructure/dynamic generation passed **23/23**; the complete protected document/business suite passed **70/70** on isolated Django data; the combined frontend document suite passed **26/26**; Chromium scenarios **3.9c** and **3.9** each passed **1/1** on isolated E2E SQLite; and the Vite 8.3.5 production build passed with **2,564 modules**. `manage.py check` and `makemigrations --check --dry-run` passed. The first frontend run was **25/26** because the new historical rollback test fixture reused the active version ID; assigning distinct IDs corrected the fixture and the full rerun passed, superseding that failure. The E2E runs covered server-driven replacement upload/test/activation plus extracted action-panel generation, draft save, and reload. Expected Vite WebSocket proxy-abort messages occurred during managed teardown. No development/staging/production data, persistent activation, migration, or external storage object changed.
+
+- **2026-11-04 - Smart Documents Phase 6 automated acceptance gate (PASS, manual release UAT pending):** the combined frontend schema/wizard/suggestion/placement/workspace suite passed **26/26**; the complete protected document and business-flow suite passed **70/70** on Django's isolated test database; and the final successful Chromium runs covered scenarios **3.9, 3.9b, and 3.9c (3/3)** on isolated E2E SQLite, including core/custom filling, all-six save/reload, real generation/download, repeating rows, replacement, ticket-backed test generation, and activation. The first combined browser run passed 3.9/3.9b but correctly exposed that the repository Quotation baseline uses approved `attention` rather than `client_name`; after adding that explicit alias, focused 3.9c passed and supersedes the failure. The Vite 8.3.5 production build passed with **2,563 modules**; `manage.py check` and `makemigrations --check --dry-run` passed with no drift. A synthetic five-run DOCX probe containing 100 repeating rows and 10,000 characters measured **8.97 ms median**, **15.47 ms maximum**, and **0.38 MiB traced peak** locally; the probe file was removed and no output was retained. Expected Vite WebSocket proxy-abort messages occurred during managed browser teardown. No development/staging/production database, persistent activation, or storage object changed.
+
+- **2026-11-04 - Smart Documents Phase 5 unified filling completion (PASS):** the combined schema/wizard/suggestion/placement/workspace Node suite passed **25/25**; Chromium Admin Documents scenario 3.9 passed **1/1** on isolated E2E SQLite and covered core-definition routing, the explicit data-versus-layout boundary, preserved Quotation editor selection, a real `POST /generate-document/` response and DOCX download, and the existing draft save/reload workflow; and the Vite 8.3.5 production build passed with **2,563 modules**. `manage.py check` and `makemigrations --check --dry-run` passed with no model drift. The Phase 3 **60/60** backend gate remains current because Phase 5 changed no backend runtime. Expected Vite WebSocket proxy-abort messages appeared during managed reload/teardown; asserted HTTP behavior passed. The E2E output was isolated; no development/staging/production data changed.
+
+- **2026-11-04 - Smart Documents Phase 4 visual configuration completion (PASS):** the combined schema/wizard/suggestion/placement Node suite passed **22/22** after coordinate normalization resolved the first strict floating-point assertion; Chromium Admin Documents scenario 3.9c passed **1/1**, covering the new Word-part, repeating-section, and configuration-boundary summary; and the Vite 8.3.5 production build passed with **2,562 modules**. `manage.py check` and `makemigrations --check --dry-run` passed with no model drift. The Phase 3 **60/60** backend gate remains current because this checkpoint changed no backend runtime. The lazy PDF editor chunk is about 409.0 KB uncompressed and its existing PDF.js worker remains about 1.05 MB. No persistent development/staging/production data changed.
+
+- **2026-11-04 - Smart Documents Phase 3 deterministic suggestions completion (PASS):** the combined schema/wizard/suggestion Node suite passed **19/19**; the protected document/business workflow suite passed **60/60** on Django's isolated test database; Chromium Admin Documents scenario 3.9c passed **1/1**, including explicit connection review before ticket-backed test and activation; and the Vite 8.3.5 production build passed with **2,561 modules**. `manage.py check` and `makemigrations --check --dry-run` passed with no model drift. The PDF mapper chunk is about 405.9 KB uncompressed and its existing PDF.js worker remains about 1.05 MB. No persistent development/staging/production data changed.
+
+- **2026-11-04 - Smart Documents Phase 2 guided replacement completion (PASS):** `node --test tests/fieldServiceReportSchema.test.js tests/solarCommissioningSchema.test.js tests/remainingDocumentSchemas.test.js tests/templateReplacementWizard.test.js` passed **15/15**; the focused dynamic-generation suite passed **10/10**; the protected document/business workflow suite passed **60/60** on Django's isolated test database; Chromium Admin Documents scenario 3.9c passed **1/1** on isolated E2E SQLite, covering guided selection, DOCX upload/validation, actual ticket-backed test download, and activation; and the Vite 8.3.5 production build passed with **2,560 modules**. `manage.py check` and `makemigrations --check --dry-run` passed with no model drift. Scoped `git diff --check` passed with line-ending warnings only. Expected Vite WebSocket proxy aborts appeared during managed reload/teardown while the asserted workflow passed. No persistent development/staging/production data or migration changed.
+
+- **2026-11-03 - Smart Documents all-six Phase 1 completion (PASS):** `node --test tests/fieldServiceReportSchema.test.js tests/solarCommissioningSchema.test.js tests/remainingDocumentSchemas.test.js` passed **11/11**; the protected document/business workflow suite passed **59/59** on Django's isolated test database; Chromium Admin Documents scenarios 3.9 and 3.9b each passed **1/1** on isolated E2E SQLite, covering current mini-sidebar custom-type/design setup, quotation schema-version save/reload, TDS/contract/turnover/FSR schema-version save/reload, and canonical 54-item commissioning save/reload. The Vite 8.3.5 production build passed with **2,558 modules**. `manage.py check`, `makemigrations --check --dry-run`, and scoped `git diff --check` passed. Two intermediate 3.9 attempts exposed stale selectors from the earlier template-manager redesign; the test now follows New document type → first design upload → field setup and passes. Expected Vite WebSocket proxy aborts appeared during managed reload/teardown. No persistent development/staging/production record or migration changed.
+
+- **2026-11-03 - Smart Documents Phase 1 Solar Commissioning checkpoint (PASS):** `node --test tests/fieldServiceReportSchema.test.js tests/solarCommissioningSchema.test.js` passed **6/6**; the focused legacy generation/canonical-lock suite passed **4/4**; the protected document/business workflow gate passed **22/22**; Chromium Admin Documents scenario 3.9b passed **1/1** on isolated E2E SQLite with all 54 canonical items, a saved Pass value, and reload verified; and the Vite 8.3.5 build passed with **2,553 modules**. `manage.py check`, `makemigrations --check --dry-run`, and scoped `git diff --check` passed. The first backend command used a backend-relative `venv` path and exited before tests; the corrected parent-relative command passed. Expected WebSocket proxy aborts appeared during managed browser reload/teardown, while the asserted HTTP journey passed. No development/staging/production data or migration changed.
+
+- **2026-11-03 - Smart Documents Phase 0–1 FSR checkpoint (PASS):** Before the change, the focused legacy/dynamic/template suite passed **22/22**, the Vite 8.3.5 production build passed with **2,550 modules**, and five temporary legacy FSR renders against read-only ticket 630 measured **13.47/14.06/16.69 ms min/median/max** with a 91,145-byte output; no output record or retained file was created. After the change, `node --test tests/fieldServiceReportSchema.test.js` passed **3/3**, the FSR backend baseline passed **3/3**, the combined focused backend suite passed **23/23**, Chromium Admin Documents scenario 3.9b passed **1/1** with a thirteenth row saved/versioned/reloaded, and the production build passed with **2,551 modules**. `manage.py check` passed and `makemigrations --check --dry-run` reported no changes. The E2E database was isolated; no development/staging/production record changed.
+
+- **2026-11-03 - One-page PDF editor rendering repair (PASS build; real-file visual recheck pending):** `npm.cmd run build` passed with Vite 8.3.5 and 2,550 transformed modules. Source review confirms PDF readiness—not a changed page count—now triggers rendering, and scale derives from the viewer panel rather than the initial 300px canvas wrapper. The user's `CSE-AVILES.pdf` must be closed/reopened in the running browser for final visual confirmation.
+
+- **2026-11-03 - Template-manager notice dismissal (PASS):** `npm.cmd run build` passed with Vite 8.3.5 and 2,550 transformed modules. Source review confirms success messages use a cleaned-up four-second timer and popup close clears prior success/error state; errors are not placed on the automatic timer.
+
+- **2026-11-03 - Quotation row actions beside delete (PASS):** `npm.cmd run build` passed with Vite 8.3.5 and 2,550 transformed modules. Source inspection confirms the Price, BOM, and Warranty blue headers contain no Add button; each row action cell contains Add beside Remove; these cells are hidden by the existing print rule. No backend test was required for this frontend-only editor interaction.
+
+- **2026-11-03 - Direct safe document-design deletion (PASS):** `manage.py test services.tests.test_document_template_infrastructure --keepdb` passed **11/11**. Coverage proves an enabled/default unreferenced design can be deleted and a sibling is promoted to default, a retired draft design and stored source are removed, and active or historically referenced designs return HTTP 409. `npm.cmd run build` passed with Vite 8.3.5 and 2,550 transformed modules.
+
+- **2026-11-03 - Document templates mini-sidebar separation (PASS):** `npm.cmd run build` passed with Vite 8.3.5 and 2,550 transformed modules. Source verification confirms the old inline sidebar import/registration forms and state are gone; Add new design and New document type select dedicated main-panel modes, while Replace source document remains only on an existing design. No backend/database test was required because this change is presentation/state separation only and does not alter API calls or payloads.
+
+- **2026-11-03 - Local Documents 0068/0069 migration (PASS):** Before migration, the plan contained only the two version metadata columns, the `DocumentTemplateField` table, its uniqueness constraint, and index. A transaction-consistent SQLite backup passed `PRAGMA integrity_check=ok` with zero foreign-key violations. `manage.py migrate services 0069_document_template_fields` applied both `0068` and `0069`; `showmigrations` marks both applied. Post-migration `manage.py check` reports no issues and the live SQLite database again reports integrity `ok` with zero foreign-key violations. Counts after migration: 7 definitions, 9 designs, 7 versions, 0 template fields, 0 instances, 0 outputs, and 0 attachments. The cleanup audit was read-only and no candidate record was deleted.
+
+- **2026-11-03 - Client-friendly DOCX/PDF Documents workflow (PASS with browser UAT pending):** The focused `services.tests.test_dynamic_document_generation` run passed **9/9**, including parsed PDF output with mapped client data and controlled validation for a required manual core field. The combined template, dynamic/custom generation, placeholder, baseline, private-storage, quotation/deposit/dispatch, revision, turnover, and project-handover gate passed **58/58** on the isolated test database. `manage.py check` reported no issues; `makemigrations --check --dry-run` reported no changes; `python -m pip check` reported no broken requirements. `npm.cmd run build` passed with Vite 8.3.5 and **2,550 modules**; `npm.cmd audit --package-lock-only --audit-level=low` reported **0 vulnerabilities**; `git diff --check` passed with line-ending warnings only. An initial PowerShell `npm` call was blocked by local script policy and the equivalent `npm.cmd` build passed. A new test payload initially used `key` rather than `field_key`; it was corrected and the rerun passed. No real-browser/non-technical UAT was run.
+
+- **2026-11-03 — Documents current-state report refresh (PASS):** Re-read the canonical living handoff, inspected the current Documents frontend/backend implementation and route/model contracts, and performed a read-only local database count/status query. Confirmed 7 definitions, 8 designs, 6 valid draft versions, 0 active versions, 0 instances, 0 outputs, and 0 attachments. Updated only `DOCUMENTS_CURRENT_STATUS.md` and this living handoff; no application test suite was required for the documentation-only change.
+
+2026-11-03 (Dynamic Documents security and authoring-contract checkpoint; local configured storage):
+- `privatize_document_assets` first ran read-only and found six referenced legacy-public baseline objects. Two provider/verification interruptions stopped apply safely after the first and second objects had already moved; subsequent dry runs correctly classified those objects as authenticated and the remaining objects as legacy public. After switching authenticated reads to Cloudinary's expiring private-download endpoint, the final apply completed with **6 referenced, 2 already authenticated, 4 migrated, 0 missing**.
+- A final deployment-shaped proof downloaded all six authenticated objects with exact original byte counts, opened/rendered each as a valid DOCX ZIP with zero unresolved tokens, and received HTTP 404 from every former public raw URL. Database file names, checksums, validation/publication status, and inactive state were unchanged; no output/archive record was created.
+- `.\venv\Scripts\python.exe backend\manage.py test services.tests.test_document_placeholder_catalog services.tests.test_document_template_infrastructure services.tests.test_dynamic_document_generation services.tests.test_custom_documents afn_service_management.test_storage services.tests.test_private_document_storage --verbosity 1` passed **31/31** on the isolated test database after the final renderer/publication changes.
+- The focused repeating-row/catalog rerun passed **4/4**. The publication/render suite passed **15 runnable tests** with the new PostgreSQL competing-activation test correctly skipped on local SQLite; it must run on the PostgreSQL staging gate before concurrency is claimed there.
+- `npm.cmd run build` passed with **2,547 transformed modules**. Django system check reported no issues and `makemigrations --check --dry-run` reported no changes.
+- `npx.cmd playwright test e2e/03-admin-workspace.spec.js --grep "3\.9 -"` passed **1/1** in 2.7 minutes against isolated `backend/db.e2e.sqlite3`. It verified the core approved-placeholder catalog/source metadata, live custom-field metadata refresh, custom definition/design lifecycle, and quotation draft save/reload. Expected development notification WebSocket `ECONNABORTED` proxy noise was non-failing.
+- One initial backend validation command used a backend-relative nonexistent virtualenv path and exited before Django started; the corrected repository-root command produced the results above.
+
+2026-11-02 (Dynamic Documents baseline registration checkpoint; local configured storage):
+- A source-only validation shell check passed all six exact runtime files, including `document_templates/originals/field_service_report.docx` (91,221 bytes), with approved placeholders and no validator errors.
+- `..\venv\Scripts\python.exe manage.py test services.tests.test_import_legacy_document_templates services.tests.test_document_template_infrastructure services.tests.test_dynamic_document_generation --verbosity 1` passed 16/16 on the isolated Django database. The importer coverage proves read-only dry run, six valid inactive v1 versions, named uploader provenance, configured-file existence, and checksum-idempotent rerun; adjacent coverage retains upload security, publication/rollback, all-six dynamic generation, provenance, downloads, and fallback.
+- Before apply, `..\venv\Scripts\python.exe manage.py import_legacy_document_templates` reported six valid files, six would-register results, and no writes. Django check reported no issues and migration drift reported no changes.
+- With approved external access, `..\venv\Scripts\python.exe manage.py import_legacy_document_templates --apply --actor iman` uploaded and registered six valid inactive v1 versions in configured Cloudinary raw-file storage. It activated none. A post-apply dry run reported all six checksums already registered and created nothing.
+- The first configured-storage render shell stopped before rendering when Cloudinary reset the TLS connection during the first GET. No database/output write occurred. A one-file retry downloaded the quotation baseline byte-exactly (2,033/2,033 bytes). The complete retry read and rendered all six: TDS 2,056 bytes, quotation 1,981, contract 1,778, commissioning 1,731, turnover 1,963, and field report 91,145; every result passed ZIP integrity and contained zero unresolved `{{...}}` tokens.
+- Read-only local counts after the checkpoint are seven definitions (six core plus one pre-existing custom definition), six valid draft versions uploaded by `iman`, zero active versions, zero instances, zero outputs, and zero attachments. Local development and six Cloudinary objects changed only through the authorized inactive baseline import; staging and production were untouched.
+
+2026-11-02 (guarded document-design deletion; local and uncommitted):
+- `..\venv\Scripts\python.exe manage.py test services.tests.test_document_template_infrastructure --verbosity 1` passed 8/8 on the isolated Django database. New coverage proves that a retired non-default design and its unreferenced version/file are deleted, while enabled/default designs and generated-output references return HTTP 409 and retain their rows.
+- `..\venv\Scripts\python.exe manage.py check` reported no issues and `..\venv\Scripts\python.exe manage.py makemigrations --check --dry-run` reported no changes.
+- `npm.cmd run build` passed with 2,547 transformed modules in 13.34 seconds.
+- `npx.cmd playwright test e2e/03-admin-workspace.spec.js --grep "3\.9 -"` passed 1/1 in 2.0 minutes against ignored `backend/db.e2e.sqlite3`. The browser created a temporary custom design, retired it, opened the named destructive confirmation, deleted it through the real API, and verified it left the design list before completing the existing quotation save/reload journey. Expected development WebSocket `ECONNABORTED` proxy teardown noise was non-failing. No development/staging/production record was changed.
+
+2026-11-02 (Cloudinary document-upload routing repair; local and uncommitted):
+- Reproduced the configuration boundary read-only: local settings had `USE_CLOUDINARY_MEDIA=True`, and the former backend generated an `/image/upload/` URL for a DOCX-like storage path. The network probe was blocked by the command sandbox before reading or writing any Cloudinary asset; it produced no deployment-shaped provider evidence.
+- `..\venv\Scripts\python.exe manage.py test afn_service_management.test_storage services.tests.test_document_template_infrastructure --verbosity 1` passed 8/8 on the isolated Django test database. It covers raw routing for DOCX/PDF/text, image/video routing, upload/version creation, invalid/unsafe rejection, permissions, activation, and rollback.
+- `..\venv\Scripts\python.exe manage.py check` reported no issues, and `..\venv\Scripts\python.exe manage.py makemigrations --check --dry-run` reported no changes.
+- An effective-settings shell check resolved the configured backend to `afn_service_management.storage.AFNMediaCloudinaryStorage`, `document_templates/example/template.docx` to `raw`, and `profiles/photo.jpg` to `image` without contacting Cloudinary. No persistent database or external storage object was changed.
+
+2026-11-02 (Dynamic Documents Phase F readiness gate; local and uncommitted):
+- Added a representative DOCX regression covering body/table plus header/footer placeholder rendering and byte-for-byte preservation of `word/styles.xml` and an embedded logo; its focused run passed 1/1.
+- `..\venv\Scripts\python.exe manage.py test services.tests.test_document_template_infrastructure services.tests.test_dynamic_document_generation services.tests.test_custom_documents services.tests.test_document_generation_baseline services.tests.test_business_flow_controls services.tests.test_quotation_revision services.tests.test_project_handover_action services.tests.test_turnover_lifecycle services.tests.test_job_history_contract --verbosity 1` passed 48/48 in 8.093 seconds on the isolated test database.
+- `npx.cmd playwright test e2e/03-admin-workspace.spec.js --grep "3\.9"` passed 2/2 in 2.3 minutes on ignored `backend/db.e2e.sqlite3`. It covered custom registration/field setup, quotation draft save/reload, and every core editor stage saving/reloading its canonical record or printable draft. Expected development notification WebSocket `ECONNABORTED` proxy teardown noise remained non-failing.
+- `npm.cmd run build` passed with 2,547 transformed modules in 14.77 seconds. Django check reported no issues, migration drift reported no changes, and the migration plan reported no operations.
+- Read-only local post-gate counts remain six definitions and zero uploaded versions, document instances, outputs, or attachments. Acceptance writes were isolated; local development business/document records were not mutated.
+
+2026-11-02 (local Dynamic Documents schema migration; explicitly authorized):
+- Preflight `showmigrations services` and `migrate --plan` showed exactly `services.0065`, `0066`, and `0067` pending; no unrelated application migration was in the plan.
+- Created ignored transaction-consistent backup `backend/local_backups/db-consistent-before-documents-0065-0067-20261102-211512.sqlite3` using SQLite's online backup API. Source and backup were each 20,545,536 bytes, reported `integrity_check=ok`, and had zero foreign-key violations. The backup is covered by the existing `backend/local_backups/*.sqlite3` ignore rule.
+- `..\venv\Scripts\python.exe manage.py migrate services` applied `0065`, `0066`, and `0067` successfully to local `backend/db.sqlite3`. Staging and production were not accessed.
+- Post-migration `showmigrations services` marks all through `0067` applied; `migrate --plan` reports no planned operations; Django system check reports no issues; migration drift reports no changes; SQLite reports `integrity_check=ok` and zero foreign-key violations.
+- Read-only post-migration counts are six core definitions, six inactive Standard designs, and zero template versions, document instances, archived outputs, or attachments. No existing business record or workflow state was migrated into the new tables.
+
+2026-11-02 (Dynamic Documents Phase E custom documents; local and uncommitted):
+- `..\venv\Scripts\python.exe manage.py test services.tests.test_custom_documents services.tests.test_document_template_infrastructure services.tests.test_dynamic_document_generation --verbosity 1` passed 16/16 on Django's isolated test database. Coverage includes registration, inactive-until-ready enforcement, typed/reserved/unknown field validation, custom DOCX rendering, exact template/source provenance, private attachments and downloads, spoofed-PDF rejection, client denial, definition-level capability isolation, Phase B publication/rollback, and all six Phase C dynamic core render paths.
+- `npm.cmd run build` passed with 2,547 transformed modules in 23.98 seconds.
+- `..\venv\Scripts\python.exe manage.py check` reported no issues, and `..\venv\Scripts\python.exe manage.py makemigrations --check --dry-run` reported no changes.
+- The focused `e2e/03-admin-workspace.spec.js` Documents journey passed 1/1 in 1.4 minutes against ignored `backend/db.e2e.sqlite3`, verifying custom registration/manual-field setup and the existing quotation save/reload path. The later file-signature hardening is covered by the final backend gate and did not alter that UI path.
+- Migration `0067` was exercised only through disposable test/E2E databases. No development, staging, or production migration/write, dependency, commit, push, or deployment occurred.
+
+2026-11-02 (Dynamic Documents Phase D frontend integration; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed after final integration with 2,546 transformed modules in 9.35 seconds.
+- The first focused backend command named nonexistent `afn_service_management.settings_test`; it exited before tests or database creation. The normal repository command then exposed one real PATCH defect: DRF treated the conditional one-default constraint as unconditional. After replacing that generated validator with explicit per-definition name validation and transactional default switching, `..\\venv\\Scripts\\python.exe manage.py test services.tests.test_document_template_infrastructure services.tests.test_dynamic_document_generation --verbosity 1` passed 11/11.
+- `npx.cmd playwright test e2e/03-admin-workspace.spec.js --grep "3.9 -"` passed 1/1 in 1.3 minutes on the isolated E2E database. It verified the Editor preview label, template-manager access, seeded core registry/Standard design, accessible close behavior, and the existing quotation save/reload journey. The first passing browser run showed that E2E `flush` removed migration seed rows; the seed fixture was aligned with migration `0065`, and the final rerun proved the populated manager. Expected notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- Final Django system check reported no issues, `makemigrations --check --dry-run` reported no changes, and the Phase D scoped `git diff --check` exited 0.
+- Playwright applied existing migrations only to ignored `backend/db.e2e.sqlite3`. No migration or write targeted development, staging, or production; no dependency, commit, push, or deployment changed.
+
+2026-11-02 (Dynamic Documents Phase C generation/archive; local and uncommitted):
+- The first 16-test Phase C run had 15 passes and one useful assertion failure: generated quotation XML used `QUO-0001` instead of canonical `QUO-GEN-001`. The context mapping was corrected to prefer `QuotationRecord.quotation_number`; no record mutation or financial calculation changed.
+- `..\\venv\\Scripts\\python.exe manage.py test services.tests.test_dynamic_document_generation services.tests.test_document_template_infrastructure services.tests.test_document_generation_baseline services.tests.test_business_flow_controls.PreServiceDepositTests --verbosity 1` then passed 17/17. It covered active templates for all six types, split-run rendering, exact provenance/archive, legacy fallback, test rendering, client download denial, Phase B controls, legacy output, and deposit/dispatch immutability.
+- `..\\venv\\Scripts\\python.exe manage.py test services.tests.test_business_flow_controls.QuotationAcceptanceTests services.tests.test_business_flow_controls.PreServiceDepositTests services.tests.test_quotation_revision services.tests.test_project_handover_action services.tests.test_turnover_lifecycle services.tests.test_job_history_contract --verbosity 1` passed the required 19/19 workflow checkpoint.
+- Django check passed and migration drift reported no changes. Migrations `0065`/`0066` applied only to isolated in-memory test databases.
+
+2026-11-02 (Dynamic Documents Phase B backend infrastructure; local and uncommitted):
+- `..\\venv\\Scripts\\python.exe manage.py test services.tests.test_document_template_infrastructure services.tests.test_document_generation_baseline services.tests.test_business_flow_controls.PreServiceDepositTests --verbosity 1` passed 12/12 on the isolated in-memory database. It applied `services.0065` only there and covered valid/split-run uploads, invalid placeholder diagnostics, unsafe external/OLE/extension rejection, inactive upload, atomic activation/rollback, client denial, all six legacy outputs, aliases, and the accepted-quotation/full-deposit dispatch gate.
+- After separating read/upload/manage/publish/rollback permission handling, `..\\venv\\Scripts\\python.exe manage.py test services.tests.test_document_template_infrastructure --verbosity 1` passed its final 5/5 focused API tests; the subsequent system check and scoped diff check passed.
+- `..\\venv\\Scripts\\python.exe manage.py check` passed and `..\\venv\\Scripts\\python.exe manage.py makemigrations --check --dry-run` reported no changes.
+- No development, staging, or production migration or database write was performed.
+
+2026-11-02 (Dynamic Documents Phase A baseline; local and uncommitted):
+- The first focused test command used `backend/.\\venv\\Scripts\\python.exe`, which does not exist, so PowerShell stopped before Django or a test database started. The corrected command used the repository-root virtual environment.
+- `..\\venv\\Scripts\\python.exe manage.py test services.tests.test_document_generation_baseline services.tests.test_business_flow_controls.PreServiceDepositTests services.tests.test_business_flow_controls.QuotationAcceptanceTests services.tests.test_quotation_revision services.tests.test_project_handover_action services.tests.test_job_history_contract --verbosity 2` passed 20/20 on Django's isolated in-memory test database in 3.060 seconds; system checks reported no issues. The run covered all six DOCX types, stable aliases, quotation accept/decline/revision locks, full-deposit dispatch gating, deposit permissions/voiding/Sales Record credit, turnover finalization, and admin/technician completed-history contracts.
+- Read-only SHA-256 capture fingerprinted the six baseline templates and the existing original FSR override. No template file or generated output was added or modified.
+- `..\\venv\\Scripts\\python.exe manage.py check` passed; `..\\venv\\Scripts\\python.exe manage.py makemigrations --check --dry-run` reported no changes; scoped `git diff --check` passed. No generated-document file appeared in the worktree.
+- No development, staging, or production migration/database command was run.
+
+2026-11-02 (Documents module current-state investigation; local and uncommitted):
+- Read-only source inspection covered the administrator Documents workspace and helpers, frontend API bindings, client quotation/turnover decisions, job-history download surfaces, Django document/core models, serializers, service-ticket and related viewsets, permissions/RBAC, routes, report/technician serializers, DOCX generator, and all baseline/original template XML.
+- Repository-wide `rg` dependency scans verified the six generated-document choices and traced quotation, turnover, field-service-report, solar-estimate, installed-equipment, project-profile, completed-history, and download consumers. No completion-certificate implementation or template-management model/API/UI was found.
+- `git diff --check -- DOCUMENTS_CURRENT_STATUS.md docs/quality/CURRENT_SYSTEM_AUDIT_AND_HANDOFF.md` passed. The report contains 19 second-level sections and 99 explicit status-classification references.
+- No runtime test, build, migration, or database command was run because this was a static investigation and documentation-only deliverable.
+
+2026-11-02 (Walk-in request availability-calendar alignment; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 8.74 seconds.
+- The first combined `playwright.cmd test e2e/03-admin-workspace.spec.js --grep '3\.3[bc]'` run passed the 390x844 case but ended 1/2 because the development notification WebSocket proxy emitted `ECONNABORTED`, Chromium temporarily reported offline, and the existing mutation guard correctly refused the save before a POST. This was an infrastructure interruption rather than a calendar or form validation failure.
+- The isolated `--grep '3\.3b'` rerun passed 1/1 in 1.1 minutes: availability returned HTTP 200, a selectable calendar day became selected, dirty-draft protection held, and Save for Review returned HTTP 201 before the dialog closed with success feedback.
+- The final isolated `--grep '3\.3c'` rerun passed 1/1 in 1.1 minutes at 390x844 with no dialog horizontal overflow and reachable header/actions. Expected non-failing development WebSocket `ECONNABORTED` noise remained in the server log.
+- Visually inspected `test-results/screenshots/03-admin-walk-in-dialog-mobile.png`: the simplified header, client/service controls, and sticky actions fit within the phone viewport without clipping. The desktop save-flow screenshot was also inspected at the completed location section and showed the full-width map/address layout with persistent actions.
+
+2026-11-01 (Extensionless Cloudinary proof-photo rendering; local and uncommitted):
+- A read-only Django-shell inspection of development records confirmed recent checklist proof entries labeled `type: photo` have valid Cloudinary `/image/upload/...` URLs without `.jpg`/`.png` suffixes. It also found legacy local-media and absolute loopback references; no database value was written or migrated.
+- `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 9.32 seconds.
+- `playwright.cmd test e2e/03-admin-workspace.spec.js --grep '3.21' --project=chromium` passed 1/1 in 1.3 minutes. The journey intercepts an extensionless Cloudinary-style URL, serves image content, and proves Admin Job History renders it as a visible `<img>` with the original URL before completing the existing live equipment-return verification. Expected notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+
+2026-11-01 (Admin Calendar selected-day agenda popup; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 8.80 seconds.
+- The first focused `playwright.cmd test e2e/03-admin-workspace.spec.js --grep '3.2 -' --project=chromium` run reached the new UI but failed because the test clicked the appointment-card layer over the selected date rather than the date's empty area; the product correctly opened event details. The locator was corrected to exercise empty-area date selection, and the next run passed 1/1 in 1.0 minute.
+- After adding explicit 390x844 containment and no-horizontal-overflow assertions, the final focused `3.2` run passed 1/1 in 1.0 minute. Coverage proves desktop date-to-agenda opening, filtered content, screenshot capture, Escape close and focus return, agenda-row transition to event details, mobile bottom-sheet containment, and close-button dismissal. Expected notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- Visually inspected `test-results/screenshots/03-admin-calendar-day-agenda.png`: the modal is centered over the operational calendar, preserves the compact four-column appointment row, and removes the persistent agenda block below the month.
+
+2026-11-01 (Admin Services subtitle removal; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 9.12 seconds.
+- `playwright.cmd test e2e/03-admin-workspace.spec.js --grep '3.7c' --project=chromium` passed 1/1 in 1.3 minutes after changing the outside-click target from the removed subtitle to the catalog toolbar. Deactivate/reactivate behavior and count updates remain covered; expected notification WebSocket `ECONNABORTED` teardown noise was non-failing.
+
+2026-11-01 (Minimal Admin Services catalog cleanup; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed after the final responsive-menu correction with 2,545 transformed modules in 8.87 seconds.
+- `playwright.cmd test e2e/03-admin-workspace.spec.js --grep '3.7' --project=chromium` passed 3/3 in 1.5 minutes. Coverage exercises the consolidated toolbar, API-derived counts, default and alternate filters, Details, existing create/edit flows, menu keyboard/outside-click behavior, confirmed deactivation/reactivation, and count updates.
+- The first mobile-specific `--grep '3.7 -'` rerun correctly failed because the right-aligned action menu extended to x=-23.96875 at 390x844. After making the menu left-aligned on narrow screens and right-aligned from `sm` upward, the same test passed 1/1 in 1.0 minute with the menu inside the viewport and no document-level horizontal overflow. Expected notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- Visually inspected `test-results/screenshots/03-admin-services.png`: the desktop page retains the established card design and has one compact count/filter/Add toolbar with Details and three-dot card actions.
+
+2026-11-01 (Configurable-workday rollback; local and uncommitted):
+- Source scan returned no `standard_workday`, `standardWorkday`, or `get_standard_workday` references, and `backend/users/migrations/0043_adminsettings_standard_workday_minutes.py` no longer exists.
+- `git diff --check` completed without whitespace errors; only the worktree's existing line-ending notices were reported.
+- `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 10.29 seconds after the rollback.
+
+2026-11-01 (Client Full/Closed labels and day-based service duration; local and uncommitted):
+- `npm.cmd run build` from `frontend/` first passed with 2,545 transformed modules in 15.11 seconds; after removing the remaining Admin Calendar X treatments, the final build passed with 2,545 modules in 7.00 seconds.
+- `playwright.cmd test e2e/03-admin-workspace.spec.js --grep '3.7b' --project=chromium` passed 1/1 in 2.0 minutes, including the Days/Hours/Minutes conversion preview and restoration before the existing service save.
+- `playwright.cmd test e2e/05-client-workspace.spec.js --grep '5.2' --project=chromium` passed 3/3 in 1.6 minutes for ordinary selection, administrator closure, and fail-closed outage behavior. After strengthening `5.2b` to assert both states independently, its focused rerun passed 1/1 in 1.1 minutes and proved Closed and Full are separately rendered and disabled. Expected notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- `playwright.cmd test e2e/03-admin-workspace.spec.js --grep '3.2b' --project=chromium` passed 1/1 in 1.2 minutes after the admin closure badges replaced the X icons; close/reopen behavior, restriction reason visibility, and dirty-edit protection remain intact.
+- The initial combined npm wrapper invocation using an unescaped `3.7b|5.2` grep expression did not start Playwright because Windows command parsing treated `|5.2` as a separate command. The two focused Playwright invocations above supersede that runner-only failure.
+
+2026-11-01 (Shared three-job daily calendar capacity; local and uncommitted):
+- `manage.py test services.tests.test_client_appointment_availability services.tests.test_scheduling_warranty_and_assignment --settings=afn_service_management.settings_e2e -v 1` passed 73/73 in 9.278 seconds. Coverage proves one shared count across different slots and an unspecified legacy slot, Limited at two jobs, Full/rejection at three, manual closure precedence, request/approval/assignment/reschedule enforcement, privacy, and range behavior.
+- `manage.py test users.tests.AdminSettingsTests --settings=afn_service_management.settings_e2e -v 1` passed 7/7 in 0.548 seconds, including removal of obsolete slot-capacity fields from the settings API. `manage.py makemigrations --check --dry-run` returned `No changes detected`.
+- `manage.py test services.tests.test_dashboard_role --settings=afn_service_management.settings_e2e -v 1` passed 21/21 in 3.081 seconds, covering admin calendar/dashboard visibility and role behavior after the response-contract change.
+- `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 9.05 seconds.
+- `npx.cmd playwright test e2e/03-admin-workspace.spec.js --grep "3.2b"` passed 1/1 in 1.1 minutes and proved the fixed three-job daily limit is shown while a real slot can still be closed and reopened. `npx.cmd playwright test e2e/05-client-workspace.spec.js --grep "5.2"` passed 3/3 in 1.1 minutes for normal selection, admin-closed date, and fail-closed outage behavior. Expected notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+
+2026-11-01 (Client location panel natural scrolling; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 9.05 seconds after removing the desktop sticky utilities from the location panel.
+
+2026-11-01 (Client New Request UI simplification; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 8.32 seconds.
+- `npx.cmd playwright test e2e/05-client-workspace.spec.js --grep "5.2 - Service Requests"` passed 1/1 in 54.4 seconds against the isolated E2E database, retaining real calendar selection coverage. Expected notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- Visually inspected `test-results/screenshots/05-client-service-requests.png` at 1,440x900: the step tracker remains, while the form and map use plain headings without repeated badges or explanatory copy.
+
+2026-11-01 (Complete client New Request UI redesign; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 8.75 seconds.
+- `npx.cmd playwright test e2e/05-client-workspace.spec.js --grep "5.2"` passed 3/3 in 1.3 minutes against the isolated E2E database. It covers ordinary date selection, an administrator-closed disabled date, and fail-closed behavior when availability cannot load. Expected notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- Visually inspected `test-results/screenshots/05-client-service-requests.png` at the 1,440x900 desktop viewport. The four-step hierarchy, service and location sections, preserved calendar entry point, sticky map panel, empty-pin state, and responsive two-column balance are readable. No backend test or migration was needed for this presentation-only change.
+
+2026-11-01 (Client New Request availability UI alignment; local and uncommitted):
+- Final `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 8.81 seconds.
+- Final `playwright test e2e/05-client-workspace.spec.js --grep "5\\.2 -|5\\.2b|5\\.2c"` passed 3/3 in 1.1 minutes, covering normal calendar selection and the new selected-date summary, a disabled administrator-closed date with a rendered X icon, and fail-closed/retry behavior when availability cannot load. The first browser run passed the closed-date and outage scenarios but retained one stale assertion for the removed `Selected appointment date:` sentence; the UI screenshot showed the replacement card was correct, the assertion was updated to the Selected badge/status card, and the complete rerun passed.
+- Visually inspected `test-results/screenshots/05-client-service-requests.png` and the closed-date test screenshot: the form hierarchy, full-width Client field, month navigation, date-cell spacing, Selected treatment, and red unavailable X are readable at the 1,440x900 desktop viewport. Expected notification WebSocket `ECONNABORTED` teardown noise remained non-failing. No backend test or migration was required for this presentation-only follow-up.
+
+2026-11-01 (Admin Calendar duplicate heading removal and visible closure reasons; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 10.95 seconds.
+- `playwright test e2e/03-admin-workspace.spec.js --grep "3\\.2 -|3\\.2b"` passed 2/2 in 1.5 minutes, proving the normal calendar has only the canonical Service Calendar heading and the real close/reopen path renders the reasoned closure marker. The final screenshot-producing `3.2b` rerun passed 1/1 in 1.1 minutes. Expected notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- Visually inspected `test-results/screenshots/03-admin-calendar-closed-date.png`: the selected date carries a red X/closure treatment while the drawer independently reports the affected Afternoon slot as Closed. `git diff --check -- frontend/src/pages/admin/AdminCalendar.jsx e2e/03-admin-workspace.spec.js` passed. No backend, migration, persistent-data, commit, push, or deployment action was performed.
+
+2026-11-01 (Calendar Configuration Mode redesign; local and uncommitted):
+- Baseline `\.\venv\Scripts\python.exe backend\manage.py test services.tests.test_client_appointment_availability services.tests.test_dashboard_role services.tests.test_scheduling_warranty_and_assignment --settings=afn_service_management.settings_e2e -v 1` passed 91/91 before implementation. The final focused suite passed 94/94 in 11.937 seconds after adding authoritative admin-occupancy, Turned Over/Accepted completion, and manual-assignment Full/Closed regressions; Django system check reported no issues.
+- Final `npm.cmd run build` from `frontend/` passed with 2,545 transformed modules in 8.63 seconds after the drawer dirty-state and modal keyboard-focus corrections.
+- Focused Chromium checks passed for normal calendar filtering/details (`3.2`), Configuration Mode close/reopen/bulk disclosure/dirty-edit protection (`3.2b`), ordinary client calendar selection (`5.2`), an admin-closed client date (`5.2b`), and fail-closed availability outage behavior (`5.2c`). The final post-focus-correction `3.2b` run passed 1/1 in 1.0 minute and the final `5.2c` run passed during the two-test rerun. Earlier browser runs exposed only over-broad test locators (the close icon matched the Close availability action; a whole form region matched option and button text); screenshots showed correct product state, selectors were scoped, and the final reruns passed. Expected Vite notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- Final `manage.py makemigrations --check --dry-run` returned `No changes detected`; final `git diff --check` exited 0 with line-ending notices only for unrelated pre-existing paths. E2E startup applied existing migrations only to ignored `backend/db.e2e.sqlite3`. No schema/migration was created or applied to development, staging, or production; no persistent business data, dependency, environment value, commit, push, or deployment changed.
+
+2026-11-01 (Calendar current-status investigation; documentation only):
+- Read the canonical handoff, admin/client/technician calendar components, frontend API wrappers/routes, Django calendar/availability/ticket/technician views, scheduling helpers and policy, serializers, models, RBAC references, and focused backend/browser tests. Findings are recorded in `CALENDAR_CURRENT_STATUS.md`; no runtime result is claimed by this static investigation.
+- Scoped `git diff --check` passed for this handoff, and `git diff --no-index --check -- NUL CALENDAR_CURRENT_STATUS.md` passed for the new report. The report contains all eight requested investigation sections plus the Configuration Mode change boundary. No application test, build, migration, database write, remote request, commit, push, or deployment was run for this investigation.
+
+2026-11-01 (Reverse-geocode resilience and stale-avatar cleanup; local and uncommitted):
+- Read-only inspection resolved exactly one affected row: local user ID 35 (`client4`) with `profile_image=media/profiles/jobposting2_pt7lxh`. Created ignored transaction-consistent backup `backend/local_backups/db-consistent-before-stale-avatar-cleanup-20261101-113509.sqlite3`; source and backup each returned `integrity_check=ok` with zero foreign-key violations.
+- Cleared only user 35's obsolete `profile_image` field. Direct serializer verification and authenticated `GET /api/users/me/` both returned `profile_image_url=''`; post-change SQLite integrity remained `ok` with zero foreign-key violations.
+- The first combined focused-test command named the existing avatar class incorrectly as `users.tests.UserSerializerTests`; its three geocode tests passed, but the runner correctly exited 1 on that test-loader error. The corrected `.\venv\Scripts\python.exe backend\manage.py test api.tests.GeocodeValidationTests users.tests.ProfileImageSerializationTests --settings=afn_service_management.settings_e2e -v 1` passed 5/5 in 0.067 seconds and supersedes the selection-only failure.
+- A real local probe encountered the expected sandbox/network `WinError 10013` after both bounded attempts but returned HTTP 200 with `lookup_status=unavailable`, proving the coordinates/manual-entry fallback without a browser-level 502.
+- `manage.py check` reported no issues; `makemigrations --check --dry-run` reported no changes; `npm.cmd run build` passed with 2,544 modules in 13.84 seconds.
+
+2026-11-01 (Local `services.0064` and `users.0042` migrations; explicitly approved):
+- `npm.cmd run env:check` confirmed deployment stage `development`, SQLite, and local target `backend/db.sqlite3`. `showmigrations services users` showed exactly `[ ] 0064_calendarclosure_availability_status` and `[ ] 0042_adminsettings_appointment_slot_capacities` pending.
+- Created ignored transaction-consistent backup `backend/local_backups/db-consistent-before-calendar-capacity-20261101-112321.sqlite3` with SQLite's online backup API. Source and backup each returned `integrity_check=ok` with zero foreign-key violations.
+- `.\venv\Scripts\python.exe backend\manage.py migrate --noinput` applied only `services.0064_calendarclosure_availability_status` and `users.0042_adminsettings_appointment_slot_capacities`, both successfully.
+- Post-migration `showmigrations services users` marks both `[X]`; `manage.py check` reports no issues; development SQLite returns `integrity=ok` and `fk_violations=0`; `services_calendarclosure.availability_status` and all three `users_adminsettings` capacity columns physically exist.
+- An authenticated `GET /api/services/service-requests/appointment-availability/?start=2026-11-01&end=2026-11-30` returned HTTP 200 with two activity days. Staging and production were not contacted or mutated.
+
+2026-11-01 (Capacity-aware appointment availability; local and uncommitted):
+- `.\venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run` passed with `No changes detected` after creating `services.0064` and `users.0042`.
+- `.\venv\Scripts\python.exe backend\manage.py test services.tests.test_client_appointment_availability services.tests.test_service_request_ticket_lifecycle services.tests.test_scheduling_warranty_and_assignment --settings=afn_service_management.settings_e2e -v 1` passed 86/86 in 9.636 seconds. This covers automatic Limited/Full transitions, restrictive override precedence, capacity rejection, manual range overrides, authorization, privacy, request approval, direct scheduling, and rescheduling.
+- `npm.cmd run build` passed with 2,544 transformed modules in 12.11 seconds after the final admin range-reopen control.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.2b"` passed 1/1 in 1.2 minutes, exercising the real Admin Calendar controls on isolated services. The final client calendar checks passed 2/2 in 1.0 minute, covering calendar selection/status presentation and a red disabled date. Expected Vite notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- Playwright applied `services.0064` and `users.0042` only to ignored `backend/db.e2e.sqlite3`. No development, staging, or production migration ran.
+- `manage.py showmigrations services users` confirmed development has `[X] services.0063`, `[ ] services.0064`, `[X] users.0041`, and `[ ] users.0042`; `manage.py check` reported no issues.
+
+2026-11-01 (Local `services.0063` migration; explicitly approved):
+- `npm.cmd run env:check` confirmed deployment stage `development`, SQLite, and the local target `backend/db.sqlite3`. `showmigrations services` showed only `[ ] 0063_calendarclosure` pending.
+- Created ignored transaction-consistent backup `backend/local_backups/db-consistent-before-services-0063-20261101-000243.sqlite3` using SQLite's online backup API. Source and backup each returned `integrity_check=ok` with zero foreign-key violations.
+- `.\venv\Scripts\python.exe backend\manage.py migrate services 0063 --noinput` applied `services.0063_calendarclosure` successfully. `showmigrations` then reported `[X] 0063_calendarclosure`, and `manage.py check` reported no issues.
+- The first combined post-migration verification had a PowerShell quoting error only in its raw SQLite subcommand (`*` was parsed as a command); its separate migration-state, Django-check, and authenticated endpoint portions still completed. The corrected Django database verification returned `integrity=ok`, `fk_violations=0`, `calendarclosure_table=True`, and `calendarclosure_rows=0`.
+- An authenticated `GET /api/services/service-requests/appointment-availability/?start=2026-11-01&end=2026-11-30` returned HTTP 200 with two activity days, replacing the pre-migration HTTP 503 whose backend trace was `django.db.utils.OperationalError: no such table: services_calendarclosure`.
+- Only local development SQLite and its ignored backup changed. Staging, production, source code, dependencies, environment values, commits, remotes, and deployments were untouched.
+
+2026-10-31 (Client calendar-only date selection; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed with 2,544 transformed modules in 8.20 seconds.
+- `npx.cmd playwright test e2e/05-client-workspace.spec.js --grep "5.2 - Service Requests"` passed 1/1 in 1.0 minute against isolated E2E services. It proves the duplicate `#request-preferred-date` field is absent, an enabled calendar day can be clicked, that cell becomes `aria-selected=true`, and the formatted selected-date confirmation appears. Expected notification WebSocket proxy `ECONNABORTED` noise remained non-failing.
+- No backend, schema, migration, route, permission, dependency, environment, development/staging/production data, commit, push, or deployment change was performed.
+
+2026-10-31 (Admin-controlled appointment closures; local and uncommitted):
+- The first focused backend command stopped at Django system check before running tests because the proposed index name exceeded Django's 30-character cross-database limit. It created no persistent database state; the index was renamed to `calclosure_active_date_idx` before validation continued.
+- The final `.\venv\Scripts\python.exe backend\manage.py test services.tests.test_client_appointment_availability services.tests.test_service_request_ticket_lifecycle services.tests.test_scheduling_warranty_and_assignment --settings=afn_service_management.settings_e2e -v 1` rerun passed 83/83 in 11.125 seconds on a disposable database after the unrelated-edit safeguard, covering close/reopen permission and audit behavior, privacy-safe closure exposure, blocked client requests, approval/schedule enforcement, exact-time slot mapping, and the wider lifecycle/scheduling regression set.
+- `.\venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run` reported `No changes detected` after `services.0063_calendarclosure` was created.
+- `npm.cmd run build` from `frontend/` passed with 2,544 transformed modules in 9.78 seconds.
+- `npx.cmd playwright test e2e/03-admin-workspace.spec.js --grep "3.2b"` passed 1/1 in 1.1 minutes and exercised a real Admin Calendar slot close and reopen. `npx.cmd playwright test e2e/05-client-workspace.spec.js --grep "5.2b"` passed 1/1 in 52.2 seconds and proved an admin-closed date is red and disabled for a client. Expected notification WebSocket proxy teardown noise remained non-failing.
+- Migration `services.0063` was applied only to disposable test/E2E databases. Development SQLite, staging, production, persistent application data, commit history, and remotes were not changed.
+
+2026-10-31 (Visible intro skip control removed; local and uncommitted):
+- `npm.cmd run build` from `frontend/` passed with 2,544 transformed modules in 8.48 seconds.
+- `npx.cmd playwright test e2e/01-public-pages.spec.js --grep "1.1f"` passed 1/1 in 57.9 seconds against isolated E2E services. It proves the replayed intro contains no Skip intro button, backdrop dismissal still works, a second replay ends automatically within the existing timeout, and a normal E2E visit remains intro-free under `VITE_DISABLE_INTRO=true`.
+- No backend, schema, migration, route, environment, persistent-data, commit, push, or deployment change was performed.
+
+2026-10-31 (Client appointment availability calendar; local and uncommitted):
+- `.\venv\Scripts\python.exe backend\manage.py test services.tests.test_client_appointment_availability --settings=afn_service_management.settings_e2e -v 2` passed 3/3 on an isolated in-memory database. It proves authenticated aggregate access, cancelled-appointment exclusion, absence of private identity/details in the response, unauthenticated refusal, and the 63-day range limit.
+- The final `npm.cmd run build` from `frontend/` passed with 2,544 transformed modules in 8.17 seconds after affected-slot wording and direct-date month synchronization were finalized.
+- `npx.cmd playwright test e2e/05-client-workspace.spec.js --grep "5.2 - Service Requests"` passed 1/1 in 1.0 minute against the isolated E2E database and ports. The authenticated client page rendered the calendar, both privacy-safe legend states, and selectable date cells. Expected notification WebSocket proxy `ECONNABORTED` teardown noise remained non-failing.
+- No development/staging/production migration, persistent-data mutation, commit, push, or deployment was performed.
+
+2026-10-31 (Local full-stack startup race and process-tree cleanup; local and uncommitted):
+- Diagnosed the pasted failure from actual logs: Django's autoreloader started at 23:08:10, began listening on 127.0.0.1:8001 at 23:08:24, and its surviving child later returned `GET /api/health/database/` HTTP 200. The former 15-attempt readiness loop ended at this boundary and stopped only its parent.
+- PowerShell parser validation of `frontend/scripts/dev-full.ps1` passed with no syntax errors after replacing the fixed attempts with a 60-second elapsed-time window and adding launcher-owned process-tree cleanup.
+- A real isolated `$env:BACKEND_PORT='8012'; $env:VITE_DEV_SERVER_PORT='5192'; npm.cmd run dev:full` validation passed: the launcher printed backend-ready, then Vite 8.2.2 became ready on `http://localhost:5192/`. No migration command or persistent-data mutation was performed.
+- The validation frontend/backend listeners and the prior failed-run listener on 8001 were explicitly terminated by exact PID after the managed environment blocked the first cleanup attempt; a final `netstat` check found no listener on 8001, 8012, or 5192.
+- No database migration, schema, API route, dependency, environment-file, persistent-data, commit, push, or deployment changed.
+
+2026-10-31 (Compact services visibility control; local and uncommitted):
+- Removed the large bordered catalog toolbar and visible duplicate labels, retaining a single slim counts/dropdown row with screen-reader names and unchanged filtering behavior.
+- `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules in 10.41 seconds.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.7c"` passed 1/1 in 1.5 minutes, proving the compact select remains accessible by its Service visibility label and the Active/Deactivated hide/reactivate flow remains intact. Expected local Vite notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- `git diff --check` passed before the handoff update with line-ending warnings only for pre-existing inventory backend changes; a final check follows this entry.
+- No backend, schema, migration, route, environment, persistent-data, commit, push, or deployment changed.
+
+2026-10-31 (Deactivated-services visibility filter; local and uncommitted):
+- Added Active, Deactivated, and All service-catalog views with active/deactivated counts. Active is the default; confirmed deactivation hides the card there, and Deactivated preserves access to Activate and other service controls.
+- `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules in 9.00 seconds.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.7c"` passed 1/1 in 1.2 minutes, proving the default filter is Active, deactivation hides the card, Deactivated reveals it, activation hides it from that view, and Active reveals the restored card. Expected local Vite notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- No backend, schema, migration, route, environment, persistent-data, commit, push, or deployment changed.
+
+2026-10-31 (Inventory item-view readability and movement-history pagination; local and uncommitted):
+- Reworked the Details/Manage dialog into a stable header plus scrollable, card-separated body; widened the desktop canvas and emphasized the four stock-position values. Stock Movement History now has an independent accessible disclosure, loaded-record count, page reset/clamping, refresh, and 10-record Previous/Next pagination.
+- `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules in 8.85 seconds.
+- The first `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.8b"` run failed because the prior test still expected the now-collapsed opening movement to be visible. After updating that contract, the second run failed only because the new exact movement-1 assertion also matched movement 10; the third run passed the new movement pagination but reached another later stale expectation that received-stock history was expanded by default. After making the reopened-view check explicitly verify collapsed state and expand it, the final run passed 1/1 in 1.3 minutes. It covers item creation, both collapsed histories, 11-record 10/1 pagination for reservations and movements, disclosure reset after reopening, receipt history, and retirement. Expected local Vite notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- The generated desktop failure screenshot was visually inspected after the layout rendered: header actions remained visible, stock cards aligned, item metadata remained readable, and both collapsed history cards fit the viewport without overlap or clipping.
+- No backend, schema, migration, route, environment, persistent-data, commit, push, or deployment changed.
+
+2026-10-31 (Item-view reservation collapse and 10-record pagination; local and uncommitted):
+- Each inventory item's Details/Manage dialog now starts its Ticket Reservations history collapsed, displays the loaded record count, and paginates expanded history at 10 records per page. Opening a different item resets the disclosure and page; Refresh remains available when expanded.
+- The initial `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules in 13.57 seconds. A later semantic-heading refinement made that result stale; the final build passed with the same 2,543 modules in 10.73 seconds.
+- The first `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.8b"` run reached and passed the new 10/1 collapse/pagination assertions, then failed later because mocked reservation quantity `5` made the older unscoped `Qty 5` stock-history assertion ambiguous. The assertion was narrowed to the Stock Movement History section; a second run exposed an invalid nested locator and failed there. After correcting the locator to the heading's ancestor section, the next run passed 1/1 in 1.7 minutes. The semantic-heading refinement made that result stale, so the final rerun passed 1/1 in 1.6 minutes, covering item creation, collapsed reservation history, 10/1 paging, receipt, movement history, and retirement. Expected local Vite notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- No backend, schema, migration, route, environment, persistent-data, commit, push, or deployment changed.
+
+2026-10-31 (Inventory reservation collapse and 10-group pagination; local and uncommitted):
+- Pending Equipment Requests now starts collapsed and paginates grouped service-ticket requests at 10 per page. A `ticketId` query or `#pending-equipment-requests` deep link expands the section automatically and returns pagination to page 1.
+- `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules in 13.35 seconds.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.8 - Inventory Management"` passed 1/1 in 1.4 minutes, proving 11 grouped requests are hidden initially and render as pages of 10 and 1 after expansion.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep 3.8d` passed 1/1 in 1.3 minutes, proving a ticket-focused link still auto-expands the queue and the existing grouped mixed approval/rejection workflow remains functional. Expected local Vite notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- No backend, schema, migration, route, environment, persistent-data, commit, push, or deployment changed.
+
+2026-10-31 (Admin Calendar Include completed contract; local and uncommitted):
+- Corrected `GET /api/admin/calendar/` so the absence of `show_completed` excludes all `COMPLETED_TICKET_STATUSES`; `show_completed=1` includes them within the requested scheduled-date range. Cancelled tickets remain excluded.
+- `.\venv\Scripts\python.exe backend\manage.py test services.tests.test_dashboard_role.DashboardRoleTests.test_admin_calendar_only_includes_completed_tickets_when_requested --noinput --verbosity 2` passed 1/1 in 0.302 seconds on an isolated in-memory database, proving recent and old completed tickets are absent by default and present only with the flag.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.2 - Admin Calendar"` passed 1/1 in 1.2 minutes. The checkbox changed the visible result from 1 to 2 events, rendered the completed event as Done, and returned to 1 event when unchecked. Expected local Vite notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+- No schema, migration, environment, persistent-data, commit, push, or deployment changed.
+
+2026-10-31 (Dashboard Reject request progressive disclosure; local and uncommitted):
+- Moved Reject request from the always-visible request-review footer into a compact More actions disclosure. The two constructive next steps stay visible; rejection retains its existing permission check, disabled state, reason validation, confirmation dialog, API call, and audit behavior.
+- `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules in 8.94 seconds.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.1 - Admin Dashboard"` passed 1/1 in 1.9 minutes, proving rejection is initially hidden, becomes reachable through More actions, and still opens the protected reason dialog. Expected local Vite notification WebSocket `ECONNABORTED` teardown noise remained non-failing.
+
+2026-10-31 (Compact Dismiss ticket action label; local and uncommitted):
+- Removed only the visible `— Client withdrew` suffix from the administrator ticket action. The action now reads `Dismiss ticket`; its required reason, confirmation, result message, backend action, and audit semantics are unchanged.
+- `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules in 8.63 seconds. No backend, schema, migration, data, commit, push, or deployment changed.
+
+2026-10-31 (Softer Dismiss wording across operational UI; local and uncommitted):
+- Replaced visible Cancel/Terminate actions with Dismiss, visible Cancelled states with Dismissed, and cancellation metrics with dismissal wording across shared dialogs, administrator, technician, client, support, sales, inventory, reports, analytics, and activity-log surfaces.
+- Real service/request dismissal confirmations still explain that the record closes, remains in history, and may release staff and inventory. Internal handler names, API `/cancel/` routes, decision keys, analytics fields, and persisted `Cancelled` values remain unchanged; contract-law cancellation/termination clauses and electrical termination text were intentionally preserved.
+- Final `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules in 10.29 seconds.
+- `npm.cmd run test:e2e -- e2e/11-minor-flow-journeys.spec.js --grep 11.3` passed 1/1 in 2.0 minutes, proving the administrator can choose Dismiss Service after inspection while the canonical backend status remains `Cancelled` and the client sees Dismissed.
+- `npm.cmd run test:e2e -- e2e/11-minor-flow-journeys.spec.js --grep 11.5` passed 1/1 in 1.5 minutes, proving the client Dismiss request action still closes the request through the existing API and the surrounding reschedule/rejection flow remains intact.
+- The first attempted combined grep used an unescaped Windows `|`; Windows treated `11.5` as a command and no tests ran. The two separate passing invocations above supersede that invocation error. Expected local Vite notification WebSocket `ECONNABORTED` teardown noise remained non-failing. No backend, schema, migration, data, commit, push, or deployment changed.
+- `git diff --check` passed with only the repository's existing CRLF-to-LF warnings for two inventory backend files.
+
+2026-10-31 (Clearable numeric-entry behavior across system forms; local and uncommitted):
+- Removed on-change numeric fallback/coercion from the affected service catalog, technician equipment request, administrator settings, and landing calculator inputs. Defaults still initialize normally, but an intermediate blank remains visible until the user enters a replacement; submit-time minimum/range validation remains authoritative.
+- `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules in 9.90 seconds.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.7b"` passed in 1.7 minutes, proving service max-daily-assignment and checklist-equipment defaults can be cleared and restored before the real service save succeeds.
+- `npm.cmd run test:e2e -- e2e/11-minor-flow-journeys.spec.js --grep "11.1"` passed in 2.0 minutes, proving technician-request quantity `1` can be cleared/restored before the complete request, approval, resume, finish, and verified-return journey succeeds.
+- The initial `--grep "3.14"` run passed landing-page calculator clearing/publish but failed the settings case because `getByLabel('Allowed Radius')` matched both the enclosing location checkbox and radius spinbutton. The selector was narrowed to the named spinbutton; `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.14 - Admin Settings"` then passed in 1.2 minutes. This supersedes the selector-only failure.
+- An attempted combined `--grep "3.7b|3.8b"` command was split by the Windows shell at `|` and ran no tests; the relevant scenarios were therefore invoked separately. Expected local Vite notification WebSocket `ECONNABORTED` noise remained non-failing. No backend, schema, migration, data, commit, push, or deployment changed.
+
+2026-10-30 (Inventory Receive/Adjust workflow separation; local and uncommitted):
+- Receive Stock and Adjust Stock now open visually and semantically distinct dialogs without an interchangeable action selector. The green receipt flow states that it adds units and renders `recorded + received = new total`; the amber correction flow states that it replaces the total and renders `system → physical count` with the variance.
+- Exceptional non-ticket returns and manual deductions remain reachable under the collapsed Other stock actions section. Existing ticket-driven issue/return workflows and the backend ledger contract are unchanged.
+- Final `npm.cmd --prefix frontend run build` passed with 2,543 transformed modules in 11.75 seconds.
+- The final `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.8b"` passed in 1.2 minutes, covering distinct Receive/Adjust guidance and styling contracts, the locked Adjust dialog, current-count default, absent action combobox, difference/result preview, locked Receive dialog, explicit clearing of its default `1`, accessible additive equation, receipt persistence/history, and retirement.
+- The first browser run after the visual distinction passed the workflow up to the receipt preview but expected the former combined `+5` text; the equation intentionally renders `+` and `5` separately. The assertion was updated to its accessible `Recorded 0, change 5, resulting 5` label, and the passing rerun above supersedes that test-only mismatch.
+- The first E2E attempt timed out during category creation while the page reported offline, before reaching any changed stock workflow. The immediate rerun completed the same category request and full journey successfully, superseding that environmental failure. Expected local Vite notification WebSocket `ECONNABORTED` noise remained non-failing. No schema, migration, data, commit, push, or deployment changed.
+
+2026-10-30 (Inventory Add Item safety and usability; local and uncommitted):
+- Add Item now identifies required fields, uppercases SKU as entered, explains stock setup and low-stock threshold behavior, collapses supplier/warranty and description/notes, shows automatic status, and exposes no status selector. Edit is named Edit Item.
+- The serializer ignores caller-supplied initial lifecycle state and derives the state from opening stock; a backend regression covers malicious `in_use` and `maintenance` creation payloads.
+- Two focused creation regressions passed, including malicious starting-state payloads; the complete inventory module passed all 44 tests in 11.786 seconds.
+- Final `npm.cmd --prefix frontend run build` passed after the dialog-label correction with 2,543 transformed modules in 8.03 seconds.
+- The final `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.8b"` passed in 1.2 minutes, covering the accessible Add Item dialog, automatic-status display, absent status selector, creation, receipt, retirement, hiding, and retired-item retrieval.
+- The first browser attempt exposed that the new Add Item aria label had been attached to Manage Categories; the labels were moved to their correct dialogs and the passing rerun above supersedes that failure. No schema, migration, environment, data, commit, push, or deployment changed.
+
+2026-10-30 (Inventory status display consolidation; local and uncommitted):
+- Desktop rows and mobile cards now render one complete status pill instead of a stock shorthand plus a second lifecycle label. The merged labels are In stock, Low stock, Out of stock, Reserved, In use, Maintenance, and Retired.
+- The desktop Status column now has sufficient fixed-table width for the complete non-wrapping label, with space reclaimed from the oversized Actions column so the pill no longer appears clipped.
+- The final `npm.cmd --prefix frontend run build` passed and generated the 2,543-module production bundle in 8.15 seconds.
+- The final `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.8b"` passed in 1.3 minutes, proving the complete `Out of stock` pill remains within its table cell, the former `Out` shorthand is absent, and receipt changes the pill to `In stock`.
+- `git diff --check` passed with line-ending warnings only. No backend, schema, migration, environment, data, commit, push, or deployment changed.
+
+2026-10-30 (Retired inventory hidden by default; local and uncommitted):
+- The default Item usage state is now Active items. Retired records remain available through Retired items and All items including retired so history and reactivation are not lost.
+- `npm.cmd --prefix frontend run build` passed and generated the 2,543-module production bundle in 8.01 seconds.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.8b"` passed the real retire/hide/retrieve lifecycle in 1.3 minutes on the isolated E2E database.
+- `git diff --check` passed with line-ending warnings only. No backend, schema, migration, environment, data, commit, push, or deployment changed.
+
+2026-10-30 (Inventory Retire danger styling; local and uncommitted):
+- The Retire Item control and its confirmation now use the shared red danger treatment; Reactivate remains green. The protected-reference/permanent-deletion explanation moved from the Manage workspace into the retirement confirmation popup.
+- `npm.cmd --prefix frontend run build` passed and generated the 2,543-module production bundle in 11.27 seconds.
+- `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.8b"` passed the focused administrator inventory lifecycle journey, including the retirement popup copy, in 1.6 minutes on the isolated E2E database.
+- No backend, schema, migration, environment, data, commit, push, or deployment changed.
+
+2026-10-30 (Inventory Manage and safe item lifecycle; local and uncommitted):
+- `venv\Scripts\python.exe backend\manage.py test inventory.tests.InventoryCapabilityTests.test_item_with_only_opening_balance_can_be_deleted inventory.tests.AutoInventoryWorkflowTests.test_items_with_history_and_nonempty_categories_cannot_be_deleted --noinput --verbosity 2` passed 2/2 focused deletion-contract tests.
+- `venv\Scripts\python.exe backend\manage.py test inventory.tests --noinput --verbosity 1` passed all 43 inventory tests on an isolated test database.
+- The final `npm.cmd --prefix frontend run build` passed and generated the 2,543-module production bundle in 8.35 seconds.
+- The final `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.8[bc]"` passed both focused Chromium scenarios in 1.2 minutes, proving opening-only Delete, post-receipt Retire, Manage receipt/history, and the view-only boundary.
+- The first browser run exposed a removed `FiTrash2` import still required by category deletion; that import was restored and the final rerun above supersedes the 1-failed/1-passed result. Expected non-ASGI Vite notification-WebSocket `ECONNABORTED` messages remained non-failing harness noise.
+- `git diff --check` is recorded again after the final handoff update below. Browser/backend tests used isolated databases; no development or deployed data, schema, migration, environment, commit, push, or deployment changed.
+
+2026-10-30 (Inventory Manage workspace consolidation; local and uncommitted):
+- `git diff --check` passed before the handoff update.
+- The final `npm.cmd --prefix frontend run build` passed after all handler corrections and generated the 2,543-module production bundle in 7.98 seconds.
+- The final `npm.cmd run test:e2e -- e2e/03-admin-workspace.spec.js --grep "3.8[bc]"` passed both the administrator Manage/receipt/history journey and the read-only Details/capability boundary in 1.3 minutes.
+- An earlier post-refinement combined run correctly caught the desktop Details and Manage handlers reversed: the view-only scenario passed but the administrator Manage dialog was absent. The two handlers were corrected and the final combined rerun above supersedes that failure.
+- The first combined PowerShell grep expression did not reach Playwright because of command parsing and printed `The system cannot find the path specified`; the two explicit focused reruns above supersede it. Expected non-ASGI Vite WebSocket fallback `ECONNABORTED` messages remained non-failing harness noise.
+- Browser validation used the isolated E2E database. No development or deployed data, backend, API, schema, migration, environment, commit, push, or deployment changed.
 
 2026-10-28 (login cold-start timeout hardening; deployed and health-verified):
 - `git diff --check` passed before and after the handoff update.
@@ -1567,6 +2251,264 @@ Python code on 8000/5174. Restart a development server after backend changes.
 
 ## 9. Known risks and pending decisions
 
+- **2026-11-04 custom-navigation boundary:** active custom definitions are shown only to users with document-management capability because their generic workspace can save and generate instances. They intentionally open a modal workspace rather than pretending to have the same hardcoded React paper and protected business actions as the six core documents. The navigation fetch fails closed to the six core items and logs the API error; staff can retry by reopening a document dialog or reloading the page. A future read-only custom-document experience would need an explicit permission and interaction contract.
+
+- **2026-11-04 Preventive Maintenance custom-document boundary:** the installed seventh type is an operational document record, not a maintenance scheduling engine. Its next-maintenance date and equipment condition are document fields and do not update `MaintenancePlan`, ticket status, warranty, inventory, or notifications. This is intentional least authority. If AFN later wants generation to schedule maintenance or enforce a technician/client signature workflow, that requires a separately specified protected business action rather than giving a custom template hidden side effects. Desktop Word PDF export timed out during this run, so acceptance is based on successful AFN preview/generation/private-download plus DOCX structural/text validation; a staff visual review of the downloaded DOCX is still appropriate before using its layout as a company-standard form.
+
+- **2026-11-04 Smart Documents post-technical-UAT boundary:** the current six repository baselines and authenticated Cloudinary route now pass technical release UAT. This does not approve the appearance or field completeness of a later arbitrary company DOCX/PDF. For each final AFN design, an authorized administrator must upload it as an inactive version, map/review connections, inspect a representative ticket-backed download in the company's office/PDF software, then deliberately activate it and retain a rollback candidate. DOCX remains source-authored rather than browser-paginated, and fixed PDF overlays cannot expand arbitrary repeating tables. Retaining the core editors, protected business actions, historical versions, and safe legacy fallback is intentional until those real designs are accepted; deleting them is neither safe nor required by the implementation plan.
+
+- **2026-11-04 Smart Documents post-Phase-7-safe-cleanup gate (superseded by the technical UAT entry above):** the duplicated publication policy and action-card presentation have safe boundaries, but `AdminDocuments.jsx` still contains the six document-specific paper layouts and is intentionally large. The later Word/private-storage UAT cleared the technical gate; the layouts remain because they own protected workflow editing and because AFN has not yet approved its final replacement designs, not because the checkpoint failed.
+
+- **2026-11-04 Smart Documents post-Phase-6 gate (technical storage/baseline portion superseded):** automated acceptance blocks incomplete new core designs and covers recovery, history, permissions, protected workflow effects, long content, and repeating rows. The later Word/private-storage UAT certifies the current repository baselines and configured Cloudinary route. It does not certify a future arbitrary client-authored file; per-design human review and deliberate activation remain required. DOCX remains source-authored rather than browser-paginated; PDF remains fixed-position and cannot expand arbitrary repeating tables.
+
+- **2026-11-04 Smart Documents post-Phase-5 gate:** core editors and final uploaded layouts are intentionally separate surfaces. **Generate active design** reads the latest saved canonical/presentation data, so unsaved browser edits are not included; the control states that staff must save first. Browser **Print** still prints the retained React paper, while active-design generation downloads the published DOCX/PDF or safe legacy fallback. Custom definitions continue through generic instances and cannot gain core workflow authority. Phase 6 must run the full cross-document/browser/performance acceptance matrix, including incomplete designs and active-version rollback; Phase 7 cleanup must remain evidence-based. Do not remove the six editors, legacy fallback, or protected actions yet.
+
+- **2026-11-04 Smart Documents post-Phase-4 gate:** PDF controls improve fixed overlays but do not provide reflow, automatic row expansion, or pagination. Zoom rerenders the current page and may cost more CPU on old devices at 175%, though it adds no network call. DOCX source areas and markers can be validated, but accurate live browser rendering/editing remains unavailable without a conversion or office engine that exceeds this phase's hosting boundary. Phase 5 unified filling, Phase 6 full acceptance/performance, and Phase 7 evidence-based cleanup remain pending; keep existing paper editors and generation fallbacks.
+
+- **2026-11-04 Smart Documents post-Phase-3 gate:** deterministic suggestions inspect individual PDF.js text runs near the click. Scanned/image-only PDFs, rotated labels, unusual encodings, or labels fragmented into many runs may produce no suggestion and require manual mapping. Suggestions intentionally exclude repeating collections and never persist without accept plus save. Confirmed mappings are not copied between versions because layout coordinates may differ. Required-component warnings are conservative review aids, not server activation blockers; Phase 6 must exercise incomplete templates and decide whether document-specific mandatory checks should become backend publication rules. Phase 4 mapper/DOCX feasibility work and Phases 5–7 remain pending.
+
+- **2026-11-04 Smart Documents post-Phase-2 gate:** The guided wizard is complete for existing core designs and reuses the protected APIs, but it does not turn arbitrary DOCX/PDF files into Word-like browser editors. DOCX still requires approved placeholders; PDF still uses fixed-position scalar mappings and cannot expand arbitrary repeating tables. Phase 3 suggestions, Phase 4 mapper improvements, Phase 5 unified filling, Phase 6 full acceptance, and Phase 7 evidence-based cleanup remain pending. Keep all document-specific editors, canonical workflow actions, history, and legacy fallback until those gates pass.
+
+- **2026-11-03 Smart Documents post-Phase-1 gate:** All six schema version 1 contracts are implemented, but the schemas do not replace the retained document-specific React papers or authorize generic workflow mutations. Solar Commissioning retains its existing dual transition surface: the admin status selector can persist completed/finalized while the backend `complete` action has no dedicated UI control. The guided replacement wizard, smart suggestions, mapping improvements, unified filling, full acceptance suite, and cleanup remain Phases 2–7. Uploaded designs still control generated output rather than the hardcoded editor. Keep the legacy editor/generator and all canonical workflow actions until later acceptance gates pass.
+
+- **2026-11-03 design deletion remains intentionally irreversible:** confirmation and backend reference checks protect active and historical use, but deleting an unreferenced draft/retired design permanently removes its stored source after the database transaction commits. Provider-side file deletion is best-effort and may require orphan cleanup if the storage provider fails. Active designs must first be superseded by activating another design.
+
+- **2026-11-03 cleanup target requires identification:** the required `DocumentTemplateField` schema must not be removed. Three unrelated data candidates match “not needed”: custom definition `iman` (inactive, empty design), Technical Data Sheet design `Iman` (disabled, no versions), and Field Service Report design `Iman Template` (enabled, one draft DOCX version). Removing the last candidate also removes a stored template source and is materially destructive. Use the existing guarded design deletion or an explicitly scoped database cleanup only after the intended target is confirmed. The pre-migration backup is retained locally.
+
+- **2026-11-03 client-friendly Documents release boundary:** migrations `services.0068` and `0069` are additive and tested but remain unapplied to development, staging, and production. Run backup/migration and configured-private-storage UAT before release. Automatic AcroForm import/mapping, scanned OCR, image/drawn or cryptographic signatures, arbitrary visual placement inside DOCX, and accurate inline DOCX preview are not implemented. PDF signatures are text fields. Structural upload validation is not malware scanning. The PDF editor is code-split but adds a roughly 403 KB application chunk and a roughly 1 MB PDF.js worker. Real non-technical browser UAT with representative multi-page AFN DOCX/PDF files and real Cloudinary PDF upload/download/generation remains required. Keep the legacy renderer/fallback until the six real core designs are visually approved and activation/rollback/archive recovery is accepted.
+
+- **2026-11-03 Phase F remains guarded after closing public document delivery:**
+  new and migrated template/output/attachment objects use authenticated raw
+  storage and short-lived server-generated reads, and the six former public
+  baseline URLs now return 404. Remaining release gates are real Word visual
+  approval for all six documents, approved replacement activation/rollback,
+  configured archived-output and attachment authorization UAT, execution of
+  the competing-activation test on PostgreSQL staging, a documented retention
+  policy, a malware-scanning decision for supporting uploads, stakeholder
+  acceptance, and an operational rollback procedure. PDF conversion remains
+  optional and unavailable on the current host; do not remove the legacy
+  fallback or editable JSX views yet.
+
+- **2026-11-02 baseline registration advances but does not complete Phase F (superseded in part by the authenticated-storage checkpoint above):**
+  configured Cloudinary upload/read-back and structural rendering are locally
+  proven for all six inactive baselines. The first read encountered a transient
+  TLS reset and the immediate retries succeeded, so provider/network resilience
+  remains a deployment concern. Public-delivery privacy is now closed by the
+  authenticated-storage checkpoint. No baseline has been visually approved in Word,
+  activated, replaced, or rollback-tested with a later approved version; no
+  configured-storage archived output has been authorization/download-tested.
+  Keep the compatibility fallback and active JSX editors. Complete those gates,
+  staging backup/migration/UAT, stakeholder acceptance, and an operational
+  rollback procedure before deleting any legacy path.
+
+- **2026-11-02 permanent design deletion is intentionally narrow:** an
+  administrator must first retire the design and choose another default. Any
+  active version, generated-output provenance, or prepared custom-document
+  reference blocks deletion. External object storage cannot participate in the
+  database transaction, so a failed post-commit file removal is logged and may
+  require provider-side orphan cleanup; historical database records are never
+  deleted to solve that provider failure.
+
+- **2026-11-02 Cloudinary document routing is source- and isolated-test
+  verified, not provider-UAT verified:** the image-only mismatch that caused
+  DOCX uploads to return HTTP 500 is corrected, but the sandboxed network probe
+  could not contact Cloudinary and intentionally created no external asset.
+  Restart any development server that does not auto-reload, retry one approved
+  DOCX upload, then verify authorized test-render/download and rollback before
+  activating a company template. Deployment-shaped storage/privacy evidence is
+  still required before staging or production activation.
+
+- **2026-11-02 local Dynamic Documents schema and isolated acceptance are now
+  current, but Phase F is not ready for compatibility removal:** migrations `0065` through
+  `0067` are applied only to local development. All six seeded designs remain
+  inactive and have no uploaded versions, so local output still correctly uses
+  the legacy fallback. Before retiring any JSX layout or legacy renderer path,
+  upload/test/activate and visually inspect real company-approved templates,
+  prove rollback with those files, verify private configured storage in a
+  deployment-shaped environment, and obtain staging/stakeholder acceptance.
+  Staging and production remain unmigrated.
+
+- **2026-11-02 Dynamic Documents Phase E remains undeployed:** custom
+  registration, fields, generation, archives, and attachments pass local gates,
+  and migration `services.0067` is now applied to local development, but not to
+  staging or production. Configured Cloudinary/raw-file behavior needs a deployment-shaped
+  upload/generate/download test. Full custom browser automation currently stops
+  after registration/field setup; backend tests prove activation, generation,
+  attachment, access, and provenance transitions. Attachment signature checks
+  reduce filename spoofing but are not malware scanning. Define retention and
+  authorized deletion/archive policy and add an available scanner before broad
+  production attachment intake. PDF/image conversion remains intentionally
+  deferred. Any staging/production migration still requires explicit
+  authorization, a verified backup, and release review.
+
+- **2026-11-02 Dynamic Documents Phase D remains undeployed:** the React
+  manager now covers the core template lifecycle, test-render downloads, and
+  output history, but accurate in-browser DOCX/PDF conversion remains deferred.
+  The HTML Editor preview is intentionally separate from the uploaded layout.
+  Full browser automation of upload/activate/rollback/download remains pending;
+  focused backend coverage proves those state transitions and file protections.
+  Configured Cloudinary/raw-file behavior still needs a deployment-shaped test.
+  Keep the legacy fallback. Local schema is current, but any staging/production
+  migration requires explicit authorization and a verified backup plan.
+
+- **2026-11-02 Dynamic Documents Phase C backend-only risk was superseded by
+  local Phase D UI integration, but its deployment caveat remains:** the
+  generator/archive contract passes locally, but configured Cloudinary/raw-file
+  behavior and privacy must be verified in a deployment-shaped environment
+  before activation. The React workspace does not yet list versions, trigger
+  test renders, display archives, or show an actual-template preview. PDF remains
+  deliberately deferred. Keep the legacy fallback and hardcoded editor preview
+  until Phase D browser/workflow acceptance. Local schema is current; deployed
+  databases remain unchanged.
+
+- **2026-11-02 Dynamic Documents Phase B/C implementation risk is superseded by
+  Phases D/E and local schema application:** registry, generation provenance,
+  archive, private downloads, and management UI now exist. Configured
+  Cloudinary/raw-file behavior still needs a deployment-shaped test before
+  activation outside local/test storage. PDF conversion remains deferred. Do
+  not remove the legacy template resolver or JSX editor preview before Phase F
+  acceptance and rollback readiness.
+
+- **2026-11-02 Phase A-only risk is superseded:** Phases B-E are implemented and
+  their schema is applied locally. The Phase A baseline remains the regression
+  and rollback reference. No separate branch was created in this intentionally
+  dirty worktree.
+
+- **2026-11-02 initial Documents investigation is superseded by Phases B-E:**
+  template upload security, versioning, activation/rollback, dynamic generation,
+  provenance, archive, custom definitions, and management UI now exist. The
+  remaining split is intentional: the HTML Editor preview supports editable
+  canonical forms while exact uploaded-layout preview requires an unavailable
+  conversion service. Do not call the HTML view an exact DOCX preview.
+
+- **2026-11-02 Walk-in calendar alignment remains local/uncommitted:** the staff
+  dialog now shares the client calendar's authenticated availability endpoint
+  and fail-closed outage behavior. The backend remains authoritative if capacity
+  changes after the month data loads. Availability status is not live-pushed
+  while a dialog remains open, so a competing booking can still cause the final
+  POST to reject and staff must choose again. Browser validation covered the
+  superadmin path and a 390x844 viewport; physical-device and deployed-role UAT
+  remain appropriate before release.
+
+- **2026-11-01 Proof-photo rendering fix remains local/uncommitted:** Admin Job
+  History now correctly handles extensionless URLs when the API labels the item
+  as a photo. Truly stale local/loopback URLs and deleted provider assets still
+  cannot be recovered by presentation logic and continue to show the existing
+  unavailable-image fallback. Chat attachments and client/technician proof
+  viewers already render non-video media directly and were not changed.
+
+- **2026-11-01 Admin Services cleanup remains local/uncommitted:** this is a
+  frontend presentation and interaction change only. The existing hard-delete
+  API, confirmation helper, and server protection remain in the codebase, but
+  permanent deletion is intentionally absent from the routine card menu requested
+  here. Local Chromium coverage includes desktop and a 390x844 viewport; a
+  physical-device and deployed-browser pass remains appropriate before release.
+  The later subtitle removal adds no new functional risk and retains the same
+  toolbar-first interaction contract.
+
+- **2026-11-01 Configurable standard workday was intentionally rolled back:**
+  one service-duration day remains the existing fixed eight-hour convention.
+  Optional overtime can raise technician daily capacity through the existing
+  setting, but it does not redefine a service-duration day. No `users.0043`
+  migration should be generated or applied for the discarded attempt.
+
+- **2026-11-01 Day-based duration is a presentation convention:** one displayed
+  service day equals eight technician working hours (480 stored minutes), not a
+  calendar day or promised completion date. The existing scheduling allocator
+  remains authoritative for splitting long jobs across dates, overtime, skills,
+  and technician load. SLA deadlines and the separate three-appointment daily
+  calendar cap were intentionally not changed by this frontend-only follow-up.
+  The client date badge infers Closed from all three slot statuses being closed;
+  mixed closed/full days are labeled Full while their slot breakdown remains
+  available through the existing selected-date contract.
+
+- **2026-11-01 Shared daily capacity remains local/uncommitted:** the fixed rule
+  counts scheduled non-cancelled tickets, not pending client requests. The
+  fourth scheduled job is rejected across enforced scheduling paths, while
+  administrators can manually close a time or date sooner for heavy work.
+  Legacy per-slot capacity columns remain physically present for migration
+  compatibility but are inert and hidden from supported settings surfaces.
+  The policy remains a visit-count limit, not an estimate of project duration;
+  technician duration and overlap feasibility stay separate.
+
+- **2026-11-01 Client New Request redesign remains local/uncommitted:** the
+  presentation-only redesign passes the production build and the three focused
+  scheduling journeys, and its desktop screenshot was inspected. The calendar
+  and booking contracts were intentionally preserved. A physical-phone UX pass
+  and deployed map-tile/search/GPS check remain appropriate before release;
+  those external/mobile checks were not claimed by this local validation.
+
+- **2026-11-01 Calendar redesign remains local/uncommitted:** Configuration Mode,
+  authoritative administrator occupancy, manual-assignment capacity enforcement,
+  completed-state correction, stale-response protection, and client fail-closed
+  behavior are implemented and focused regressions pass. The historical
+  `CALENDAR_CURRENT_STATUS.md` intentionally preserves the pre-redesign findings.
+  Remaining boundaries are deliberate: availability is global rather than
+  service-specific, service duration does not reserve multiple days, technician
+  feasibility remains a separate dispatch calculation, existing appointments
+  are not auto-rescheduled by closures, and there are no recurring rules. The
+  unused Maintenance workflow option was removed. PostgreSQL concurrency still
+  requires the existing disposable-PostgreSQL release gate before deployment.
+  The later selected-day popup is presentation-only and passes desktop plus
+  390x844 Chromium coverage, but still warrants physical-device and deployed-
+  browser confirmation before release.
+
+- **2026-11-01 Capacity-aware calendar remains undeployed:** local development
+  now has `services.0063`, `services.0064`, and `users.0042`, while staging and
+  production have none of these calendar migrations. Scheduled tickets, not
+  pending requests, consume capacity. The shared
+  capacity-policy row lock prevents simultaneous approval/reschedule/direct
+  ticket writes from overbooking on PostgreSQL; SQLite serializes writes under
+  its own database locking behavior. Capacities remain operational visit limits,
+  not estimates of project duration, and do not alter SLA calculation.
+
+- **2026-11-01 Calendar closures remain undeployed:**
+  `services.0063_calendarclosure` is now applied locally but not to staging or
+  production, so the new route/UI cannot be used remotely until an explicitly
+  authorized migration and release. Closing availability deliberately leaves
+  existing appointments intact; operators must use the normal reasoned
+  reschedule/dismiss workflows when an existing booking must change. Legacy
+  `AdminSettings.holiday_dates` are not automatically converted into closures;
+  whether to synchronize or retire that separate informational setting remains
+  a product decision.
+
+- **2026-10-31 Visible intro skip control removal is not deployed:** the intro
+  still supports click/tap on its backdrop and any key as lightweight dismissal,
+  and reduced-motion users still bypass it entirely. This change removes only
+  the explicit button from the rendered design. Commit and deployment require
+  explicit approval.
+
+- **2026-10-31 Client appointment availability is not deployed:** the original
+  advisory amber/boolean contract has been superseded locally by capacity-aware
+  statuses. Orange means Limited and remains requestable; red means every slot
+  is Full/Closed at day level or that a selected slot is Full/Closed. The API
+  intentionally hides counts, identities, and internal manual-override reasons.
+  Final project duration, inspection, skill, office review, and SLA remain
+  separate concerns. Commit and deployment still require explicit approval.
+
+- **2026-10-31 Calendar completed-toggle correction is not deployed:** completed
+  and turned-over tickets are now opt-in locally. The Calendar remains bounded by
+  the visible `scheduled_date` range, so completed work without a scheduled date
+  belongs in Job History and will not appear merely by enabling the checkbox.
+  Commit and deployment still require explicit approval.
+
+- **2026-10-31 Dismiss wording is presentation-only and not deployed:** the
+  database, API, filters, exports, and third-party consumers still use the
+  canonical `Cancelled` value and existing cancel/termination route semantics.
+  This deliberately avoids a breaking migration, but developers must not assume
+  the displayed word `Dismissed` is a new lifecycle state. Contract/legal
+  cancellation and termination clauses remain legally exact. Commit and
+  deployment still require explicit approval.
+
+- **2026-10-30 Inventory Manage/lifecycle correction is not deployed:** Receive
+  and Adjust share the audited movement ledger. Permanent deletion is limited to
+  items with no operational references; the automatically created opening balance
+  is intentionally excluded so a new data-entry mistake remains removable.
+  Referenced items must be retired to preserve history, and reserved stock must be
+  released or fulfilled first. A concurrent reference created after the UI loads
+  can still produce a truthful 409 race response, which is handled rather than
+  treated as a server crash. Commit/deployment still require explicit approval.
+
 - **2026-10-28 login cold-start hardening is deployed:** the former explicit
   15-second login timeout is replaced by a liveness warm-up and separate
   60-second wake/authentication budgets. This improves free-tier first-login
@@ -1784,7 +2726,7 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Low local storage | `backend/local_backups` now occupies about 178.76 MiB across 11 files, including the validated pre-`users.0039` SQLite snapshot and the earlier unvalidated filesystem copy that was preserved rather than deleted. These may be intentional recovery evidence. Installed environments also occupy about 357 MiB after bytecode cleanup but are needed for offline development | Review backup retention dates and recovery value before deleting any backup; prefer the transaction-consistent `db-consistent-before-users-0039-20261008-124846.sqlite3` over the earlier same-session filesystem copy; remove `venv` or dependency trees only when accepting the cost and network requirement to reinstall them |
 | Low forecasting maturity | The model lifecycle now trains, rolling-backtests, stores validation evidence, refreshes through the daily automation, and publishes only qualifying service models. The current development data still has only 20 genuine requests across about 4.4 months, so no model is publishable. Item quantities additionally depend on genuine ticket-linked issue history and configured service-item mappings. The 7/30-day view is a monthly-forecast allocation, and the location view is explicitly an allocation by recent historical density rather than a separate geographic model | Continue collecting genuine history (three years is materially stronger), keep issue transactions linked to tickets and requirement mappings current, monitor WAPE/bias after each run, and retain the descriptive trend whenever validation fails. Do not lower the publication gates merely to display a forecast |
 | Low media compatibility | Structured proof records now render their declared video type, while older string-only records rely on common file extensions (`mp4`, `webm`, `ogg`, `mov`) to identify videos | Preserve the structured `type` field for new uploads; if uncommon legacy video formats exist, backfill their media type or extend the allowlist after browser-codec validation |
-| Low legacy profile data | Local user 35 retains a stale `media/profiles/jobposting2_pt7lxh` database value whose file is absent. The API now safely emits the empty avatar fallback and removes repeated `media/` prefixes, but it does not fabricate or delete media | Let the account owner upload a new profile image; clear or repair the stale field only with explicit local-data authorization. Review remote accounts for similar legacy values before any media migration |
+| Low legacy profile data | With explicit authorization, local user 35's stale `media/profiles/jobposting2_pt7lxh` reference is now cleared and serializes to the empty avatar fallback. Remote/staging accounts were not inspected or modified | Let the account owner upload a new image when desired. Review remote accounts for similar legacy values only through an authorized, backup-protected data-quality task |
 | Medium before deployment | Registration city/municipality and barangay choices depend on the third-party `psgc.cloud` API; the five CALABARZON provinces remain available locally and address is optional, but the lower-level selectors cannot populate during a provider or CORS outage | Verify the live hierarchy calls from the deployed browser origin; preferably vendor a dated official PSA PSGC CALABARZON snapshot or add a same-origin cached proxy before treating address capture as availability-critical |
 | Low UX density | Route-wide geometry and representative screenshot inspection found consistent shell spacing and no clipped, overlapping, or unlabeled main actions, but the mobile Documents editor and inspection/checklist workflows remain long, information-dense surfaces | Conduct short task-based usability sessions with office and field users; prioritize progressive disclosure or saved server-side drafts only where observed completion time or error rate justifies the workflow change |
 | High before a separate production launch | All current migrations are applied to staging Aiven, but no future production database can inherit that evidence or authorization | Back up and preflight the exact production target, review guarded cleanup/inventory migrations against its data, obtain explicit approval, then migrate and smoke-test that target |
@@ -1818,12 +2760,515 @@ Python code on 8000/5174. Restart a development server after backend changes.
 | Low | The client support assistant is deterministic guidance, not a generative support agent, and reads a snapshot when opened/refreshed | Keep answers curated as workflows change; direct account-specific or unresolved concerns to the existing human support case flow |
 | Low availability boundary | The public and authenticated solar calculators intentionally share published public settings and bundled defaults; during a settings-endpoint outage, either calculator can still operate with defaults that may be older than the latest published configuration | Preserve the resilient fallback, but consider displaying a settings freshness warning before estimates become contractual rather than preliminary |
 | Low inventory handoff boundary | The current decision is intentionally **Approve & Issue**: approval records the physical issue immediately. The system does not have a separate approved-but-not-yet-handed-over state. | Train inventory managers to confirm physical handover before approving. Add distinct `approved` and `issued` states only if the company later requires a separate warehouse pickup/receiving step. |
-| Deployment gate | All repository migrations through `services.0062` are current locally and on staging but remain unapplied to a separate production target. Staging has a validated earlier Django logical snapshot, but this machine lacks `pg_dump` and the snapshot has not been restore-tested; Render CLI access was renewed for the 2026-10-22 verification. | Before production, require a PostgreSQL-native backup plus restore drill, role-based manual UAT, and the guarded disposable-PostgreSQL concurrency gate; do not treat the logical staging snapshot as production-grade evidence. |
+| Low inventory costing boundary | Receive Stock records quantity, reference, reason, actor, and time but does not snapshot a per-delivery supplier price; the item's current unit price remains catalog metadata rather than a purchase-lot cost ledger. | Keep delivery references accurate. Add receipt-level unit cost and an explicit valuation policy only if accounting or weighted-average inventory valuation enters scope. |
+| Deployment gate | Local development is current through `services.0064`/`users.0042`; staging is current only through `services.0062`/`users.0041`; a separate production target remains untouched. Staging has a validated earlier Django logical snapshot, but this machine lacks `pg_dump` and the snapshot has not been restore-tested; Render CLI access was renewed for the 2026-10-22 verification. | Before staging/production release, review and apply the complete calendar chain (`services.0063`, `services.0064`, and `users.0042`) through the normal backup/migration gate. Before production, require a PostgreSQL-native backup plus restore drill, role-based manual UAT, and the guarded disposable-PostgreSQL concurrency gate; do not treat the logical staging snapshot as production-grade evidence. |
 | Medium commercial boundary | Deposit collection is recorded after money is received outside the portal; there is no payment gateway, receipt issuance, reconciliation import, refund processor, or independent payment approval | Keep references/notes and reasoned void history accurate; add gateway/accounting/reconciliation integration only through a separate approved financial contract |
 | Low product decision | A quotation covers the whole multi-service job, so when selected services have different deposit settings the rule producing the highest job-level amount wins and is snapshotted; configured rules are not summed | Confirm this strictest-rule policy with the business before launch; if additive per-line deposits are desired, first add quotation lines tied to service types and migrate the calculation contract |
 | Medium product decision | Sales Records use a read-only accepted-quotation or signed-contract value when available. A reasoned manual reference value remains available for legacy completed work with neither source; it is not independently approved and is not payment evidence | Periodically review manual-value records and decide whether future exports need tax/accounting integration; keep payment collection and accounting state outside this service-management system |
 
 ## 10. Current worktree manifest
+
+- 2026-11-04 (active custom Documents navigation): `frontend/src/pages/admin/AdminDocuments.jsx` loads authorized active custom definitions into the numbered Documents row and routes their selection to `CustomDocumentWorkspace.jsx`; `docs/quality/DOCUMENT_TEMPLATE_ADMIN_GUIDE.md` explains the new entry point; this handoff records architecture, validation, risk, manifest, and history. Existing custom records/storage were read but not changed. No backend runtime, model, migration, dependency, commit, push, or deployment changed.
+
+- 2026-11-04 (seventh Smart Documents custom template): local development and configured private storage intentionally gained custom definition `preventive-maintenance-report`, ten fields, design/version, one filled instance, and one archived output through existing APIs. `backend/backups/db-before-preventive-maintenance-document-20261104-122059.sqlite3` is the verified pre-write SQLite backup. `docs/quality/DOCUMENT_TEMPLATE_ADMIN_GUIDE.md` documents the installed example; this handoff records its architecture, validation, risk, data/storage mutation, and cleanup. One-off builder/source/render files were removed. No application source, model, migration, dependency, staging/production record, commit, push, or deployment changed.
+
+- 2026-11-04 (Smart Documents full post-completion verification): `AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md` and this living handoff record the fresh 75-backend/26-frontend/3-browser/build/check/drift acceptance rerun. Application source, models, migrations, dependencies, persistent real records, configured Cloudinary, commits, pushes, and deployments were unchanged. Browser mutations remained in ignored isolated E2E SQLite/storage.
+
+- 2026-11-04 (Smart Documents Phase 7 technical release UAT): `AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md` records six-document Microsoft Word pagination/visual evidence and configured private-Cloudinary upload/read/delete evidence; `docs/quality/DOCUMENT_TEMPLATE_ADMIN_GUIDE.md` adds the design-specific operational sign-off; this handoff updates architecture, validation, risks, manifest, and change history. Temporary DOCX/PDF/page-image/probe-script artifacts were removed, and the unique Cloudinary probe object was deleted. No runtime source, dependency, model, migration, database/document/template record, active design, commit, push, or deployment changed.
+
+- 2026-11-04 (Smart Documents Phase 7 safe cleanup): `backend/services/serializers/document_templates.py` exposes authoritative activation blockers; `backend/services/document_templates.py` consumes prefetched PDF mappings; `backend/services/views/document_templates.py` prefetches version fields; `frontend/src/documents/{documentFieldSuggestions.js,templateReplacementWizard.js}` remove the duplicate publication registry and add response-driven eligibility helpers; `frontend/src/components/admin/{DocumentReplacementWizard.jsx,DocumentTemplateManager.jsx}` use the shared server result; `frontend/src/components/admin/DocumentActionCard.jsx` extracts action/status presentation from `frontend/src/pages/admin/AdminDocuments.jsx`; focused frontend/backend tests and the root report, administrator guide, and this handoff record the checkpoint. Existing dirty work was preserved. No dependency, model, migration, persistent data, commit, push, or deployment changed.
+
+- 2026-11-04 (Smart Documents Phase 6 automated acceptance): `backend/services/document_templates.py` adds required activation components, DOCX loop manifests, aliases, and missing-component evaluation; `backend/services/views/document_templates.py` enforces publication transactionally while preserving historical rollback; `frontend/src/documents/documentFieldSuggestions.js` and `frontend/src/components/admin/DocumentReplacementWizard.jsx` mirror and display the policy; focused frontend/backend tests protect format differences, incomplete activation, active-version preservation, and generation failure/retry; `e2e/03-admin-workspace.spec.js` protects the guided replacement path. `AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md`, `docs/quality/DOCUMENT_TEMPLATE_ADMIN_GUIDE.md`, and this handoff record the checkpoint. Existing dirty work was preserved. No dependency, model, migration, persistent development/staging/production data, commit, push, or deployment changed.
+
+- 2026-11-04 (Smart Documents Phase 5 unified filling): `frontend/src/documents/coreDocumentWorkspace.js` and `frontend/tests/coreDocumentWorkspace.test.js` classify/test the six protected schemas; `frontend/src/components/admin/CustomDocumentWorkspace.jsx` routes core definitions to their retained editors while preserving custom dynamic filling; `frontend/src/pages/admin/AdminDocuments.jsx` supplies selected-definition routing and active-design generation; `e2e/03-admin-workspace.spec.js` protects the real routing, generation/download, and draft journey. The root report, administrator guide, and this handoff record the phase. Existing dirty work was preserved. No backend runtime, dependency, model, migration, development/staging/production data, commit, push, or deployment changed.
+
+- 2026-11-04 (Smart Documents Phase 4 visual configuration): `frontend/src/documents/pdfFieldPlacement.js` and `frontend/tests/pdfFieldPlacement.test.js` add/test bounded zoom and page-safe normalized placement; `frontend/src/components/admin/PdfTemplateFieldEditor.jsx` adds zoom, current-page field navigation, live precise movement, and resizing; `frontend/src/components/admin/DocumentReplacementWizard.jsx` adds DOCX part/repeating-section summaries and the honest source-authored boundary; `e2e/03-admin-workspace.spec.js` protects that summary. The report, staff guide, and this handoff record the checkpoint. Existing dirty work was preserved. No backend runtime, dependency, model, migration, persistent data, commit, push, or deployment changed.
+
+- 2026-11-04 (Smart Documents Phase 3 deterministic suggestions): `frontend/src/documents/documentFieldSuggestions.js` adds aliases, confidence, proximity, and missing-component helpers; `frontend/tests/documentFieldSuggestions.test.js` protects deterministic behavior; `frontend/src/components/admin/PdfTemplateFieldEditor.jsx` extracts local PDF text and requires explicit acceptance before existing field persistence; `frontend/src/components/admin/DocumentReplacementWizard.jsx` adds exact DOCX labeling, missing-content review, and explicit review confirmation; `e2e/03-admin-workspace.spec.js` protects the confirmation gate. The root report, administrator guide, and this handoff record Phase 3. Existing dirty work was preserved. No backend runtime, dependency, model, migration, persistent data, commit, push, or deployment changed.
+
+- 2026-11-04 (Smart Documents Phase 2 guided replacement): `frontend/src/components/admin/DocumentReplacementWizard.jsx` adds the six-step core replacement flow; `frontend/src/documents/templateReplacementWizard.js` and `frontend/tests/templateReplacementWizard.test.js` define/test step and readiness policy; `frontend/src/pages/admin/AdminDocuments.jsx` exposes Replace design; `frontend/src/components/admin/DocumentTemplateManager.jsx` retains advanced management with format-aware tests/rollback; `frontend/src/api/services.js`, `backend/services/{dynamic_document_generation.py,views/document_templates.py}`, and `backend/services/tests/test_dynamic_document_generation.py` support/test non-archiving DOCX/PDF ticket-backed test downloads; `e2e/03-admin-workspace.spec.js` protects upload/test/activate. The administrator guide, root implementation report, and this handoff record Phase 2. Existing dirty changes were preserved. No model, migration, persistent data, commit, push, or deployment changed.
+
+- 2026-11-03 (Smart Documents all-six Phase 1 completion): `frontend/src/documents/{documentSchemaHelpers.js,technicalDataSheetSchema.js,installationContractSchema.js,quotationSchema.js,turnoverAcceptanceSchema.js}` add shared immutable helpers plus the remaining four versioned schema/adapter/projection contracts; `frontend/src/pages/admin/{adminDocumentsSupport.js,adminDocumentsBuilders.js,AdminDocuments.jsx}` route initialization, legacy hydration, state updates, repeating-row operations, canonical payloads, and printable serialization through those schemas; `frontend/tests/remainingDocumentSchemas.test.js` covers ownership, status locks, compatibility, projections, row minimums, and version stamps; `e2e/03-admin-workspace.spec.js` asserts all five printable schema stamps and follows the current template-manager mini-sidebar workflow. `AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md` and this handoff record Phase 1 complete with Phases 2–7 pending. Existing dirty changes in overlapping paths were preserved. No model, migration, endpoint, persistent data, template activation, storage object, commit, push, or deployment changed.
+
+- 2026-11-03 (Smart Documents Phase 1 Solar Commissioning checkpoint): `frontend/src/documents/{solarCommissioningItems.js,solarCommissioningSchema.js}` add the shared 54-item catalog and versioned canonical adapter; `frontend/src/components/documents/SolarCommissioningChecklistForm.jsx` replaces obsolete technician API field names with canonical projection and a finalized lock; `frontend/src/pages/admin/{adminDocumentsSupport.js,adminDocumentsBuilders.js,AdminDocuments.jsx}` route catalog ownership, hydration, state operations, table controls, and API serialization through the schema; `frontend/tests/solarCommissioningSchema.test.js`, `backend/services/tests/test_document_generation_baseline.py`, and `e2e/03-admin-workspace.spec.js` protect legacy mapping, all 54 items, generation, finalization, canonical save, and reload. `AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md` and this handoff record the partial Phase 1 state. Existing dirty changes in overlapping paths were preserved. No migration or persistent data change.
+
+- 2026-11-03 (Smart Documents Phase 0–1 FSR checkpoint): `frontend/src/documents/fieldServiceReportSchema.js` and `frontend/tests/fieldServiceReportSchema.test.js` add the versioned schema/adapter and unit coverage; `frontend/src/pages/admin/{adminDocumentsSupport.js,adminDocumentsBuilders.js,AdminDocuments.jsx}` route existing FSR factories, hydration, table rendering, state operations, and serialization through it; `backend/services/tests/test_document_generation_baseline.py` protects repeating-row projection and canonical acknowledgment locking; `e2e/03-admin-workspace.spec.js` protects add/save/version/reload; `AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md` and this handoff document the checkpoint. Existing dirty changes in overlapping files were preserved. No migration or persistent data change.
+
+- 2026-11-03 (PDF editor one-page preview): `frontend/src/components/admin/PdfTemplateFieldEditor.jsx` adds explicit PDF-ready render state, resets page state per source, and measures the available viewer width. This handoff records the repair. No source PDF, field record, backend, or persistent data changed.
+
+- 2026-11-03 (template-manager notice lifecycle): `frontend/src/components/admin/DocumentTemplateManager.jsx` auto-dismisses success notices after four seconds and clears transient notice state when the popup closes. This handoff records the change. No backend or persistent data changed.
+
+- 2026-11-03 (quotation row-action placement): `frontend/src/pages/admin/AdminDocuments.jsx` moves Price/BOM/Warranty Add controls from table headers/below-table placement beside each row's bin, keeps both compact within the original narrow action column, preserves print hiding, and makes new BOM numbering monotonic. This handoff records the change. No backend or persistent data changed.
+
+- 2026-11-03 (direct safe design deletion): `backend/services/views/document_templates.py` removes the enabled/default preconditions, retains active/history/instance blockers, and atomically promotes a sibling default; its infrastructure tests cover the permitted and refused paths. `frontend/src/components/admin/DocumentTemplateManager.jsx` keeps Delete visible, disables it only for an active design, and clarifies confirmation. The implementation-status report and this handoff reflect the contract. No persistent design/source was deleted.
+
+- 2026-11-03 (Document templates popup separation): `frontend/src/components/admin/DocumentTemplateManager.jsx` converts the popup's left column into a navigation-only mini sidebar and moves new-design/custom-type forms into exclusive main-panel modes. `docs/quality/DOCUMENTS_CLIENT_FRIENDLY_IMPLEMENTATION_STATUS.md` and this handoff describe the clearer workflow. No main-sidebar, backend, schema, migration, database record, storage object, commit, push, or deployment changed.
+
+- 2026-11-03 (local Documents schema application): local `backend/db.sqlite3` now has `services.0068` and `0069`; `backend/backups/db-before-documents-0068-0069-20261103.sqlite3` is the verified pre-migration recovery copy. The implementation-status report and this handoff were updated. No staging/production database, template record, definition record, stored document, commit, push, or deployment changed.
+
+- 2026-11-03 (client-friendly DOCX/PDF Documents workflow): `backend/services/{models/documents.py,document_templates.py,pdf_document_generation.py,dynamic_document_generation.py,serializers/document_templates.py,views/document_templates.py,views/tickets.py,urls.py}` plus migrations `0068`/`0069`, requirements, and focused tests add format/readiness metadata, version fields, validated PDF import, true PDF overlay/merge, source download, preview, field CRUD/audit, format-aware core/custom generation, and protected-workflow coverage. `frontend/{package.json,package-lock.json,src/api/services.js,src/components/admin/{DocumentTemplateManager.jsx,PdfTemplateFieldEditor.jsx,CustomDocumentWorkspace.jsx},src/pages/admin/AdminDocuments.jsx}` adds drag/drop import, separate field setup, accurate PDF preview, fill/reset/generate/archive UX, and PDF.js. `docs/quality/DOCUMENTS_CLIENT_FRIENDLY_IMPLEMENTATION_STATUS.md` and this handoff record the user/deployment contract. Existing dirty worktree changes outside these paths remain user/prior-agent work and were not reset or cleaned.
+
+- 2026-11-03 (Dynamic Documents security and authoring-contract checkpoint):
+  `backend/afn_service_management/{storage.py,test_storage.py}` and
+  `backend/services/management/commands/privatize_document_assets.py` implement
+  authenticated Cloudinary document storage, expiring private reads, legacy
+  discovery/migration, and provider-contract tests. `services/document_templates.py`,
+  its serializer/catalog tests, `dynamic_document_generation.py`, its rendering
+  tests, and `views/document_templates.py` add typed placeholder metadata,
+  Word-authored repeating rows, edge-case rendering, live catalog refresh, and per-design publication
+  serialization; `services/test_postgres_concurrency.py` adds the staging-only
+  race proof. `DocumentTemplateManager.jsx`, the administrator guide, Phase F
+  readiness record, current-status report, and this handoff expose/document the
+  contract. Six existing local Cloudinary baseline objects moved from public to
+  authenticated delivery; database references and workflow state did not change.
+
+- 2026-11-02 (Dynamic Documents baseline registration checkpoint; local and
+  configured Cloudinary storage): `backend/services/management/commands/
+  import_legacy_document_templates.py` adds the dry-run-first idempotent
+  importer and `backend/services/tests/test_import_legacy_document_templates.py`
+  protects its six-file lifecycle. Phase A/F readiness, administrator guide,
+  current-status report, and this handoff reflect the new boundary. Local
+  development now has six valid inactive v1 versions and configured Cloudinary
+  has their six raw DOCX objects; no activation, output/archive, migration,
+  dependency, commit, push, staging, or production change occurred.
+
+- 2026-11-02 (guarded document-design deletion; local and uncommitted):
+  `backend/services/views/document_templates.py` adds the protected DELETE
+  lifecycle and post-commit file cleanup; its infrastructure test covers
+  permitted and blocked cases. `frontend/src/api/services.js` and
+  `DocumentTemplateManager.jsx` add the API call, conditional Delete action,
+  and confirmation. `e2e/03-admin-workspace.spec.js` covers the real browser
+  lifecycle. This handoff records the contract and evidence. No migration,
+  persistent record, dependency, commit, push, or deployment changed.
+
+- 2026-11-02 (Cloudinary document-upload routing repair; local and uncommitted):
+  `backend/afn_service_management/storage.py` adds extension-aware Cloudinary
+  image/video/raw resource routing; `settings.py` selects it when Cloudinary
+  media is configured; `test_storage.py` protects document and media routing;
+  this handoff records architecture, evidence, and remaining provider UAT.
+  No schema, migration, dependency, persistent record, external asset, commit,
+  push, or deployment changed.
+
+- 2026-11-02 (Dynamic Documents Phase F readiness gate; local and uncommitted):
+  `backend/services/tests/test_dynamic_document_generation.py` adds the
+  representative table/header/footer/styles/image preservation regression.
+  `docs/quality/DOCUMENT_MANAGEMENT_PHASE_F_READINESS.md`, the current Documents
+  status report, and this handoff record acceptance evidence, active dependency
+  findings, and the decision to retain compatibility paths. No runtime source,
+  migration, dependency, local business/document record, active template,
+  commit, push, or deployment changed.
+
+- 2026-11-02 (local Dynamic Documents schema migration; explicitly authorized):
+  ignored `backend/db.sqlite3` now records `services.0065` through `0067` as
+  applied. Ignored recovery file `backend/local_backups/
+  db-consistent-before-documents-0065-0067-20261102-211512.sqlite3` is the
+  validated pre-migration backup. Phase B-E/current-status documentation and
+  this handoff were updated to distinguish local development from untouched
+  staging/production. No source migration file, dependency, commit, push, or
+  deployment changed.
+
+- 2026-11-02 (Dynamic Documents Phase E custom documents; local and uncommitted):
+  `backend/services/models/documents.py`, migration `0067`, the document
+  template validator/serializers/viewsets/routes, custom generation adapter,
+  user permissions/RBAC, and focused tests add custom definitions, typed fields,
+  source-bound instances, private output/archive and attachment flows, bounded
+  safe placeholders, access enforcement, and file-signature validation.
+  `frontend/src/components/admin/DocumentTemplateManager.jsx`, new
+  `CustomDocumentWorkspace.jsx`, `AdminDocuments.jsx`, the services API client,
+  frontend RBAC, and the Admin Documents E2E journey add registration/setup and
+  dynamic preparation/generation/archive/attachment UI. `DOCUMENTS_CURRENT_STATUS.md`,
+  `DOCUMENT_MANAGEMENT_PHASE_E.md`, `DOCUMENT_TEMPLATE_ADMIN_GUIDE.md`, and this
+  handoff record scope/evidence. Migration `0067` remains test-only; no
+  dependency, non-test database write, commit, push, or deployment occurred.
+
+- 2026-11-02 (Dynamic Documents Phase D frontend integration; local and
+  uncommitted): `frontend/src/components/admin/DocumentTemplateManager.jsx`
+  adds the responsive capability-scoped manager; `frontend/src/pages/admin/
+  AdminDocuments.jsx`, `frontend/src/api/services.js`, and `frontend/src/rbac.js`
+  connect it to definitions, designs, upload/version actions, Test DOCX, and
+  output downloads while preserving the editor. `backend/services/serializers/
+  document_templates.py` and its focused test make default switching atomic and
+  regression-covered. `e2e/seed-test-data-exec.py` restores migration-seeded
+  core definitions after the intentional E2E flush, and the Admin Documents
+  journey verifies the manager. `DOCUMENT_MANAGEMENT_PHASE_D.md` and this
+  handoff record scope/evidence. No new migration, dependency, non-test database
+  write, commit, push, or deployment occurred.
+
+- 2026-11-02 (Dynamic Documents Phase C generation/archive; local and
+  uncommitted): `backend/services/dynamic_document_generation.py`,
+  `DocumentOutput` plus migration `0066`, document-template serializers/views/
+  routes, the ticket generation action, quotation context mapping, and focused
+  Phase C tests add active-template rendering, selected-design support, legacy
+  fallback, exact storage provenance, output history/download, test render, and
+  audit events. `DOCUMENT_MANAGEMENT_PHASE_C.md`, the status report, Phase B
+  note, and this handoff record behavior/evidence. No non-test migration, UI,
+  dependency, deployed data, commit, push, or deployment changed.
+
+- 2026-11-02 (Dynamic Documents Phase B backend infrastructure; local and
+  uncommitted): `backend/services/models/documents.py`, migration
+  `services.0065`, `services/document_templates.py`, document-template
+  serializers/viewsets/routes, user RBAC/permissions, and focused tests add the
+  dormant registry, upload validation, immutable versions, activation/rollback,
+  and audit boundary. `docs/quality/DOCUMENT_MANAGEMENT_PHASE_B.md`, the current
+  status report, and this handoff record the contract and evidence. The migration
+  is unapplied outside isolated tests; renderer/UI/deployed data are unchanged.
+
+- 2026-11-02 (Dynamic Documents Phase A baseline; local and uncommitted):
+  `backend/services/tests/test_document_generation_baseline.py` adds six-type,
+  alias, DOCX-integrity, unresolved-token, and no-business-mutation protection.
+  `docs/quality/DOCUMENT_MANAGEMENT_PHASE_A_BASELINE.md` records template
+  fingerprints, workflow boundaries, responsibilities, legacy candidates, and
+  Phase A exit evidence. This handoff records objective, architecture,
+  validation, risk, manifest, and change scope. No runtime code, template,
+  model, route, migration, dependency, or persistent data changed.
+
+- 2026-11-02 (Documents module current-state investigation; local and
+  uncommitted): `DOCUMENTS_CURRENT_STATUS.md` is the requested detailed audit
+  of current UI, document types, templates, generation, backend contracts,
+  data, customization, dependencies, limitations, security, and integration
+  feasibility. This handoff records the objective, confirmed architecture,
+  validation evidence, risk, manifest, and change ledger. No application,
+  schema, migration, dependency, environment, or persistent-data path changed.
+
+- 2026-11-02 (Walk-in request availability-calendar alignment; local and
+  uncommitted): `frontend/src/components/shared/WalkInRequestDialog.jsx` reuses
+  the shared appointment calendar, labels/disables unavailable slot options,
+  simplifies headings/header copy, and uses a responsive two-column desktop
+  form with full-width location. `frontend/src/pages/admin/AdminServiceTickets.jsx`
+  stores selected-day availability and applies pre-submit date/slot guards while
+  preserving the request/approval payload. `e2e/03-admin-workspace.spec.js`
+  selects a real available calendar cell instead of filling the removed native
+  date input. This handoff records architecture, evidence, risks, manifest, and
+  change scope. No backend, API, schema, migration, route, dependency, or
+  persistent-data path changed.
+
+- 2026-11-01 (Extensionless Cloudinary proof-photo rendering; local and
+  uncommitted): `frontend/src/pages/admin/AdminJobHistory.jsx` normalizes media
+  types and uses `type: photo` for thumbnail/full-preview rendering instead of
+  requiring a URL extension. `e2e/03-admin-workspace.spec.js` adds an extensionless
+  Cloudinary-style image regression to the existing Admin Job History journey.
+  This handoff records architecture, evidence, risk, manifest, and change scope.
+  No backend, migration, or persistent-data path changed.
+
+- 2026-11-01 (Admin Calendar selected-day agenda popup; local and uncommitted):
+  `frontend/src/pages/admin/AdminCalendar.jsx` replaces the persistent agenda
+  below the month with an accessible responsive popup while preserving direct
+  event details and the separate Configuration Mode panel. `e2e/03-admin-workspace.spec.js`
+  covers desktop opening/content/Escape/focus restoration, appointment details,
+  and 390x844 containment. This handoff records architecture, validation, risk,
+  manifest, and change evidence. No backend or migration path changed.
+
+- 2026-11-01 (Admin Services subtitle removal; local and uncommitted):
+  `frontend/src/pages/admin/AdminServices.jsx` removes the redundant descriptive
+  sentence and its wrapper; `e2e/03-admin-workspace.spec.js` uses the persistent
+  catalog toolbar for its outside-click assertion. This handoff records the
+  follow-up and validation. No backend or migration path changed.
+
+- 2026-11-01 (Minimal Admin Services catalog cleanup; local and uncommitted):
+  `frontend/src/pages/admin/AdminServices.jsx` consolidates counts, status filter,
+  and Add Service into one responsive toolbar; preserves the existing cards and
+  visible Details control; adds the accessible Edit/Deactivate/Reactivate action
+  menu; and compacts empty states. `e2e/03-admin-workspace.spec.js` covers the
+  toolbar, counts, filters, details, create/edit entry points, lifecycle actions,
+  keyboard/outside-click behavior, and narrow-screen containment. This handoff
+  records the architecture, evidence, risk, manifest, and change ledger. No
+  backend, API, schema, migration, dependency, or persistent-data path changed.
+
+- 2026-11-01 (Configurable-workday rollback; local and uncommitted): the
+  interrupted model/API/scheduling/Admin Settings experiment and its temporary
+  `users.0043` migration were fully removed. The application paths returned to
+  the already-recorded fixed-eight-hour duration state; this handoff records the
+  rollback and its validation evidence.
+
+- 2026-11-01 (Client Full/Closed labels and day-based service duration; local
+  and uncommitted): `frontend/src/components/client/AppointmentAvailabilityCalendar.jsx`
+  replaces unavailable X icons with derived Full/Closed text while retaining a
+  truthful Unavailable outage state; `frontend/src/pages/admin/AdminCalendar.jsx`
+  replaces manual-closure X icons with Closed/Partly closed badges while retaining
+  reasons; `frontend/src/pages/admin/AdminServices.jsx` adds Days to the existing
+  minute-backed duration editor; `frontend/src/pages/technician/TechnicianJobs.jsx`
+  renders long durations in eight-hour workdays; `e2e/{03-admin-workspace.spec.js,05-client-workspace.spec.js}`
+  cover the conversion and calendar-state distinction. This handoff records the
+  architecture, risk, validation, manifest, and change evidence. No backend or
+  migration path changed.
+
+- 2026-11-01 (Shared three-job daily calendar capacity; local and uncommitted):
+  `backend/services/scheduling_policy.py` changes occupancy to one shared daily
+  counter and includes unspecified legacy schedules; `backend/services/views/service_requests.py`
+  and `backend/services/views_dashboard.py` return/enforce daily availability;
+  `backend/users/{serializers.py,admin.py}` hide obsolete per-slot settings;
+  `frontend/src/{api/admin.js,pages/admin/AdminCalendar.jsx,components/admin/CalendarAvailabilityConfigurationPanel.jsx}`
+  replace editable slot limits with the authoritative daily limit and per-time
+  occupancy; backend tests and `e2e/03-admin-workspace.spec.js` cover the new
+  contract. No model or migration changed.
+
+- 2026-11-01 (Client location panel natural scrolling; local and uncommitted):
+  `frontend/src/pages/client/ClientServiceRequests.jsx` removes desktop sticky
+  positioning from the Pin service location panel so it follows normal page
+  scrolling. This handoff records the follow-up and build evidence.
+
+- 2026-11-01 (Client New Request UI simplification; local and uncommitted):
+  `frontend/src/pages/client/ClientServiceRequests.jsx` retains the four-step
+  tracker but replaces the repeated numbered/icon section treatments with plain
+  headings and removes redundant instructional copy from the form, map, and
+  submit footer. This handoff records the follow-up and its validation.
+
+- 2026-11-01 (Complete client New Request UI redesign; local and uncommitted):
+  `frontend/src/pages/client/ClientServiceRequests.jsx` now presents the request
+  form as four numbered Service, Location, Schedule, and Details sections, adds
+  a compact progress overview, and turns the map into a clearer sticky desktop
+  panel with search, pin status, and current-location action. The existing
+  `AppointmentAvailabilityCalendar` component and all request/API behavior are
+  preserved. This handoff records the implementation and validation evidence.
+
+- 2026-11-01 (Client New Request availability UI alignment; local and uncommitted):
+  `frontend/src/components/client/AppointmentAvailabilityCalendar.jsx` redesigns
+  the existing privacy-safe availability widget with explicit status icons,
+  larger targets, centered navigation, and a consolidated selected-date summary;
+  `frontend/src/pages/client/ClientServiceRequests.jsx` groups it with the time
+  selector under Preferred schedule and makes Client use the full form width;
+  `e2e/05-client-workspace.spec.js` covers the new labels, selection summary,
+  unavailable X, and existing outage fail-safe. No API response or persistence
+  contract changed.
+
+- 2026-11-01 (Visible Admin Calendar closures; local and uncommitted):
+  `frontend/src/pages/admin/AdminCalendar.jsx` removes the duplicate page heading
+  and derives administrator-only X/reason treatments from the already-loaded
+  active closure records for desktop cells, mobile accessible names, and the
+  selected-day agenda. `e2e/03-admin-workspace.spec.js` covers the single-heading
+  contract, visible reason marker, and screenshot evidence. This handoff records
+  the behavior and validation; no backend contract or persistent state changed.
+
+- 2026-11-01 (Calendar Configuration Mode redesign; local and uncommitted):
+  `frontend/src/pages/admin/AdminCalendar.jsx` provides the off-by-default mode,
+  clean toolbar/legends, authoritative date indicators, independent event and
+  availability loading, stale-response protection, and accessible date-cell
+  behavior; new
+  `frontend/src/components/admin/CalendarAvailabilityConfigurationPanel.jsx`
+  provides the responsive configuration drawer, global capacities, single/bulk
+  overrides, confirmation, dirty-state protection, and existing restrictions;
+  `frontend/src/api/admin.js` maps authoritative availability days;
+  `frontend/src/components/client/AppointmentAvailabilityCalendar.jsx` disables
+  all dates with retry guidance when availability cannot be verified.
+  `backend/services/{scheduling_policy.py,views_dashboard.py,views/tickets.py}`
+  adds deterministic policy-row locking, authoritative administrator occupancy,
+  closure/capacity write serialization, corrected completed classification, and
+  manual-assignment capacity enforcement. Focused tests changed in
+  `backend/services/tests/{test_client_appointment_availability.py,test_dashboard_role.py,test_scheduling_warranty_and_assignment.py}`
+  and `e2e/{03-admin-workspace.spec.js,05-client-workspace.spec.js}`. The route
+  and workflow contracts and this handoff are updated; `CALENDAR_CURRENT_STATUS.md`
+  is explicitly marked as the pre-redesign baseline. No new entity, migration,
+  dependency, or environment contract was added.
+
+- 2026-11-01 (Calendar current-status investigation; documentation only):
+  `CALENDAR_CURRENT_STATUS.md` records the verified UI, API, model, scheduling,
+  state, dependency, issue, and test boundaries for a proposed toggleable
+  Configuration Mode; this handoff records scope, risks, and validation. No
+  application code, schema, migration, dependency, configuration, route,
+  permission, or persistent data changed.
+
+- 2026-11-01 (Reverse-geocode resilience and stale-avatar cleanup; local and uncommitted):
+  `backend/api/{views.py,tests.py}` adds bounded Nominatim retry and explicit
+  resolved/unavailable reverse-geocode results;
+  `frontend/src/pages/{client/ClientServiceRequests.jsx,admin/AdminServiceTickets.jsx}`
+  preserves coordinates/address input and shows manual-entry guidance during an
+  outage. Local ignored `backend/db.sqlite3` has user 35's stale image reference
+  cleared; ignored backup
+  `backend/local_backups/db-consistent-before-stale-avatar-cleanup-20261101-113509.sqlite3`
+  preserves the pre-cleanup state. This handoff records validation and the
+  unchanged staging/production boundary.
+
+- 2026-11-01 (Local capacity-aware calendar migrations; explicitly approved):
+  local ignored `backend/db.sqlite3` now records `services.0064` and
+  `users.0042`; ignored recovery copy
+  `backend/local_backups/db-consistent-before-calendar-capacity-20261101-112321.sqlite3`
+  preserves the transaction-consistent pre-migration state; this handoff records
+  approval, verification, and the unchanged staging/production boundary.
+
+- 2026-11-01 (Capacity-aware appointment availability; local and uncommitted):
+  `backend/users/{models.py,serializers.py,signals.py,migrations/0042_adminsettings_appointment_slot_capacities.py}`
+  adds configurable per-slot capacity; `backend/services/{models/core.py,migrations/0064_calendarclosure_availability_status.py,scheduling_policy.py,serializers/tickets.py,views/service_requests.py,views/tickets.py,views_dashboard.py,tests/test_client_appointment_availability.py}`
+  adds automatic Available/Limited/Full states, manual Limited/Closed range
+  overrides, enforcement, and capacity-write serialization;
+  `frontend/src/{api/admin.js,components/client/AppointmentAvailabilityCalendar.jsx,pages/admin/AdminCalendar.jsx,pages/client/ClientServiceRequests.jsx}`
+  adds the green/orange/red client calendar and admin capacity/range controls;
+  `e2e/{03-admin-workspace.spec.js,05-client-workspace.spec.js}` and
+  `docs/security/{ROUTE_API_CAPABILITY_MATRIX.md,WORKFLOW_STATE_MACHINES.md}`
+  cover and document the contract. This handoff records validation and the
+  unapplied local/staging/production migration boundary.
+
+- 2026-11-01 (Local calendar-closure migration; explicitly approved): local
+  ignored `backend/db.sqlite3` now records `services.0063`; ignored recovery copy
+  `backend/local_backups/db-consistent-before-services-0063-20261101-000243.sqlite3`
+  preserves the transaction-consistent pre-migration state; this handoff records
+  approval, verification, and the unchanged staging/production boundary.
+
+- 2026-10-31 (Client calendar-only date selection; local and uncommitted):
+  `frontend/src/pages/client/ClientServiceRequests.jsx` removes the duplicate
+  native date input; `frontend/src/components/client/AppointmentAvailabilityCalendar.jsx`
+  adds the formatted selected-date confirmation; `e2e/05-client-workspace.spec.js`
+  proves calendar-only selection; this handoff records scope and validation.
+
+- 2026-10-31 (Admin-controlled appointment closures; local and uncommitted):
+  `backend/services/{models/core.py,migrations/0063_calendarclosure.py,scheduling_policy.py,serializers/requests.py,serializers/tickets.py,views/service_requests.py,views/tickets.py,views_dashboard.py,tests/test_client_appointment_availability.py}`,
+  `backend/users/signals.py`, and `backend/api/urls.py` add the auditable closure
+  schema, dispatch-authorized API, privacy-safe client response, and server-side
+  scheduling enforcement. `frontend/src/{api/admin.js,pages/admin/AdminCalendar.jsx,components/client/AppointmentAvailabilityCalendar.jsx,pages/client/ClientServiceRequests.jsx}`
+  add close/reopen controls and disabled client choices. `e2e/{03-admin-workspace.spec.js,05-client-workspace.spec.js}`
+  cover both roles; `docs/security/{ROUTE_API_CAPABILITY_MATRIX.md,WORKFLOW_STATE_MACHINES.md}`
+  and this handoff record the contract, evidence, deployment boundary, and risks.
+
+- 2026-10-31 (Visible intro skip control removed; local and uncommitted):
+  `frontend/src/components/IntroSplash.jsx` removes the explicit button;
+  `frontend/src/components/IntroSplash.css` removes its orphaned style rules;
+  `e2e/01-public-pages.spec.js` asserts the control is absent while retaining
+  backdrop and automatic-completion coverage; this handoff records scope,
+  evidence, and the still-local deployment boundary.
+
+- 2026-10-31 (Client appointment availability calendar; local and uncommitted):
+  `backend/services/views/service_requests.py` adds the authenticated bounded
+  aggregate route; `backend/services/tests/test_client_appointment_availability.py`
+  covers privacy, cancellation, authentication, and range behavior;
+  `frontend/src/api/services.js`,
+  `frontend/src/components/client/AppointmentAvailabilityCalendar.jsx`, and
+  `frontend/src/pages/client/ClientServiceRequests.jsx` add the API client and
+  accessible selectable calendar; `e2e/05-client-workspace.spec.js` verifies the
+  real client surface; `docs/security/ROUTE_API_CAPABILITY_MATRIX.md` and this
+  handoff record the authorization, architecture, route, risks, and evidence.
+  No schema or migration changed.
+
+- 2026-10-31 (Local full-stack startup race and process-tree cleanup; local and uncommitted):
+  `frontend/scripts/dev-full.ps1` replaces the fragile 15-attempt database-health
+  wait with a 60-second elapsed-time window, improves timeout wording, and uses
+  exact launcher-process-tree cleanup for Django's Windows autoreloader; this
+  handoff records the observed timing, isolated startup proof, and port cleanup.
+  No environment file, database setting, dependency, or application route changed.
+
+- 2026-10-31 (Compact services visibility control; local and uncommitted):
+  `frontend/src/pages/admin/AdminServices.jsx` reduces the catalog visibility UI
+  to a slim count/dropdown row while preserving assistive names and all filter
+  behavior; the existing focused service E2E test verifies accessibility and
+  lifecycle transitions; this handoff records scope and evidence.
+
+- 2026-10-31 (Deactivated-services visibility filter; local and uncommitted):
+  `frontend/src/pages/admin/AdminServices.jsx` defaults the catalog to active
+  services and adds counted Active/Deactivated/All views plus filtered empty
+  states and recovery guidance; `e2e/03-admin-workspace.spec.js` verifies the
+  complete hide/reveal/reactivate transition; this handoff records the UI
+  contract and validation. No backend contract changed.
+
+- 2026-10-31 (Inventory item-view readability and movement-history pagination; local and uncommitted):
+  `frontend/src/pages/admin/AdminInventory.jsx` gives the item Details/Manage
+  dialog a fixed header, independently scrolling card layout, emphasized stock
+  summary, and collapsed ten-record movement-history pagination with count,
+  refresh, and page reset/clamping; `e2e/03-admin-workspace.spec.js` exercises
+  both 10/1 history splits and the complete item lifecycle journey; this handoff
+  records UI behavior, failures, final evidence, and visual inspection. No
+  backend contract changed.
+
+- 2026-10-31 (Item-view reservation collapse and 10-record pagination; local and uncommitted):
+  `frontend/src/pages/admin/AdminInventory.jsx` adds independent accessible
+  disclosure, count, page reset/clamping, and ten-record pagination to the
+  Ticket Reservations history inside each item's Details/Manage dialog;
+  `e2e/03-admin-workspace.spec.js` verifies the collapsed 10/1 split while
+  retaining the full item create/receive/history/retirement journey; this
+  handoff records behavior and validation evidence. No backend contract changed.
+
+- 2026-10-31 (Inventory reservation collapse and 10-group pagination; local and uncommitted):
+  `frontend/src/pages/admin/AdminInventory.jsx` adds an accessible collapsed
+  reservation queue, ten-group local pagination, safe page clamping/reset, and
+  automatic expansion for focused links; `e2e/03-admin-workspace.spec.js`
+  verifies the 10/1 page split and preserves ticket-focused grouped decisions;
+  this handoff records behavior and evidence. No backend contract changed.
+
+- 2026-10-31 (Admin Calendar Include completed contract; local and uncommitted):
+  `backend/services/views_dashboard.py` makes completed/turned-over events truly
+  opt-in; `backend/services/tests/test_dashboard_role.py` covers default and
+  explicit inclusion; `e2e/03-admin-workspace.spec.js` proves the checkbox
+  visibly changes and restores the Calendar result set; this handoff records the
+  route behavior, evidence, and scheduled-date boundary. No schema changed.
+
+- 2026-10-31 (Dashboard Reject request progressive disclosure; local and uncommitted):
+  `frontend/src/pages/admin/AdminDashboard.jsx` places the destructive rejection
+  path inside an accessible native More actions disclosure without changing its
+  decision workflow; `e2e/03-admin-workspace.spec.js` verifies hidden-by-default
+  discoverability and the existing reason confirmation; this handoff records the
+  scope and evidence. No backend contract changed.
+
+- 2026-10-31 (Softer Dismiss wording across operational UI; local and uncommitted):
+  shared confirmation, inspection-review, status-badge, profile-security,
+  reschedule, walk-in, assistant, and sales-payment components; administrator
+  tickets, dashboard, inventory, services, users, profile, analytics, reports,
+  activity logs, and analytics visuals; client tracking/detail/profile/support;
+  technician jobs/profile/messages/inspection; follow-up and sales-record pages;
+  and `frontend/src/api/services.js` now present Dismiss/Dismissed language while
+  retaining existing internal contracts. `e2e/{03-admin-workspace.spec.js,04-technician-workspace.spec.js,05-client-workspace.spec.js,07-side-flows.spec.js,11-minor-flow-journeys.spec.js}`
+  aligns selectors and verifies the two state-changing dismissal journeys; this
+  handoff records scope, compatibility, evidence, and deployment state. No
+  backend contract changed.
+
+- 2026-10-31 (Clearable numeric-entry behavior across system forms; local and uncommitted):
+  `frontend/src/pages/admin/{AdminServices.jsx,AdminSettings.jsx,AdminLandingPage.jsx}`,
+  `frontend/src/pages/technician/TechnicianJobs.jsx`,
+  `frontend/src/hooks/useTechnicianJobs.js`, and `frontend/src/api/admin.js`
+  preserve intermediate blank numeric input while retaining save/submit validation
+  and explicit payload normalization; `e2e/{03-admin-workspace.spec.js,11-minor-flow-journeys.spec.js}`
+  prove service, settings, calculator, and technician-request behavior, while the
+  existing Dispatch and inventory receipt assertions cover those workflows; this
+  handoff records scope and evidence. No backend contract changed.
+
+- 2026-10-30 (Inventory Receive/Adjust workflow separation; local and uncommitted):
+  `frontend/src/pages/admin/AdminInventory.jsx` locks receipt and physical-count
+  correction to separate, purpose-specific dialogs, previews their quantity
+  effects, initializes corrections from recorded stock, adds reservation-aware
+  client validation, and moves exceptional return/deduction actions into a
+  collapsed secondary section; `e2e/03-admin-workspace.spec.js` covers the two
+  fixed workflows; this handoff records scope, evidence, and the remaining
+  receipt-costing boundary. No backend contract changed.
+
+- 2026-10-30 (Inventory Add Item safety and usability; local and uncommitted):
+  `backend/inventory/{serializers.py,tests.py}` enforces stock-derived initial
+  state regardless of caller input; `frontend/src/pages/admin/AdminInventory.jsx`
+  removes the creation status selector, adds an automatic preview, required-field
+  guidance, immediate SKU normalization, clearer stock help, accurate Edit naming,
+  and collapsible optional supplier/notes sections; `e2e/03-admin-workspace.spec.js`
+  covers the streamlined creation surface; this handoff records scope and
+  evidence. No schema, migration, route, permission, dependency, environment,
+  or persistent-data change.
+
+- 2026-10-30 (Inventory status display consolidation; local and uncommitted):
+  `frontend/src/pages/admin/AdminInventory.jsx` merges derived stock condition
+  and operational lifecycle state into one non-wrapping status pill on desktop
+  rows and mobile cards and widens the status column; `e2e/03-admin-workspace.spec.js`
+  verifies the complete Out of stock pill remains within its cell before receipt
+  and changes to In stock afterward; this handoff records scope and evidence. No
+  backend contract changed.
+
+- 2026-10-30 (Retired inventory hidden by default; local and uncommitted):
+  `frontend/src/pages/admin/AdminInventory.jsx` defaults the list to active
+  records while preserving explicit retired/all filters for review and
+  reactivation; `e2e/03-admin-workspace.spec.js` retires a real isolated item,
+  proves it disappears, and retrieves it through the Retired filter; this
+  handoff records scope and evidence. No backend contract changed.
+
+- 2026-10-30 (Inventory Manage and safe item lifecycle; local and uncommitted):
+  `backend/inventory/{serializers.py,views.py,tests.py}` publishes deletion
+  eligibility and blocker counts, excludes only the canonical opening balance,
+  blocks protected deletes with a detailed 409, and protects return-record
+  references; `frontend/src/pages/admin/AdminInventory.jsx` consolidates Receive
+  and Adjust under Manage, keeps Details read-only, replaces unsafe item trash
+  shortcuts with context-aware Delete/Retire/Reactivate confirmations, and keeps
+  lifecycle status out of ordinary editing; `e2e/03-admin-workspace.spec.js`
+  proves opening-only Delete visibility, post-receipt Retire visibility, receipt
+  history, and view-only access; this handoff records scope and evidence. No
+  schema, migration, route, permission, dependency, environment, or data change.
+
+- 2026-10-30 (Inventory Retire danger styling; local and uncommitted):
+  `frontend/src/pages/admin/AdminInventory.jsx` presents Retire Item and its
+  confirmation in red danger styling, moves the protected-reference explanation
+  into that popup, and preserves the green Reactivate treatment;
+  `e2e/03-admin-workspace.spec.js` covers the popup copy; this handoff records
+  the change. No backend contract changed.
 
 - 2026-10-28 (login cold-start timeout hardening; committed and deployed in `5331dc4`):
   `frontend/src/context/AuthContext.jsx` warms `/health/liveness/`, separates
@@ -2075,7 +3520,8 @@ All paths below are preserved work, not cleanup candidates.
   integrity, customizable catalog/category behavior, capability-scoped technician
   catalog access and own ledger/reservation visibility, transaction history,
   item-filtered ticket reservation context, `ITX`/`RSV` display identities,
-  lifecycle validation, active available-stock statistics, required reasons and
+  lifecycle validation, API-reported delete eligibility/blockers with canonical
+  opening balances excluded, protected-history retirement, active available-stock statistics, required reasons and
   optional references for manual movements, bounded ticket-return regression
   coverage, realtime behavior, and regression coverage.
 - `backend/inventory/migrations/{0005_inventory_integrity_constraints.py,0006_inventorycategory_inventory_category_name_ci_unique.py,0007_equipmentreturnrequest_equipmentreturnrequestitem.py}`:
@@ -2591,6 +4037,296 @@ All paths below are preserved work, not cleanup candidates.
 6. Leave work uncommitted unless the user explicitly authorizes a commit.
 
 ## 13. Change ledger
+
+- **2026-11-04 - Exposed active custom documents in the main Documents row:** retained the six protected editors as items 1-6, appended API-backed active custom definitions for document managers, routed custom selections to the existing generic Smart Documents workspace, and used a seven-column desktop grid so the new entry is not hidden off-screen. The local Preventive Maintenance Report now resolves as item 7 without a new entity or hardcoded editor. Updated the administrator guide and passed the 2,564-module production build; lint remains unavailable because the frontend defines no lint script.
+
+- **2026-11-04 - Created the seventh document through Smart Documents:** registered and enabled the ticket-backed custom Preventive Maintenance Report, added ten typed fields, uploaded/validated/tested/activated its AFN Standard DOCX, created and generated a ticket-630 sample, and proved authorized private archive download with an exact checksum. Preserved a verified pre-write local backup and removed temporary build/verification artifacts. No new entity, migration, hardcoded editor, or protected business side effect was introduced.
+
+- **2026-11-04 - Reverified the complete Smart Documents implementation:** passed 75/75 backend tests using freshly constructed DOCX/PDF uploads, 26/26 frontend document contracts, all three real Chromium Documents journeys, the 2,564-module build, Django check, and migration-drift check. The isolated browser flow performed a fresh template upload, validation, ticket-backed test generation, activation, all-six save/reload, and document generation. No application behavior or real persistent environment changed.
+
+- **2026-11-04 - Completed Smart Documents Phase 7 technical release UAT:** rendered and inspected all six protected repository baselines through desktop Microsoft Word with long/repeating data, confirmed later-page/final-section retention and no unresolved tokens, and passed a configured Cloudinary authenticated-raw upload, byte-exact private read, signed-access, and cleanup probe. Added the final-design staff sign-off steps. Phases 0–7 are technically complete; actual company replacement designs still require deliberate per-design acceptance and activation. No runtime source, schema, database record, persistent design, retained storage object, commit, push, or deployment changed.
+
+- **2026-11-04 - Completed the first safe Smart Documents Phase 7 cleanup checkpoint:** Removed the duplicated frontend activation requirement registry, exposed backend-calculated blockers in version responses, aligned guided and advanced activation/rollback controls, prefetched mapped fields, and extracted the core action/status presentation without moving business decisions. Focused, full protected, production-build, Django drift, and two real browser journeys pass. Destructive legacy cleanup remains gated by representative-file and target-storage UAT.
+
+- **2026-11-04 - Completed the Smart Documents Phase 6 automated gate:** Added mandatory format-aware publication checks for all six core documents, server/client policy parity, DOCX repeating-region manifest evidence, historical rollback compatibility, and failure/retry regressions. The all-six protected suite, frontend suite, browser journeys, production build, checks, drift check, and bounded performance probe pass. Manual representative-file and target private-storage UAT still gate Phase 7; no legacy runtime was removed and no persistent design was activated.
+
+- **2026-11-04 - Completed Smart Documents Phase 5:** Unified the Fill template entry around the existing six schemas and custom-instance path. Core selections now explain the data/layout boundary and route to their protected editors; custom documents retain dynamic filling. Added Generate active design through the existing ticket generator without changing business transitions. Frontend unit/build/real-browser generation and Django drift gates pass; no backend runtime or migration changed. Phases 6–7 remain pending.
+
+- **2026-11-04 - Completed Smart Documents Phase 4:** Improved the fixed-PDF mapper with bounded zoom, page-field navigation, live fine positioning, resizing, and normalized page-safe coordinates. Added DOCX body/header/footer and repeating-section summaries plus explicit guidance that the generated Word file—not a fake browser rendering—is authoritative. Frontend unit/build/browser and Django drift gates pass; no backend or migration changed. Phases 5–7 remain pending.
+
+- **2026-11-04 - Completed Smart Documents Phase 3:** Added a lightweight explainable alias matcher and nearby PDF text detection, confidence labels, explicit suggestion acceptance, conservative missing-component warnings, and a required review confirmation before testing. Reused version-specific PDF field persistence and exact DOCX placeholders; added no external AI, backend service, dependency, or migration. Unit, protected-backend, production-build, and Chromium gates pass. Phases 4–7 remain pending.
+
+- **2026-11-04 - Completed Smart Documents Phase 2:** Added a permission-aware six-step Replace design wizard that reuses the existing upload, validation, configuration, test-render, activation, rollback, and history infrastructure. Added temporary configured-PDF test rendering, retained the advanced Template library, and protected the flow with unit, backend, production-build, and Chromium coverage. Phases 3–7 remain pending; no database migration or persistent template state changed.
+
+- **2026-11-03 - Completed Smart Documents Phase 1 for all six core documents:** Added bounded schema/adapter/projection contracts for Technical Data Sheet, Installation Contract, Quotation / Proposal, and Turnover Acceptance; routed their existing editors and save paths through those contracts; preserved every canonical backend authority and existing paper; added compatibility/unit/browser coverage; and refreshed the stale template-library browser selectors to the current mini-sidebar workflow. Phase 2–7 work remains pending. Affected paths are listed in section 10 and the root implementation report.
+
+- **2026-11-03 - Completed the second incremental Smart Documents Phase 1 schema:** Added a reusable Solar Commissioning schema and shared 54-item catalog while retaining the existing admin paper, canonical Django record, generation path, status values, and finalized immutability. Admin and technician surfaces now use one adapter; obsolete technician fields map safely to canonical JSON and API fields. Added frontend, backend, and browser regressions. Four document schemas and Phases 2–7 remain pending. Affected paths are listed in section 10 and the root implementation report.
+
+- **2026-11-03 - Completed Smart Documents Phase 0 and FSR-only Phase 1:** Added a reusable versioned Field Service Report data schema and backward-compatible adapter beneath the retained editor. Schema-driven repeating columns and row operations preserve the existing paper while new saves identify schema version 1; old drafts still load. Added frontend, backend, and browser regressions plus baseline performance evidence. Phases 2–7 and the other five schemas remain intentionally pending. Affected paths are listed in section 10 and the root implementation report.
+
+- **2026-11-03 - Fixed blank one-page PDF setup preview:** Triggered PDF.js rendering explicitly after load even when the page count remains one, and replaced the self-limiting 300px wrapper measurement with the available viewer width. Production build passed; visual confirmation with the user's PDF remains pending after reopening the editor.
+
+- **2026-11-03 - Auto-dismissed template success notices:** Added a four-second cleanup timer for success banners and reset notice state when the popup closes, while preserving persistent error feedback. Production build passed with 2,550 modules.
+
+- **2026-11-03 - Moved quotation Add beside Delete:** Removed the small Add controls from blue table headers and the interim below-table buttons. Price, BOM, and Warranty rows now show Add and bin together; printing still excludes both. Improved BOM numbering after row deletion. Production build passed with 2,550 modules.
+
+- **2026-11-03 - Made unreferenced designs directly deletable:** Removed the hidden retire/non-default prerequisite from the UI and API. Enabled/default designs with no active or historical reference can now be deleted after confirmation; a sibling default is selected automatically. Active and provenance-bearing designs remain protected. Focused backend tests pass 11/11 and the production build passes.
+
+- **2026-11-03 - Separated Document templates popup actions:** Kept document type and design selection in the popup mini sidebar, replaced the two embedded forms with clear Add new design and New document type entries, and opened each form independently in the right panel. Existing-design version replacement remains a separate right-panel action. Production build passed with 2,550 modules; no application-main-sidebar or backend behavior changed.
+
+- **2026-11-03 - Applied Documents schema locally:** Created and verified a transaction-consistent local SQLite backup, applied `services.0068` and `0069`, and verified Django/database integrity. Audited all document definitions/designs/versions to distinguish the ambiguous cleanup candidates; deleted nothing pending exact target identification. Updated the implementation status and living handoff. Staging and production were untouched.
+
+- **2026-11-03 - Client-friendly DOCX/PDF Documents workflow:** Reused the existing dynamic-document registry, private storage, versioning, instances, outputs, permissions, and fallback while adding separable DOCX/PDF import and field configuration. Added PDF placement, manual/system fill, same-renderer preview, format-aware archive generation, core-PDF visual replacement, source download, readiness states, reset, and field audit events. Protected business workflows remain authoritative. Added two unapplied additive migrations and documented deployment/feature limits. Validation: focused 9/9, combined 58/58, build/check/schema/dependencies/audit/diff pass; browser UAT pending. Affected paths are the first 2026-11-03 item in section 10.
+
+- **2026-11-03 — Current Documents audit saved:** Added an authoritative post-Phase-B–E current-state section to `DOCUMENTS_CURRENT_STATUS.md`, clearly separating fully implemented, partial, and missing capabilities and marking the retained original audit as historical. Updated this handoff as required. Affected paths: `DOCUMENTS_CURRENT_STATUS.md`, `docs/quality/CURRENT_SYSTEM_AUDIT_AND_HANDOFF.md`.
+
+2026-11-03 (Dynamic Documents security and authoring-contract checkpoint):
+- Made document templates, generated outputs, and attachments private Cloudinary authenticated raw objects with short-lived server-generated downloads, plus a dry-run-first idempotent migration command. Migrated and verified the six local inactive baselines; exact private bytes render correctly and all former public URLs return 404.
+- Added complete placeholder metadata to the definition API and shared manager, including source, type, formatting, applicability, required state, and scalar/repeating status; the catalog now refreshes with custom-field changes. Added a documented Word convention for marker-only repeating table rows or paragraphs and browser coverage for the catalog.
+- Corrected the renderer/validator mismatch for repeating sections, added Unicode/special-character/long/missing-value coverage, serialized activation on the shared template row, and added a PostgreSQL-only competing-publication regression. Local backend/build/check gates pass; PostgreSQL staging, visual approval, real rollback/archive UAT, retention/malware decisions, and stakeholder acceptance still block legacy cleanup.
+
+2026-11-02 (Dynamic Documents baseline registration checkpoint; local configured storage):
+- Added and tested a dry-run-first baseline importer that validates the six exact legacy runtime sources, requires an auditable administrator for apply, stores immutable valid drafts through configured storage, deduplicates by checksum, and never activates versions.
+- After approved external access, registered all six Standard baselines as inactive local v1 versions under `iman`; a post-apply dry run proved idempotency. All six configured-storage files subsequently downloaded and rendered into intact DOCX archives with zero unresolved tokens after one recorded transient TLS-reset attempt.
+- Updated the Phase A/F, current-status, administrator, and living handoff records. Phase F compatibility deletion remains correctly withheld pending visual approval, real replacement rollback, archived-output/storage authorization UAT, and staging/stakeholder acceptance.
+
+2026-11-02 (guarded document-design deletion; local and uncommitted):
+- Added a capability-protected document-design DELETE endpoint that preserves active/default designs and every generated/custom-document reference, while deleting only retired unreferenced versions and scheduling their stored-file cleanup after commit.
+- Added a conditional Delete action and destructive confirmation to Admin Documents; users retire the design first, and backend conflicts remain authoritative.
+- The 8-test backend lifecycle suite, Django check, migration drift, 2,547-module build, and focused real-browser create/retire/delete journey pass. No migration or persistent environment changed.
+
+2026-11-02 (Cloudinary document-upload routing repair; local and uncommitted):
+- Replaced the configured Cloudinary image-only default with an AFN storage adapter that keeps image/video behavior and sends DOCX/PDF/text/other files through Cloudinary raw resources, fixing the template upload resource-type mismatch without a migration.
+- Added focused routing regressions and passed the combined 8-test storage/template lifecycle gate, Django system check, migration drift, and effective-backend/type inspection.
+- No document/template record or external asset was created during validation. A real provider upload/download retry and server restart if auto-reload did not occur remain runtime UAT, not claimed evidence.
+
+2026-11-02 (Dynamic Documents Phase F readiness gate; local and uncommitted):
+- Added a representative dynamic-render regression proving table/body/header/footer replacement while preserving styles and embedded image bytes, then passed the 48-test backend document/workflow acceptance gate and both Admin Documents browser journeys.
+- Confirmed the 2,547-module build, Django check, migration drift, and empty migration plan; verified isolated tests did not add versions, instances, outputs, or attachments to local development.
+- Documented that no presentation path is currently dead: editors/builders/forms/context/fallback code retain runtime consumers, and six local Standard designs have no active uploaded versions. Compatibility removal is withheld pending approved-template visual UAT, rollback, deployment-shaped storage, and staging acceptance.
+
+2026-11-02 (local Dynamic Documents schema migration; explicitly authorized):
+- Confirmed exactly `services.0065`-`0067` pending, created and validated a transaction-consistent ignored SQLite backup, and applied only those Services migrations to local development.
+- Verified complete migration state, no remaining migration plan or model drift, healthy Django checks, SQLite integrity, zero foreign-key violations, and the expected seed boundary of six core definitions/six inactive designs with no versions or generated/custom records.
+- Updated Phase B-E status documentation and this living handoff. Staging/production, business records, active templates, dependencies, source migrations, commit history, remotes, and deployments were untouched; Phase F compatibility removal remains gated on acceptance testing.
+
+2026-11-02 (Dynamic Documents Phase E custom documents; local and uncommitted):
+- Added inactive custom-definition registration, safe ticket/client/project source catalogs, typed manual fields, optional capability restrictions, and readiness enforcement before a definition can be enabled.
+- Added source-bound custom instances, exact active-template selection, DOCX generation, private instance output history, supporting attachments, hashes/signature validation, authorized downloads, activity events, and a dynamic responsive workspace inside Admin Documents. Protected business workflow authority remains unchanged and custom generation has no legacy-layout fallback.
+- Added migration `services.0067`, focused backend coverage, registration E2E coverage, Phase E delivery documentation, and an administrator authoring guide. The final combined backend gate passed 16/16, the frontend build passed with 2,547 modules, and system/migration checks pass. The migration remains isolated-test-only; no dependency, non-test database write, commit, push, or deployment occurred.
+
+2026-11-02 (Dynamic Documents Phase D frontend integration; local and uncommitted):
+- Added the capability-gated Manage templates action and responsive modal for six core definitions, multiple designs, safe default/retired state, uploads and validation diagnostics, activation, rollback, actual ticket-backed Test DOCX downloads, and private ticket output history/downloads.
+- Preserved the existing editor/workflow and labeled its HTML representation Editor preview; PDF conversion remains optional and deferred. Generation still falls back to the legacy path when no enabled active default exists.
+- Fixed conditional-default PATCH handling with explicit name validation and atomic prior-default clearing, and aligned E2E seeding with migration `0065` after the isolated database flush. Final validation passed 11/11 focused backend tests, the 2,546-module build, and the focused Admin Documents Chromium journey. No new migration, non-test database write, dependency, commit, push, or deployment occurred.
+
+2026-11-02 (Dynamic Documents Phase C generation/archive; local and uncommitted):
+- Added a compatibility generation adapter that uses active validated default/selected designs for all six core types, preserves untouched DOCX parts, repairs Word split-run tokens, and falls back to legacy templates only when no active version exists.
+- Added `DocumentOutput` archive/provenance with configured-storage files, exact template/source snapshots, checksums, ready/failed state, authorized metadata/download APIs, non-archiving test renders, and generation/download audit events.
+- Corrected generated quotation numbering to prefer the canonical quotation record. The 17-test document/deposit gate and 19-test workflow checkpoint pass; system/migration checks pass. Migrations remain isolated-test-only and Phase D UI/PDF work has not started.
+
+2026-11-02 (Dynamic Documents Phase B backend infrastructure; local and uncommitted):
+- Added normalized document definition, design, and immutable version records with one-default/one-active constraints and a migration that seeds the six protected core definitions without copying files or activating a version.
+- Added configured-storage uploads and bounded DOCX inspection for archive traversal/size/encryption, macros, embedded packages, external relationships, split-run placeholders, allowlisted tokens, unsupported expressions, and balanced loops. Unsafe files are rejected; safe diagnostic-invalid drafts remain reviewable but cannot activate.
+- Added separate upload/manage/publish/rollback capabilities, metadata/upload/activation/rollback APIs, transaction locks, and activity events. The 12-test focused gate, Django check, and migration drift pass. No development/deployed migration, renderer/UI cutover, persistent business-data change, commit, push, or deployment occurred.
+
+2026-11-02 (Dynamic Documents Phase A baseline; local and uncommitted):
+- Added an executable compatibility baseline for the legacy six-type generator. Outputs are created only in a temporary test directory and verified as valid DOCX ZIPs with resolved tokens; generation is proven not to mutate the accepted quotation, deposit gate, ticket, or printable snapshot rows.
+- Recorded stable codes and aliases, source-template SHA-256 fingerprints, the canonical business-authority boundary, exact quotation/deposit/dispatch route sequence, existing regression owners, responsibility map, and presentation-only candidates that must remain during migration.
+- The focused isolated gate passed 20/20. No renderer, application model/API/UI, schema, migration, dependency, configured storage, persistent data, template file, commit, push, or deployment changed. Phase B has not started.
+
+2026-11-02 (Documents module current-state investigation; local and uncommitted):
+- Added `DOCUMENTS_CURRENT_STATUS.md`, a source-verified classification of the current six-type Documents workspace, canonical records, snapshot/download behavior, custom DOCX renderer, routes, authorization, data sources, cross-module consumers, concrete limitations, and missing template-management capabilities.
+- Recommended a deliberately separate, administrator-only versioned template layer with inactive upload, strict DOCX/archive/relationship validation, a typed placeholder catalog, actual rendered-template preview, atomic activation/rollback, durable private storage, and exact output/template provenance. No recommendation was implemented.
+- Updated only this required living handoff alongside the requested report. No application code, migration, database, dependency, generated document, commit, push, or deployment changed.
+
+2026-11-02 (Walk-in request availability-calendar alignment; local and uncommitted):
+- Replaced the walk-in form's independent native preferred-date input with the existing shared capacity-aware appointment calendar. Staff now see the same Available/Limited/Full/Closed date contract as clients, while internal closure reasons remain outside this client-status component.
+- Added selected-day state to Service Tickets, labeled and disabled Full/Closed slot options, and added pre-submit guards for unavailable dates/slots without changing the authoritative backend validation, staff outcomes, or create/approve payload.
+- Simplified decorative section/header copy and made client/schedule cards share the desktop row while the location map remains full width and mobile remains single-column with sticky actions.
+- Updated the focused walk-in browser journey to select a live enabled calendar cell. The production build, final HTTP-201 save journey, responsive check, and screenshot inspection pass; one initial transient offline/WebSocket interruption is retained in the validation ledger and superseded. No migration, persistent-data mutation, dependency, commit, push, or deployment action occurred.
+
+2026-11-01 (Extensionless Cloudinary proof-photo rendering; local and uncommitted):
+- Corrected Admin Job History's proof gallery and full-screen viewer to trust explicit photo/video metadata, allowing valid Cloudinary image URLs without filename extensions to render as photos while retaining suffix detection for legacy entries.
+- Confirmed the failing URL shape in development records through a read-only inspection and added focused browser coverage with an extensionless Cloudinary-style response. The production build and Admin Job History journey pass; no backend, migration, database mutation, dependency, commit, push, or deployment action occurred.
+
+2026-11-01 (Admin Calendar selected-day agenda popup; local and uncommitted):
+- Replaced the always-expanded selected-day list below the operational month with a date-triggered modal that retains counts, filter context, closure reasons, appointment facts, status/conflict/reschedule markers, and the path into existing event details.
+- Added backdrop/Escape/close-button dismissal, focus trapping and restoration, body-scroll locking, an empty-day state, desktop centering, and a mobile bottom-sheet layout. Configuration Mode and direct event-card behavior remain distinct and unchanged.
+- The production build, final focused desktop/mobile Chromium journey, and desktop screenshot inspection pass. No backend, migration, persistent-data, dependency, commit, push, or deployment action occurred.
+
+2026-11-01 (Admin Services subtitle removal; local and uncommitted):
+- Removed the requested Admin Services descriptive sentence and the empty margin it occupied, allowing the page to begin directly with feedback or the compact catalog toolbar.
+- Repointed the focused menu outside-click browser assertion to the toolbar. The final production build and deactivate/reactivate journey pass; no behavior, backend, migration, persistent-data, commit, push, or deployment changed.
+
+2026-11-01 (Minimal Admin Services catalog cleanup; local and uncommitted):
+- Replaced the separated Services controls with one compact toolbar immediately above the cards: real active/deactivated counts at left, and the count-bearing Active/Deactivated/All selector plus Add Service at right. Active remains the default view and compact empty states stay in the same list area.
+- Kept Details visible on every existing card and moved Edit Service plus confirmed Deactivate/Reactivate into an accessible three-dot menu with outside-click dismissal, Escape dismissal/focus return, and corrected narrow-screen alignment. Permanent Delete is not presented in the menu; existing backend deletion safeguards were not changed.
+- Updated focused browser coverage and passed the final 2,545-module build, 3/3 Services journeys, and the corrected 390x844 containment rerun. No backend, migration, persistent-data, dependency, commit, push, or deployment action occurred.
+
+2026-11-01 (Configurable-workday rollback; local and uncommitted):
+- Removed only the interrupted configurable-standard-workday attempt, including its temporary unapplied migration. Preserved the completed calendar labels and Days/Hours/Minutes service-duration UI.
+- Confirmed no discarded field/function/migration remnants, passed diff validation, and rebuilt all 2,545 frontend modules. No database or deployment action occurred.
+
+2026-11-01 (Client Full/Closed labels and day-based service duration; local and uncommitted):
+- Replaced calendar X icons with compact semantic wording. On the client calendar, fully capacity-consumed dates say Full and dates with all slots manually closed say Closed; API verification failures retain Unavailable and retry behavior. Admin Calendar manual restrictions say Closed or Partly closed and retain their reason. Automatic capacity remains Full.
+- Added Days, Hours, and Minutes to the admin Service Duration editor using the existing minute field and the existing eight-hour technician day. Service summaries and technician job duration labels now present long work in days without changing SLA, appointment-count, API, or database contracts.
+- Production build and focused browser validation pass. No migration, persistent-data mutation, dependency, commit, push, or deployment occurred.
+
+2026-11-01 (Shared three-job daily calendar capacity; local and uncommitted):
+- Replaced the former three-per-slot rule (up to nine jobs daily) with one shared maximum of three scheduled non-cancelled jobs per date. Time slots remain booking preferences, and legacy tickets without a recognized slot also consume daily capacity.
+- Automatic availability is green below two jobs, orange/Limited at two, and red/Full at three across every otherwise-open time. The backend rejects a fourth scheduled job through request creation, approval, assignment schedule changes, direct scheduling, and rescheduling under the existing capacity lock.
+- Admin Calendar now reports the fixed daily limit and slot occupancy, while manual reasoned slot/day restrictions remain available for heavy jobs. Removed obsolete editable slot-capacity surfaces without deleting historical schema columns or creating a migration.
+- The 101 focused backend tests, migration drift check, production build, admin close/reopen E2E, and three client calendar E2E journeys pass. No persistent data, migration, commit, push, or deployment changed.
+
+2026-11-01 (Client location panel natural scrolling; local and uncommitted):
+- Removed the `xl:sticky xl:top-4` treatment from Pin service location. The panel now scrolls normally with the request form; no map or request behavior changed. The production build passes.
+
+2026-11-01 (Client New Request UI simplification; local and uncommitted):
+- Kept the four-step tracker requested by the user, while removing the repeated numbered badges, section icons, descriptions, map instruction, and submission explanation that made the form feel over-designed.
+- The production build, focused real client calendar journey, and simplified desktop screenshot inspection pass. No behavior or backend contract changed.
+
+2026-11-01 (Complete client New Request UI redesign; local and uncommitted):
+- Reworked the full New Request presentation into an easy-to-scan four-step flow without replacing the availability calendar the user preferred.
+- Improved service selection, signed-in identity, location fields, supporting notes, final submission guidance, and the desktop/mobile hierarchy. The map panel is now visually separate and sticky on wide screens, with a clear selected/unset pin state and a full-width current-location action.
+- The production build, all 3 focused client appointment-calendar journeys, and desktop screenshot inspection pass. The payload, validation, availability colors and restrictions, backend, schema, migrations, persistent data, dependencies, commit history, and deployment are unchanged.
+
+2026-11-01 (Client New Request availability UI follow-up; local and uncommitted):
+- Reorganized scheduling into a clear Preferred schedule section and modernized the appointment calendar with a calendar icon, centered month controls, larger accessible date cells, Selected badge, status pills, and a consolidated date/slot confirmation card.
+- Replaced color-only dots with green/amber check marks and a red X for Full/Closed or unverifiable dates. Disabled-date enforcement, Limited selection, retry behavior, backend validation, and privacy remain unchanged; administrator closure reasons are not exposed to clients.
+- The final 2,545-module build, 3/3 focused client browser journeys, and desktop screenshot inspection pass. No backend, API, schema, migration, persistent data, dependency, commit, push, or deployment changed.
+
+2026-11-01 (Admin Calendar closure visibility follow-up; local and uncommitted):
+- Removed the duplicate in-content Service Calendar title and explanatory sentence, leaving the existing workspace top bar as the single page heading.
+- Made active manual Closed overrides visually explicit: whole-day and partial-slot closures display a red X, affected scope, and operator reason in desktop date cells; mobile date names include the reason, and the selected-day agenda repeats the full explanation. Automatic capacity Full remains distinct from a manual closure.
+- The production build, two focused admin calendar browser journeys, final screenshot-producing close/reopen rerun, and visual screenshot inspection pass. No backend, schema, migration, data, dependency, commit, push, or deployment changed.
+
+2026-11-01 (Calendar Configuration Mode redesign; local and uncommitted):
+- Rebuilt Admin Calendar around its everyday operational use. Configuration Mode sits beside Include completed, defaults off, preserves navigation/filters/completed state, and makes empty-date clicks open a mobile bottom sheet or desktop drawer while appointment cards continue to open details. Availability colors and drawer booked/capacity/remaining/status values now come from the backend; service colors remain a secondary collapsible legend.
+- Preserved the existing global model and semantics: Morning/Midday/Afternoon capacities, reasoned Limited/Closed/Reopen overrides, 93-day bulk ceiling, existing appointments left intact, and technician feasibility separate from booking capacity. Added explicit bulk impact confirmation, independent error/retry states, stale-request protection, disabled mutations when current availability is unknown, and dirty-edit confirmation.
+- Closed the verified scheduling gaps: manual assignment with changed schedule fields now rejects Full/Closed targets; policy, capacity, and closure writes obtain a deterministic shared lock even before the singleton row exists; Turned Over/Accepted events classify as completed; client availability outages disable selection. Updated backend/browser regressions and security contracts. No new model, migration, dependency, data mutation, commit, push, or deployment was required.
+
+2026-11-01 (Calendar current-status investigation; documentation only):
+- Added `CALENDAR_CURRENT_STATUS.md`, a code-evidenced inventory of the admin, client, and technician calendars; availability/capacity controls; backend contracts and relationships; technician/global scheduling rules; refresh behavior; dependencies; known defects/limitations; and current automated coverage.
+- Identified the minimum Configuration Mode boundary: `AdminCalendar.jsx` plus browser coverage for a UI-only toggle, with API/backend changes needed only for automatic admin occupancy colors, separate configuration authorization, realtime refresh, or new scheduling semantics. No application behavior or persistent state changed.
+
+2026-11-01 (Reverse-geocode resilience and stale-avatar cleanup; local and uncommitted):
+- Backed up development SQLite and cleared only local user 35's explicitly identified obsolete avatar reference; the authenticated profile API now returns an empty avatar URL instead of repeatedly requesting the stale Cloudinary path.
+- Added one bounded retry for transient Nominatim timeouts and a truthful HTTP-200 partial-result contract when both attempts fail. Client and administrator request forms retain selected coordinates and existing address fields, avoid browser-level reverse-geocode 502s, and direct manual address entry without fabricating location data.
+- Five focused tests, real local profile/fail-soft probes, Django check, migration drift, the 2,544-module production build, and database integrity checks pass. Staging/production data, schema, migrations, dependencies, commit, push, and deployment were untouched.
+
+2026-11-01 (Local capacity-aware calendar migrations; explicitly approved):
+- Confirmed development SQLite and exactly two pending migrations, created and verified a transaction-consistent ignored backup, then applied only `services.0064_calendarclosure_availability_status` and `users.0042_adminsettings_appointment_slot_capacities`.
+- Post-migration state, Django check, SQLite integrity/foreign keys, physical column existence, and an authenticated HTTP 200 availability response all passed. Staging and production were untouched; no source, dependency, environment, commit, push, or deployment change was made in this step.
+
+2026-11-01 (Capacity-aware appointment availability; local and uncommitted):
+- Added default/configurable capacities for Morning, Midday, and Afternoon; automatic Available/Limited/Full state calculation from scheduled non-cancelled tickets; and reasoned Limited/Closed overrides across one date or a bounded multi-day range. Administrators can reopen an individual override or a range, and capacity-sensitive PostgreSQL writes share a policy-row lock.
+- Updated the client calendar to show green Available, orange Limited, and red Full/Closed states without exposing counts, identities, or internal reasons. Orange remains selectable; red is disabled and rejected by the backend across creation, approval, direct scheduling, and rescheduling. Existing appointments, service duration, and SLA rules are unchanged.
+- Added `services.0064` and `users.0042`, updated the route/workflow contracts, and expanded backend/admin/client regressions. Migration drift, 86 affected backend tests, the 2,544-module production build, and focused browser checks pass. The new migrations touched only disposable test/E2E databases; no local development/staging/production migration, commit, push, or deployment was performed.
+
+2026-11-01 (Local calendar-closure migration; explicitly approved):
+- Diagnosed the local appointment-availability HTTP 503 as the expected missing `services_calendarclosure` table, not a stopped backend or current Vite compile failure. After confirming development SQLite and creating an integrity-checked online backup, applied only `services.0063_calendarclosure` locally.
+- Post-migration state, Django system check, SQLite integrity/foreign keys, physical table existence, zero initial closure rows, and an authenticated HTTP 200 availability response all passed. Staging and production were untouched; no code, dependency, environment, commit, push, or deployment change was made.
+
+2026-10-31 (Client calendar-only date selection; local and uncommitted):
+- Removed the duplicate Selected Appointment Date field and made the appointment calendar the sole date control while preserving the same `preferred_date` submission and backend checks. The calendar now confirms the chosen formatted date, and the time-slot control remains immediately below it.
+- The 2,544-module build and focused real client browser journey passed. No backend, schema, migration, route, permission, dependency, persistent-data, commit, push, or deployment change was made.
+
+2026-10-31 (Admin-controlled appointment closures; local and uncommitted):
+- Added reasoned, reversible future whole-day and business-slot closures to Admin Calendar for authorized administrators/superadministrators, with creator/updater/reopener audit evidence and explicit red/disabled client presentation.
+- Enforced closures at client request creation, office approval, and ticket scheduling/rescheduling while leaving existing appointments visible and unrelated edits available. Added migration `services.0063`, a dispatch-protected route, focused admin/client browser journeys, and backend privacy/permission/enforcement coverage. The expanded 83-test regression, migration drift, 2,544-module build, and both E2E journeys pass. The migration touched only disposable databases; nothing was committed, pushed, deployed, or applied to development/staging/production.
+
+2026-10-31 (Visible intro skip control removed; local and uncommitted):
+- Removed the visible Skip intro button and its CSS without changing the animation duration, session/replay behavior, reduced-motion bypass, backdrop/key dismissal, or automatic completion.
+- The 2,544-module production build and focused Chromium intro journey passed. No backend, schema, migration, route, dependency, persistent-data, commit, push, or deployment change was made.
+
+2026-10-31 (Client appointment availability calendar; local and uncommitted):
+- Added an authenticated, privacy-reduced appointment-activity endpoint limited to 63 days and an accessible client month calendar with green no-appointment and amber appointment-scheduled states, affected-slot guidance, past-date blocking, and direct date-entry fallback.
+- Preserved office review and dispatch authority: busy-looking dates remain requestable and the UI explicitly avoids calling the advisory signal confirmed capacity. Three backend tests, the 2,544-module build, and the focused authenticated client browser journey passed. No schema, migration, dependency, persistent-data, commit, push, or deployment change was made.
+
+2026-10-31 (Local full-stack startup race and process-tree cleanup; local and uncommitted):
+- Extended the `dev:full` backend readiness boundary from a fragile 15-attempt loop to a 60-second elapsed-time check and made shutdown terminate the launcher-owned autoreloader tree rather than only its parent.
+- PowerShell parsing and a real isolated backend-plus-Vite startup passed; validation and orphan listeners were removed and ports 8001/8012/5192 were confirmed free. No database, environment-file, commit, push, or deployment change was made.
+
+2026-10-31 (Compact services visibility control; local and uncommitted):
+- Replaced the oversized Services catalog filter card with a minimal single-row count and compact dropdown, retaining screen-reader labels and all Active/Deactivated/All behavior.
+- The 2,543-module build and focused service lifecycle journey passed; no backend, schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-31 (Deactivated-services visibility filter; local and uncommitted):
+- Hid deactivated services from the default administrator catalog while retaining explicit Deactivated and All views, state counts, filtered empty guidance, and the existing activation path.
+- The 2,543-module build and focused deactivate/reactivate browser journey passed; no backend, schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-31 (Inventory item-view readability and movement-history pagination; local and uncommitted):
+- Reorganized the item Details/Manage dialog into a stable-header, scrollable card layout with a wider canvas and clearer stock-position cards while preserving item metadata and all management actions.
+- Collapsed Stock Movement History by default, added its record count, and paged movement rows at 10 per page independently from Ticket Reservations. The 2,543-module build and final focused item journey passed, and the desktop layout was visually inspected; no backend, schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-31 (Item-view reservation collapse and 10-record pagination; local and uncommitted):
+- Made Ticket Reservations inside each inventory item's Details/Manage dialog collapsed by default, added a visible record count, and paged its historical reservation rows at 10 per page.
+- Preserved item loading, refresh, status display, stock movement history, and lifecycle actions. The 2,543-module build and final focused browser journey passed; no backend, schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-31 (Inventory reservation collapse and 10-group pagination; local and uncommitted):
+- Collapsed Pending Equipment Requests by default and added Previous/Next pagination for 10 grouped ticket requests per page.
+- Preserved discoverability through the count badge and automatic expansion for ticket/hash links; focused browser checks passed both paging and the existing decision flow. No backend, schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-31 (Admin Calendar Include completed contract; local and uncommitted):
+- Removed the hidden 30-day completed-ticket exception from the administrator calendar endpoint: unchecked now means no completed/turned-over tickets, checked includes them for the displayed scheduled-date range.
+- Updated backend and browser regressions; both focused checks passed. No schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-31 (Dashboard Reject request progressive disclosure; local and uncommitted):
+- Replaced the prominent Reject request footer button with a More actions disclosure containing the same rejection action, leaving inspection and approval as the visible primary decisions.
+- The 2,543-module build and focused real dashboard journey passed; rejection permissions, reason validation, confirmation, and backend behavior are unchanged.
+
+2026-10-31 (Compact Dismiss ticket action label; local and uncommitted):
+- Simplified the administrator service-ticket action from `Dismiss ticket — Client withdrew` to `Dismiss ticket` without changing behavior or confirmation safeguards; the 2,543-module production build passed.
+
+2026-10-31 (Softer Dismiss wording across operational UI; local and uncommitted):
+- Standardized dialog escape actions and operational closures on Dismiss, with Dismissed used for their visible closed-state presentation in badges, filters, reports, analytics, support, and activity history.
+- Kept high-impact confirmation copy explicit about closing active processing, retaining history, releasing assignments, and returning reservations so the softer verb does not hide consequences.
+- Preserved stored `Cancelled` statuses, API routes/payloads, code identifiers, legal cancellation/termination clauses, and technical electrical terminology to avoid schema or integration breakage.
+- Updated affected browser selectors; the final 2,543-module build and focused inspection/client dismissal journeys passed. No backend, schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-31 (Clearable numeric-entry behavior across system forms; local and uncommitted):
+- Replaced immediate `Number(value) || 1`/default coercion in affected controlled number inputs with raw editable state, so a prefilled number can be fully erased while typing.
+- Kept valid defaults for newly added rows, but moved enforcement to explicit save/submit validation and normalized only valid values at the API boundary; blank service equipment/capacity values can no longer silently submit as `1`.
+- Added accessible labels and browser regressions for service equipment/capacity, technician equipment requests, settings, and landing calculator fields; existing browser coverage already proves the same behavior for Dispatch quantities and inventory receipts.
+- The 2,543-module production build and all focused browser reruns passed. The Windows pipe parsing and ambiguous settings locator attempts are recorded and superseded. No backend, schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-30 (Inventory Receive/Adjust workflow separation; local and uncommitted):
+- Removed the shared action dropdown so Receive Stock cannot silently become an adjustment/deduction and Adjust Stock cannot silently become a receipt.
+- Added recorded/change/resulting quantity previews; physical correction starts from the current count, and frontend validation mirrors reserved/available quantity boundaries before submission.
+- Made the dialogs unmistakable inside: receipt uses green additive guidance and an equation, while correction uses amber replacement guidance, an arrow, and an explicit system variance; their references, reasons, and confirmation buttons also use purpose-specific wording and styling.
+- Kept the receipt quantity editable as an intermediate blank value and added browser coverage proving its default `1` can be completely cleared before a replacement quantity is entered.
+- Preserved non-ticket return and manual deduction through a compact Other stock actions section without changing the append-only backend transaction model.
+- The 2,543-module production build and focused Chromium inventory journey passed; the initial pre-workflow offline timeout is recorded and superseded by the passing rerun. No backend, schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-30 (Inventory Add Item safety and usability; local and uncommitted):
+- Removed manual status selection from Add Item and replaced it with an automatic In stock/Out of stock preview driven by opening quantity.
+- Enforced the same rule in the serializer, so direct API callers cannot create unsupported operational lifecycle states without their real workflows.
+- Marked required fields, normalized SKU while typing, clarified stock/reorder behavior, renamed Manage Item to Edit Item, and collapsed optional supplier/warranty and long-form text sections.
+- All 44 inventory backend tests, the 2,543-module production build, and the focused Add Item-through-retirement Chromium journey passed; no schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-30 (Inventory status display consolidation; local and uncommitted):
+- Replaced the duplicated `Out` plus `OUT OF STOCK` presentation with one complete `Out of stock` pill and applied the same single-source display rule to every inventory lifecycle/stock state on desktop and mobile.
+- Rebalanced the fixed desktop columns so the complete status pill fits inside its cell instead of looking cut off.
+- The 2,543-module production build, focused inventory Chromium journey, and diff-integrity check passed; no backend, schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-30 (Retired inventory hidden by default; local and uncommitted):
+- Changed the default inventory usage-state filter to Active items, so successful retirement immediately removes the record from the normal list.
+- Preserved explicit Retired items and All items including retired choices, keeping retirement reversible and historical records discoverable.
+- The 2,543-module build, focused real retire/hide/retrieve Chromium journey, and diff-integrity check passed; no backend, schema, migration, data, commit, push, or deployment change was made.
+
+2026-10-30 (Inventory Retire danger styling; local and uncommitted):
+- Changed Retire Item and its confirmation from amber warning styling to the shared red danger treatment; moved the permanent-deletion/protected-reference explanation from the Manage workspace into the confirmation popup; Reactivate remains green and lifecycle behavior is unchanged.
+- The 2,543-module production build and focused Chromium lifecycle journey passed.
+- No commit, push, deployment, backend, schema, migration, environment, or persistent-data change was made.
+
+2026-10-30 (Inventory Manage and safe item lifecycle; local and uncommitted):
+- Removed the separate Receive shortcut from desktop inventory rows and mobile cards; Manage now opens the existing comprehensive item workspace instead of jumping directly to the edit form.
+- Made Receive Stock the primary Manage action, added Adjust Stock with the correction form preselected, renamed the metadata editor entry to Edit Item, and retained reservations and movement history in the same workspace.
+- Preserved Details as an explicitly read-only inspection mode and the existing capability boundary: even administrators see no mutation action through Details, while view-only staff also receive no Manage entry.
+- Added a backend deletion contract covering operational stock movements, reservations, service requirements, and equipment-return records. The automatic canonical opening balance does not block removal; protected history returns a detailed 409 and must be retired instead.
+- Replaced item-level trash shortcuts with Manage-only Delete, Retire, and Reactivate actions plus confirmation and blocker guidance. Ordinary Edit can no longer bypass the lifecycle flow, and reserved items remain protected from retirement.
+- Passed all 43 inventory backend tests, the 2,543-module production build, and both focused Chromium journeys. No commit, push, deployment, schema, migration, route, permission, dependency, environment, or persistent-data change was made.
 
 2026-10-28 (login cold-start timeout hardening; committed and deployed in `5331dc4`):
 - Replaced the login page's hard 15-second cutoff with a public liveness warm-up followed by a 60-second credential request budget, while keeping credential submission single-shot and the button disabled throughout.
@@ -3242,3 +4978,315 @@ Test-only fixes: the E2E request throttle was raised to 1000/hour. No schema cha
 - Dispatch Board refreshes technician presence every 30 seconds. **Available** appears only when a technician is Online with no active job; Offline technicians no longer show a contradictory Available badge, but may still be scheduled for future work. **Busy** remains the derived active-work state and inactive accounts remain **Inactive**.
 - Technician Tracking classifies recent GPS samples as **Moving**, **Stationary**, or **Movement unknown**, animates only genuinely moving markers, and shows straight-line distance from the current position to assigned jobs alongside the existing route distance/ETA evidence.
 - Migration `users.0040_technicianprofile_last_seen_at` passed isolated tests and is applied to local SQLite; staging PostgreSQL remains untouched until the later deployment.
+
+# Current change: Chapters 1–5 paper-to-system E2E alignment audit
+
+## Architecture and documentation impact
+
+- Added `docs/quality/PAPER_SYSTEM_E2E_ALIGNMENT_AUDIT.md` as the dated investigation record for the supplied Google paper, `Copy of AFN-SERVE: REVISION CAPSTONE 2`.
+- The report maps Chapters I–V to the current routes, models, workflows, deployment contract, and maintained tests. It corrects the paper's polling-only, 30-table, and generic hosting descriptions to the current REST/WebSocket, 60-first-party-model, Render/Aiven/Redis/Cloudinary/Brevo/ORS implementation.
+- It records paper-validity issues rather than silently treating them as system defects: the inconsistent 150/151 client allocation, unsupported perfect Chapter IV results, future-tense evaluation language, and empty substantive Chapter V.
+- No external Google document, runtime behavior, data, schema, environment, dependency, route, permission, generated file, or deployment changed.
+
+## Current worktree manifest addition
+
+| Path | Purpose |
+|---|---|
+| `docs/quality/PAPER_SYSTEM_E2E_ALIGNMENT_AUDIT.md` | Current chapter-by-chapter paper/system alignment, evidence, limitations, and revision priorities |
+| `docs/quality/CURRENT_SYSTEM_AUDIT_AND_HANDOFF.md` | Living objective, evidence, risks, manifest, and change record for this documentation audit |
+
+## Validation ledger — 2026-11-04 paper/system audit
+
+| Command/evidence | Result |
+|---|---|
+| Native Google Docs read of tabs `CHAPTER 1-3 Revising` and `CHAPTER 4-5` | PASS — Chapters I–IV were read; Chapter V contains only its title/heading. External citations were not independently authenticated. |
+| `.\venv\Scripts\python.exe backend\manage.py check` | PASS — no system-check issues. |
+| `.\venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run` | PASS — no changes detected. |
+| `npm run build` | PASS — 2,564 modules transformed. |
+| `npx playwright test --list` | PASS — 230 tests discovered in 11 files. |
+| `.\venv\Scripts\python.exe backend\manage.py shell -c "...apps.get_models()..."` | PASS — 60 first-party application models reported across users, services, inventory, messages, and notifications. |
+| `npm run quality:full` | FAIL at backend stage — 693 tests ran; 1 failed and 7 skipped (685 passed). Later quality stages were not reached by this command. |
+| `.\venv\Scripts\python.exe backend\manage.py test users.tests.EmailVerificationTests.test_unverified_client_is_removed_after_verification_window --verbosity 2` | FAIL, reproduced — endpoint returned HTTP 403 while the test expects HTTP 401. |
+| Separate `npm run build; npx playwright test --reporter=line` | FAIL — build passed; browser suite finished with 224 passed and 6 failed in 32.9 minutes on the isolated E2E database. Failures covered the Calendar cell overlay/collision (two tests), missing commissioning-save confirmation, two stale major-journey location selectors after the request UI redesign, and an absent admin rejection action while the captured page showed client navigation. |
+
+## Known risks and pending decisions
+
+- Decide the expired-unverified-login contract: retain HTTP 403 and update the assertion/client handling, or restore the documented/tested HTTP 401 response. No assumption is recorded as a fix.
+- Repair the Calendar cell's click layering and desktop event/button collision; this is directly user-visible and reproduced by two independent browser checks.
+- Reconcile the client request step redesign with both major cross-role journeys; replace obsolete location selectors only after confirming the intended accessible workflow.
+- Investigate the missing commissioning-save confirmation and the rejection journey's client/admin page-state mismatch before classifying either as only a stale assertion.
+- Chapter IV must use real questionnaire rows and disclosed response counts; repository tests cannot validate respondent data.
+- Chapter II citations still require a separate source-authentication audit.
+- Chapter III's data dictionary and deployment/realtime sections should be regenerated from maintained artifacts before paper submission.
+- Chapter V must remain unwritten as a final conclusion until actual Chapter IV evidence is available.
+
+## Change ledger addition
+
+| Date | Change | Affected paths | Evidence |
+|---|---|---|---|
+| 2026-11-04 | Added a complete Chapters 1–5 versus current-system investigation and recorded its validation/risk boundary | `docs/quality/PAPER_SYSTEM_E2E_ALIGNMENT_AUDIT.md`, this file | Google paper tabs read; Django check and migration drift passed; 2,564-module build passed; backend gate reproduced one 403/401 contract failure; isolated browser suite finished 224/230 with six diagnosed failure boundaries |
+| 2026-11-04 | Replaced the academic context-diagram Draw.io source with the current system boundary, actors, providers, professor-required data store, and 16 directional labeled flows | `docs/academic/final_diagrams/01_CONTEXT_DIAGRAM.drawio`, this file | PowerShell XML parse passed; 13 vertices and 16 edges counted; scoped `git diff --check` passed with only the Windows LF/CRLF notice |
+
+## Current worktree manifest addition — context diagram
+
+| Path | Purpose |
+|---|---|
+| `docs/academic/final_diagrams/01_CONTEXT_DIAGRAM.drawio` | Editable current context diagram for the paper, with four user actors, three provider boundaries, the AFN-SERVE process, and professor-required database |
+| `docs/quality/CURRENT_SYSTEM_AUDIT_AND_HANDOFF.md` | Living objective, validation, risk, manifest, and change evidence for the diagram revision |
+
+## Known risk — context diagram export
+
+- The Draw.io XML is structurally valid and editable, but a final diagrams.net visual inspection/export remains required before inserting the figure into the paper. Confirm label readability at the paper's landscape page size; do not split the figure or represent internal frontend/backend infrastructure as external actors.
+
+## Current objective addition — CLAUDE.md
+
+Added a root `CLAUDE.md` pointing Claude Code at `AGENTS.md` and this handoff, with commands, environment rules, and architecture notes. Documentation only; no runtime code, schema, dependency, database, commit, push, or deployment changed.
+
+## Current worktree manifest addition — CLAUDE.md
+
+| Path | Purpose |
+|---|---|
+| `CLAUDE.md` | Claude Code guidance; defers shared rules to `AGENTS.md` |
+
+## Validation ledger — CLAUDE.md
+
+- No commands were run to validate this change. Command names were taken from root `package.json`; the single-test examples were not executed.
+
+## Known risks — CLAUDE.md
+
+- `CLAUDE.md` summarizes architecture from a directory survey and this file, so it may drift. Treat the code as authoritative.
+
+## Change ledger addition — CLAUDE.md
+
+| Date | Change | Paths | Validation |
+|---|---|---|---|
+| 2026-11-04 | Added `CLAUDE.md` | `CLAUDE.md`, this file | None run |
+
+## Change ledger addition — AGENTS.md engineering rules
+
+| Date | Change | Paths | Validation |
+|---|---|---|---|
+| 2026-11-04 | Checked `CLAUDE.md` against the repo (role names, single-test example, duplicated rules corrected). Added an "Engineering rules" section to `AGENTS.md` (Django, React, database, API, permissions, workflows, testing). Documentation only. | `AGENTS.md`, `CLAUDE.md`, this file | Verified by reading files and listing paths only; no tests run |
+
+Known documentation gaps: no standalone API reference beyond `docs/security/ROUTE_API_CAPABILITY_MATRIX.md`, no frontend architecture doc, no `docs/current-state.md` (this handoff serves that role), and no frontend lint or unit-test setup.
+
+## Current objective addition — four-page diagram pack
+
+Produce one four-page draw.io file (Chen ERD, Context, DFD Level 0, DFD Level 1), with the ERD and DBML schema carrying identical data, from the live models. Documentation and tooling only; no application code, migration, dependency, database, commit, push, or deployment changed.
+
+## Architecture and documentation impact — diagram pack
+
+- Audit findings: the Gemini API (optional analytics assistant, `backend/users/views/admin_services.py`) was missing from the earlier context diagram; the older paper ERD/DBML omitted 9 of 61 models (`CalendarClosure` is now included, 8 document-template models remain excluded); the older DFD had no quotation/sales/document process or store (now process 9.0, stores D15 and D16).
+- Level 0 numbering: processes 1.0 to 8.0 unchanged, 9.0 added. Level 1 decomposes 3.0.
+- Details, counts, evidence and limits: `docs/academic/final_diagrams/AFN-SERVE-Diagram-Validation-Report.md`.
+
+## Current worktree manifest addition — diagram pack
+
+| Path | Purpose |
+|---|---|
+| `docs/academic/final_diagrams/AFN-SERVE-System-Diagrams.drawio` | Four-page editable diagram file |
+| `docs/academic/final_diagrams/AFN-SERVE-Paper-Schema.dbml` | Reduced schema identical in data to the ERD |
+| `docs/academic/final_diagrams/AFN-SERVE-Diagram-Validation-Report.md` | Counts, checks, gaps, evidence |
+| `docs/academic/final_diagrams/README.md` | Pointer section appended |
+| `backend/scripts/generate_afn_paper_schema.py` | Generates the reduced schema from Django models (reads metadata only) |
+| `backend/scripts/diagram_pack/` | Layout optimizer, DFD builder, merge/validate tools, specs, and generated page sources |
+| `AGENTS.md`, `CLAUDE.md` | Already recorded above |
+
+## Validation ledger — diagram pack (2026-11-05)
+
+- `python backend/scripts/generate_afn_paper_schema.py` (via the venv): wrote 53 tables and 346 columns.
+- `diagram_pack/validate.py` on the final file: all structural checks passed (4 pages, no duplicate ids or bad references, no overlaps, ERD 53/346/110 equals the schema, DFD rules, Context to Level 0 and Level 0 to Level 1 balancing).
+- `diagram_pack/check.py`: crossings Context 0, Level 0 35, Level 1 2; no connector through a shape or sharing a segment.
+- Not run: draw.io render/PDF export (tool not installed), ERD connector crossing check, any Django tests.
+
+## Known risks — diagram pack
+
+- Level 0 is dense (92 flows, 35 bridged crossings); it may need splitting for the paper.
+- The file has not been opened in diagrams.net; verify before inserting figures.
+- 8 document-template models are not in the ERD or schema; confirm that is acceptable.
+- The Chen ERD page is 9414x6774 and needs scaling or zooming to read.
+- `diagram_pack` scripts contain absolute scratch paths to edit before re-running.
+
+## Change ledger addition — diagram pack
+
+| Date | Change | Paths | Validation |
+|---|---|---|---|
+| 2026-11-05 | Added the four-page diagram pack, paper schema generator and output, validation report, and tooling | see the manifest above | Structural checks passed; no render or PDF |
+
+- **2026-11-05 diagram pack round 2:** ERD diamonds are verb-only (`VERB_ONLY` flag in `generate_afn_chen_drawio.py`, set only by `diagram_pack/chen.py`); line-hop arcs removed from all pages; Context rebuilt from the user's reference by `diagram_pack/build_context.py` (centre box 520x320, 44 labelled flows, 0 crossings); `merge.py` now reads from its own folder. `validate.py` passes (ERD 53/110/346; Level 0 92 flows; Level 1 28 flows). Not rendered in draw.io. Level 0 still has 35 crossings (now plain, no arcs).
+- **2026-11-05 diagram pack round 3 (ERD entanglement):** with hop arcs gone the ERD showed 283 leg crossings (41 of 110 relationships end in "by" and caused 208). `generate_afn_paper_schema.py` now omits pure audit FKs to User (`AUDIT_FK`, keeps a link if it is the table's only relationship), giving 53 entities / 88 relationships / 324 attributes in both ERD and paper schema; `diagram_pack/optimize_erd.py` anneals `ENTITY_GRID` seats (result in `erd_grid.json`, loaded by `chen.py`) to 84 crossings. Physical DB unchanged. Not rendered in draw.io.
+- **2026-11-05 diagram pack round 4 (Level 0 accuracy):** Level 0 checked against code. Removed the non-existent `2.0 <-> Cloud` request-attachment flow (also from Context), added `1.0 <-> Cloud` and `7.0 <-> Cloud` (profile/landing/message images), `6.0 -> Email` (maintenance reminder), GPS/arrival on the technician flow, D5 renamed with Location Log. Level 0 now 95 flows, 91 crossings, 0 diagonals; validate.py passes. See Round 4 in `AFN-SERVE-Diagram-Validation-Report.md`.
+- **2026-11-05 diagram pack round 5 (Level 0 merged lines):** Level 0 request/response pairs merged into two-way lines (95 directed flows on 54 lines, 28 crossings, down from 91); `dfd_build.py <spec> <out> merge`; `validate.py` counts both directions of a two-way line. Level 1 and Context unchanged. Not rendered in draw.io.
+- **2026-11-05 diagram pack round 6:** Level 1 now also uses merged two-way lines (25 lines, 4 crossings); `spec_level1.py` is the padded variant, so do not re-run `variant.py` on it. Context keeps one arrow per flow. Level 0 crossing cost tests (300 and 1500) both gave 27 crossings.
+- **2026-11-05 diagram pack round 7:** paper schema tables renamed to the snake_case model name with primary key `<table>_id` (`generate_afn_paper_schema.py`, `snake()`, mapping saved to `diagram_pack/table_names.json`); ERD regenerated from it via `diagram_pack/erd_source.py` (same layout, 84 crossings). Strict ERD-vs-schema check passes for all 53 tables. Physical DB names unchanged.
+- **2026-11-05 diagram pack round 8:** added `docs/academic/final_diagrams/AFN-SERVE-Data-Dictionary.docx` (53 tables, 324 rows, capstone sample format) generated from the paper schema by `diagram_pack/build_data_dictionary.py` and `build_data_dictionary_docx.py`. Rebuild both after any schema change. Paper names only; the system is unchanged.
+
+## 2026-11-05 bug sweep: backend, Calendar and Documents
+
+Validation ledger (commands actually run, local SQLite / isolated E2E database):
+
+- `npm run env:check`: development, SQLite, local target confirmed.
+- `npm run check:backend`: no issues. `manage.py makemigrations --check --dry-run`: no changes detected.
+- `npm run build:frontend`: built successfully.
+- `npm run test:backend`: first run 693 tests, 1 failure (`users.tests.EmailVerificationTests.test_unverified_client_is_removed_after_verification_window`); after the fix below, 693 tests OK (7 skipped).
+- Playwright, `e2e/03-admin-workspace.spec.js` Calendar and Documents tests (3.2, 3.2b, 3.9, 3.9b): 3 passed, 1 failed (3.2b); after the fix below, 3.2b passed.
+- Exploratory click-through of `/admin/calendar` and `/admin/documents` with the isolated E2E database (temporary spec, removed afterwards): Calendar 24 controls (month navigation, Today, Configure Availability, service colours, day and job dialogs, all four filters, Include completed), Documents 29 controls (Fill template, Replace design, Template library and their dialogs, all six document stages, zoom, paper size, Print, Add row, ticket search). No application error, failed request or crash. Disabled until a ticket is chosen: Save draft, Save specs to ticket, Generate active design. Delete, Reset, Remove row and Clear filters were not clicked.
+
+Findings and changes:
+
+- Stale test, not a product bug: commit `5331dc4` deliberately removed `delete_expired_unverified_clients()` from login (cold-start hardening, guarded by `test_login_does_not_run_expired_account_cleanup`), but `test_unverified_client_is_removed_after_verification_window` still expected login to remove the account and return 401. The test now expects 403 from login and removal by the cleanup function. Path: `backend/users/tests.py`. No application code changed.
+- Fragile test: `e2e/03-admin-workspace.spec.js` 3.2b clicked the centre of today's date cell, which is covered by that day's job cards (they open the job, by design), so it timed out. It now clicks the date corner. Path: `e2e/03-admin-workspace.spec.js`.
+- Observation, not changed: on a busy date in Configure Availability mode, clicking a job card opens the job instead of the date settings; the date number area opens the settings.
+- Environment noise, not changed: the E2E Vite server has no real-time backend, so `ws://.../ws/notifications/` logs a handshake error on every page in the E2E run. It is not seen as an application error; verify with `npm run dev:full` (Daphne) if real-time notifications matter.
+- Not covered: the document fill/save/generate flows with a chosen ticket beyond the existing 3.9 and 3.9b tests, the destructive buttons, and other admin pages.
+
+### 2026-11-05 Documents and Calendar button tests (follow-up)
+
+Validation ledger (isolated E2E database):
+
+- New `e2e/12-documents-calendar-controls.spec.js` (16 tests) plus existing 3.2, 3.2b, 3.9, 3.9b, 3.9c and 3.20/3.21: 23 passed. First run of the new file: 9 passed, 5 failed; two failures were real application bugs (below), the others were wrong locators or a test that clicked the wrong stacked dialog.
+- `npm run build:frontend` after the fix: built successfully.
+
+Bugs fixed (`frontend/src/pages/admin/AdminDocuments.jsx`, import list from `./adminDocumentsSupport`):
+
+- `pickFirstValue` was used (10 places) but never imported, so "Save specs to ticket" always failed with the message "pickFirstValue is not defined". Regression test 12.3.
+- `formatTicketDateForInput` was used in the "Service Report Source" option labels but never imported, so selecting a ticket that already has saved field service reports crashed the page. Regression test 12.8b.
+- A scan of all 153 frontend source files for project-exported names used without an import found no other case (one false positive, a prop in `SalesPaymentsPanel.jsx`).
+
+New coverage: stage switching, disabled-until-ticket actions, Save draft, Save specs, Generate (docx download), Reset, Add/Remove row, zoom and paper size, Print popup, the three dialogs, month navigation, all four filters and Clear filters, Include completed, service colours, day and job dialogs with their links, the unsaved-availability confirmation, and 12.16: a new document type created entirely with the buttons (register, upload Word design, add field, re-upload as version 2, activate, set default, enable), which then appears as a seventh stage button, is filled in, saved as a draft, and generates a Word file whose text contains the typed note and the client name with no placeholders left. The test uses the new fixture `e2e/fixtures/e2e-maintenance-certificate.docx`.
+
+Observations, not changed:
+
+- Custom document setup: the field setup only appears after a first design is uploaded, but that first upload is flagged "Needs attention: Template contains placeholders outside the approved registry" if it already uses a custom placeholder, and there is no re-check button; the design must be uploaded again as a new version after the field is added.
+- Enabling a custom document before its design is the default fails with the unclear message "Is active: Activate a validated default template version first." The working order is Activate, Set default, then Enable document.
+- The "Replace design" dialog does not close on Escape; the Fill template and Template library dialogs do.
+- A custom document opens in the "Fill a document" workspace (fields, Save draft, Preview, Generate DOCX), not in the live editable page preview that the six built-in documents have. The Preview button was not exercised.
+- Clicking a job card on a calendar date leaves the day's appointment list open behind the job details.
+
+### 2026-11-05 Client-friendly document templates, steps 1-3 (plain names, checklist, one-click use)
+
+Goal (from the user): the client must be able to bring their own Word/PDF design and configure it without a developer. Plan steps 1-3 are implemented; steps 4-7 are not.
+
+What changed:
+
+- **Plain-name fields (backend).** `[Client Name]` (also `[Customer]`, `[Ticket Number]`, `[Date]`, ...) works like `{{ client_name }}` when a DOCX design is checked and when a document is generated. A name only counts when it resolves to a field the document may use (`resolve_plain_name`, `FRIENDLY_ALIASES`, document-specific for dates); other bracketed text such as `[Signature]` or `[1]` is left exactly as typed. Word runs that split a name are joined, never across paragraphs. The uploaded file is never rewritten; `render_template_bytes` converts known names just before filling. Repeating tables still use the `{{#rows}}` markers (plain-name markers for tables are not built). Paths: `backend/services/document_templates.py`, `backend/services/dynamic_document_generation.py`.
+- **Plain checklist.** Every version response has `checklist` items (`ok`, `problem`, `note`) in everyday wording, from `build_design_checklist`: found and missing required items with a hint, plain wording for validation errors, new field names found in a custom design (note, with an "Add as fields" action), and PDF fields placed. Only essential items are problems. Path: `document_templates.py`, `serializers/document_templates.py`.
+- **Check again / add fields / use design (backend actions).** `POST .../document-template-versions/<id>/revalidate/`, `.../accept-fields/`, `.../use-design/` (see `docs/security/ROUTE_API_CAPABILITY_MATRIX.md`). `use-design` re-checks, activates, makes the design the default, and enables a custom document in one transaction-guarded step under the same activation rules. No migration; validation data lives in the existing JSON fields.
+- **Screens.** New `frontend/src/components/admin/DesignChecklist.jsx`, shown in each version row of the template manager and in the review step of the Replace design wizard. The manager now has "Check again" and "Use this design" (instead of "Activate") for draft versions; "Set default" and "Enable document" remain for advanced use. API helpers in `frontend/src/api/services.js`.
+
+Validation ledger (local SQLite / isolated E2E database):
+
+- `manage.py test`: 724 tests OK (7 skipped), 31 of them new in `backend/services/tests/test_plain_name_fields.py` (name matching, split runs, ordinary brackets untouched, core design with plain names activates, missing required table blocks use and keeps the previous design, custom one-click field setup, check-again after fields exist, publish permission, a generated Word file contains the typed note and client name). `makemigrations --check`: no changes.
+- `npm run build:frontend` (Vite build): passed.
+- Playwright: 12.16 rewritten as the short flow (register type, upload Word design written with `[Client Name]` and `[E2E Note]`, one "Add as fields" click, one "Use this design" click, appears as a seventh stage, fill, generate, read the Word file): passed. With the other new tests and 3.2, 3.2b, 3.9, 3.9b, 3.9c, 3.20, 3.21: 22 passed, 1 failed in one combined run; the failure was 3.9b waiting for the transient message "Solar commissioning checklist saved.". Re-run from a fresh database: 3.2/3.2b/3.9/3.9b/3.9c/3.20/3.21 all passed (7 of 7); 3.9b is intermittently flaky on that message, unrelated to these changes.
+
+Known limits and not done:
+
+- Plain names cover single fields only. Repeating tables (price table, equipment table, readings) must keep the markers from AFN's own design; the checklist says so in plain words.
+- The six core documents cannot gain fields from a design (by design); a design must keep their essential fields and tables or "Use this design" is refused with the checklist.
+- The checklist sits low in the manager (version history), and the manual "Field key" form is still technical. Moving the next step higher and hiding that form under Advanced is not done.
+- Not started: plan step 4 (prominent download of the current design and a "fields you can use" copy list), step 5 (end-to-end proof on the six: quotation totals/deposits/acceptance with a replaced design, many-row Field Service Report, long multi-page contract, data-consistency check), step 6 (suggested fields for finished designs with no marked fields), step 7 (staff guide and `AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md`).
+
+
+### 2026-11-05 Client-friendly document templates, steps 4, 5 and 7 (helpers, integrity proof, guides)
+
+What changed:
+
+- **Fields you can use (step 4).** `DocumentTemplateManager.jsx` shows a "Fields you can use" box above the technical "Approved placeholders" panel: plain `[Field Name]` chips with Copy, repeating tables listed apart with Copy for their markers, **Download the design in use** (existing `download` endpoint on the active version) and, for custom documents only, **Download a blank starter file**.
+- **Starter endpoint.** `GET /api/services/document-definitions/<id>/starter/` (`DocumentDefinitionViewSet.starter`) returns a Word file built by `build_starter_docx` / `plain_field_list` in `backend/services/document_templates.py`. Core documents return 409. Logged as `starter_download`. API client: `downloadDocumentStarter` in `frontend/src/api/services.js`. Matrix updated.
+- **Integrity proof (step 5).** `backend/services/tests/test_replaced_design_integrity.py` (5 tests) proves with replaced Word designs: quotation rows (3 price, 40 equipment) all print and money, deposit gate and status are unchanged; the archived snapshot matches the draft; an old archived file keeps its hash after a new design is used and rollback restores the old design; a 60-row Field Service Report prints 60 rows; a 400-clause contract with 120 filler paragraphs keeps all text; an unusable design is refused and the previous one stays in use.
+- **Guides (step 7).** `docs/quality/DOCUMENT_TEMPLATE_STAFF_GUIDE.md` (staff, plain language) and `docs/quality/AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md`.
+
+Validation ledger: `test_starter_design` 4 OK; `test_replaced_design_integrity` 5 OK; Vite build passed; Playwright 12.16 and the new 12.17 passed (2 of 2). Full `manage.py test`: 733 tests OK (7 skipped); 739 after step 6.
+
+Known limits: step 6 (suggestions for finished designs) not started, waiting on the Word-versus-PDF answer. Generated Word files could not be rendered to images on this machine, so layout was checked structurally. Checklist position and the technical "Field key" form are unchanged from steps 1-3. Nothing is committed.
+
+### 2026-11-05 Client-friendly document templates, step 6 (Word suggestions)
+
+- **What.** A finished Word design with lines like `Client Name: ______` or a bare `Ticket Number:` is offered as fields. `backend/services/blank_suggestions.py` finds them (`find_blank_suggestions`, run inside `validate_docx` on `word/document.xml`, stored as `placeholder_manifest.blank_suggestions`) and rewrites them (`apply_blank_suggestions`). Only labels that resolve to an approved field of that document are offered, so "Note:" or "Favourite colour: ___" are left alone.
+- **API.** `POST .../document-template-versions/<id>/fill-blanks/` (`fill_blanks`, upload capability) saves the result as a NEW draft version through the normal serializer; the uploaded file is never edited. Checklist item `Blanks that can become fields` with `action: fill_blanks` (drafts only). Frontend: `fillDesignBlanks`, `onFillBlanks` in `DesignChecklist.jsx`, wired in `DocumentTemplateManager.jsx`. Matrix updated.
+- **Validation.** `test_blank_suggestions` 6 OK; Vite build passed; Playwright 12.18 passed (register type, upload `e2e/fixtures/e2e-finished-certificate.docx`, offer lists Client Name and Ticket Number but not Remarks, one click, original kept, new version ready, Use this design).
+- **Limits.** Word only; PDF suggestions not started (PDF stays second). Only the main document part is scanned (not headers/footers) and only single-paragraph `Label: blank` lines (not label-beside-empty-cell tables). Layout of filled files could not be rendered to images here.
+
+### 2026-11-05 PDF field suggestions and document-type delete
+
+- **PDF suggestions.** `backend/services/pdf_suggestions.py` reads the text of an uploaded PDF with pypdf (`find_pdf_field_suggestions`, called from `validate_pdf`, stored as `placeholder_manifest.field_suggestions`), finds `Label:` lines whose label is an approved field and whose value is blank, and proposes a box right after the label (`y` from the top, fractions, matching the overlay in `pdf_document_generation.py`). Checklist item `Fields AFN can place for you` (`action: place_fields`, draft PDFs). `POST .../place-fields/` creates `system` fields; staff then check them in "Set up fields". Scanned PDFs (no text), rotated pages and unreadable files give no suggestions. Box widths are estimates (label width approximated at half the font size per character).
+- **Delete document type.** `DELETE /api/services/document-definitions/<id>/` for unused custom types only (see matrix). UI: "Delete document type" with a confirmation in the Custom document setup panel.
+- **Bug found and fixed by the new test.** The Custom document setup panel (Disable/Enable, fields) was hidden for a type with no design yet, so a new type could not be disabled or deleted. It now also shows above the import form and in the empty state.
+- **Validation.** `test_pdf_suggestions` 5, `DeleteDocumentTypeTests` 2 (this class also re-runs its parent's 4 tests), `test_blank_suggestions` 6; Vite build passed; Playwright all 20 in `12-documents-calendar-controls.spec.js` passed, including 12.19 (PDF placement, boxes checked visually in a screenshot: they sit right after the labels, Remarks skipped) and 12.20 (delete type with Dismiss then confirm).
+- **Limits.** PDF suggestions only for text-based PDFs; boxes should be reviewed. Multi-column forms with several labels on one line are handled approximately. Nothing is committed.
+
+- **Follow-up (2026-11-05).** The new "Delete document type" button made Playwright test 3.9 ambiguous (its locator `name: 'Delete'` matched both buttons). The test locator in `e2e/03-admin-workspace.spec.js` is now `{ name: 'Delete', exact: true }`; no app code changed. Re-run: 3.9, 3.9b and 3.9c passed. The full `03-admin-workspace.spec.js` ran once with 39 of 40 passing before this fix; the other e2e specs (01, 02, 04-11) were not re-run after the template manager changes.
+
+- **Full Playwright run (2026-11-05).** 245 passed, 5 failed on the first full run (33 min). Re-run results: 3.20 (heatmap page load timeout) and 9 admin/calendar/desktop (calendar cell overlap check) passed on re-run, so they are timing flakes. 10.1, 10.2 and 11.5 were **stale tests**, not template bugs: the client request form and admin dashboard were changed earlier in the (uncommitted) worktree. Updated in `e2e/10-major-flow-journey.spec.js` (new address and details placeholders, date chosen from the appointment calendar via `[role="gridcell"]:not([disabled])`) and `e2e/11-minor-flow-journeys.spec.js` ("Reject request" now lives under "More actions"). After the update 10.1 and 11.5 pass.
+- **Open: 10.2.** `Inspection, quotation, deposit, service, turnover, and sale across all roles` now fails at step 4: after the office dispatches the inspection ticket (`For Inspection`), the technician's `/technician/map-navigation?ticketId=<id>` shows "Unable to start navigation: Job not found". It is unrelated to document templates and not yet diagnosed. It may be a stale test or a real regression in the uncommitted dispatch/technician-job changes (`backend/services/views/tickets.py`, `service_requests.py`); check how technician job lookup treats inspection tickets before release.
+
+- **Resolved: 10.2 (supersedes the "Open: 10.2" note above).** Not a product bug. The scheduler enforces an 8-hour daily limit per technician (`scheduling_policy.py`: "already has 8 scheduled hour(s) on <date>... would exceed the 8-hour daily limit"). When 10.1 and 10.2 both picked the first open calendar day, the second dispatch was refused (HTTP 400) and the technician had no job, which showed up as "Job not found". Fix is in the tests only: `e2e/10-major-flow-journey.spec.js` picks different open days (`nth(3)` and `nth(6)`) that also avoid the fixed days +3 and +6 that `11.5` uses. Result: `10-major-flow-journey` + `11-minor-flow-journeys` 10 of 10 passed on the final run (one earlier 10.1 failure did not repeat on 2 reruns, judged a flake). Lesson: e2e specs that dispatch the same technician must not share a day.
+
+### 2026-11-05 Quotation editor no longer pre-fills product rows
+
+- `frontend/src/documents/quotationSchema.js`: System Brands, Bill of Materials and Warranty rows now start with one empty row instead of sample products ("JA Solar / Aiko Solar", "Hybrid inverter", ...). Standard terms text (payment, force majeure, cancellation, inclusions, exclusions) and AFN's own "PV System Workmanship" warranty row are still pre-filled. Saved drafts keep whatever rows they already stored; only new drafts start empty. Other documents already started blank.
+- Validation: Vite build passed; Playwright 3.9, 3.9b, 3.9c and all of `12-documents-calendar-controls.spec.js` passed.
+
+### 2026-11-05 Button-by-button checks: client New Request page and the Calendar for admin and superadmin
+
+- **New spec** `e2e/13-client-request-and-calendar-controls.spec.js` (25 tests, all passing on the final run). Geocoding (`/api/geocode/search/`, `/api/geocode/reverse/`) is answered with fixed data so the map and search run offline; geolocation is mocked.
+- **Client New Request (13.1-13.11, 13 tests):** the four steps and empty initial form; every service checkbox on/off; the validation chain in order (required address field, no service, no pin, no date, then the review dialog); Use My Location (pin and address autofill) and the blocked-location message; map zoom in/out and a map click that drops a pin and fills the address; address search (list, pick a result, clear, failing search); the appointment calendar (previous/next month, date pick, time-slot list); the review dialog content, "Review again" and Escape (nothing sent); Confirm submit (success box, OK, form cleared, request saved as Pending and listed on My Requests); a server refusal keeps the answers and shows the reason; phone width has no sideways scroll and every control is reachable.
+- **Calendar, run for both `admin_test` and `superadmin_test` (12 tests):** Previous/Next/Today, Include completed, the colour legend, all four filters and Clear filters; a day opening its list and closing by X, Escape or a click outside; a job's details with close, Escape, Open ticket queue and Open dispatch; Reschedule from the calendar (fields, Dismiss, X, reason required, saves the new date and the ticket really moves); availability configuration (open the panel, its four sections, the reason rule, close a day, see it blocked on the grid, reopen, Bulk Edit range limited then reopened, leave cleanly); phone layout (filters fold away, date box, day list).
+- **Result:** admin and superadmin behave the same on every calendar control. No app bug was found in these two pages; all failures along the way were test mistakes (a date cell that shifted while availability loaded, a hidden mobile copy matched first, counts read before the page settled, and Reschedule only being offered for "Not Started" jobs, so the test now creates one through the API).
+- **Test-data note:** the calendar tests create extra services/jobs in the isolated e2e database; `global-setup.js` re-seeds it on each run.
+
+- **Pre-deploy check run (2026-11-05 to 06).** `manage.py check` clean; `makemigrations --check` no changes; full Playwright run 270 passed, 5 failed (34 min, crossing local midnight). Causes: three in my new spec (`13.9`, `13.S5`, `13.S6`) were test bugs, fixed in `e2e/13-client-request-and-calendar-controls.spec.js` (dates are now computed in local time, because `toISOString()` is UTC and a day behind between 00:00 and 08:00 Philippine time; and record lookups now walk every page, because the API pages at 10) and the whole spec re-ran 25 of 25. `3.9b` ("Solar commissioning checklist saved." message) and `09-all-pages-quality admin / calendar / desktop` passed alone on re-run (3 of 3).
+- **Recurring, not yet explained:** `09-all-pages-quality admin / calendar / desktop` has now failed in two of three full runs with "collisions" between a day's availability label ("Fully booked", "Available") and an appointment card inside the same day cell, and passes alone. It may be a real layout overlap on busy days; worth a look at `AdminCalendar.jsx` day cells before release.
+- **Deploy notes (nothing deployed, nothing committed):** `settings.py` switches media storage to `afn_service_management.storage.AFNMediaCloudinaryStorage` (document files private on Cloudinary; run `privatize_document_assets` only with approval); eight new migrations (`services` 0063-0069, `users` 0042) are untested on PostgreSQL; new dependencies `pypdf`, `reportlab`, `pdfjs-dist`.
+
+### 2026-11-06 Calendar day cells: overlapping buttons fixed
+
+- **Bug.** In `frontend/src/pages/admin/AdminCalendar.jsx` (desktop month grid) each date had an invisible button stretched over the whole cell (`absolute inset-0`), and the appointment cards were separate buttons stacked on top of it. Clicks worked, but two clickable controls overlapped, which is poor for screen readers and keyboard users. `09-all-pages-quality admin / calendar / desktop` reported it only when appointments loaded within its 1.5 s wait, so it looked like a flake (failed in 2 of 3 full runs).
+- **Fix.** The date button now covers only the date row at the top of the cell (`inset-x-0 top-0 h-[1.875rem]`) and is still the keyboard target with the same accessible name. A click on any empty part of the cell is handled by the cell itself, which also moves focus to the date button so closing the day list returns focus there. Appointment cards and "+N more" already stop the click from reaching the cell.
+- **Tests.** New `13.A0` / `13.S0` (admin and superadmin) wait for appointments to load, then assert no two buttons overlap, that clicking the empty lower part of a day opens it, and that Enter on the date button opens it. Verified the test fails on the old layout with exactly the reported overlap, then passes on the fix. `03-admin-workspace` 3.2 now clicks the cell (not the button) for its "empty area" click. Calendar tests across 03, 09 (3 repeats), 12 and 13 passed (50 of 51 in the combined run). Full `13` spec re-run: 26 of 27 passed; the one failure was `13.2` timing out while loading the page (the whole run was about 2.5 times slower than usual) and it passed on re-run. Client `13.8`, which failed once in the combined run, passed in both later runs.
+
+### 2026-11-06 Documents page re-review and documentation check
+
+Re-checked the Documents page (code review, all document browser tests, screenshots, and an exploratory run deleting the custom type whose tab was open, which works cleanly). Fixed:
+
+- **AFN's own designs failed their own check.** Technical Data Sheet (split last/first/middle name), Commissioning Checklist (identified by site) and Field Service Report (no service-type line). Added `REQUIRED_COMPONENT_ALIASES` for the TDS (`last_name`, `first_name`) and the commissioning checklist (`site_name`), and added `Service Type: {{ service_type }}` after the Date line in `backend/document_templates/field_service_report.docx` (copy of the Date paragraph, same formatting). All six built-in designs now pass unchanged (`BuiltInDesignTests`). The FSR Word file should be opened once in Word to confirm the look.
+- **No starting design for a built-in document with nothing in use.** New `GET /api/services/document-definitions/<id>/built-in-design/` (core only, serves the marked file in `document_templates/`, not `originals/`) and the **Download the original design** button.
+- **Next step hidden after upload.** The manager scrolls to the new version's checklist; save messages now point to the checklist and **Use this design**.
+- **Enable document clickable too early.** Disabled with an explanation until a design is in use.
+- **Misleading table advice.** UI hint and guides now say to keep AFN's repeating tables.
+- **Noted, not changed:** a custom document's tab opens a large "Fill a document" window that only says to select a ticket first when no ticket is chosen.
+
+Documentation: staff guide, admin guide (old **Manage templates**/**Register custom document**/"activate then enable" steps replaced), implementation report, route matrix (built-in design row) and a new **Document templates and custom document types** section in `docs/security/WORKFLOW_STATE_MACHINES.md`. Root `AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md` (2026-11-04 checkpoint) now points to the newer report; root `DOCUMENTS_CURRENT_STATUS.md` and `CALENDAR_CURRENT_STATUS.md` are dated snapshots and were left as they are.
+
+Validation: `manage.py test` 752 OK (7 skipped); `makemigrations --check` no changes; Vite build passed; Playwright 12.16-12.20 and 3.9/3.9b/3.9c passed (8 of 8) after the last code change; full 12 and 03 document tests 23 of 23 earlier in the review.
+
+### 2026-11-06 Custom document tab asks for a ticket first
+
+- `frontend/src/pages/admin/AdminDocuments.jsx`: clicking a custom document's tab with no ticket chosen no longer opens an empty "Fill a document" window. The tab is highlighted (`pendingCustomCode`), a note under the tabs says "Choose a ticket above to fill <name>. It opens as soon as you pick one." with **Cancel**, and the ticket search is focused with its list open. Picking a ticket opens the Fill window automatically. With a ticket already chosen, the tab opens the window straight away as before. Clicking a built-in tab clears the pending choice. Frontend only; no API or permission change.
+- Test `12.21` (sets up a ready custom document through the API, then checks the no-ticket note, Cancel, auto-open after picking a ticket, and direct open with a ticket). Validation: Vite build passed; all of `12-documents-calendar-controls.spec.js` plus 3.9/3.9b/3.9c passed (24 of 24).
+- Known cosmetic point: under the note, the previously selected built-in document's editor stays visible until a ticket is picked.
+
+## Current worktree manifest addition — client-friendly documents, calendar checks, release prep (2026-11-05/06)
+
+- **Backend (new):** `backend/services/blank_suggestions.py`, `backend/services/pdf_suggestions.py`; tests `backend/services/tests/test_plain_name_fields.py`, `test_blank_suggestions.py`, `test_pdf_suggestions.py`, `test_starter_design.py`, `test_replaced_design_integrity.py`.
+- **Backend (changed):** `backend/services/document_templates.py` (plain names, checklist, starter, aliases), `backend/services/dynamic_document_generation.py`, `backend/services/views/document_templates.py` (`revalidate`, `accept-fields`, `use-design`, `fill-blanks`, `place-fields`, `starter`, `built-in-design`, definition delete), `backend/services/serializers/document_templates.py`, `backend/document_templates/field_service_report.docx` (Service Type line), `backend/users/tests.py` (stale login test).
+- **Frontend:** `frontend/src/components/admin/DesignChecklist.jsx` (new), `DocumentTemplateManager.jsx`, `DocumentReplacementWizard.jsx`, `frontend/src/api/services.js`, `frontend/src/pages/admin/AdminDocuments.jsx` (imports fix, ticket-first custom tab), `frontend/src/pages/admin/AdminCalendar.jsx` (day-cell button overlap), `frontend/src/documents/quotationSchema.js` (no sample product rows), `frontend/tests/remainingDocumentSchemas.test.js` (row counts for the new quotation defaults).
+- **E2E:** `e2e/12-documents-calendar-controls.spec.js`, `e2e/13-client-request-and-calendar-controls.spec.js`, `e2e/fixtures/` (3 sample files); updated `e2e/03-admin-workspace.spec.js`, `e2e/10-major-flow-journey.spec.js`, `e2e/11-minor-flow-journeys.spec.js`.
+- **Docs:** `docs/quality/DOCUMENT_TEMPLATE_STAFF_GUIDE.md`, `docs/quality/AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md` (new), `docs/quality/DOCUMENT_TEMPLATE_ADMIN_GUIDE.md`, `docs/security/ROUTE_API_CAPABILITY_MATRIX.md`, `docs/security/WORKFLOW_STATE_MACHINES.md`, root `AFN_SMART_DOCUMENT_IMPLEMENTATION_REPORT.md` (pointer note), `CLAUDE.md`.
+- **Diagram pack:** `docs/academic/final_diagrams/*`, `backend/scripts/diagram_pack/`, `backend/scripts/generate_afn_paper_schema.py`, `backend/scripts/generate_afn_chen_drawio.py`.
+- **Left out of commits on purpose:** `.codex-temp-conceptual-framework.html` (a stray temporary render file at the root; not deleted, per worktree-safety rules).
+
+## Validation ledger — release prep (2026-11-06)
+
+- `npm ci --dry-run` in `frontend/` and at the root: "up to date" (lockfiles match `package.json`, including the new `pdfjs-dist`).
+- `node --test tests/*.test.js` in `frontend/`: 26 pass after updating one quotation row-count test that the new empty defaults broke. These unit tests are not run by any npm script or by CI.
+- `manage.py test` 752 OK (7 skipped); `makemigrations --check` no changes; Vite build passed. Full Playwright run recorded below when it finishes.
+
+## Known risks and pending decisions — before deploying (2026-11-06)
+
+- `render.yaml` starts the backend with `python manage.py migrate --noinput`, so pushing a release runs the eight new migrations (`services` 0063-0069, `users` 0042) on Aiven PostgreSQL immediately. They have only run on SQLite, and the PostgreSQL-only tests are skipped locally. Back up Aiven and dry-run them on a PostgreSQL copy first.
+- Media storage switches to `afn_service_management.storage.AFNMediaCloudinaryStorage` (documents private). Cloudinary keys must be set on Render; existing public document files may need `privatize_document_assets` (needs approval; not run).
+- Open the generated Field Service Report once in Word (new Service Type line). Try one real client Word/PDF design.
+- **Full Playwright run (release prep, 2026-11-06, 32 min):** 277 passed, 1 failed. The failure, `05-client-workspace 5.2b`, was a test time-zone bug: it built "today" with `toISOString()` (UTC), which is yesterday in local time between 00:00 and 08:00 Philippine time, so the mocked closed date showed as a past date. Fixed to local dates in `e2e/05-client-workspace.spec.js`; 5.2/5.2b/5.2c then passed at 02:35 local (3 of 3). Other older specs still build some dates with `toISOString()` (for example `10-major-flow-journey`, `11-minor-flow-journeys`); they passed in this run but may misbehave if run between 00:00 and 08:00.
+- **`.gitattributes`:** added `*.pdf binary`. Without it Git treated the PDF test fixture as text (`text=auto`) and could rewrite its line endings on checkout, which corrupts PDFs. The staged fixture was verified byte-identical to the file (`git hash-object --no-filters`).

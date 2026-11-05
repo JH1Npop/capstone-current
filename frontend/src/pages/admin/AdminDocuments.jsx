@@ -1,14 +1,60 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { FiCheckCircle, FiExternalLink, FiInfo, FiMinus, FiPlus, FiPrinter, FiRefreshCw, FiSave, FiSend, FiTrash2, FiChevronDown, FiX } from 'react-icons/fi';
+import { FiCheckCircle, FiExternalLink, FiFileText, FiInfo, FiMinus, FiPlus, FiPrinter, FiRefreshCw, FiSend, FiSettings, FiTrash2, FiChevronDown, FiX } from 'react-icons/fi';
 import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
+import DocumentTemplateManager from '../../components/admin/DocumentTemplateManager';
+import DocumentReplacementWizard from '../../components/admin/DocumentReplacementWizard';
+import CustomDocumentWorkspace from '../../components/admin/CustomDocumentWorkspace';
+import DocumentActionCard from '../../components/admin/DocumentActionCard';
 import QuotationDepositPanel from '../../components/sales/QuotationDepositPanel';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { useAuth } from '../../context/AuthContext';
-import { DOCUMENTS_MANAGE_CAPABILITIES, hasAnyCapability } from '../../rbac';
+import { DOCUMENTS_MANAGE_CAPABILITIES, DOCUMENT_TEMPLATES_ACCESS_CAPABILITIES, hasAnyCapability } from '../../rbac';
 import { formatTicketId } from '../../utils/roleIds';
 import {
+  FIELD_SERVICE_REPORT_SCHEMA,
+  addFieldServiceReportRow,
+  removeFieldServiceReportRow,
+  serializeFieldServiceReportDraft,
+  updateFieldServiceReportField,
+  updateFieldServiceReportRow,
+} from '../../documents/fieldServiceReportSchema';
+import {
+  SOLAR_COMMISSIONING_SCHEMA,
+  serializeSolarCommissioningRecord,
+  updateSolarCommissioningField,
+  updateSolarCommissioningItem,
+  updateSolarCommissioningReading,
+} from '../../documents/solarCommissioningSchema';
+import {
+  buildTechnicalDataSheetRecord,
+  serializeTechnicalDataSheetDraft,
+  updateTechnicalDataSheetField,
+  updateTechnicalDataSheetRow,
+} from '../../documents/technicalDataSheetSchema';
+import {
+  buildInstallationContractRecord,
+  serializeInstallationContractDraft,
+  updateInstallationContractField as updateInstallationContractSchemaField,
+} from '../../documents/installationContractSchema';
+import {
+  addQuotationRow as addQuotationSchemaRow,
+  buildQuotationRecord,
+  removeQuotationRow as removeQuotationSchemaRow,
+  serializeQuotationDraft,
+  updateQuotationField as updateQuotationSchemaField,
+} from '../../documents/quotationSchema';
+import {
+  addTurnoverRow as addTurnoverSchemaRow,
+  buildTurnoverRecord,
+  removeTurnoverRow as removeTurnoverSchemaRow,
+  serializeTurnoverDraft,
+  updateTurnoverField as updateTurnoverSchemaField,
+  updateTurnoverRow as updateTurnoverSchemaRow,
+} from '../../documents/turnoverAcceptanceSchema';
+import {
   fetchDocumentDraft,
+  fetchDocumentDefinitions,
   fetchDocumentPrefill,
   searchServiceTickets,
   fetchSolarCommissioningChecklist,
@@ -22,23 +68,25 @@ import {
   saveTurnoverAcceptance,
   finalizeTurnoverAcceptance,
   saveTechnicalDataSheet,
-  saveInstallationContract
+  saveInstallationContract,
+  downloadTicketDocument,
 } from '../../api/services';
 import { fetchInventory } from '../../api/admin';
 import {
   PAPER_SIZE_OPTIONS,
   TEMPLATE_OPTIONS,
   compactProjectDetails,
-  createEmptyRow,
   createInitialForm,
   createInitialTdsForm,
   findRowByLabel,
   formatPaymentSchedule,
+  formatTicketDateForInput,
   getFieldServiceReportById,
   getLatestFieldServiceReport,
   getProjectDetail,
   hasValue,
   normalizeQuotationRecords,
+  pickFirstValue,
   pickNumericId,
 } from './adminDocumentsSupport';
 import {
@@ -237,6 +285,19 @@ const buildPrintCss = (paperSize) => {
     }
     .table-row-action:hover {
       color: #dc2626;
+    }
+    .table-row-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+    }
+    .table-row-actions .table-row-action {
+      width: 18px;
+      height: 24px;
+    }
+    .table-row-add-action:hover {
+      color: #2563eb;
     }
     .signature-line {
       margin-top: 20px;
@@ -910,6 +971,7 @@ function TableCellInput({ value, onChange, readOnly = false, ariaLabel }) {
 }
 
 function FieldServiceReport({ form, onUpdateRow, onAddRow, onRemoveRow }) {
+  const rowSchema = FIELD_SERVICE_REPORT_SCHEMA.collections.rows;
   return (
     <article className="document-paper">
       <Header />
@@ -931,26 +993,12 @@ function FieldServiceReport({ form, onUpdateRow, onAddRow, onRemoveRow }) {
       <p className="section-label">Before Service:</p>
       <table>
         <colgroup>
-          <col style={{ width: '16%' }} />
-          <col style={{ width: '7%' }} />
-          <col style={{ width: '9%' }} />
-          <col style={{ width: '11%' }} />
-          <col style={{ width: '11%' }} />
-          <col style={{ width: '8%' }} />
-          <col style={{ width: '15%' }} />
-          <col style={{ width: '23%' }} />
+          {rowSchema.columns.map((column) => <col key={column.key} style={{ width: column.width }} />)}
           <col style={{ width: '5%' }} />
         </colgroup>
         <thead>
           <tr>
-            <th>Brand / Model</th>
-            <th>TR/HP</th>
-            <th>Serial #</th>
-            <th>Indoor temp</th>
-            <th>Outdoor temp</th>
-            <th>Ampere</th>
-            <th>Others specify</th>
-            <th>Recommendation</th>
+            {rowSchema.columns.map((column) => <th key={column.key}>{column.label}</th>)}
             <th className="table-actions-header">
               <button
                 type="button"
@@ -965,56 +1013,17 @@ function FieldServiceReport({ form, onUpdateRow, onAddRow, onRemoveRow }) {
           </tr>
         </thead>
         <tbody>
-          {form.rows.map((row) => (
+          {form.rows.map((row, rowIndex) => (
             <tr key={row.id}>
-              <td>
-                <TableCellInput
-                  value={row.brandModel}
-                  onChange={(value) => onUpdateRow(row.id, 'brandModel', value)}
-                />
-              </td>
-              <td>
-                <TableCellInput
-                  value={row.trHp}
-                  onChange={(value) => onUpdateRow(row.id, 'trHp', value)}
-                />
-              </td>
-              <td>
-                <TableCellInput
-                  value={row.serialNumber}
-                  onChange={(value) => onUpdateRow(row.id, 'serialNumber', value)}
-                />
-              </td>
-              <td>
-                <TableCellInput
-                  value={row.indoorTemp}
-                  onChange={(value) => onUpdateRow(row.id, 'indoorTemp', value)}
-                />
-              </td>
-              <td>
-                <TableCellInput
-                  value={row.outdoorTemp}
-                  onChange={(value) => onUpdateRow(row.id, 'outdoorTemp', value)}
-                />
-              </td>
-              <td>
-                <TableCellInput
-                  value={row.ampere}
-                  onChange={(value) => onUpdateRow(row.id, 'ampere', value)}
-                />
-              </td>
-              <td>
-                <TableCellInput
-                  value={row.others}
-                  onChange={(value) => onUpdateRow(row.id, 'others', value)}
-                />
-              </td>
-              <td>
-                <TableCellInput
-                  value={row.recommendation}
-                  onChange={(value) => onUpdateRow(row.id, 'recommendation', value)}
-                />
-              </td>
+              {rowSchema.columns.map((column) => (
+                <td key={column.key}>
+                  <TableCellInput
+                    value={row[column.key]}
+                    onChange={(value) => onUpdateRow(row.id, column.key, value)}
+                    ariaLabel={`${rowSchema.label} row ${rowIndex + 1} ${column.label}`}
+                  />
+                </td>
+              ))}
               <td className="table-actions-cell">
                 <button
                   type="button"
@@ -1045,6 +1054,10 @@ function SolarCommissioningChecklistPreview({
   onChecklistItemChange,
   onReadingChange
 }) {
+  const checklistSchema = SOLAR_COMMISSIONING_SCHEMA.collections.checklist_items_json;
+  const checklistColumns = checklistSchema.columns;
+  const checklistStatusOptions = checklistColumns.find(({ key }) => key === 'check_status')?.options || [];
+  const workflowStatusOptions = SOLAR_COMMISSIONING_SCHEMA.fields.find(({ key }) => key === 'status')?.options || [];
   const renderReadingInput = (group, key) => (
     <AutoGrowTextarea
       rows={1}
@@ -1118,9 +1131,9 @@ function SolarCommissioningChecklistPreview({
                 onChange={(event) => onFieldChange('status', event.target.value)}
                 className="commissioning-inline-select"
               >
-                <option value="draft">Draft</option>
-                <option value="completed">Completed</option>
-                <option value="finalized">Finalized</option>
+                {workflowStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </td>
           </tr>
@@ -1129,15 +1142,11 @@ function SolarCommissioningChecklistPreview({
 
       <table className="commissioning-checklist">
         <colgroup>
-          <col style={{ width: '7%' }} />
-          <col style={{ width: '73%' }} />
-          <col style={{ width: '20%' }} />
+          {checklistColumns.map((column) => <col key={column.key} style={{ width: column.width }} />)}
         </colgroup>
         <thead>
           <tr>
-            <th>No.</th>
-            <th>Checklist Item</th>
-            <th>Check</th>
+            {checklistColumns.map((column) => <th key={column.key}>{column.label}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -1161,10 +1170,9 @@ function SolarCommissioningChecklistPreview({
                       onChange={(event) => onChecklistItemChange(item.item_no, 'check_status', event.target.value)}
                       className="commissioning-inline-select"
                     >
-                      <option value="">Select</option>
-                      <option value="Pass">Pass</option>
-                      <option value="Fail">Fail</option>
-                      <option value="N/A">N/A</option>
+                      {checklistStatusOptions.map((option) => (
+                        <option key={option.value || 'empty'} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
                   </td>
                 </tr>
@@ -1453,11 +1461,7 @@ function QuotationProposalPreview({
             <th>Description</th>
             <th>Unit</th>
             <th>Total Amount</th>
-            <th className="table-actions-header">
-              <button type="button" onClick={() => onAddTableRow('price')} className="table-row-action" title="Add price row">
-                <FiPlus size={14} />
-              </button>
-            </th>
+            <th className="table-actions-header" aria-label="Row actions" />
           </tr>
         </thead>
         <tbody>
@@ -1467,9 +1471,7 @@ function QuotationProposalPreview({
               <td><TableCellInput value={row.unit} onChange={(value) => onTableRowChange('priceRows', row.id, 'unit', value)} /></td>
               <td><TableCellInput value={row.totalPrice} onChange={(value) => onTableRowChange('priceRows', row.id, 'totalPrice', value)} /></td>
               <td className="table-actions-cell">
-                <button type="button" onClick={() => onRemoveTableRow('priceRows', row.id)} className="table-row-action" title="Remove price row">
-                  <FiTrash2 size={14} />
-                </button>
+                <div className="table-row-actions"><button type="button" onClick={() => onAddTableRow('price')} className="table-row-action table-row-add-action" title="Add price row" aria-label="Add price row"><FiPlus size={12} /></button><button type="button" onClick={() => onRemoveTableRow('priceRows', row.id)} className="table-row-action" title="Remove price row" aria-label="Remove price row"><FiTrash2 size={12} /></button></div>
               </td>
             </tr>
           ))}
@@ -1491,10 +1493,10 @@ function QuotationProposalPreview({
           <col style={{ width: '7%' }} />
           <col style={{ width: '47%' }} />
           <col style={{ width: '10%' }} />
-          <col style={{ width: '8%' }} />
+          <col style={{ width: '5%' }} />
           <col style={{ width: '13%' }} />
           <col style={{ width: '10%' }} />
-          <col style={{ width: '5%' }} />
+          <col style={{ width: '8%' }} />
         </colgroup>
         <thead className="quotation-table-head">
           <tr>
@@ -1504,11 +1506,7 @@ function QuotationProposalPreview({
             <th>Qty</th>
             <th>Unit Price (₱)</th>
             <th>Total Amount</th>
-            <th className="table-actions-header">
-              <button type="button" onClick={() => onAddTableRow('bom')} className="table-row-action" title="Add BOM row">
-                <FiPlus size={14} />
-              </button>
-            </th>
+            <th className="table-actions-header" aria-label="Row actions" />
           </tr>
         </thead>
         <tbody>
@@ -1530,15 +1528,12 @@ function QuotationProposalPreview({
               <td><TableCellInput value={row.unitPrice} onChange={(value) => onTableRowChange('bomRows', row.id, 'unitPrice', value)} ariaLabel={`BOM row ${row.itemNo || ''} unit price`} /></td>
               <td><TableCellInput value={row.amount} onChange={() => {}} readOnly ariaLabel={`BOM row ${row.itemNo || ''} total amount`} /></td>
               <td className="table-actions-cell">
-                <button type="button" onClick={() => onRemoveTableRow('bomRows', row.id)} className="table-row-action" title="Remove BOM row">
-                  <FiTrash2 size={14} />
-                </button>
+                <div className="table-row-actions"><button type="button" onClick={() => onAddTableRow('bom')} className="table-row-action table-row-add-action" title="Add item row" aria-label="Add item row"><FiPlus size={12} /></button><button type="button" onClick={() => onRemoveTableRow('bomRows', row.id)} className="table-row-action" title="Remove item row" aria-label="Remove item row"><FiTrash2 size={12} /></button></div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-
       <p className="quotation-section-title">Warranty Terms</p>
       <table className="quotation-warranty-table">
         <colgroup>
@@ -1552,11 +1547,7 @@ function QuotationProposalPreview({
             <th>Item</th>
             <th>Brand</th>
             <th>Warranty Period</th>
-            <th className="table-actions-header">
-              <button type="button" onClick={() => onAddTableRow('warranty')} className="table-row-action" title="Add warranty row">
-                <FiPlus size={14} />
-              </button>
-            </th>
+            <th className="table-actions-header" aria-label="Row actions" />
           </tr>
         </thead>
         <tbody>
@@ -1566,15 +1557,12 @@ function QuotationProposalPreview({
               <td><TableCellInput value={row.brand} onChange={(value) => onTableRowChange('warrantyRows', row.id, 'brand', value)} /></td>
               <td><TableCellInput value={row.period} onChange={(value) => onTableRowChange('warrantyRows', row.id, 'period', value)} /></td>
               <td className="table-actions-cell">
-                <button type="button" onClick={() => onRemoveTableRow('warrantyRows', row.id)} className="table-row-action" title="Remove warranty row">
-                  <FiTrash2 size={14} />
-                </button>
+                <div className="table-row-actions"><button type="button" onClick={() => onAddTableRow('warranty')} className="table-row-action table-row-add-action" title="Add warranty row" aria-label="Add warranty row"><FiPlus size={12} /></button><button type="button" onClick={() => onRemoveTableRow('warrantyRows', row.id)} className="table-row-action" title="Remove warranty row" aria-label="Remove warranty row"><FiTrash2 size={12} /></button></div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-
       <textarea
         rows={7}
         value={form.warrantyNotes}
@@ -2527,31 +2515,6 @@ const getQuotationPricingError = (form) => {
   return '';
 };
 
-const normalizeMoneyForApi = (value) => {
-  const number = parseQuotationNumber(value);
-  return number == null ? null : number.toFixed(2);
-};
-
-function ActionButton({ action, variant = 'secondary', className = '' }) {
-  if (!action) return null;
-  const Icon = action.icon || FiSave;
-  const styles = variant === 'primary'
-    ? 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-slate-300 disabled:text-white'
-    : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-60';
-  return (
-    <button
-      type="button"
-      onClick={action.onClick}
-      disabled={action.disabled || action.busy}
-      title={action.title}
-      className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed ${styles} ${className}`}
-    >
-      <Icon size={15} aria-hidden="true" />
-      {action.busy ? action.busyLabel || 'Saving...' : action.label}
-    </button>
-  );
-}
-
 function TextField({ label, value, onChange, type = 'text' }) {
   const sharedClasses = 'w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
 
@@ -2581,9 +2544,16 @@ function TextField({ label, value, onChange, type = 'text' }) {
 export default function AdminDocuments() {
   const { user } = useAuth();
   const canManageDocuments = hasAnyCapability(user, DOCUMENTS_MANAGE_CAPABILITIES);
+  const canAccessTemplateManager = hasAnyCapability(user, DOCUMENT_TEMPLATES_ACCESS_CAPABILITIES);
   const [searchParams] = useSearchParams();
   const initialTemplate = searchParams.get('template');
   const [activeTemplate, setActiveTemplate] = useState(initialTemplate || 'field_service_report');
+  const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
+  const [replacementWizardOpen, setReplacementWizardOpen] = useState(false);
+  const [customDocumentsOpen, setCustomDocumentsOpen] = useState(false);
+  const [customWorkspaceDefinitionCode, setCustomWorkspaceDefinitionCode] = useState('');
+  const [customDocumentDefinitions, setCustomDocumentDefinitions] = useState([]);
+  const [activeDesignGenerating, setActiveDesignGenerating] = useState(false);
   const [paperSize, setPaperSize] = useState('letter');
   const [form, setForm] = useState(createInitialForm);
   const [commissioningForm, setCommissioningForm] = useState(createInitialCommissioningForm);
@@ -2627,7 +2597,36 @@ export default function AdminDocuments() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [inventoryItems, setInventoryItems] = useState([]);
   const dropdownRef = useRef(null);
+  const ticketInputRef = useRef(null);
+  // A custom document tab chosen before any ticket: show a note, and open its Fill window once a ticket is picked.
+  const [pendingCustomCode, setPendingCustomCode] = useState('');
+  useEffect(() => {
+    if (!pendingCustomCode || !selectedTicketId) return;
+    setCustomWorkspaceDefinitionCode(pendingCustomCode);
+    setCustomDocumentsOpen(true);
+    setPendingCustomCode('');
+  }, [pendingCustomCode, selectedTicketId]);
   const prefillRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (!canManageDocuments) {
+      setCustomDocumentDefinitions([]);
+      return undefined;
+    }
+
+    let isMounted = true;
+    fetchDocumentDefinitions({ is_active: true })
+      .then((items) => {
+        if (isMounted) {
+          setCustomDocumentDefinitions(items.filter((item) => item.category === 'custom'));
+        }
+      })
+      .catch((error) => {
+        console.error('Unable to load custom document navigation.', error);
+        if (isMounted) setCustomDocumentDefinitions([]);
+      });
+    return () => { isMounted = false; };
+  }, [canManageDocuments, customDocumentsOpen, replacementWizardOpen, templateManagerOpen]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2702,6 +2701,16 @@ export default function AdminDocuments() {
   const previewScale = zoomChoice === 'fit' ? previewFitScale : zoomChoice;
   const currentMissingFields = documentPrefill?.missing_fields?.[activeTemplate] || [];
   const activeTemplateLabel = TEMPLATE_OPTIONS.find((template) => template.id === activeTemplate)?.label || 'AFN Document';
+  const documentNavigationSteps = useMemo(() => [
+    ...JOB_STEPS,
+    ...customDocumentDefinitions.map((definition) => ({
+      id: `custom:${definition.code}`,
+      definitionCode: definition.code,
+      short: definition.name,
+      hint: definition.description || 'Custom document',
+      isCustom: true,
+    })),
+  ], [customDocumentDefinitions]);
 
   const refreshTicketPrefill = async (ticketId, ticketList = tickets) => {
     const selectedTicketBase = ticketList.find((ticket) => String(ticket.id) === String(ticketId));
@@ -2855,19 +2864,19 @@ export default function AdminDocuments() {
 
   const getActiveDraftPayload = () => {
     if (activeTemplate === 'field_service_report') {
-      return form;
+      return serializeFieldServiceReportDraft(form);
     }
     if (activeTemplate === 'quotation_proposal') {
-      return quotationFormRef.current;
+      return serializeQuotationDraft(quotationFormRef.current);
     }
     if (activeTemplate === 'technical_data_sheet') {
-      return tdsForm;
+      return serializeTechnicalDataSheetDraft(tdsForm);
     }
     if (activeTemplate === 'installation_contract') {
-      return installationContractForm;
+      return serializeInstallationContractDraft(installationContractForm);
     }
     if (activeTemplate === 'turnover_acceptance') {
-      return turnoverForm;
+      return serializeTurnoverDraft(turnoverForm);
     }
     return null;
   };
@@ -3026,34 +3035,19 @@ export default function AdminDocuments() {
   }, [activeTemplate, selectedFieldServiceReportId, selectedTicketId, tickets, documentPrefill, installedEquipmentRecords]);
 
   const updateField = (key, value) => {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => updateFieldServiceReportField(current, key, value));
   };
 
   const updateRow = (rowId, key, value) => {
-    setForm((current) => ({
-      ...current,
-      rows: current.rows.map((row) => (row.id === rowId ? { ...row, [key]: value } : row))
-    }));
+    setForm((current) => updateFieldServiceReportRow(current, rowId, key, value));
   };
 
   const addRow = () => {
-    setForm((current) => ({
-      ...current,
-      rows: [...current.rows, createEmptyRow(current.rows.length + 1)]
-    }));
+    setForm(addFieldServiceReportRow);
   };
 
   const removeRow = (rowId) => {
-    setForm((current) => {
-      if (current.rows.length === 1) {
-        return current;
-      }
-
-      return {
-        ...current,
-        rows: current.rows.filter((row) => row.id !== rowId)
-      };
-    });
+    setForm((current) => removeFieldServiceReportRow(current, rowId));
   };
 
   const resetForm = () => {
@@ -3097,55 +3091,35 @@ export default function AdminDocuments() {
   };
 
   const updateCommissioningField = (key, value) => {
-    setCommissioningForm((current) => ({ ...current, [key]: value }));
+    setCommissioningForm((current) => updateSolarCommissioningField(current, key, value));
   };
 
   const updateCommissioningItem = (itemNo, key, value) => {
-    setCommissioningForm((current) => ({
-      ...current,
-      checklist_items_json: current.checklist_items_json.map((item) =>
-        item.item_no === itemNo ? { ...item, [key]: value } : item
-      )
-    }));
+    setCommissioningForm((current) => updateSolarCommissioningItem(current, itemNo, key, value));
   };
 
   const updateCommissioningReading = (group, key, value) => {
-    setCommissioningForm((current) => ({
-      ...current,
-      readings_json: {
-        ...current.readings_json,
-        [group]: {
-          ...(current.readings_json?.[group] || {}),
-          [key]: value
-        }
-      }
-    }));
+    setCommissioningForm((current) => updateSolarCommissioningReading(current, group, key, value));
   };
 
   const updateQuotationField = (key, value) => {
-    setQuotationForm((current) => ({ ...current, [key]: value }));
+    setQuotationForm((current) => updateQuotationSchemaField(current, key, value));
   };
 
   const updateTdsField = (key, value) => {
-    setTdsForm((current) => ({ ...current, [key]: value }));
+    setTdsForm((current) => updateTechnicalDataSheetField(current, key, value));
   };
 
   const updateTdsLoadRow = (rowId, key, value) => {
-    setTdsForm((current) => ({
-      ...current,
-      loadRows: current.loadRows.map((row) => (row.id === rowId ? { ...row, [key]: value } : row))
-    }));
+    setTdsForm((current) => updateTechnicalDataSheetRow(current, 'loadRows', rowId, key, value));
   };
 
   const updateTdsPurposeRow = (rowId, key, value) => {
-    setTdsForm((current) => ({
-      ...current,
-      purposeRows: current.purposeRows.map((row) => (row.id === rowId ? { ...row, [key]: value } : row))
-    }));
+    setTdsForm((current) => updateTechnicalDataSheetRow(current, 'purposeRows', rowId, key, value));
   };
 
   const updateInstallationContractField = (key, value) => {
-    setInstallationContractForm((current) => ({ ...current, [key]: value }));
+    setInstallationContractForm((current) => updateInstallationContractSchemaField(current, key, value));
   };
 
   const updateQuotationTableRow = (tableKey, rowId, key, value) => {
@@ -3186,34 +3160,26 @@ export default function AdminDocuments() {
 
   const addQuotationRow = (type) => {
     const tableKey = type === 'price' ? 'priceRows' : type === 'bom' ? 'bomRows' : 'warrantyRows';
-    setQuotationForm((current) => ({
-      ...current,
-      [tableKey]: [...current[tableKey], createQuotationRow(type, current[tableKey].length + 1)]
-    }));
+    setQuotationForm((current) => {
+      const nextRowNumber = type === 'bom'
+        ? current.bomRows.reduce((highest, row) => Math.max(highest, Number(row.itemNo) || 0), 0) + 1
+        : current[tableKey].length + 1;
+      return addQuotationSchemaRow(current, tableKey, createQuotationRow(type, nextRowNumber));
+    });
   };
 
   const removeQuotationRow = (tableKey, rowId) => {
     setQuotationForm((current) => {
-      if (current[tableKey].length === 1) {
-        return current;
-      }
-
-      return {
-        ...current,
-        [tableKey]: current[tableKey].filter((row) => row.id !== rowId)
-      };
+      return removeQuotationSchemaRow(current, tableKey, rowId);
     });
   };
 
   const updateTurnoverField = (key, value) => {
-    setTurnoverForm((current) => ({ ...current, [key]: value }));
+    setTurnoverForm((current) => updateTurnoverSchemaField(current, key, value));
   };
 
   const updateTurnoverTableRow = (tableKey, rowId, key, value) => {
-    setTurnoverForm((current) => ({
-      ...current,
-      [tableKey]: current[tableKey].map((row) => (row.id === rowId ? { ...row, [key]: value } : row))
-    }));
+    setTurnoverForm((current) => updateTurnoverSchemaRow(current, tableKey, rowId, key, value));
   };
 
   const addTurnoverRow = (type) => {
@@ -3225,22 +3191,16 @@ export default function AdminDocuments() {
           ? 'commissioningRows'
           : 'documentsRows';
 
-    setTurnoverForm((current) => ({
-      ...current,
-      [tableKey]: [...current[tableKey], createTurnoverRow(type, current[tableKey].length + 1)]
-    }));
+    setTurnoverForm((current) => addTurnoverSchemaRow(
+      current,
+      tableKey,
+      createTurnoverRow(type, current[tableKey].length + 1),
+    ));
   };
 
   const removeTurnoverRow = (tableKey, rowId) => {
     setTurnoverForm((current) => {
-      if (current[tableKey].length === 1) {
-        return current;
-      }
-
-      return {
-        ...current,
-        [tableKey]: current[tableKey].filter((row) => row.id !== rowId)
-      };
+      return removeTurnoverSchemaRow(current, tableKey, rowId);
     });
   };
 
@@ -3254,10 +3214,7 @@ export default function AdminDocuments() {
     setCommissioningMessage('');
 
     try {
-      const payload = {
-        ...commissioningForm,
-        ticket: Number(selectedTicketId),
-      };
+      const payload = serializeSolarCommissioningRecord(commissioningForm, Number(selectedTicketId));
       const saved = await saveSolarCommissioningChecklist(payload);
       const selectedTicket = tickets.find((ticket) => String(ticket.id) === String(selectedTicketId));
       const nextForm = selectedTicket
@@ -3285,29 +3242,22 @@ export default function AdminDocuments() {
 
     try {
       // 1. Save Document Draft
+      const serializedTurnoverDraft = serializeTurnoverDraft(turnoverForm);
       const payloadDraft = {
         document_type: 'turnover_acceptance',
         status: 'draft',
-        data_json: turnoverForm,
+        data_json: serializedTurnoverDraft,
         tables_json: {
-          componentsRows: turnoverForm.componentsRows,
-          performanceRows: turnoverForm.performanceRows,
-          commissioningRows: turnoverForm.commissioningRows,
+          componentsRows: serializedTurnoverDraft.componentsRows,
+          performanceRows: serializedTurnoverDraft.performanceRows,
+          commissioningRows: serializedTurnoverDraft.commissioningRows,
         }
       };
       const documentDraft = await saveDocumentDraft(selectedTicketId, payloadDraft);
       setDocumentDrafts((current) => ({ ...current, turnover_acceptance: documentDraft }));
 
       // 2. Save Turnover Acceptance Model
-      const finalTurnoverDate = turnoverForm.dateOfTurnover || null;
-      const payloadTurnover = {
-        id: turnoverForm.id,
-        ticket: Number(selectedTicketId),
-        turnover_date: finalTurnoverDate,
-        accepted_by_client_name: turnoverForm.clientName || '',
-        accepted_by_client_contact: turnoverForm.clientContactNumber || '',
-        warranty_start_date: turnoverForm.warrantyStartDate || finalTurnoverDate,
-      };
+      const payloadTurnover = buildTurnoverRecord(turnoverForm, selectedTicketId);
 
       let saved = await saveTurnoverAcceptance(payloadTurnover);
       const turnoverId = saved?.id || turnoverForm.id;
@@ -3320,7 +3270,7 @@ export default function AdminDocuments() {
         const finalizedDocument = await saveDocumentDraft(selectedTicketId, {
           ...payloadDraft,
           status: 'finalized',
-          data_json: { ...turnoverForm, id: turnoverId, status: 'finalized' },
+          data_json: serializeTurnoverDraft({ ...turnoverForm, id: turnoverId, status: 'finalized' }),
         });
         setDocumentDrafts((current) => ({ ...current, turnover_acceptance: finalizedDocument }));
       }
@@ -3426,17 +3376,7 @@ export default function AdminDocuments() {
         throw new Error('No client found for this ticket.');
       }
 
-      const totalAmountRow = currentQuotationForm.priceRows?.[0] || {};
-      const totalAmount = totalAmountRow.totalPrice || '';
-      
-      const payload = {
-        ticket: selectedTicketId,
-        client: clientId,
-        total_amount: totalAmount,
-        payment_terms: currentQuotationForm.paymentTerms,
-        bill_of_materials: currentQuotationForm.bomRows || [],
-        status: 'Sent'
-      };
+      const payload = buildQuotationRecord(currentQuotationForm, selectedTicketId, clientId, 'Sent');
 
       const saved = await saveQuotationRecord(payload);
       setQuotationRecords([saved]);
@@ -3445,7 +3385,7 @@ export default function AdminDocuments() {
         document_type: 'quotation_proposal',
         title: 'Quotation Proposal',
         status: 'draft',
-        data_json: currentQuotationForm,
+        data_json: serializeQuotationDraft(currentQuotationForm),
       });
       setDocumentDrafts((current) => ({ ...current, quotation_proposal: savedDraft }));
       setDocumentDraftMessage('Quotation saved and sent to the client to accept or decline in their portal.');
@@ -3470,45 +3410,11 @@ export default function AdminDocuments() {
     setDocumentDraftMessage('');
 
     try {
-      const purposeOfGoingSolar = tdsForm.purposeRows
-        .filter((row) => hasValue(row.mark) && !String(row.label || '').toLowerCase().startsWith('others'))
-        .map((row) => row.label);
-      if (hasValue(tdsForm.purposeOther)) {
-        purposeOfGoingSolar.push(tdsForm.purposeOther);
-      }
-
-      const payload = {
-        ticket: Number(selectedTicketId),
-        status: documentPrefill?.technical_data_sheet?.status || 'draft',
-        premise_type: tdsForm.sitePremisePlan || null,
-        premise_category: tdsForm.sitePremiseCategory || null,
-        ownership_type: tdsForm.ownershipStatus || null,
-        primary_electric_supply: tdsForm.primaryElectricSupply || null,
-        ac_phase_power_supply: tdsForm.acSupplyType || null,
-        solar_panel_installation_location: tdsForm.solarInstallLocation || null,
-        rooftop_type: tdsForm.rooftopType || null,
-        average_monthly_electric_bill: tdsForm.averageMonthlyBill || null,
-        electricity_required_hours_per_day: tdsForm.electricityHoursPerDay || null,
-        brownout_frequency: tdsForm.brownoutFrequencyPerWeek || null,
-        battery_preference: tdsForm.batteryPreference || null,
-        purpose_of_going_solar: purposeOfGoingSolar,
-        load_schedule_json: tdsForm.loadRows,
-        generator_details_json: {
-          hasGenerator: tdsForm.hasGenerator || '',
-          brandName: tdsForm.generatorBrandName || '',
-          capacity: tdsForm.generatorCapacity || '',
-          fuelType: tdsForm.generatorFuelType || '',
-          datePurchased: tdsForm.generatorDatePurchased || '',
-          frequentBrownouts: tdsForm.frequentBrownouts || '',
-          brownoutFrequencyPerWeek: tdsForm.brownoutFrequencyPerWeek || '',
-        },
-        attachments_json: {
-          electricBill: tdsForm.attachElectricBill || '',
-          sitePhoto: tdsForm.attachSitePhoto || '',
-        },
-        client_confirmation_date: tdsForm.confirmationDate || null,
-        client_confirmed_name: tdsForm.clientConfirmationName || null,
-      };
+      const payload = buildTechnicalDataSheetRecord(
+        tdsForm,
+        selectedTicketId,
+        documentPrefill?.technical_data_sheet?.status || 'draft',
+      );
 
       const saved = await saveTechnicalDataSheet(payload, documentPrefill?.technical_data_sheet?.id || null);
       setDocumentPrefill((current) => current ? { ...current, technical_data_sheet: saved } : current);
@@ -3516,7 +3422,7 @@ export default function AdminDocuments() {
         document_type: 'technical_data_sheet',
         title: 'TDS - Technical Data Sheet',
         status: 'draft',
-        data_json: tdsForm,
+        data_json: serializeTechnicalDataSheetDraft(tdsForm),
       });
       setDocumentDrafts((current) => ({ ...current, technical_data_sheet: savedDraft }));
       setDocumentDraftMessage('Technical data sheet and printable draft saved successfully.');
@@ -3537,18 +3443,7 @@ export default function AdminDocuments() {
     setDocumentDraftMessage('');
 
     try {
-      const payload = {
-        ticket: selectedTicketId,
-        scope_of_work: installationContractForm.scopeNotes || '',
-        start_date: installationContractForm.startDate || null,
-        estimated_completion_days: parseInt(installationContractForm.estimatedCompletionTime) || null,
-        total_contract_amount: normalizeMoneyForApi(installationContractForm.totalContractAmount),
-        payment_terms_upfront: normalizeMoneyForApi(installationContractForm.upfrontPayment),
-        payment_terms_completion: normalizeMoneyForApi(installationContractForm.completionPayment),
-        payment_terms_final: normalizeMoneyForApi(installationContractForm.finalPayment),
-        warranty_period: installationContractForm.warrantyPeriod || '',
-        status: 'draft'
-      };
+      const payload = buildInstallationContractRecord(installationContractForm, selectedTicketId, 'draft');
 
       const contractId = installationContractForm.contractId;
       const saved = await saveInstallationContract(payload, contractId);
@@ -3558,7 +3453,7 @@ export default function AdminDocuments() {
         document_type: 'installation_contract',
         title: 'Solar Installation Contract',
         status: 'draft',
-        data_json: { ...installationContractForm, contractId: saved.id },
+        data_json: serializeInstallationContractDraft({ ...installationContractForm, contractId: saved.id }),
       });
       setDocumentDrafts((current) => ({ ...current, installation_contract: savedDraft }));
       setDocumentDraftMessage('Installation contract and printable draft saved successfully.');
@@ -3742,6 +3637,26 @@ export default function AdminDocuments() {
     };
   };
 
+  const generateActiveDesign = async () => {
+    if (!selectedTicketId) return;
+    const setGenerationMessage = activeTemplate === 'turnover_acceptance'
+      ? setTurnoverMessage
+      : activeTemplate === 'commissioning_checklist' ? setCommissioningMessage : setDocumentDraftMessage;
+    setActiveDesignGenerating(true);
+    setGenerationMessage('');
+    try {
+      const reportId = activeTemplate === 'field_service_report' && selectedFieldServiceReportId !== 'latest'
+        ? selectedFieldServiceReportId
+        : undefined;
+      await downloadTicketDocument(selectedTicketId, activeTemplate, { reportId });
+      setGenerationMessage('Active design generated and downloaded from the saved document data.');
+    } catch (error) {
+      setGenerationMessage(error?.message || 'Unable to generate the active design.');
+    } finally {
+      setActiveDesignGenerating(false);
+    }
+  };
+
   const selectedTicketSummary = tickets.find((ticket) => String(ticket.id) === String(selectedTicketId)) || null;
   const latestQuotation = quotationRecords[0] || documentPrefill?.quotation_record || null;
 
@@ -3893,64 +3808,82 @@ export default function AdminDocuments() {
   const actionMessage = activeTemplate === 'turnover_acceptance'
     ? turnoverMessage
     : activeTemplate === 'commissioning_checklist' ? commissioningMessage : documentDraftMessage;
-  const actionMessageIsGood = /saved|loaded|successfully|finalized|sent|registered/i.test(actionMessage || '');
+  const actionMessageIsGood = /saved|loaded|successfully|finalized|sent|registered|generated/i.test(actionMessage || '');
   const detailsOpenByDefault = !['turnover_acceptance'].includes(activeTemplate);
   const hasDetails = !['quotation_proposal', 'installation_contract'].includes(activeTemplate);
 
   const actionsCard = (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-900">{activeTemplateLabel}</h2>
-        {activeStatus ? (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-            <span className={`h-2 w-2 rounded-full ${STATUS_TONES[activeStatus.tone]}`} aria-hidden="true" />
-            {activeStatus.label}
-          </span>
-        ) : null}
-      </div>
-      {currentMissingFields.length ? (
-        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <p className="font-semibold">Still needed before printing</p>
-          <p className="mt-1">{currentMissingFields.map(humanizeFieldName).join(', ')}</p>
-        </div>
-      ) : null}
-      {['quotation_proposal', 'installation_contract'].includes(activeTemplate) ? (
-        <p className="mt-3 text-xs text-slate-500" role="note">
-          Amounts and payment terms are typed in for the document. Payments are collected and verified outside this system.
-        </p>
-      ) : null}
-      {activeDocumentLocked ? (
-        <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" role="note">
-          This document is locked at its current workflow status. Its saved record can still be viewed and printed.
-        </p>
-      ) : null}
-      {canManageDocuments ? (
-        <div className="mt-4 space-y-2">
-          {noTicket ? <p className="text-xs text-slate-500">Choose a ticket to save or send this document.</p> : null}
-          <ActionButton action={primaryAction} variant="primary" />
-          {secondaryActions.map((action) => <ActionButton key={action.label} action={action} />)}
-        </div>
-      ) : null}
-      {actionMessage ? (
-        <p role="status" aria-live="polite" className={`mt-3 text-xs ${actionMessageIsGood ? 'text-emerald-700' : 'text-rose-600'}`}>
-          {actionMessage}
-        </p>
-      ) : null}
+    <DocumentActionCard
+      title={activeTemplateLabel}
+      status={activeStatus}
+      missingFields={currentMissingFields.map(humanizeFieldName)}
+      showPaymentNote={['quotation_proposal', 'installation_contract'].includes(activeTemplate)}
+      locked={activeDocumentLocked}
+      canManage={canManageDocuments}
+      noTicket={noTicket}
+      primaryAction={primaryAction}
+      secondaryActions={secondaryActions}
+      generationAction={{
+        label: 'Generate active design',
+        onClick: generateActiveDesign,
+        busy: activeDesignGenerating,
+        busyLabel: 'Generating...',
+        disabled: noTicket || documentEditorLoading,
+        title: 'Downloads the published DOCX or PDF design using the latest saved business data. Save your changes first.',
+      }}
+      message={actionMessage}
+      messageIsGood={actionMessageIsGood}
+    >
       {activeTemplate === 'quotation_proposal' && canManageDocuments ? (
-        <div className="mt-4">
           <QuotationDepositPanel
             quotation={quotationRecords[0] || null}
             onUpdated={(updated) => setQuotationRecords([updated])}
           />
-        </div>
       ) : null}
-    </div>
+    </DocumentActionCard>
   );
 
   return (
-    <Layout title="Documents" subtitle="Print-ready AFN templates.">
+    <Layout title="Documents" subtitle="Create, fill, and manage company documents.">
       <style>{printCss}</style>
       <div className="space-y-4">
+        {canManageDocuments || canAccessTemplateManager ? (
+          <div className="flex flex-wrap justify-end gap-2">
+            {canManageDocuments ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomWorkspaceDefinitionCode(activeTemplate);
+                  setCustomDocumentsOpen(true);
+                }}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700"
+              >
+                <FiFileText size={16} aria-hidden="true" />
+                Fill template
+              </button>
+            ) : null}
+            {canAccessTemplateManager ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setReplacementWizardOpen(true)}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+              >
+                <FiRefreshCw size={16} aria-hidden="true" />
+                Replace design
+              </button>
+              <button
+                type="button"
+                onClick={() => setTemplateManagerOpen(true)}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700"
+              >
+                <FiSettings size={16} aria-hidden="true" />
+                Template library
+              </button>
+            </>
+            ) : null}
+          </div>
+        ) : null}
         {!canManageDocuments && (
           <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
             You have view-only document access. You can inspect and print records, but saving and finalizing require the Manage project documents capability.
@@ -3969,6 +3902,7 @@ export default function AdminDocuments() {
                       onClick={() => setIsDropdownOpen(true)}
                     >
                       <input
+                        ref={ticketInputRef}
                         type="text"
                         placeholder="Search ticket by ID, client, or service..."
                         value={isDropdownOpen ? ticketSearch : (selectedTicketId ? (() => {
@@ -4049,16 +3983,33 @@ export default function AdminDocuments() {
         </section>
 
         {/* Documents in job order, each with its state for the selected ticket. */}
-        <nav aria-label="Document templates" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          {JOB_STEPS.map((step, index) => {
+        <nav aria-label="Document templates" className="-mx-1 grid grid-flow-col auto-cols-[10.5rem] gap-2 overflow-x-auto px-1 pb-1 lg:grid-flow-row lg:grid-cols-4 lg:overflow-visible xl:grid-cols-7">
+          {documentNavigationSteps.map((step, index) => {
             const template = TEMPLATE_OPTIONS.find((option) => option.id === step.id);
-            const status = documentStatus(step.id);
-            const active = activeTemplate === step.id;
+            const status = step.isCustom ? null : documentStatus(step.id);
+            const active = step.isCustom
+              ? (customDocumentsOpen || pendingCustomCode === step.definitionCode) && customWorkspaceDefinitionCode === step.definitionCode
+              : activeTemplate === step.id && !customWorkspaceDefinitionCode;
             return (
               <button
                 key={step.id}
                 type="button"
                   onClick={() => {
+                    if (step.isCustom) {
+                      setCustomWorkspaceDefinitionCode(step.definitionCode);
+                      if (!selectedTicketId) {
+                        setPendingCustomCode(step.definitionCode);
+                        setIsDropdownOpen(true);
+                        ticketInputRef.current?.focus();
+                        ticketInputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                        return;
+                      }
+                      setPendingCustomCode('');
+                      setCustomDocumentsOpen(true);
+                      return;
+                    }
+                    setPendingCustomCode('');
+                    setCustomWorkspaceDefinitionCode('');
                     setActiveTemplate(step.id);
                     setDocumentDraftLoading(Boolean(selectedTicketId && step.id !== 'commissioning_checklist'));
                     setCommissioningLoading(Boolean(selectedTicketId && step.id === 'commissioning_checklist'));
@@ -4068,7 +4019,7 @@ export default function AdminDocuments() {
                   }}
                 aria-pressed={active}
                 aria-label={`${template?.label || step.short}${status ? `: ${status.label}` : ''}`}
-                className={`flex min-w-[10.5rem] flex-1 items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+                className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
                   active ? 'border-brand-500 bg-brand-50 shadow-sm' : 'border-slate-200 bg-white hover:border-brand-200 hover:bg-slate-50'
                 }`}
               >
@@ -4090,6 +4041,21 @@ export default function AdminDocuments() {
           })}
         </nav>
 
+        {pendingCustomCode && !selectedTicketId ? (
+          <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-900">
+            <span>
+              Choose a ticket above to fill <strong>{customDocumentDefinitions.find((definition) => definition.code === pendingCustomCode)?.name || 'this document'}</strong>. It opens as soon as you pick one.
+            </span>
+            <button
+              type="button"
+              onClick={() => { setPendingCustomCode(''); setCustomWorkspaceDefinitionCode(''); }}
+              className="rounded-lg border border-brand-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-800 hover:bg-brand-100"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+
         {/* One grid: actions, paper, then details. Phones stack them in that order; desktop puts
             actions and details in the left column with the paper spanning the right. */}
         <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)] xl:grid-rows-[auto_1fr]">
@@ -4099,6 +4065,7 @@ export default function AdminDocuments() {
           <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm xl:col-start-2 xl:row-span-2 xl:row-start-1">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
               <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Editor preview</span>
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   Paper
                   <select
@@ -4226,9 +4193,9 @@ export default function AdminDocuments() {
                           onChange={(event) => updateCommissioningField('status', event.target.value)}
                           className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                         >
-                          <option value="draft">Draft</option>
-                          <option value="completed">Completed</option>
-                          <option value="finalized">Finalized</option>
+                          {(SOLAR_COMMISSIONING_SCHEMA.fields.find(({ key }) => key === 'status')?.options || []).map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
                         </select>
                       </label>
                     </>
@@ -4310,6 +4277,33 @@ export default function AdminDocuments() {
             </details>
           </aside>
         </section>
+        <DocumentTemplateManager
+          open={templateManagerOpen}
+          onClose={() => setTemplateManagerOpen(false)}
+          ticketId={selectedTicketId}
+          initialDefinitionCode={activeTemplate}
+        />
+        <DocumentReplacementWizard
+          open={replacementWizardOpen}
+          onClose={() => setReplacementWizardOpen(false)}
+          ticketId={selectedTicketId}
+          initialDefinitionCode={activeTemplate}
+          onOpenAdvanced={() => setTemplateManagerOpen(true)}
+        />
+        <CustomDocumentWorkspace
+          open={customDocumentsOpen}
+          onClose={() => {
+            setCustomDocumentsOpen(false);
+            setCustomWorkspaceDefinitionCode('');
+          }}
+          ticketId={selectedTicketId}
+          initialDefinitionCode={customWorkspaceDefinitionCode || activeTemplate}
+          onOpenCoreDocument={(code) => {
+            setActiveTemplate(code);
+            setCustomDocumentsOpen(false);
+            setCustomWorkspaceDefinitionCode('');
+          }}
+        />
 
       </div>
     </Layout>

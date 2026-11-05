@@ -37,7 +37,7 @@ export default function ConfirmationDialog({
   tone = 'brand',
   icon = 'info',
   confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  cancelLabel = 'Dismiss',
   loading = false,
   disabled = false,
   onConfirm,

@@ -184,16 +184,6 @@ function IntroSplash() {
         </svg>
       </div>
 
-      <button
-        type="button"
-        className="afn-intro__skip"
-        onClick={(event) => {
-          event.stopPropagation();
-          finish(true);
-        }}
-      >
-        Skip intro
-      </button>
     </div>
   );
 }

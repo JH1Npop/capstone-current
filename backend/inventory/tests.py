@@ -109,6 +109,41 @@ class InventoryCapabilityTests(APITestCase):
         self.assertEqual(opening.notes, 'Opening inventory balance')
         self.assertEqual(opening.performed_by, user)
 
+    def test_item_with_only_opening_balance_can_be_deleted(self):
+        user = self.create_user('deletable-inventory-manager', 'admin', INVENTORY_MANAGE)
+        self.client.force_authenticate(user)
+
+        created = self.client.post(self.items_url, self.item_payload, format='json')
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        self.assertTrue(created.data['can_delete'])
+        self.assertEqual(created.data['delete_reference_count'], 0)
+        item_id = created.data['id']
+        deleted = self.client.delete(f'{self.items_url}{item_id}/')
+
+        self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT, deleted.data)
+        self.assertFalse(InventoryItem.objects.filter(pk=item_id).exists())
+
+    def test_item_creation_derives_status_instead_of_accepting_manual_state(self):
+        user = self.create_user('derived-status-manager', 'admin', INVENTORY_MANAGE)
+        self.client.force_authenticate(user)
+
+        empty_response = self.client.post(
+            self.items_url,
+            {**self.item_payload, 'sku': 'DERIVED-EMPTY-01', 'quantity': 0, 'status': 'in_use'},
+            format='json',
+        )
+        stocked_response = self.client.post(
+            self.items_url,
+            {**self.item_payload, 'sku': 'DERIVED-STOCK-01', 'quantity': 4, 'status': 'maintenance'},
+            format='json',
+        )
+
+        self.assertEqual(empty_response.status_code, status.HTTP_201_CREATED, empty_response.data)
+        self.assertEqual(stocked_response.status_code, status.HTTP_201_CREATED, stocked_response.data)
+        self.assertEqual(empty_response.data['status'], 'out_of_stock')
+        self.assertEqual(stocked_response.data['status'], 'available')
+
     def test_item_creation_requires_unique_case_insensitive_sku(self):
         user = self.create_user('sku-inventory-manager', 'admin', INVENTORY_MANAGE)
         self.client.force_authenticate(user)
@@ -1237,6 +1272,10 @@ class AutoInventoryWorkflowTests(APITestCase):
         )
         self.client.force_authenticate(user=self.admin_user)
 
+        detail_response = self.client.get(
+            f'/api/inventory/items/{self.inventory_item.id}/',
+        )
+
         item_response = self.client.delete(
             f'/api/inventory/items/{self.inventory_item.id}/',
         )
@@ -1244,7 +1283,16 @@ class AutoInventoryWorkflowTests(APITestCase):
             f'/api/inventory/categories/{self.category.id}/',
         )
 
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(detail_response.data['can_delete'])
+        self.assertGreaterEqual(detail_response.data['delete_reference_count'], 1)
+        self.assertIn(
+            'stock movements',
+            [entry['label'] for entry in detail_response.data['delete_blockers']],
+        )
         self.assertEqual(item_response.status_code, status.HTTP_409_CONFLICT)
+        self.assertFalse(item_response.data['can_delete'])
+        self.assertIn('Retire it', item_response.data['detail'])
         self.assertEqual(category_response.status_code, status.HTTP_409_CONFLICT)
         self.assertTrue(InventoryItem.objects.filter(pk=self.inventory_item.pk).exists())
         self.assertTrue(InventoryCategory.objects.filter(pk=self.category.pk).exists())

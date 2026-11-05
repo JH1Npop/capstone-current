@@ -30,12 +30,104 @@ test.describe('Client Workspace - All Pages', () => {
 
   test('5.2 - Service Requests page (create new request)', async ({ page }) => {
     await visitWorkspacePage(page, '/client/service-requests', 'test-results/screenshots/05-client-service-requests.png');
+    await expect(page.getByRole('heading', { name: 'Preferred schedule' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Choose an appointment date' })).toBeVisible();
+    await expect(page.getByText('Available', { exact: true })).toBeVisible();
+    await expect(page.getByText('Limited', { exact: true })).toBeVisible();
+    await expect(page.getByText('Full / Closed', { exact: true })).toBeVisible();
+    await expect(page.getByLabel(/appointment availability open|limited appointment availability|fully booked|closed to new appointment requests/i).first()).toBeVisible();
+    await expect(page.locator('#request-preferred-date')).toHaveCount(0);
+    const openCalendarDate = page.locator('[role="gridcell"]:not([disabled])').first();
+    await openCalendarDate.click();
+    await expect(openCalendarDate).toHaveAttribute('aria-selected', 'true');
+    await expect(openCalendarDate.getByText('Selected', { exact: true })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: /available for an appointment request|limited appointment availability/i })).toBeVisible();
     const hasServiceRequestUi =
       await page.getByRole('button', { name: /new request|create service request|request service/i }).isVisible({ timeout: 3000 }).catch(() => false)
       || await page.locator('form, [class*="create"], [class*="new"], [class*="request"]').first().isVisible({ timeout: 3000 }).catch(() => false)
       || await page.getByRole('heading', { name: /service requests|request service/i }).isVisible({ timeout: 3000 }).catch(() => false)
       || await page.getByText(/unable to load|no service types|no request options/i).isVisible({ timeout: 3000 }).catch(() => false);
     expect(hasServiceRequestUi).toBeTruthy();
+  });
+
+  test('5.2b - Client appointment calendar distinguishes full and admin-closed dates', async ({ page }) => {
+    // Local dates: the calendar works in local time, and toISOString() (UTC) is a day behind between 00:00 and 08:00 in the Philippines.
+    const localKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const today = localKey(new Date());
+    const tomorrow = localKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+    await page.route('**/api/services/service-requests/appointment-availability/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          start: today,
+          end: today,
+          days: [{
+            date: today,
+            has_appointments: false,
+            slots: { morning: false, midday: false, afternoon: false, unspecified: false },
+            availability: {
+              status: 'unavailable',
+              slots: {
+                morning: { status: 'closed', source: 'admin' },
+                midday: { status: 'closed', source: 'admin' },
+                afternoon: { status: 'closed', source: 'admin' },
+              },
+            },
+            closure: {
+              all_day: true,
+              slots: { morning: false, midday: false, afternoon: false },
+              reasons: [{ time_slot: 'all_day', time_slot_label: 'All day', reason: 'E2E company holiday' }],
+            },
+          }, {
+            date: tomorrow,
+            has_appointments: true,
+            slots: { morning: true, midday: true, afternoon: true, unspecified: false },
+            availability: {
+              status: 'unavailable',
+              slots: {
+                morning: { status: 'full', source: 'capacity' },
+                midday: { status: 'full', source: 'capacity' },
+                afternoon: { status: 'full', source: 'capacity' },
+              },
+            },
+            closure: {
+              all_day: false,
+              slots: { morning: false, midday: false, afternoon: false },
+              reasons: [],
+            },
+          }],
+          advisory: 'Schedule activity may change until the request is reviewed and confirmed.',
+        }),
+      });
+    });
+
+    await visitWorkspacePage(page, '/client/service-requests');
+    const closedDate = page.locator('[role="gridcell"][aria-label*="closed to new appointment requests"]');
+    await expect(closedDate).toHaveCount(1);
+    await expect(closedDate).toBeDisabled();
+    await expect(closedDate.getByText('Closed', { exact: true })).toBeVisible();
+    const fullDate = page.locator('[role="gridcell"][aria-label*="fully booked for new appointment requests"]');
+    await expect(fullDate).toHaveCount(1);
+    await expect(fullDate).toBeDisabled();
+    await expect(fullDate.getByText('Full', { exact: true })).toBeVisible();
+  });
+
+  test('5.2c - Client appointment calendar fails closed when availability cannot load', async ({ page }) => {
+    await page.route('**/api/services/service-requests/appointment-availability/**', async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'Availability is temporarily unavailable.' }),
+      });
+    });
+
+    await visitWorkspacePage(page, '/client/service-requests');
+    const availabilityAlert = page.getByRole('alert').filter({ hasText: /dates are temporarily disabled because current capacity could not be verified/i });
+    await expect(availabilityAlert).toBeVisible();
+    await expect(availabilityAlert.getByRole('button', { name: /retry/i })).toBeVisible();
+    const futureDates = page.locator('[role="gridcell"][aria-label*="availability could not be verified"]');
+    await expect(futureDates.first()).toBeDisabled();
   });
 
   test('5.3 - Request Tracking list', async ({ page }) => {
@@ -99,7 +191,7 @@ test.describe('Client Workspace - All Pages', () => {
     const firstName = page.getByLabel('First Name');
     const originalFirstName = await firstName.inputValue();
     await firstName.fill('Unsaved Client Name');
-    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('button', { name: 'Dismiss' }).click();
     await page.getByRole('button', { name: 'Edit Profile' }).click();
     await expect(page.getByLabel('First Name')).toHaveValue(originalFirstName);
 

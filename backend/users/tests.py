@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 from django.contrib.auth.tokens import default_token_generator
-from users.views.helpers import email_verification_token_generator
+from users.views.helpers import delete_expired_unverified_clients, email_verification_token_generator
 from django.core.cache import cache
 from django.core import mail
 from django.core.files.storage import FileSystemStorage
@@ -570,7 +570,13 @@ class EmailVerificationTests(APITestCase):
             'password': 'Password123!',
         }, format='json')
 
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        # Login no longer runs the expired-account cleanup (see test_login_does_not_run_expired_account_cleanup),
+        # so the expired client is refused as unverified and is removed by the cleanup job instead.
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(User.objects.filter(pk=user.pk).exists())
+
+        delete_expired_unverified_clients()
+
         self.assertFalse(User.objects.filter(pk=user.pk).exists())
 
     def test_recent_unverified_client_is_kept_before_verification_window(self):
@@ -1071,6 +1077,9 @@ class AdminSettingsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['defaultTimeZone'], 'Asia/Manila')
         self.assertEqual(response.data['maxTechnicianAssignments'], 7)
+        self.assertNotIn('morningAppointmentCapacity', response.data)
+        self.assertNotIn('middayAppointmentCapacity', response.data)
+        self.assertNotIn('afternoonAppointmentCapacity', response.data)
 
         settings_record = AdminSettings.objects.get()
         self.assertEqual(settings_record.updated_by, self.admin_user)

@@ -188,6 +188,11 @@ class AdminSettingsAdmin(admin.ModelAdmin):
     list_display = ['id', 'system_name', 'auto_dispatch_enabled', 'enable_notifications', 'updated_at']
     readonly_fields = ['updated_at']
     raw_id_fields = ['updated_by']
+    exclude = [
+        'morning_appointment_capacity',
+        'midday_appointment_capacity',
+        'afternoon_appointment_capacity',
+    ]
 
 
 @admin.register(ChangeLog)

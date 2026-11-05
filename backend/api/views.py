@@ -5,6 +5,8 @@ Extracted from api/urls.py to keep URL configuration clean.
 import logging
 import json
 import math
+import time
+from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -160,6 +162,8 @@ AFTER_SALES_DECISIONS = {'none', 'warranty_only', 'create_case'}
 NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org'
 NOMINATIM_USER_AGENT = 'AFNServiceManagement/1.0'
 CACHE_TTL_SECONDS = 60 * 60 * 24
+NOMINATIM_MAX_ATTEMPTS = 2
+NOMINATIM_RETRY_DELAY_SECONDS = 1
 
 
 def _fetch_nominatim(path, params):
@@ -173,8 +177,15 @@ def _fetch_nominatim(path, params):
         f'{NOMINATIM_BASE_URL}/{path}?{encoded_params}',
         headers={'User-Agent': NOMINATIM_USER_AGENT},
     )
-    with urlopen(request, timeout=8) as response:
-        payload = json.loads(response.read().decode('utf-8'))
+    for attempt in range(NOMINATIM_MAX_ATTEMPTS):
+        try:
+            with urlopen(request, timeout=8) as response:
+                payload = json.loads(response.read().decode('utf-8'))
+            break
+        except (TimeoutError, URLError):
+            if attempt + 1 >= NOMINATIM_MAX_ATTEMPTS:
+                raise
+            time.sleep(NOMINATIM_RETRY_DELAY_SECONDS)
 
     cache.set(cache_key, payload, CACHE_TTL_SECONDS)
     return payload
@@ -245,9 +256,21 @@ def geocode_reverse_view(request):
         payload = _fetch_nominatim('reverse', params)
     except Exception as exc:
         logger.warning('Reverse geocode failed: %s', exc)
-        return Response({'error': 'Reverse geocoding is temporarily unavailable.'}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({
+            'lat': str(lat),
+            'lon': str(lon),
+            'display_name': '',
+            'address': {},
+            'name': '',
+            'type': '',
+            'importance': None,
+            'lookup_status': 'unavailable',
+            'message': 'The map location is saved, but its address could not be loaded. Enter the address manually.',
+        })
 
-    return Response(_clean_geocode_result(payload))
+    cleaned_result = _clean_geocode_result(payload)
+    cleaned_result['lookup_status'] = 'resolved'
+    return Response(cleaned_result)
 
 
 def _parse_json_field(value, default):

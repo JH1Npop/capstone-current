@@ -273,7 +273,7 @@ export default function TechnicianProfile() {
                   </button>
                   <button type="button" onClick={cancelProfileEdit} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300">
                     <FiX size={16} />
-                    Cancel
+                    Dismiss
                   </button>
                 </div>
               </form>

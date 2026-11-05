@@ -192,7 +192,7 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
               onClick={onClose}
               className="inline-flex items-center justify-center rounded-xl border border-surface-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-surface-50"
             >
-              Cancel
+              Dismiss
             </button>
             <button
               type="submit"

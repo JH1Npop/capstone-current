@@ -31,7 +31,7 @@ test.describe('Side Flow - Admin Service Management', () => {
       await page.waitForTimeout(1500);
       await page.screenshot({ path: 'test-results/screenshots/07-01-add-service-modal.png', fullPage: true });
 
-      const closeBtn = page.locator('button:has-text("Cancel"), button:has-text("Close"), [class*="close"]');
+      const closeBtn = page.locator('button:has-text("Dismiss"), button:has-text("Close"), [class*="close"]');
       if (await closeBtn.first().isVisible({ timeout: 2000 }).catch(() => false)) {
         await closeBtn.first().click();
       }

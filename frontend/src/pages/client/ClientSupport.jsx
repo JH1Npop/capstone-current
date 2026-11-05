@@ -15,7 +15,7 @@ const statusLabels = {
   in_progress: 'In Progress',
   on_hold: 'On Hold',
   completed: 'Completed',
-  cancelled: 'Cancelled'
+  cancelled: 'Dismissed'
 };
 
 const supportCategoryLabels = {

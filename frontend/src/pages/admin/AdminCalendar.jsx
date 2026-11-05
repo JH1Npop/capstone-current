@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FiChevronLeft,
@@ -6,14 +6,25 @@ import {
   FiAlertTriangle,
   FiClock,
   FiFilter,
+  FiRefreshCw,
+  FiSettings,
   FiUser,
+  FiX,
 } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
 import RescheduleTicketModal from '../../components/shared/RescheduleTicketModal';
 import CalendarEventDetailsModal from '../../components/shared/CalendarEventDetailsModal';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
+import CalendarAvailabilityConfigurationPanel from '../../components/admin/CalendarAvailabilityConfigurationPanel';
 import { formatRequestId, formatTicketId } from '../../utils/roleIds';
-import { fetchAdminCalendarEvents, fetchServiceTypes, rescheduleServiceTicket } from '../../api/api';
+import {
+  fetchAdminCalendarClosures,
+  fetchAdminCalendarEvents,
+  fetchServiceTypes,
+  rescheduleServiceTicket,
+  updateAdminCalendarClosure,
+} from '../../api/api';
 import { STATUS_META } from '../../components/ui/StatusBadge';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -65,6 +76,19 @@ const sameDay = (a, b) =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
+
+const getClosedRestrictions = (closures = []) => closures.filter(
+  (closure) => closure.availability_status === 'closed'
+);
+
+const getClosedRestrictionLabel = (closures = []) => {
+  if (closures.length === 0) return '';
+  const slots = closures.some((closure) => closure.time_slot === 'all_day')
+    ? 'Closed all day'
+    : `${closures.map((closure) => closure.time_slot_label).join(', ')} closed`;
+  const reasons = [...new Set(closures.map((closure) => closure.reason).filter(Boolean))].join(' · ');
+  return reasons ? `${slots}: ${reasons}` : slots;
+};
 
 const getCalendarDays = (monthDate) => {
   const year = monthDate.getFullYear();
@@ -160,20 +184,144 @@ const getConflictEventIds = (events) => {
   return conflicts;
 };
 
+const AVAILABILITY_META = {
+  available: { label: 'Available', dot: 'bg-emerald-500' },
+  limited: { label: 'Limited', dot: 'bg-amber-500' },
+  full: { label: 'Fully booked', dot: 'bg-rose-500' },
+  closed: { label: 'Manually closed', dot: 'bg-slate-700' },
+};
+
+function SelectedDayAgendaModal({ open, dateLabel, events, allEventCount, closedRestrictions, conflictEventIds, onClose, onOpenEvent }) {
+  const dialogRef = useRef(null);
+  const closeButtonRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const previousFocus = document.activeElement;
+    document.body.style.overflow = 'hidden';
+    closeButtonRef.current?.focus();
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(dialogRef.current?.querySelectorAll(
+        'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+      ) || []).filter((element) => element.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-5" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="selected-day-agenda-title" className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-4 py-4 sm:px-6">
+          <div className="min-w-0">
+            <h2 id="selected-day-agenda-title" className="text-lg font-bold text-slate-950 sm:text-xl">Appointments for {dateLabel}</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {events.length} visible scheduled item{events.length === 1 ? '' : 's'}
+              {allEventCount !== events.length ? ` · ${allEventCount} before filters` : ''}
+            </p>
+          </div>
+          <button ref={closeButtonRef} type="button" onClick={onClose} aria-label="Close selected day appointments" className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-800">
+            <FiX size={20} />
+          </button>
+        </header>
+
+        <div className="overflow-y-auto">
+          {closedRestrictions.length > 0 && (
+            <div className="flex items-start gap-2 border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 sm:px-6" role="status" aria-label="Selected date closure reason">
+              <span className="mt-0.5 shrink-0 rounded-full bg-rose-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-rose-700">
+                {closedRestrictions.some((closure) => closure.time_slot === 'all_day') ? 'Closed' : 'Partly closed'}
+              </span>
+              <div>
+                <p className="font-bold">{closedRestrictions.some((closure) => closure.time_slot === 'all_day') ? 'This date is closed for new appointments' : 'Part of this date is closed for new appointments'}</p>
+                <p className="mt-0.5">{getClosedRestrictionLabel(closedRestrictions)}</p>
+              </div>
+            </div>
+          )}
+
+          {events.length === 0 ? (
+            <div className="px-4 py-10 text-center text-sm text-slate-500 sm:px-6">No appointments for the selected day.</div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {events.map((event) => {
+                const style = getStatusStyle(event.calendar_status);
+                return (
+                  <button key={`selected-${event.id}`} type="button" onClick={() => onOpenEvent(event)} style={getServiceColorStyle(event, 0.1)} className="grid w-full gap-3 border-l-8 px-4 py-3 text-left text-sm transition hover:bg-blue-50/60 sm:px-6 md:grid-cols-[minmax(12rem,1.2fr)_minmax(9rem,0.8fr)_minmax(11rem,1fr)_minmax(10rem,1fr)] md:items-center">
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-2 font-semibold text-slate-900">
+                        <span className="h-3 w-3 shrink-0 rounded-sm" style={getServiceSwatchStyle(event.service_type_color)} />
+                        <span className="truncate">{event.service_type || 'Service'}</span>
+                      </div>
+                      <div className="truncate text-xs text-slate-500">{event.ticket_id ? formatTicketId(event.ticket_id) : formatRequestId(event.request_id)} · {event.client || 'Client'}</div>
+                    </div>
+                    <div className="flex min-w-0 items-center gap-2"><FiClock className="shrink-0 text-slate-400" size={14} /><span className="truncate text-slate-700">{formatEventTime(event)}</span></div>
+                    <div className="flex min-w-0 items-center gap-2"><FiUser className="shrink-0 text-slate-400" size={14} /><span className="truncate text-slate-700">{event.assigned_technician || (event.assignment_status === 'unassigned' ? 'No technician assigned' : 'TBD')}</span></div>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">{style.label}</span>
+                      {event.is_rescheduled ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">Rescheduled</span> : null}
+                      {conflictEventIds.has(event.id) ? <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700"><FiAlertTriangle /> Conflict</span> : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminCalendar() {
   const navigate = useNavigate();
+  const calendarRequestId = useRef(0);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [events, setEvents] = useState([]);
+  const [closures, setClosures] = useState([]);
+  const [availabilityDays, setAvailabilityDays] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [availabilityLoading, setAvailabilityLoading] = useState(true);
+  const [calendarError, setCalendarError] = useState('');
+  const [availabilityError, setAvailabilityError] = useState('');
+  const [configurationError, setConfigurationError] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [rescheduleTicket, setRescheduleTicket] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [showCompletedJobs, setShowCompletedJobs] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState(() => getLocalDateKey(new Date()));
+  const [selectedDayAgendaOpen, setSelectedDayAgendaOpen] = useState(false);
   const [serviceTypes, setServiceTypes] = useState([]);
   const [filters, setFilters] = useState({ service: 'all', technician: 'all', status: 'all', workflow: 'all' });
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [serviceLegendOpen, setServiceLegendOpen] = useState(false);
+  const [configurationMode, setConfigurationMode] = useState(false);
+  const [configurationPanelOpen, setConfigurationPanelOpen] = useState(false);
+  const [configurationDirty, setConfigurationDirty] = useState(false);
+  const [configurationConfirmAction, setConfigurationConfirmAction] = useState(null);
+  const [closureSaving, setClosureSaving] = useState(false);
+  const [dailyCapacity, setDailyCapacity] = useState(3);
   const activeFilterCount = Object.values(filters).filter((value) => value !== 'all').length;
 
   const monthDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
@@ -181,19 +329,38 @@ export default function AdminCalendar() {
   const monthLabel = calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const today = useMemo(() => new Date(), []);
 
-  const loadCalendar = async () => {
+  const loadCalendar = useCallback(async () => {
+    const requestId = calendarRequestId.current + 1;
+    calendarRequestId.current = requestId;
     setLoading(true);
-    try {
-      const data = await fetchAdminCalendarEvents({ ...monthRange, showCompleted: showCompletedJobs });
-      setEvents(data.filter(isVisibleCalendarEvent));
-      setError('');
-    } catch (err) {
-      setEvents([]);
-      setError(err.message || 'Unable to load admin calendar.');
-    } finally {
-      setLoading(false);
+    setAvailabilityLoading(true);
+    const [eventResult, availabilityResult] = await Promise.allSettled([
+      fetchAdminCalendarEvents({ ...monthRange, showCompleted: showCompletedJobs }),
+      fetchAdminCalendarClosures(monthRange),
+    ]);
+    if (requestId !== calendarRequestId.current) return;
+
+    if (eventResult.status === 'fulfilled') {
+      setEvents(eventResult.value.filter(isVisibleCalendarEvent));
+      setCalendarError('');
+    } else {
+      setCalendarError(eventResult.reason?.message || 'Unable to refresh calendar events. Existing events are retained.');
     }
-  };
+
+    if (availabilityResult.status === 'fulfilled') {
+      setClosures(availabilityResult.value.closures);
+      setDailyCapacity(availabilityResult.value.dailyCapacity);
+      setAvailabilityDays(availabilityResult.value.availabilityDays);
+      setAvailabilityError('');
+    } else {
+      setAvailabilityError(availabilityResult.reason?.message || 'Unable to refresh appointment availability.');
+    }
+
+    if (requestId === calendarRequestId.current) {
+      setLoading(false);
+      setAvailabilityLoading(false);
+    }
+  }, [monthRange, showCompletedJobs]);
 
   const loadServiceTypes = async () => {
     try {
@@ -206,7 +373,7 @@ export default function AdminCalendar() {
 
   useEffect(() => {
     loadCalendar();
-  }, [monthRange.start, monthRange.end, showCompletedJobs]);
+  }, [loadCalendar]);
 
   useEffect(() => {
     loadServiceTypes();
@@ -232,6 +399,16 @@ export default function AdminCalendar() {
     }
     return groups;
   }, [filteredEvents]);
+  const closuresByDay = useMemo(() => {
+    const groups = new Map();
+    for (const closure of closures) {
+      groups.set(closure.date, [...(groups.get(closure.date) || []), closure]);
+    }
+    return groups;
+  }, [closures]);
+  const availabilityByDay = useMemo(() => new Map(
+    availabilityDays.map((day) => [day.date, day])
+  ), [availabilityDays]);
   const conflictEventIds = useMemo(() => getConflictEventIds(events), [events]);
   const technicianOptions = useMemo(() => Array.from(new Set(events.flatMap(getEventTeam))).sort(), [events]);
   const statusOptions = useMemo(() => Array.from(new Set(events.map((event) => normalizeStatus(event.calendar_status)))).sort(), [events]);
@@ -268,6 +445,10 @@ export default function AdminCalendar() {
     );
   }, [events, serviceTypes]);
   const selectedDayEvents = eventsByDay.get(selectedDateKey) || [];
+  const selectedDayAllEvents = events.filter((event) => event.date === selectedDateKey);
+  const selectedDateClosures = closuresByDay.get(selectedDateKey) || [];
+  const selectedDateClosedRestrictions = getClosedRestrictions(selectedDateClosures);
+  const selectedDateAvailability = availabilityByDay.get(selectedDateKey) || null;
   const selectedDateLabel = new Date(`${selectedDateKey}T00:00:00`).toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
@@ -296,14 +477,50 @@ export default function AdminCalendar() {
     setSelectedDateKey(getLocalDateKey(current));
   };
 
+  const selectCalendarDate = (dateKey, { openConfiguration = true } = {}) => {
+    setSelectedDateKey(dateKey);
+    if (configurationMode && openConfiguration) {
+      setSelectedDayAgendaOpen(false);
+      setConfigurationError('');
+      setSuccessMessage('');
+      setConfigurationPanelOpen(true);
+    } else if (!configurationMode) {
+      setSelectedDayAgendaOpen(true);
+    }
+  };
+
   const selectMobileDate = (value) => {
     const date = new Date(`${value}T00:00:00`);
     if (Number.isNaN(date.getTime())) return;
-    setSelectedDateKey(value);
+    selectCalendarDate(value);
     setCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1));
   };
 
+  const closeSelectedDayAgenda = useCallback(() => setSelectedDayAgendaOpen(false), []);
+
+  const closeConfigurationPanel = ({ exitMode = false } = {}) => {
+    if (configurationDirty) {
+      setConfigurationConfirmAction(exitMode ? 'exit-mode' : 'close-panel');
+      return;
+    }
+    setConfigurationPanelOpen(false);
+    if (exitMode) setConfigurationMode(false);
+  };
+
+  const toggleConfigurationMode = () => {
+    if (configurationMode) {
+      closeConfigurationPanel({ exitMode: true });
+      return;
+    }
+    setSelectedDayAgendaOpen(false);
+    setConfigurationMode(true);
+    setConfigurationPanelOpen(false);
+    setConfigurationError('');
+    setSuccessMessage('Select a date to configure booking availability.');
+  };
+
   const openEvent = (event) => {
+    setSelectedDayAgendaOpen(false);
     setSelectedEvent(event);
     setSuccessMessage('');
   };
@@ -315,14 +532,80 @@ export default function AdminCalendar() {
     setSuccessMessage(`${formatTicketId(ticketId)} schedule updated.`);
   };
 
+  const handleApplyAvailability = async ({ startDate, endDate, timeSlot, availabilityStatus, reason }) => {
+    setClosureSaving(true);
+    setConfigurationError('');
+    try {
+      await updateAdminCalendarClosure({
+        action: 'set',
+        startDate,
+        endDate,
+        timeSlot,
+        availabilityStatus,
+        reason,
+      });
+      setSuccessMessage(`${availabilityStatus === 'closed' ? 'Closed' : 'Limited'} availability applied from ${startDate} through ${endDate}.`);
+      await loadCalendar();
+      return true;
+    } catch (err) {
+      setConfigurationError(err.message || 'Unable to update calendar availability.');
+      return false;
+    } finally {
+      setClosureSaving(false);
+    }
+  };
+
+  const handleReopenAvailability = async (closure) => {
+    setClosureSaving(true);
+    setConfigurationError('');
+    try {
+      await updateAdminCalendarClosure({
+        action: 'reopen',
+        date: closure.date,
+        timeSlot: closure.time_slot,
+      });
+      setSuccessMessage(`${closure.time_slot_label} availability reopened for ${selectedDateLabel}.`);
+      await loadCalendar();
+      return true;
+    } catch (err) {
+      setConfigurationError(err.message || 'Unable to reopen calendar availability.');
+      return false;
+    } finally {
+      setClosureSaving(false);
+    }
+  };
+
+  const handleReopenRange = async ({ startDate, endDate, timeSlot }) => {
+    setClosureSaving(true);
+    setConfigurationError('');
+    try {
+      await updateAdminCalendarClosure({
+        action: 'reopen',
+        startDate,
+        endDate,
+        timeSlot,
+      });
+      setSuccessMessage(`Availability reopened from ${startDate} through ${endDate}.`);
+      await loadCalendar();
+      return true;
+    } catch (err) {
+      setConfigurationError(err.message || 'Unable to reopen the selected range.');
+      return false;
+    } finally {
+      setClosureSaving(false);
+    }
+  };
+
   return (
     <Layout>
-      
-      {error && (
-        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
+      {calendarError && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+          <span>{calendarError}</span>
+          <button type="button" onClick={loadCalendar} className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold"><FiRefreshCw /> Retry events</button>
+        </div>
       )}
 
-      {successMessage && (
+      {successMessage && !configurationPanelOpen && (
         <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
           {successMessage}
         </div>
@@ -371,8 +654,23 @@ export default function AdminCalendar() {
               />
               Include completed
             </label>
+            <button
+              type="button"
+              onClick={toggleConfigurationMode}
+              aria-pressed={configurationMode}
+              className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition ${configurationMode ? 'border-brand-600 bg-brand-600 text-white shadow-sm' : 'border-slate-300 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700'}`}
+            >
+              <FiSettings aria-hidden="true" /> {configurationMode ? 'Done Configuring' : 'Configure Availability'}
+            </button>
           </div>
         </div>
+
+        {configurationMode && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-200 bg-brand-50 px-4 py-2 text-xs text-brand-800" role="status">
+            <span><strong>Configuration Mode:</strong> select an empty area of a date to manage booking availability. Appointment cards still open normally.</span>
+            {!configurationPanelOpen && <span className="font-semibold">No date configuration open</span>}
+          </div>
+        )}
 
         <div className="border-b border-slate-200 bg-white px-4 py-3">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -393,7 +691,6 @@ export default function AdminCalendar() {
               <option value="request">Client requests</option>
               <option value="inspection">Inspections</option>
               <option value="installation">Service jobs</option>
-              <option value="maintenance">Maintenance</option>
             </select>
             <select value={filters.service} onChange={(event) => setFilters((current) => ({ ...current, service: event.target.value }))} className={`${mobileFiltersOpen ? 'block' : 'hidden'} h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 sm:block`} aria-label="Filter by service">
               <option value="all">All services</option>
@@ -414,21 +711,15 @@ export default function AdminCalendar() {
 
         {serviceColorLegend.length > 0 && (
           <div className="border-b border-slate-200 bg-white px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="mr-1 text-xs font-semibold uppercase text-slate-500">Service Colors</span>
-              {serviceColorLegend.map((service) => (
-                <div
-                  key={service.name}
-                  className="flex min-h-8 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700"
-                >
-                  <span
-                    className="h-3 w-8 rounded-sm shadow-sm"
-                    style={getServiceSwatchStyle(service.color)}
-                  />
-                  <span className="max-w-40 truncate">{service.name}</span>
-                </div>
-              ))}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600" aria-label="Booking availability legend">
+                {Object.entries(AVAILABILITY_META).map(([statusValue, meta]) => <span key={statusValue} className="inline-flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-full ${meta.dot}`} />{meta.label}</span>)}
+              </div>
+              <button type="button" onClick={() => setServiceLegendOpen((value) => !value)} aria-expanded={serviceLegendOpen} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">{serviceLegendOpen ? 'Hide service colors' : `Service colors (${serviceColorLegend.length})`}</button>
             </div>
+            {serviceLegendOpen && <div className="mt-3 flex flex-wrap items-center gap-2">{serviceColorLegend.map((service) => (
+              <div key={service.name} className="flex min-h-8 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700"><span className="h-3 w-8 rounded-sm shadow-sm" style={getServiceSwatchStyle(service.color)} /><span className="max-w-40 truncate">{service.name}</span></div>
+            ))}</div>}
           </div>
         )}
 
@@ -447,6 +738,10 @@ export default function AdminCalendar() {
               {monthDays.map((day) => {
                 const key = getLocalDateKey(day);
                 const dayEvents = eventsByDay.get(key) || [];
+                const dayAvailability = availabilityByDay.get(key);
+                const availabilityMeta = AVAILABILITY_META[dayAvailability?.status] || null;
+                const closedRestrictions = getClosedRestrictions(closuresByDay.get(key) || []);
+                const closedRestrictionLabel = getClosedRestrictionLabel(closedRestrictions);
                 const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
                 const isToday = sameDay(day, today);
                 const isSelected = key === selectedDateKey;
@@ -455,8 +750,8 @@ export default function AdminCalendar() {
                   <button
                     key={`mobile-${key}`}
                     type="button"
-                    onClick={() => setSelectedDateKey(key)}
-                    aria-label={`${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${dayEvents.length} scheduled item${dayEvents.length === 1 ? '' : 's'}`}
+                    onClick={() => selectCalendarDate(key)}
+                    aria-label={`${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${dayEvents.length} visible scheduled item${dayEvents.length === 1 ? '' : 's'}, ${availabilityMeta?.label || 'availability unknown'}${closedRestrictionLabel ? `, ${closedRestrictionLabel}` : ''}${configurationMode ? ', open availability configuration' : ''}`}
                     className={`relative flex min-h-14 flex-col items-center justify-center border-b border-r border-slate-200 p-1 text-xs transition ${
                       isSelected
                         ? 'bg-blue-100 text-blue-800 ring-2 ring-inset ring-blue-400'
@@ -474,6 +769,12 @@ export default function AdminCalendar() {
                       </span>
                     ) : (
                       <span className="mt-1 h-3" aria-hidden="true" />
+                    )}
+                    {availabilityMeta && <span className={`absolute right-1 top-1 h-2 w-2 rounded-full ${availabilityMeta.dot}`} title={availabilityMeta.label} />}
+                    {closedRestrictions.length > 0 && (
+                      <span className="absolute left-1 top-1 rounded-full bg-rose-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-rose-700" title={closedRestrictionLabel}>
+                        {closedRestrictions.some((closure) => closure.time_slot === 'all_day') ? 'Closed' : 'Partly closed'}
+                      </span>
                     )}
                   </button>
                 );
@@ -493,6 +794,10 @@ export default function AdminCalendar() {
                   {monthDays.map((day) => {
                     const key = getLocalDateKey(day);
                     const dayEvents = eventsByDay.get(key) || [];
+                    const dayAvailability = availabilityByDay.get(key);
+                    const availabilityMeta = AVAILABILITY_META[dayAvailability?.status] || null;
+                    const closedRestrictions = getClosedRestrictions(closuresByDay.get(key) || []);
+                    const closedRestrictionLabel = getClosedRestrictionLabel(closedRestrictions);
                     const visibleEvents = dayEvents.slice(0, 2);
                     const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
                     const isToday = sameDay(day, today);
@@ -501,8 +806,14 @@ export default function AdminCalendar() {
                     return (
                       <div
                         key={key}
-                        onClick={() => setSelectedDateKey(key)}
-                        className={`min-h-28 cursor-pointer border-b border-r border-slate-200 p-1.5 transition sm:min-h-32 xl:min-h-36 ${
+                        // A click on an empty part of the date selects it. The keyboard target is the date-row
+                        // button below; it only covers the top row so it never sits under the appointment buttons.
+                        onClick={(clickEvent) => {
+                          // Focus the date button so closing the day list returns focus to this date.
+                          clickEvent.currentTarget.querySelector('button')?.focus();
+                          selectCalendarDate(key);
+                        }}
+                        className={`relative min-h-28 cursor-pointer border-b border-r border-slate-200 p-1.5 transition sm:min-h-32 xl:min-h-36 ${
                           isSelected
                             ? 'bg-blue-50 ring-2 ring-inset ring-blue-300'
                             : isCurrentMonth
@@ -510,18 +821,40 @@ export default function AdminCalendar() {
                               : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
                         }`}
                       >
-                    <div className="mb-1.5 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={(clickEvent) => {
+                        clickEvent.stopPropagation();
+                        selectCalendarDate(key);
+                      }}
+                      className="absolute inset-x-0 top-0 z-0 h-[1.875rem] rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
+                      aria-label={`${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${dayEvents.length} visible scheduled item${dayEvents.length === 1 ? '' : 's'}, ${availabilityMeta?.label || 'availability unknown'}${closedRestrictionLabel ? `, ${closedRestrictionLabel}` : ''}${configurationMode ? ', open availability configuration' : ''}`}
+                    />
+                    <div className="pointer-events-none relative z-[1] mb-1.5 flex items-center justify-between gap-1">
                       <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>
                         {day.getDate()}
                       </span>
-                      {dayEvents.length > 0 && (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
-                          {dayEvents.length}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {availabilityMeta && <span className={`h-2.5 w-2.5 rounded-full ${availabilityMeta.dot}`} title={availabilityMeta.label} />}
+                        {dayEvents.length > 0 && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
+                            {dayEvents.length}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="space-y-1.5">
+                    {closedRestrictions.length > 0 && (
+                      <div
+                        className="pointer-events-none relative z-[1] mb-1.5 rounded-md border border-rose-300 bg-rose-50 px-2 py-1.5 text-rose-800"
+                        aria-label={`Closure for ${key}: ${closedRestrictionLabel}`}
+                      >
+                        <p className="text-[11px] font-bold leading-4">{closedRestrictions.some((closure) => closure.time_slot === 'all_day') ? 'CLOSED' : 'PARTLY CLOSED'}</p>
+                        <p className="line-clamp-2 text-[10px] leading-3.5" title={closedRestrictionLabel}>{closedRestrictionLabel}</p>
+                      </div>
+                    )}
+
+                    <div className="relative z-[2] space-y-1.5">
                       {visibleEvents.map((event) => {
                         const style = getStatusStyle(event.calendar_status);
                         return (
@@ -563,7 +896,7 @@ export default function AdminCalendar() {
                           type="button"
                           onClick={(clickEvent) => {
                             clickEvent.stopPropagation();
-                            setSelectedDateKey(key);
+                            selectCalendarDate(key);
                           }}
                           className="w-full rounded-md bg-slate-100 px-1.5 py-1 text-left text-xs font-semibold text-slate-500 hover:bg-slate-200"
                         >
@@ -587,63 +920,55 @@ export default function AdminCalendar() {
         )}
       </section>
 
-      <section className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">{selectedDateLabel}</h3>
-            <p className="text-sm text-slate-500">{selectedDayEvents.length} scheduled item{selectedDayEvents.length === 1 ? '' : 's'}</p>
-          </div>
-        </div>
+      <CalendarAvailabilityConfigurationPanel
+        open={configurationMode && configurationPanelOpen}
+        selectedDateKey={selectedDateKey}
+        availability={selectedDateAvailability}
+        availabilityDays={availabilityDays}
+        availabilityError={availabilityError}
+        mutationError={configurationError}
+        feedback={configurationPanelOpen ? successMessage : ''}
+        availabilityLoading={availabilityLoading}
+        closures={selectedDateClosures}
+        dailyCapacity={dailyCapacity}
+        saving={closureSaving}
+        onRetry={loadCalendar}
+        onApplyOverride={handleApplyAvailability}
+        onReopen={handleReopenRange}
+        onReopenClosure={handleReopenAvailability}
+        onRequestClose={() => closeConfigurationPanel()}
+        onDirtyChange={setConfigurationDirty}
+      />
 
-        {selectedDayEvents.length === 0 ? (
-          <div className="px-4 py-8 text-sm text-slate-500">No appointments for the selected day.</div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {selectedDayEvents.map((event) => {
-              const style = getStatusStyle(event.calendar_status);
-              return (
-                <button
-                  key={`selected-${event.id}`}
-                  type="button"
-                  onClick={() => openEvent(event)}
-                  style={getServiceColorStyle(event, 0.1)}
-                  className="grid w-full gap-3 border-l-8 px-4 py-3 text-left text-sm transition hover:bg-blue-50/60 md:grid-cols-[minmax(12rem,1.2fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)] md:items-center"
-                >
-                  <div className="min-w-0">
-                    <div className="flex min-w-0 items-center gap-2 font-semibold text-slate-900">
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-sm"
-                        style={getServiceSwatchStyle(event.service_type_color)}
-                      />
-                      <span className="truncate">{event.service_type || 'Service'}</span>
-                    </div>
-                    <div className="truncate text-xs text-slate-500">{event.ticket_id ? formatTicketId(event.ticket_id) : formatRequestId(event.request_id)} · {event.client || 'Client'}</div>
-                  </div>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <FiClock className="shrink-0 text-slate-400" size={14} />
-                    <span className="truncate text-slate-700">{formatEventTime(event)}</span>
-                  </div>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <FiUser className="shrink-0 text-slate-400" size={14} />
-                    <span className="truncate text-slate-700">{event.assigned_technician || (event.assignment_status === 'unassigned' ? 'No technician assigned' : 'TBD')}</span>
-                  </div>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
-                      {style.label}
-                    </span>
-                    {event.is_rescheduled ? (
-                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">Rescheduled</span>
-                    ) : null}
-                    {conflictEventIds.has(event.id) ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700"><FiAlertTriangle /> Conflict</span>
-                    ) : null}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      <SelectedDayAgendaModal
+        open={selectedDayAgendaOpen}
+        dateLabel={selectedDateLabel}
+        events={selectedDayEvents}
+        allEventCount={selectedDayAllEvents.length}
+        closedRestrictions={selectedDateClosedRestrictions}
+        conflictEventIds={conflictEventIds}
+        onClose={closeSelectedDayAgenda}
+        onOpenEvent={openEvent}
+      />
+
+      {configurationConfirmAction && (
+        <ConfirmationDialog
+          title="Discard availability changes?"
+          message="Your unsaved availability edits will be discarded. Calendar events, filters, month, and Include completed will remain unchanged."
+          tone="warning"
+          icon="warning"
+          confirmLabel="Discard changes"
+          cancelLabel="Keep configuring"
+          onCancel={() => setConfigurationConfirmAction(null)}
+          onConfirm={() => {
+            const exitMode = configurationConfirmAction === 'exit-mode';
+            setConfigurationDirty(false);
+            setConfigurationPanelOpen(false);
+            if (exitMode) setConfigurationMode(false);
+            setConfigurationConfirmAction(null);
+          }}
+        />
+      )}
 
       <CalendarEventDetailsModal
         event={selectedEvent}

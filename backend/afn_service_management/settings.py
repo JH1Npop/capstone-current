@@ -437,7 +437,7 @@ USE_CLOUDINARY_MEDIA = (
     and all([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET])
 )
 MEDIA_STORAGE_BACKEND = (
-    'cloudinary_storage.storage.MediaCloudinaryStorage'
+    'afn_service_management.storage.AFNMediaCloudinaryStorage'
     if USE_CLOUDINARY_MEDIA
     else 'django.core.files.storage.FileSystemStorage'
 )

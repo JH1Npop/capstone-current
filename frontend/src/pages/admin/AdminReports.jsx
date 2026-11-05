@@ -264,7 +264,7 @@ export default function AdminReports() {
   const workflowSegments = [
     { label: 'Completed', value: summaryStats.completed, color: '#10b981', className: 'bg-emerald-500' },
     { label: 'Active', value: summaryStats.active, color: '#2563eb', className: 'bg-brand-600' },
-    { label: 'Cancelled', value: summaryStats.cancelled, color: '#f43f5e', className: 'bg-rose-500' },
+    { label: 'Dismissed', value: summaryStats.cancelled, color: '#f43f5e', className: 'bg-rose-500' },
   ];
 
   const workflowGradient = (() => {
@@ -476,7 +476,7 @@ export default function AdminReports() {
                 <h2 className="mt-1 text-base font-semibold text-slate-900">How the selected tickets are distributed</h2>
               </div>
               <div className="mt-5 flex flex-1 flex-col items-center justify-center gap-5 sm:flex-row sm:items-start">
-                <div className="relative h-36 w-36 shrink-0 rounded-full" style={{ background: workflowGradient }} aria-label={`${summaryStats.completed} completed, ${summaryStats.active} active, ${summaryStats.cancelled} cancelled`}>
+                <div className="relative h-36 w-36 shrink-0 rounded-full" style={{ background: workflowGradient }} aria-label={`${summaryStats.completed} completed, ${summaryStats.active} active, ${summaryStats.cancelled} dismissed`}>
                   <div className="absolute inset-[18px] grid place-items-center rounded-full bg-white text-center shadow-inner">
                     <div>
                       <p className="text-2xl font-bold text-slate-900">{summaryStats.total}</p>

@@ -186,6 +186,11 @@ test.describe('Minor flows through the real UI', () => {
     const job = techPage.getByLabel(service.name, { exact: true });
     await job.getByRole('button', { name: 'Choose equipment' }).click();
     await job.getByRole('checkbox', { name: new RegExp(item.name) }).check();
+    const requestedQuantity = job.getByLabel('Quantity');
+    await expect(requestedQuantity).toHaveValue('1');
+    await requestedQuantity.fill('');
+    await expect(requestedQuantity).toHaveValue('');
+    await requestedQuantity.fill('1');
     // The list closes on Escape (or an outside click) so it never covers the controls below it.
     await techPage.keyboard.press('Escape');
     await expect(job.locator('button[aria-expanded]')).toHaveAttribute('aria-expanded', 'false');
@@ -385,7 +390,7 @@ test.describe('Minor flows through the real UI', () => {
     await Promise.all([adminContext.close(), clientContext.close()]);
   });
 
-  test('11.3 - Inspection result Cancel Service closes the request for the client', async ({ browser, request }) => {
+  test('11.3 - Inspection result Dismiss Service closes the request for the client', async ({ browser, request }) => {
     const setup = setupHelpers(request);
     const stamp = Date.now();
     const service = await setup.createService(`E2E Cancelled Site ${stamp}`, { requires_site_inspection: true });
@@ -406,14 +411,14 @@ test.describe('Minor flows through the real UI', () => {
     const { context: adminContext, page: adminPage } = await openPage(browser, adminAuth);
     await adminPage.goto(`/admin/service-tickets?ticketId=${ticket.id}`);
     await adminPage.getByRole('button', { name: /Review Inspection/ }).click();
-    await adminPage.getByRole('radio', { name: /Cancel Service/ }).check();
+    await adminPage.getByRole('radio', { name: /Dismiss Service/ }).check();
     await adminPage.getByPlaceholder('Add internal notes about this decision...').fill('Roof cannot carry an array; advised client to repair first.');
     await adminPage.getByRole('button', { name: 'Submit Decision' }).click();
     await expect.poll(() => setup.status(ticket.id)).toBe('Cancelled');
 
     const { context: clientContext, page: clientPage } = await openPage(browser, clientAuth);
     await clientPage.goto(`/client/requests/${requestObj.id}`);
-    await expect(clientPage.getByText(/Cancelled/i).first()).toBeVisible();
+    await expect(clientPage.getByText(/Dismissed/i).first()).toBeVisible();
     await Promise.all([adminContext.close(), clientContext.close()]);
   });
 
@@ -603,9 +608,9 @@ test.describe('Minor flows through the real UI', () => {
     // Client cancels a pending request from Request Tracking with a reason.
     const toCancel = await setup.createRequest(service.id, `E2E client cancel ${stamp}`);
     await clientPage.goto('/client/requests');
-    await clientPage.getByRole('button', { name: `Cancel request ${toCancel.id}` }).locator('visible=true').first().click();
+    await clientPage.getByRole('button', { name: `Dismiss request ${toCancel.id}` }).locator('visible=true').first().click();
     await clientPage.getByRole('dialog').getByRole('textbox').fill('Found another schedule; will request again later.');
-    await clientPage.getByRole('button', { name: 'Cancel request', exact: true }).click();
+    await clientPage.getByRole('button', { name: 'Dismiss request', exact: true }).click();
     await expect.poll(async () => (await setup.client.get(`/api/services/service-requests/${toCancel.id}/`)).status).toBe('Cancelled');
 
     // Office rejects a pending request from the dashboard; the client sees it as rejected.
@@ -624,7 +629,8 @@ test.describe('Minor flows through the real UI', () => {
     }
     expect(opened).toBe(true);
     const details = adminPage.getByRole('dialog', { name: 'Service Request Details' });
-    await details.getByRole('button', { name: 'Reject Request' }).click();
+    await details.getByText('More actions').click();
+    await details.getByRole('button', { name: 'Reject request', exact: true }).click();
     await adminPage.getByLabel('Reason for rejection').fill('We do not service this area yet; please contact us for referrals.');
     await adminPage.getByRole('button', { name: 'Reject request', exact: true }).click();
     // A rejection closes the request (status Cancelled) with a "rejected" closure the client can see.

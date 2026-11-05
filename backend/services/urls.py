@@ -12,6 +12,7 @@ from .views_follow_up import FollowUpCaseViewSet, MaintenanceScheduleViewSet
 from .views_dashboard import DashboardView
 from .views.solar_estimates import SolarEstimateViewSet
 from .views.sales_records import SalesRecordViewSet
+from .views.document_templates import DocumentAttachmentViewSet, DocumentDefinitionViewSet, DocumentFieldDefinitionViewSet, DocumentInstanceViewSet, DocumentOutputViewSet, DocumentTemplateFieldViewSet, DocumentTemplateViewSet, DocumentTemplateVersionViewSet
 
 router = routers.DefaultRouter()
 router.register(r'service-types', ServiceTypeViewSet)
@@ -39,6 +40,14 @@ router.register(r'follow-up-cases', FollowUpCaseViewSet, basename='follow-up-cas
 router.register(r'maintenance-schedules', MaintenanceScheduleViewSet, basename='maintenance-schedules')
 router.register(r'solar-estimates', SolarEstimateViewSet, basename='solar-estimate')
 router.register(r'sales-records', SalesRecordViewSet, basename='sales-record')
+router.register(r'document-definitions', DocumentDefinitionViewSet, basename='document-definition')
+router.register(r'document-field-definitions', DocumentFieldDefinitionViewSet, basename='document-field-definition')
+router.register(r'document-instances', DocumentInstanceViewSet, basename='document-instance')
+router.register(r'document-attachments', DocumentAttachmentViewSet, basename='document-attachment')
+router.register(r'document-templates', DocumentTemplateViewSet, basename='document-template')
+router.register(r'document-template-versions', DocumentTemplateVersionViewSet, basename='document-template-version')
+router.register(r'document-template-fields', DocumentTemplateFieldViewSet, basename='document-template-field')
+router.register(r'document-outputs', DocumentOutputViewSet, basename='document-output')
 router.register(r'coverage-heatmap', CoverageHeatmapViewSet, basename='coverage-heatmap')
 router.register(r'ors', ORSViewSet, basename='ors')
 

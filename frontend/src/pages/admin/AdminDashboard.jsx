@@ -11,6 +11,7 @@ import {
   FiRefreshCw,
   FiTrendingUp,
   FiExternalLink,
+  FiMoreHorizontal,
   FiX
 } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
@@ -693,7 +694,7 @@ export default function AdminDashboard() {
             : requestDecision.type === 'approve_inspection'
               ? 'Require inspection'
               : 'Reject request'}
-          cancelLabel="Cancel"
+          cancelLabel="Dismiss"
           disabled={requestDecision.type === 'reject' && rejectReason.trim().length < 8}
           onCancel={() => {
             setRequestDecision(null);
@@ -807,14 +808,25 @@ export default function AdminDashboard() {
             </div>
             
             {canReviewRequests && <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 rounded-b-2xl flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => setRequestDecision({ type: 'reject', id: viewingRequestDetails.id, label: viewingRequestDetails.service_summary || viewingRequestDetails.service_type_name || 'this request' })}
-                disabled={approvingRequests.has(viewingRequestDetails.id)}
-                className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 hover:border-rose-300 disabled:opacity-60"
-              >
-                Reject Request
-              </button>
+              <details className="group relative">
+                <summary className="inline-flex min-h-10 cursor-pointer list-none items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-200 [&::-webkit-details-marker]:hidden">
+                  <FiMoreHorizontal aria-hidden="true" />
+                  More actions
+                </summary>
+                <div className="absolute bottom-full left-0 z-20 mb-2 min-w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.currentTarget.closest('details')?.removeAttribute('open');
+                      setRequestDecision({ type: 'reject', id: viewingRequestDetails.id, label: viewingRequestDetails.service_summary || viewingRequestDetails.service_type_name || 'this request' });
+                    }}
+                    disabled={approvingRequests.has(viewingRequestDetails.id)}
+                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
+                  >
+                    Reject request
+                  </button>
+                </div>
+              </details>
               
               {viewingRequestDetails.service_requires_site_inspection ? (
                 // The server always opens an inspection for these services, so offer only that path.

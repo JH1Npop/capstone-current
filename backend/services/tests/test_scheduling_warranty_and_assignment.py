@@ -4,6 +4,8 @@ from ._imports import *  # noqa: F403,F405
 from .proof_fixtures import completion_photo
 from inventory.models import InventoryCategory, InventoryItem, InventoryReservation
 from services.models import QuotationRecord
+from services.models import CalendarClosure
+from users.models import AdminSettings
 from django.db import transaction
 from services.views.technician import TechnicianJobsView
 from services.auto_dispatch import auto_assign_technician
@@ -1644,6 +1646,95 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         ticket.refresh_from_db()
         self.assertEqual(ticket.technician, self.technician_user)
+
+    def test_assignment_schedule_change_rejects_closed_appointment_slot(self):
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Closed-slot dispatch assignment',
+            priority='Normal',
+            status='Approved',
+        )
+        target_date = timezone.localdate() + timedelta(days=3)
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            status='Not Started',
+            priority='Normal',
+            assigned_admin=self.supervisor_user,
+        )
+        CalendarClosure.objects.create(
+            date=target_date,
+            time_slot='morning',
+            availability_status='closed',
+            reason='Team training',
+            created_by=self.supervisor_user,
+            updated_by=self.supervisor_user,
+        )
+        self.client.force_authenticate(user=self.supervisor_user)
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{ticket.id}/assign/',
+            {
+                'technician_id': self.technician_user.id,
+                'scheduled_date': target_date.isoformat(),
+                'scheduled_time_slot': 'morning',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('closed for morning', response.data['error'].lower())
+        ticket.refresh_from_db()
+        self.assertIsNone(ticket.technician_id)
+
+    def test_assignment_schedule_change_rejects_full_appointment_slot(self):
+        target_date = timezone.localdate() + timedelta(days=3)
+        for slot in ('morning', 'midday', 'afternoon'):
+            existing_request = ServiceRequest.objects.create(
+                client=self.client_user,
+                service_type=self.service_type,
+                description=f'Existing {slot} visit',
+                priority='Normal',
+                status='Approved',
+            )
+            ServiceTicket.objects.create(
+                request=existing_request,
+                scheduled_date=target_date,
+                scheduled_time_slot=slot,
+                status='Not Started',
+                priority='Normal',
+            )
+        candidate_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Candidate full-slot dispatch assignment',
+            priority='Normal',
+            status='Approved',
+        )
+        candidate = ServiceTicket.objects.create(
+            request=candidate_request,
+            scheduled_date=timezone.localdate() + timedelta(days=1),
+            status='Not Started',
+            priority='Normal',
+            assigned_admin=self.supervisor_user,
+        )
+        self.client.force_authenticate(user=self.supervisor_user)
+
+        response = self.client.post(
+            f'/api/services/service-tickets/{candidate.id}/assign/',
+            {
+                'technician_id': self.technician_user.id,
+                'scheduled_date': target_date.isoformat(),
+                'scheduled_time_slot': 'morning',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('daily appointment capacity of 3 jobs', response.data['error'].lower())
+        candidate.refresh_from_db()
+        self.assertIsNone(candidate.technician_id)
 
     def test_assignment_requires_legacy_evening_ticket_to_be_rescheduled(self):
         request_obj = ServiceRequest.objects.create(

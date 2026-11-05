@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { MapContainer, Marker, useMapEvents } from 'react-leaflet';
 import { FiCheck, FiChevronDown, FiMapPin, FiSearch, FiX } from 'react-icons/fi';
+import AppointmentAvailabilityCalendar from '../client/AppointmentAvailabilityCalendar';
 import MapTileLayer from '../maps/MapTileLayer';
 import { CALABARZON_BOUNDS, CALABARZON_MIN_ZOOM, clampToCalabarzon } from '../../utils/mapRegion';
 import { defaultLeafletMarkerIcon } from '../../utils/leafletMarkerIcon';
@@ -23,16 +24,17 @@ function LocationPicker({ latitude, longitude, onChange }) {
   return latitude != null && longitude != null ? <Marker position={[latitude, longitude]} icon={defaultLeafletMarkerIcon} /> : null;
 }
 
-function SectionHeading({ number, title, description }) {
-  return (
-    <div className="mb-4 flex items-start gap-3">
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-bold text-brand-700">{number}</span>
-      <div>
-        <h3 className="font-semibold text-slate-900">{title}</h3>
-        <p className="mt-0.5 text-sm text-slate-500">{description}</p>
-      </div>
-    </div>
-  );
+const isUnavailableAppointmentStatus = (status) => status === 'closed' || status === 'full';
+
+const appointmentStatusLabel = (status) => ({
+  available: 'Available',
+  limited: 'Limited',
+  full: 'Full',
+  closed: 'Closed',
+}[status] || '');
+
+function SectionHeading({ title }) {
+  return <h3 className="mb-4 text-base font-semibold text-slate-900">{title}</h3>;
 }
 
 export default function WalkInRequestDialog({
@@ -42,6 +44,7 @@ export default function WalkInRequestDialog({
   serviceTypes,
   priorityOptions,
   timeSlotOptions,
+  selectedDateAvailability,
   mapCenter,
   searchQuery,
   searchResults,
@@ -51,6 +54,7 @@ export default function WalkInRequestDialog({
   getServiceTypeName,
   onChange,
   onToggleService,
+  onSelectedDateAvailabilityChange,
   onSearchQueryChange,
   onSearchSelect,
   onLocationChange,
@@ -93,11 +97,7 @@ export default function WalkInRequestDialog({
         className="grid h-full w-full grid-rows-[auto_1fr_auto] overflow-hidden bg-slate-50 shadow-2xl sm:h-[calc(100vh-2rem)] sm:max-w-6xl sm:rounded-xl"
       >
         <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-brand-600">Service intake</p>
-            <h2 id="walk-in-dialog-title" className="mt-1 text-xl font-bold text-slate-900">Create Walk-in Request</h2>
-            <p className="mt-1 text-sm text-slate-500">Record an in-person or phone request without leaving the service queue.</p>
-          </div>
+          <h2 id="walk-in-dialog-title" className="text-xl font-bold text-slate-900">Create Walk-in Request</h2>
           <button type="button" onClick={onClose} disabled={submitting} aria-label="Close walk-in request" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50">
             <FiX size={21} />
           </button>
@@ -110,9 +110,9 @@ export default function WalkInRequestDialog({
             </div>
           ) : null}
 
-          <div className="space-y-4">
+          <div className="grid gap-4 xl:grid-cols-2">
             <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <SectionHeading number="1" title="Client and service" description="Choose who requested service and what work they need." />
+              <SectionHeading title="Client and service" />
 
               <fieldset>
                 <legend className="text-sm font-semibold text-slate-700">After saving</legend>
@@ -171,28 +171,37 @@ export default function WalkInRequestDialog({
             </section>
 
             <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <SectionHeading number="2" title="Preferred schedule" description="Capture the client's requested service window for planning." />
-              <div className="grid gap-4 lg:grid-cols-2">
-                <label className="block text-sm font-medium text-slate-700">
-                  Preferred date
-                  <input type="date" value={form.preferredDate} onChange={(event) => onChange('preferredDate', event.target.value)} className={inputClass} required />
-                </label>
+              <SectionHeading title="Preferred schedule" />
+              <AppointmentAvailabilityCalendar
+                value={form.preferredDate}
+                onChange={(date) => onChange('preferredDate', date)}
+                onSelectedDayChange={onSelectedDateAvailabilityChange}
+              />
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <label className="block text-sm font-medium text-slate-700">
                   Time slot
                   <select value={form.preferredTimeSlot} onChange={(event) => onChange('preferredTimeSlot', event.target.value)} className={inputClass}>
-                    {timeSlotOptions.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}
+                    {timeSlotOptions.map((slot) => {
+                      const status = slot.value ? selectedDateAvailability?.availability?.slots?.[slot.value]?.status : '';
+                      const statusLabel = appointmentStatusLabel(status);
+                      return (
+                        <option key={slot.value} value={slot.value} disabled={Boolean(slot.value && isUnavailableAppointmentStatus(status))}>
+                          {slot.label}{statusLabel ? ` — ${statusLabel}` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                   <span className="mt-1 block text-xs font-normal text-slate-500">Service visits are scheduled from 8 AM to 5 PM.</span>
                 </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Scheduling notes <span className="font-normal text-slate-400">(optional)</span>
+                  <textarea value={form.schedulingNotes} onChange={(event) => onChange('schedulingNotes', event.target.value)} rows={2} className={inputClass} placeholder="Access restrictions, contact timing, or dispatch notes." />
+                </label>
               </div>
-              <label className="mt-4 block text-sm font-medium text-slate-700">
-                Scheduling notes <span className="font-normal text-slate-400">(optional)</span>
-                <textarea value={form.schedulingNotes} onChange={(event) => onChange('schedulingNotes', event.target.value)} rows={2} className={inputClass} placeholder="Access restrictions, contact timing, or dispatch notes." />
-              </label>
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <SectionHeading number="3" title="Service location" description="Search or pin the exact location technicians should visit." />
+            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-2">
+              <SectionHeading title="Service location" />
               <label className="block text-sm font-medium text-slate-700">
                 Search location
                 <div className="relative mt-1">
@@ -260,7 +269,7 @@ export default function WalkInRequestDialog({
           </button>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <button type="button" onClick={onClose} disabled={submitting} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
-              Cancel
+              Dismiss
             </button>
             <button type="submit" disabled={submitting} className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-wait disabled:opacity-60">
               {submitting ? 'Saving…' : submitLabel}

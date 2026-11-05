@@ -221,6 +221,44 @@ export const fetchAdminCalendarEvents = async ({ start, end, showCompleted = fal
   }
 };
 
+export const fetchAdminCalendarClosures = async ({ start, end } = {}) => {
+  try {
+    const { data } = await api.get('/admin/calendar/closures/', { params: { start, end } });
+    return {
+      closures: Array.isArray(data?.closures) ? data.closures : [],
+      dailyCapacity: Number(data?.daily_capacity || 3),
+      availabilityDays: Array.isArray(data?.availability_days) ? data.availability_days : [],
+    };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load calendar closures.'));
+  }
+};
+
+export const updateAdminCalendarClosure = async ({
+  action = 'set',
+  date,
+  startDate,
+  endDate,
+  timeSlot = 'all_day',
+  availabilityStatus = 'closed',
+  reason = '',
+}) => {
+  try {
+    const { data } = await api.post('/admin/calendar/closures/', {
+      action,
+      date,
+      start_date: startDate,
+      end_date: endDate,
+      time_slot: timeSlot,
+      availability_status: availabilityStatus,
+      reason,
+    });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to update calendar availability.'));
+  }
+};
+
 export const assignTechnician = async ({ ticketId, technicianId, technicianName, crewIds = [], equipmentReservations = null, dispatchStage = 'service' }) => {
   try {
     let resolvedTechnicianId = technicianId;
@@ -537,7 +575,7 @@ export const createService = async (service) => {
       display_order: Number(service.display_order || 0),
       estimated_duration: Number(service.estimated_duration || 0),
       estimated_cost: Number(service.estimated_cost || 0),
-      max_daily_assignments: Number(service.max_daily_assignments || 1),
+      max_daily_assignments: Number(service.max_daily_assignments),
       is_active: service.is_active !== false,
       requires_site_inspection: Boolean(service.requires_site_inspection),
       procedures: Array.isArray(service.procedures)
@@ -554,7 +592,7 @@ export const createService = async (service) => {
         ? service.required_equipment
             .map((item) => ({
               name: String(item?.name || '').trim(),
-              quantity: Number(item?.quantity || 1)
+              quantity: Number(item?.quantity)
             }))
             .filter((item) => item.name)
         : [],
@@ -589,7 +627,7 @@ export const updateService = async (id, updates) => {
       display_order: Number(updates.display_order || 0),
       estimated_duration: Number(updates.estimated_duration || 0),
       estimated_cost: Number(updates.estimated_cost || 0),
-      max_daily_assignments: Number(updates.max_daily_assignments || 1),
+      max_daily_assignments: Number(updates.max_daily_assignments),
       is_active: updates.is_active !== false,
       requires_site_inspection: Boolean(updates.requires_site_inspection),
       procedures: Array.isArray(updates.procedures)
@@ -606,7 +644,7 @@ export const updateService = async (id, updates) => {
         ? updates.required_equipment
             .map((item) => ({
               name: String(item?.name || '').trim(),
-              quantity: Number(item?.quantity || 1)
+              quantity: Number(item?.quantity)
             }))
             .filter((item) => item.name)
         : [],

@@ -31,7 +31,7 @@ const actionLabels = {
   assign: 'Assigned',
   reschedule: 'Rescheduled',
   complete: 'Completed',
-  cancel: 'Cancelled',
+  cancel: 'Dismissed',
   error: 'Needs attention',
   system: 'System event'
 };
@@ -93,7 +93,7 @@ const actionOptions = [
   { value: 'assign', label: 'Assign' },
   { value: 'reschedule', label: 'Reschedule' },
   { value: 'complete', label: 'Complete' },
-  { value: 'cancel', label: 'Cancel' },
+  { value: 'cancel', label: 'Dismiss' },
   { value: 'error', label: 'Error' },
   { value: 'system', label: 'System' }
 ];

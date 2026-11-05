@@ -49,11 +49,62 @@ class InventoryItemSerializer(serializers.ModelSerializer):
     available_quantity = serializers.ReadOnlyField()
     is_low_stock = serializers.ReadOnlyField()
     stock_status = serializers.ReadOnlyField()
+    can_delete = serializers.SerializerMethodField()
+    delete_reference_count = serializers.SerializerMethodField()
+    delete_blockers = serializers.SerializerMethodField()
 
     class Meta:
         model = InventoryItem
         fields = '__all__'
         read_only_fields = ['reserved_quantity', 'total_value', 'last_notification_sent']
+
+    @staticmethod
+    def _deletion_counts(item):
+        cached = getattr(item, '_deletion_counts_cache', None)
+        if cached is not None:
+            return cached
+
+        annotated_fields = (
+            'operational_transaction_count',
+            'reservation_reference_count',
+            'service_requirement_reference_count',
+            'return_request_reference_count',
+        )
+        if all(hasattr(item, field) for field in annotated_fields):
+            counts = {
+                'stock movements': item.operational_transaction_count,
+                'reservations': item.reservation_reference_count,
+                'service requirements': item.service_requirement_reference_count,
+                'equipment return records': item.return_request_reference_count,
+            }
+        else:
+            operational_transactions = item.transactions.exclude(
+                transaction_type='adjustment',
+                reference_number=f'OPENING-{item.pk}',
+                notes='Opening inventory balance',
+            )
+            counts = {
+                'stock movements': operational_transactions.count(),
+                'reservations': item.reservations.count(),
+                'service requirements': item.service_type_requirements.count(),
+                'equipment return records': item.equipment_return_request_items.count(),
+            }
+
+        item._deletion_counts_cache = counts
+        return counts
+
+    def get_can_delete(self, item):
+        return not any(self._deletion_counts(item).values())
+
+    def get_delete_reference_count(self, item):
+        return sum(self._deletion_counts(item).values())
+
+    def get_delete_blockers(self, item):
+        return [
+            {'label': label, 'count': count}
+            for label, count in self._deletion_counts(item).items()
+            if count
+        ]
 
     def validate_quantity(self, value):
         if value < 0:
@@ -118,7 +169,11 @@ class InventoryItemSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data):
         opening_quantity = validated_data.pop('quantity', 0)
-        item = InventoryItem(quantity=0, **validated_data)
+        # Initial availability is stock-derived. Callers cannot create an item
+        # already reserved, in use, under maintenance, or retired without the
+        # corresponding operational workflow.
+        validated_data.pop('status', None)
+        item = InventoryItem(quantity=0, status='available', **validated_data)
         item.save(notify_low_stock=False)
 
         request = self.context.get('request')

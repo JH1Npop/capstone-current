@@ -13,6 +13,12 @@ from .rbac import (
     SERVICE_TICKET_MANAGE_CAPABILITIES,
     DOCUMENTS_MANAGE_CAPABILITIES,
     DOCUMENTS_VIEW_CAPABILITIES,
+    DOCUMENT_TEMPLATES_MANAGE_CAPABILITIES,
+    DOCUMENT_TEMPLATES_UPLOAD_CAPABILITIES,
+    DOCUMENT_TEMPLATES_PUBLISH_CAPABILITIES,
+    DOCUMENT_TEMPLATES_ROLLBACK_CAPABILITIES,
+    DOCUMENT_DEFINITIONS_MANAGE_CAPABILITIES,
+    DOCUMENT_ATTACHMENTS_MANAGE_CAPABILITIES,
     ANALYTICS_VIEW_CAPABILITIES,
     REPORTS_VIEW_CAPABILITIES,
     REPORTS_EXPORT_CAPABILITIES,
@@ -293,6 +299,30 @@ class CanViewDocuments(AdminWorkspaceCapabilityPermission):
 
 class CanManageDocuments(AdminWorkspaceCapabilityPermission):
     capability_codes = DOCUMENTS_MANAGE_CAPABILITIES
+
+
+class CanManageDocumentTemplates(AdminWorkspaceCapabilityPermission):
+    capability_codes = DOCUMENT_TEMPLATES_MANAGE_CAPABILITIES
+
+
+class CanUploadDocumentTemplates(AdminWorkspaceCapabilityPermission):
+    capability_codes = DOCUMENT_TEMPLATES_UPLOAD_CAPABILITIES
+
+
+class CanPublishDocumentTemplates(AdminWorkspaceCapabilityPermission):
+    capability_codes = DOCUMENT_TEMPLATES_PUBLISH_CAPABILITIES
+
+
+class CanRollbackDocumentTemplates(AdminWorkspaceCapabilityPermission):
+    capability_codes = DOCUMENT_TEMPLATES_ROLLBACK_CAPABILITIES
+
+
+class CanManageDocumentDefinitions(AdminWorkspaceCapabilityPermission):
+    capability_codes = DOCUMENT_DEFINITIONS_MANAGE_CAPABILITIES
+
+
+class CanManageDocumentAttachments(AdminWorkspaceCapabilityPermission):
+    capability_codes = DOCUMENT_ATTACHMENTS_MANAGE_CAPABILITIES
 
 
 class CanViewAnalytics(AdminWorkspaceCapabilityPermission):

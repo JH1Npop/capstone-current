@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from django.db import transaction
 from django.db.models import Count, Sum, Q, Avg, F
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -36,6 +37,7 @@ from services.maintenance import process_maintenance_alerts
 from services.job_progress import ACTIVE_TICKET_STATUSES, get_ticket_workflow_progress
 from services.models import (
     AfterSalesCase as FollowUpCase,
+    CalendarClosure,
     MaintenanceSchedule,
     ServiceLocation,
     ServiceRequest,
@@ -61,6 +63,13 @@ from users.rbac import (
     user_has_any_capability,
 )
 from services.ticket_status import COMPLETED_TICKET_STATUSES
+from services.scheduling_policy import (
+    ORDERED_BOOKABLE_TIME_SLOTS,
+    get_appointment_daily_capacity,
+    get_scheduled_slot_counts,
+    lock_appointment_capacity_policy,
+    resolve_slot_availability,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -878,7 +887,6 @@ class AdminCalendarView(APIView):
             return Response({'error': 'end must be on or after start.'}, status=status.HTTP_400_BAD_REQUEST)
 
         show_completed = str(request.query_params.get('show_completed') or '').lower() in {'1', 'true', 'yes', 'all'}
-        completed_cutoff = today - timedelta(days=30)
         tickets = ServiceTicket.objects.select_related(
             'request',
             'request__client',
@@ -895,12 +903,7 @@ class AdminCalendarView(APIView):
             status='Cancelled',
         ).order_by('scheduled_date', 'scheduled_time', 'id')
         if not show_completed:
-            # Keep recent completions visible in the operational calendar while
-            # moving older records to the opt-in history view.
-            tickets = tickets.exclude(
-                status__in=COMPLETED_TICKET_STATUSES,
-                completed_date__date__lt=completed_cutoff,
-            )
+            tickets = tickets.exclude(status__in=COMPLETED_TICKET_STATUSES)
 
         ticket_request_ids = set(ServiceTicket.objects.values_list('request_id', flat=True))
         request_fallbacks = ServiceRequest.objects.select_related(
@@ -929,7 +932,7 @@ class AdminCalendarView(APIView):
     def _calendar_status_for_ticket(self, ticket):
         if ticket.status == 'Cancelled' or ticket.request.status == 'Cancelled':
             return 'cancelled'
-        if ticket.status == 'Completed':
+        if ticket.status in COMPLETED_TICKET_STATUSES:
             return 'completed'
         if ticket.request.status == 'Pending':
             return 'pending_approval'
@@ -1025,3 +1028,194 @@ class AdminCalendarView(APIView):
             'scheduling_notes': service_request.scheduling_notes,
             'reschedule_requested': False,
         }
+
+
+class AdminCalendarClosureView(APIView):
+    permission_classes = [IsAuthenticated]
+    ALLOWED_SLOTS = {'all_day', 'morning', 'midday', 'afternoon'}
+    ALLOWED_AVAILABILITY_STATUSES = {'limited', 'closed'}
+
+    def _permission_error(self, request):
+        if not is_admin_workspace_role(getattr(request.user, 'role', None)):
+            return Response({'error': 'You do not have access to calendar closures.'}, status=status.HTTP_403_FORBIDDEN)
+        if not user_has_any_capability(request.user, SUPERVISOR_DISPATCH_CAPABILITIES):
+            return Response({'error': 'You do not have access to calendar closures.'}, status=status.HTTP_403_FORBIDDEN)
+        return None
+
+    @staticmethod
+    def _serialize(closure):
+        actor = closure.updated_by or closure.created_by
+        return {
+            'id': closure.id,
+            'date': closure.date.isoformat(),
+            'time_slot': closure.time_slot,
+            'time_slot_label': closure.get_time_slot_display(),
+            'availability_status': closure.availability_status,
+            'availability_status_label': closure.get_availability_status_display(),
+            'reason': closure.reason,
+            'is_active': closure.is_active,
+            'updated_at': closure.updated_at.isoformat(),
+            'updated_by': _display_name(actor),
+        }
+
+    def get(self, request):
+        permission_error = self._permission_error(request)
+        if permission_error:
+            return permission_error
+
+        today = timezone.localdate()
+        start_date = parse_date(str(request.query_params.get('start') or '')) or today.replace(day=1)
+        end_date = parse_date(str(request.query_params.get('end') or '')) or (start_date + timedelta(days=62))
+        if end_date < start_date:
+            return Response({'error': 'end must be on or after start.'}, status=status.HTTP_400_BAD_REQUEST)
+        if (end_date - start_date).days > 92:
+            return Response({'error': 'Calendar closures can cover at most 93 days.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        closures = CalendarClosure.objects.filter(
+            date__range=(start_date, end_date),
+            is_active=True,
+        ).select_related('created_by', 'updated_by').order_by('date', 'time_slot', 'id')
+        closures_list = list(closures)
+        daily_capacity = get_appointment_daily_capacity()
+        scheduled_counts = get_scheduled_slot_counts(start_date, end_date)
+        closures_by_date = {}
+        for closure in closures_list:
+            closures_by_date.setdefault(closure.date.isoformat(), {})[closure.time_slot] = closure
+
+        availability_days = []
+        for offset in range((end_date - start_date).days + 1):
+            availability_date = start_date + timedelta(days=offset)
+            date_key = availability_date.isoformat()
+            overrides = closures_by_date.get(date_key, {})
+            counts = scheduled_counts.get(date_key, {})
+            daily_count = sum(counts.values())
+            daily_remaining = max(0, daily_capacity - daily_count)
+            slots = {}
+            for slot in ORDERED_BOOKABLE_TIME_SLOTS:
+                count = int(counts.get(slot, 0))
+                resolved = resolve_slot_availability(
+                    count=daily_count,
+                    capacity=daily_capacity,
+                    all_day_override=overrides.get('all_day'),
+                    slot_override=overrides.get(slot),
+                )
+                slots[slot] = {
+                    **resolved,
+                    'booked': count,
+                }
+
+            slot_statuses = [slots[slot]['status'] for slot in ORDERED_BOOKABLE_TIME_SLOTS]
+            if all(slot_status == 'closed' for slot_status in slot_statuses):
+                day_status = 'closed'
+            elif all(slot_status in {'closed', 'full'} for slot_status in slot_statuses):
+                day_status = 'full'
+            elif any(slot_status in {'closed', 'full', 'limited'} for slot_status in slot_statuses):
+                day_status = 'limited'
+            else:
+                day_status = 'available'
+
+            availability_days.append({
+                'date': date_key,
+                'status': day_status,
+                'booked': daily_count,
+                'capacity': daily_capacity,
+                'remaining': daily_remaining,
+                'slots': slots,
+            })
+
+        return Response({
+            'closures': [self._serialize(closure) for closure in closures_list],
+            'daily_capacity': daily_capacity,
+            'availability_days': availability_days,
+        })
+
+    def post(self, request):
+        permission_error = self._permission_error(request)
+        if permission_error:
+            return permission_error
+
+        action_name = str(request.data.get('action') or 'close').strip().lower()
+        start_date = parse_date(str(request.data.get('start_date') or request.data.get('date') or ''))
+        end_date = parse_date(str(request.data.get('end_date') or request.data.get('date') or '')) or start_date
+        time_slot = str(request.data.get('time_slot') or 'all_day').strip().lower()
+        availability_status = str(request.data.get('availability_status') or 'closed').strip().lower()
+        reason = str(request.data.get('reason') or '').strip()
+
+        if action_name not in {'close', 'set', 'reopen'}:
+            return Response({'action': 'Choose set, close, or reopen.'}, status=status.HTTP_400_BAD_REQUEST)
+        if start_date is None or end_date is None:
+            return Response({'date': 'Choose a valid start and end date.'}, status=status.HTTP_400_BAD_REQUEST)
+        if end_date < start_date:
+            return Response({'end_date': 'End date must be on or after start date.'}, status=status.HTTP_400_BAD_REQUEST)
+        if start_date < timezone.localdate():
+            return Response({'date': 'Past dates cannot be changed.'}, status=status.HTTP_400_BAD_REQUEST)
+        if (end_date - start_date).days > 92:
+            return Response({'end_date': 'A single availability change can cover at most 93 days.'}, status=status.HTTP_400_BAD_REQUEST)
+        if time_slot not in self.ALLOWED_SLOTS:
+            return Response({'time_slot': 'Choose all day, morning, midday, or afternoon.'}, status=status.HTTP_400_BAD_REQUEST)
+        if availability_status not in self.ALLOWED_AVAILABILITY_STATUSES:
+            return Response({'availability_status': 'Choose limited or closed.'}, status=status.HTTP_400_BAD_REQUEST)
+        if action_name in {'close', 'set'} and len(reason) < 3:
+            return Response({'reason': 'Enter an availability reason of at least 3 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(reason) > 255:
+            return Response({'reason': 'Availability reason must be 255 characters or fewer.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        dates = [start_date + timedelta(days=offset) for offset in range((end_date - start_date).days + 1)]
+        with transaction.atomic():
+            lock_appointment_capacity_policy()
+            existing_by_date = {
+                closure.date: closure
+                for closure in CalendarClosure.objects.select_for_update().filter(
+                    date__range=(start_date, end_date),
+                    time_slot=time_slot,
+                )
+            }
+            if action_name == 'reopen':
+                reopened = []
+                for closure in existing_by_date.values():
+                    if not closure.is_active:
+                        continue
+                    closure.is_active = False
+                    closure.reopened_by = request.user
+                    closure.reopened_at = timezone.now()
+                    closure.updated_by = request.user
+                    closure._activity_reason = reason or 'Reopened from the admin calendar.'
+                    closure.save(update_fields=['is_active', 'reopened_by', 'reopened_at', 'updated_by', 'updated_at'])
+                    reopened.append(closure)
+                if not reopened:
+                    return Response({'error': 'This date range or slot is already open.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'message': f'Reopened availability for {len(reopened)} date(s).',
+                    'closures': [self._serialize(closure) for closure in reopened],
+                })
+
+            updated = []
+            for closure_date in dates:
+                closure = existing_by_date.get(closure_date)
+                if closure is None:
+                    closure = CalendarClosure.objects.create(
+                        date=closure_date,
+                        time_slot=time_slot,
+                        availability_status=availability_status,
+                        reason=reason,
+                        created_by=request.user,
+                        updated_by=request.user,
+                    )
+                else:
+                    closure.availability_status = availability_status
+                    closure.reason = reason
+                    closure.is_active = True
+                    closure.updated_by = request.user
+                    closure.reopened_by = None
+                    closure.reopened_at = None
+                    closure._activity_reason = reason
+                    closure.save(update_fields=[
+                        'availability_status', 'reason', 'is_active', 'updated_by',
+                        'reopened_by', 'reopened_at', 'updated_at',
+                    ])
+                updated.append(closure)
+
+        return Response({
+            'message': f'{availability_status.title()} availability applied to {len(updated)} date(s).',
+            'closures': [self._serialize(closure) for closure in updated],
+        }, status=status.HTTP_201_CREATED)

@@ -16,7 +16,7 @@ Status meanings:
 | --- | --- | --- | --- | --- |
 | Operations dashboard | `/admin/dashboard` | dashboard and SLA summaries; `/api/dashboard/changes/?role=admin` change token polled every 5 seconds (full reload only when it changes or once a minute) | `supervisor.dashboard.view` | Parity; unrelated admin capabilities cannot retrieve the full dashboard and login redirects select the first authorized workspace |
 | Service tickets | `/admin/service-tickets` | service requests, tickets, service locations, inspections, and administrator progress updates | `supervisor.tickets.view`, `services.requests.review`, `services.tickets.manage` | Parity for core request review and ticket mutations, including legacy location/inspection/progress endpoints; document/report actions are tracked separately |
-| Dispatch board/calendar | `/admin/dispatch-board`, `/admin/calendar` | ticket assignment, calendar, auto-dispatch | `supervisor.dispatch.view` | Parity; routes, calendar reads, dispatch lists, and dispatch actions share the capability boundary |
+| Dispatch board/calendar | `/admin/dispatch-board`, `/admin/calendar`; `GET/POST /api/admin/calendar/closures/` | ticket assignment, calendar, auto-dispatch, authoritative per-day/per-slot occupancy, configurable per-slot appointment capacity, and reversible Limited/Closed date or date-range overrides | `supervisor.dispatch.view` | Parity; routes, calendar reads, dispatch lists/actions, capacities, and availability overrides share the capability boundary. The closure read returns server-derived booked/capacity/remaining/status values for Configuration Mode. Limited/Closed changes require a reason and affect new scheduling rather than cancelling existing appointments |
 | Technician tracking | `/admin/technician-tracking` | tracking, technician locations, legacy GIS dashboard | `supervisor.tracking.view` | Parity |
 | Coverage and job history | `/admin/coverage-heatmap`, `/admin/job-history` | coverage and history reports | `supervisor.tracking.view` for coverage; `admin.job_history.view` for completed-job evidence | Parity; action-specific API permissions prevent either capability from unlocking the other dataset |
 | User directory | `/admin/user-management` | users and capability grants | `users.directory.view`, `users.directory.manage` | Parity; current technician-skill mutations remain superadmin-only, matching the editor |
@@ -58,6 +58,7 @@ messages, notifications, documents, support cases, and history.
 | --- | --- | --- |
 | Solar estimates | `/client/solar-estimates` | Enforced and tested |
 | Requests and request detail | `/client/requests`, `/client/requests/:id` | Enforced; transition audit remains |
+| Request appointment availability | `/client/service-requests`; aggregate `GET /api/services/service-requests/appointment-availability/` | Authentication required; returns privacy-reduced Available/Limited/Full/Closed date and slot states computed from configured capacity plus active overrides. It exposes no counts, override reasons, client, ticket, request, service, location, or technician identity. Full/Closed choices are disabled and rejected again at request creation, approval, and ticket scheduling/rescheduling boundaries; Limited remains requestable |
 | Ticket progress | Used by request detail/timeline consumers | Owned tickets are read-only; create, edit, and delete are blocked |
 | Service history | `/client/service-history` | Enforced |
 | Purchase records | `/client/purchase-records` | Confirmed records restricted to the owning client; mutations blocked and directly tested |
@@ -65,7 +66,42 @@ messages, notifications, documents, support cases, and history.
 | Notifications | `/client/notifications` | Enforced |
 | Profile | `/client/profile` | Self-service only |
 
+## Document design actions added 2026-11-05 (`/api/services/document-template-versions/<id>/...`)
+
+| Action | Method | Capability (server) | Notes |
+| --- | --- | --- | --- |
+| `revalidate` | POST | `documents.templates.manage` | Checks a **draft** DOCX design again against the current approved and registered fields. The stored file is not changed. Active and retired versions are refused (409). |
+| `accept-fields` | POST | `documents.definitions.manage` | Registers plain names found in a draft design of a **custom** document as text fields, then checks the design again. Names must be in the design's own `possible_fields` list. Core documents are refused (409). |
+| `use-design` | POST | `documents.templates.publish` | Checks a draft again, then activates it, makes its design the default, and switches a custom document on. The same activation rules apply (valid design, all required core components). Enabling a custom document additionally needs `documents.definitions.manage`; without it the design is activated and the response reports `definition_enabled: false`. |
+
+Read-only addition: every version response now carries a plain-language `checklist` (status `ok`, `problem`, or `note`).
+
 ## Implementation order for remaining gaps
 
 1. Staging concurrency validation against PostgreSQL, Redis, and durable media
 2. Authenticated penetration testing and deployed network/IAM review
+
+## Starter download added 2026-11-05 (`/api/services/document-definitions/<id>/starter/`)
+
+| Action | Method | Capability (server) | Notes |
+| --- | --- | --- | --- |
+| `starter` | GET | `documents.view` (same access as listing the definition) | Downloads a blank Word design listing the document's fields in plain `[Field Name]` form. Custom documents only; the six core documents return 409 because their required tables make a blank file invalid. Writes an activity-log entry (`starter_download`). The UI shows the button only in the template manager. |
+
+## Fill blanks added 2026-11-05 (`/api/services/document-template-versions/<id>/fill-blanks/`)
+
+| Action | Method | Capability (server) | Notes |
+| --- | --- | --- | --- |
+| `fill-blanks` | POST | `documents.templates.upload` (creates a version) | Draft **Word** designs only. Body `{names: [...]}` must be labels offered in the version's `placeholder_manifest.blank_suggestions` (lines like `Client Name: ______` whose label is an approved field). The uploaded file is never edited: the result is saved as a new draft version through the normal upload validation, with a change note. Definition access capabilities are enforced. |
+
+## PDF field placement and document-type delete added 2026-11-05
+
+| Route | Method | Capability (server) | Notes |
+| --- | --- | --- | --- |
+| `/api/services/document-template-versions/<id>/place-fields/` | POST | `documents.templates.manage` | Draft **PDF** designs only. Body `{names: [...]}` must be labels in the version's `placeholder_manifest.field_suggestions` (found by `services/pdf_suggestions.py` at upload from real PDF text). Creates AFN-filled (`system`) `DocumentTemplateField` rows with estimated placements; does not activate. Scanned PDFs have no suggestions. Logged `template_fields_placed`. |
+| `/api/services/document-definitions/<id>/` | DELETE | `documents.definitions.manage` | **Custom** documents only, and only if no output and no prepared instance ever existed. Removes its designs, versions, stored files and fields. Core documents and used types return 409 (disable instead). Logged `custom_definition_delete`. |
+
+## Built-in design download added 2026-11-06
+
+| Route | Method | Capability (server) | Notes |
+| --- | --- | --- | --- |
+| `/api/services/document-definitions/<id>/built-in-design/` | GET | `documents.view` | The six core documents only: returns AFN's own Word design with its field markers (`backend/document_templates/<file>.docx`, not the unmarked copies in `document_templates/originals/`). Custom documents return 409. Logged `built_in_design_download`. Shown in the template manager as **Download the original design** when no version is in use. |

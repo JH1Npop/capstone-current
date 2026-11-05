@@ -291,7 +291,7 @@ class DashboardRoleTests(TestCase):
         self.assertEqual(event['entity_type'], 'request')
         self.assertEqual(event['scheduling_notes'], 'Client is available after 1 PM.')
 
-    def test_admin_calendar_keeps_completed_and_hides_cancelled_tickets(self):
+    def test_admin_calendar_only_includes_completed_tickets_when_requested(self):
         self.ticket.status = 'Completed'
         self.ticket.completed_date = timezone.now()
         self.ticket.save(update_fields=['status', 'completed_date'])
@@ -326,6 +326,21 @@ class DashboardRoleTests(TestCase):
             priority='Normal',
             completed_date=timezone.now() - timedelta(days=45),
         )
+        turned_over_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Turned over service',
+            priority='Normal',
+            status='Completed',
+        )
+        turned_over_ticket = ServiceTicket.objects.create(
+            request=turned_over_request,
+            technician=self.technician_user,
+            scheduled_date=self.ticket.scheduled_date,
+            status='Turned Over / Accepted',
+            priority='Normal',
+            completed_date=timezone.now(),
+        )
 
         self.api_client.force_authenticate(user=self.admin_user)
         response = self.api_client.get('/api/admin/calendar/', {
@@ -335,11 +350,10 @@ class DashboardRoleTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         ticket_ids = {event['ticket_id'] for event in response.data['events'] if event['ticket_id']}
-        completed_event = next(event for event in response.data['events'] if event['ticket_id'] == self.ticket.id)
-        self.assertIn(self.ticket.id, ticket_ids)
-        self.assertEqual(completed_event['calendar_status'], 'completed')
+        self.assertNotIn(self.ticket.id, ticket_ids)
         self.assertNotIn(cancelled_ticket.id, ticket_ids)
         self.assertNotIn(old_completed_ticket.id, ticket_ids)
+        self.assertNotIn(turned_over_ticket.id, ticket_ids)
 
         history_response = self.api_client.get('/api/admin/calendar/', {
             'start': old_date.isoformat(),
@@ -351,7 +365,15 @@ class DashboardRoleTests(TestCase):
         history_ticket_ids = {
             event['ticket_id'] for event in history_response.data['events'] if event['ticket_id']
         }
+        completed_event = next(event for event in history_response.data['events'] if event['ticket_id'] == self.ticket.id)
+        self.assertIn(self.ticket.id, history_ticket_ids)
+        self.assertEqual(completed_event['calendar_status'], 'completed')
         self.assertIn(old_completed_ticket.id, history_ticket_ids)
+        turned_over_event = next(
+            event for event in history_response.data['events']
+            if event['ticket_id'] == turned_over_ticket.id
+        )
+        self.assertEqual(turned_over_event['calendar_status'], 'completed')
 
     def test_admin_calendar_does_not_show_request_fallback_when_ticket_exists_outside_range(self):
         preferred_date = timezone.localdate() + timedelta(days=3)

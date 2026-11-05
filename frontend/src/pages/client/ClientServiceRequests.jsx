@@ -13,12 +13,18 @@ import {
 } from '../../api/api';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
-import { getLocalDateInputValue } from '../../utils/date';
 import { CALABARZON_BOUNDS, clampToCalabarzon } from '../../utils/mapRegion';
 import { defaultLeafletMarkerIcon } from '../../utils/leafletMarkerIcon';
 import { formatEstimateId, formatRequestId } from '../../utils/roleIds';
-import { FiCheckCircle, FiSearch } from 'react-icons/fi';
+import {
+  FiArrowRight,
+  FiCheckCircle,
+  FiMapPin,
+  FiSearch,
+  FiUser,
+} from 'react-icons/fi';
 import MapTileLayer from '../../components/maps/MapTileLayer';
+import AppointmentAvailabilityCalendar from '../../components/client/AppointmentAvailabilityCalendar';
 
 // Debounce helper
 const useDebounce = (value, delay) => {
@@ -43,6 +49,11 @@ const TIME_SLOT_OPTIONS = [
   { value: 'afternoon', label: 'Afternoon (2 PM - 5 PM)' }
 ];
 
+const isUnavailableAppointmentStatus = (status) => status === 'closed' || status === 'full';
+const appointmentStatusLabel = (status) => (
+  status === 'limited' ? 'Limited' : status === 'full' ? 'Full' : status === 'closed' ? 'Closed' : ''
+);
+
 const CALABARZON_PROVINCES = ['Cavite', 'Laguna', 'Batangas', 'Rizal', 'Quezon'];
 const CITY_PROVINCE_OVERRIDES = {
   lucena: 'Quezon',
@@ -51,6 +62,12 @@ const CITY_PROVINCE_OVERRIDES = {
 
 const inputClass = 'w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
 const labelClass = 'mb-1 block text-sm font-medium text-slate-700';
+
+function RequestSectionHeading({ id, title }) {
+  return (
+    <h2 id={id} className="text-base font-semibold text-slate-950">{title}</h2>
+  );
+}
 
 const requestBrowserPosition = (options) => new Promise((resolve, reject) => {
   navigator.geolocation.getCurrentPosition(resolve, reject, options);
@@ -124,6 +141,7 @@ export default function ClientServiceRequests() {
   const [notes, setNotes] = useState('');
   const [preferredDate, setPreferredDate] = useState('');
   const [preferredTimeSlot, setPreferredTimeSlot] = useState('');
+  const [selectedDateAvailability, setSelectedDateAvailability] = useState(null);
   const [schedulingNotes, setSchedulingNotes] = useState('');
   const [latitude, setLatitude] = useState(null);
   const [longitude, setLongitude] = useState(null);
@@ -242,6 +260,13 @@ const selectSearchResult = async (result) => {
     const result = await reverseGeocodeLocation({ lat, lng });
 
     if (!result) return false;
+    if (result.lookup_status === 'unavailable') {
+      setLocationError(
+        result.message ||
+        'The map location is selected, but its address could not be loaded. Enter the address manually.'
+      );
+      return false;
+    }
 
     const addr = result.address || {};
 
@@ -397,6 +422,17 @@ const selectSearchResult = async (result) => {
       setSubmitError('Please select a preferred appointment date.');
       return false;
     }
+    if (selectedDateAvailability?.availability?.status === 'unavailable') {
+      setMessage('');
+      setSubmitError('The selected appointment date has no availability. Please choose another date.');
+      return false;
+    }
+    const selectedSlotStatus = selectedDateAvailability?.availability?.slots?.[preferredTimeSlot]?.status;
+    if (preferredTimeSlot && isUnavailableAppointmentStatus(selectedSlotStatus)) {
+      setMessage('');
+      setSubmitError('The selected time slot is full or closed. Please choose an available time slot.');
+      return false;
+    }
 
     return true;
   };
@@ -438,6 +474,7 @@ const selectSearchResult = async (result) => {
       setServiceTypeIds([]);
       setPreferredDate('');
       setPreferredTimeSlot('');
+      setSelectedDateAvailability(null);
       setSchedulingNotes('');
       setLatitude(null);
       setLongitude(null);
@@ -538,27 +575,43 @@ const selectSearchResult = async (result) => {
         </div>
       )}
 
-      <div className="mb-4">
-        <p className="text-sm text-slate-500">Choose a service and pin its dispatch location.</p>
-      </div>
+      <section aria-label="Request steps" className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Plan your service visit</p>
+            <p className="mt-0.5 text-xs text-slate-500">Complete each section, then review your request before sending it.</p>
+          </div>
+          <div className="grid grid-cols-4 gap-2 text-center text-[11px] font-semibold text-slate-500 sm:w-[25rem]">
+            {['Service', 'Location', 'Schedule', 'Details'].map((step, index) => (
+              <div key={step} className="rounded-lg bg-slate-50 px-2 py-2">
+                <span className="mr-1 text-brand-600">{index + 1}</span>{step}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>}
-      <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <form onSubmit={handleSubmitRequest} className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="text-base font-semibold text-slate-900">Request Details</h2>
-          </div>
-          <div className="space-y-5 p-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <p className={labelClass}>Client</p>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+      <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <form onSubmit={handleSubmitRequest} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="space-y-5 p-5 sm:p-6">
+            <RequestSectionHeading
+              id="request-service-title"
+              title="Choose services"
+            />
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm">
+                <FiUser aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Requesting as</p>
+                <p className="truncate text-sm font-semibold text-slate-800">
                   {[user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || user?.username || 'Signed-in client'}
-                </div>
+                </p>
               </div>
             </div>
             <div>
-              <p id="request-service-types" className={labelClass}>Service Types</p>
+              <p id="request-service-types" className={labelClass}>Service Types *</p>
               <div role="group" aria-labelledby="request-service-types" className="rounded-xl border border-slate-300 bg-white p-2">
                 {serviceTypes.length > 0 ? (
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -567,7 +620,7 @@ const selectSearchResult = async (result) => {
                       return (
                         <label
                           key={serviceType.id}
-                          className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                          className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2.5 text-sm transition ${
                             checked ? 'border-brand-300 bg-brand-50 text-brand-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                           }`}
                         >
@@ -587,7 +640,7 @@ const selectSearchResult = async (result) => {
                 )}
               </div>
               {selectedServiceTypes.length > 0 && (
-                <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50/60 px-3 py-2.5 text-xs text-slate-600">
                   <div className="font-semibold text-slate-800">
                     Selected services: {selectedServiceTypes.map((serviceType) => serviceType.name).join(', ')}
                   </div>
@@ -604,9 +657,15 @@ const selectSearchResult = async (result) => {
                 </div>
               )}
             </div>
+            <div className="border-t border-slate-200 pt-5">
+              <RequestSectionHeading
+                id="request-location-title"
+                title="Service location"
+              />
+            </div>
             <div>
               <label htmlFor="request-address" className={labelClass}>Address / Landmark *</label>
-              <input id="request-address" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="E.g., near SM Mall of Asia" required />
+              <input id="request-address" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="House number, street, barangay, or nearby landmark" required />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -618,20 +677,19 @@ const selectSearchResult = async (result) => {
               <input id="request-province" value={province} onChange={(e) => setProvince(e.target.value)} className={inputClass} placeholder="Enter province name" required />
             </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label htmlFor="request-preferred-date" className={labelClass}>Preferred Appointment Date *</label>
-                <input
-                  id="request-preferred-date"
-                  type="date"
+            <section className="border-t border-slate-200 pt-5" aria-labelledby="preferred-schedule-title">
+              <RequestSectionHeading
+                id="preferred-schedule-title"
+                title="Preferred schedule"
+              />
+              <div className="mt-5">
+                <AppointmentAvailabilityCalendar
                   value={preferredDate}
-                  onChange={(e) => setPreferredDate(e.target.value)}
-                  min={getLocalDateInputValue()}
-                  className={inputClass}
-                  required
+                  onChange={setPreferredDate}
+                  onSelectedDayChange={setSelectedDateAvailability}
                 />
               </div>
-              <div>
+              <div className="mt-4">
                 <label htmlFor="request-time-slot" className={labelClass}>Preferred Time Slot</label>
                 <select
                   id="request-time-slot"
@@ -640,46 +698,66 @@ const selectSearchResult = async (result) => {
                   className={inputClass}
                 >
                   {TIME_SLOT_OPTIONS.map((option) => (
-                    <option key={option.value || 'none'} value={option.value}>
+                    <option
+                      key={option.value || 'none'}
+                      value={option.value}
+                      disabled={Boolean(
+                        option.value
+                        && isUnavailableAppointmentStatus(selectedDateAvailability?.availability?.slots?.[option.value]?.status)
+                      )}
+                    >
                       {option.label}
+                      {option.value && appointmentStatusLabel(selectedDateAvailability?.availability?.slots?.[option.value]?.status)
+                        ? ` — ${appointmentStatusLabel(selectedDateAvailability?.availability?.slots?.[option.value]?.status)}`
+                        : ''}
                     </option>
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-slate-500">Service visits are scheduled during business hours, from 8 AM to 5 PM.</p>
               </div>
+            </section>
+            <div className="border-t border-slate-200 pt-5">
+              <RequestSectionHeading
+                id="request-details-title"
+                title="Additional details"
+              />
             </div>
             <div>
               <label htmlFor="request-details" className={labelClass}>
-                Request Details <span className="text-slate-400">(Optional)</span>
+                Notes <span className="text-slate-400">(Optional)</span>
               </label>
-              <textarea id="request-details" value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} rows="3" placeholder="Describe your request"  />
+              <textarea id="request-details" value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} rows="4" placeholder="Describe the work needed or anything the team should know before visiting" />
             </div>
             {submitError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{submitError}</p>}
             {message && <p className={`rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm ${messageToneClassName}`}>{message}</p>}
           </div>
-          <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+          <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
             <button
               type="submit"
               disabled={isSubmitting || serviceTypes.length === 0}
-              className="w-full rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {isSubmitting ? 'Submitting...' : 'Create Service Request'}
+              {!isSubmitting && <FiArrowRight aria-hidden="true" />}
             </button>
           </div>
         </form>
 
-        <div className="self-start rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-base font-semibold text-slate-900">Location Pin</h3>
-          <div className="mt-4">
+        <aside className="self-start overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+            <h2 className="text-base font-semibold text-slate-950">Pin service location</h2>
+          </div>
+          <div className="p-4 sm:p-5">
             <div className="relative">
-              <div className="flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100">
-                <FiSearch className="text-slate-400" size={18} />
+              <div className="flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2.5 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100">
+                <FiSearch className="text-slate-400" size={18} aria-hidden="true" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search for address, city, or landmark..."
-                  className="flex-1 bg-transparent text-sm outline-none"
+                  placeholder="Search address or landmark"
+                  aria-label="Search service location"
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none"
                   autoComplete="off"
                 />
               </div>
@@ -693,16 +771,15 @@ const selectSearchResult = async (result) => {
                       onClick={() => selectSearchResult(result)}
                       className="w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition last:border-b-0 hover:bg-brand-50"
                     >
-                      <div className="font-medium truncate">{result.display_name.split(',')[0]}</div>
-                      <div className="text-xs text-slate-500 truncate">{result.display_name}</div>
+                      <div className="truncate font-medium">{result.display_name.split(',')[0]}</div>
+                      <div className="truncate text-xs text-slate-500">{result.display_name}</div>
                     </button>
                   ))}
                 </div>
               )}
             </div>
-          </div>
 
-          <div className="map-wrapper h-72 border border-slate-200 lg:h-[24rem]">
+          <div className="map-wrapper mt-4 h-72 overflow-hidden rounded-xl border border-slate-200 lg:h-[24rem]">
             <MapContainer
               center={mapCenter}
               zoom={10}
@@ -716,15 +793,23 @@ const selectSearchResult = async (result) => {
               <LocationPicker lat={latitude} lng={longitude} setLat={setLatitude} setLng={setLongitude} onLocationChange={handleLocationChange} />
             </MapContainer>
           </div>
-          <div className="mt-3 text-xs font-medium text-slate-500">
-            Selected: {latitude != null ? latitude.toFixed(6) : 'unset'} , {longitude != null ? longitude.toFixed(6) : 'unset'}
+          <div className={`mt-3 flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium ${
+            latitude != null && longitude != null
+              ? 'border-green-200 bg-green-50 text-green-800'
+              : 'border-slate-200 bg-slate-50 text-slate-600'
+          }`}>
+            <span className={`h-2.5 w-2.5 rounded-full ${latitude != null && longitude != null ? 'bg-green-500' : 'bg-slate-300'}`} />
+            {latitude != null && longitude != null
+              ? `Pin selected: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+              : 'No location pin selected yet'}
           </div>
           <button
             type="button"
             onClick={handleUseMyLocation}
             disabled={isLocating}
-            className="mt-2 rounded-xl bg-brand-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-wait disabled:opacity-60"
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-100 disabled:cursor-wait disabled:opacity-60"
           >
+            <FiMapPin aria-hidden="true" />
             {isLocating ? 'Finding location...' : 'Use My Location'}
           </button>
           {insecurePhoneLocation ? (
@@ -737,7 +822,8 @@ const selectSearchResult = async (result) => {
               {locationError}
             </p>
           ) : null}
-        </div>
+          </div>
+        </aside>
       </div>
     </Layout>
   );

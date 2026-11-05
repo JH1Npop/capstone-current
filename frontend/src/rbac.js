@@ -38,6 +38,12 @@ export const CAPABILITIES = {
   serviceCatalogManage: 'services.catalog.manage',
   documentsView: 'documents.view',
   documentsManage: 'documents.manage',
+  documentTemplatesUpload: 'documents.templates.upload',
+  documentTemplatesManage: 'documents.templates.manage',
+  documentTemplatesPublish: 'documents.templates.publish',
+  documentTemplatesRollback: 'documents.templates.rollback',
+  documentDefinitionsManage: 'documents.definitions.manage',
+  documentAttachmentsManage: 'documents.attachments.manage',
   analyticsView: 'analytics.view',
   reportsView: 'reports.view',
   reportsExport: 'reports.export',
@@ -85,6 +91,22 @@ export const DOCUMENTS_VIEW_CAPABILITIES = [
 export const DOCUMENTS_MANAGE_CAPABILITIES = [
   CAPABILITIES.documentsManage
 ];
+
+export const DOCUMENT_TEMPLATES_ACCESS_CAPABILITIES = [
+  CAPABILITIES.documentTemplatesUpload,
+  CAPABILITIES.documentTemplatesManage,
+  CAPABILITIES.documentTemplatesPublish,
+  CAPABILITIES.documentTemplatesRollback,
+  CAPABILITIES.documentDefinitionsManage,
+  CAPABILITIES.documentAttachmentsManage
+];
+
+export const DOCUMENT_TEMPLATES_UPLOAD_CAPABILITIES = [CAPABILITIES.documentTemplatesUpload];
+export const DOCUMENT_TEMPLATES_MANAGE_CAPABILITIES = [CAPABILITIES.documentTemplatesManage];
+export const DOCUMENT_TEMPLATES_PUBLISH_CAPABILITIES = [CAPABILITIES.documentTemplatesPublish];
+export const DOCUMENT_TEMPLATES_ROLLBACK_CAPABILITIES = [CAPABILITIES.documentTemplatesRollback];
+export const DOCUMENT_DEFINITIONS_MANAGE_CAPABILITIES = [CAPABILITIES.documentDefinitionsManage];
+export const DOCUMENT_ATTACHMENTS_MANAGE_CAPABILITIES = [CAPABILITIES.documentAttachmentsManage];
 
 export const ANALYTICS_VIEW_CAPABILITIES = [
   CAPABILITIES.analyticsView

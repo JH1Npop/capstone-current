@@ -176,6 +176,23 @@ inspection exceptions (`Awaiting Materials` or cancellation) require a reason
 in both the API and review dialog. Whitespace is normalized before the same
 evidence is written to the ticket activity log and `ServiceStatusHistory`.
 
+Administrators and superadministrators with dispatch access configure a maximum
+appointment count for Morning, Midday, and Afternoon. A slot is automatically
+Available while more than one place remains, Limited when one remains, and Full
+when capacity is reached. They may also apply a reasoned Limited or Closed
+override to a future date or date range for the whole day or one slot; manual
+overrides take priority, and reopening preserves who reopened the record and
+when. Limited remains requestable; Full and Closed are enforced when a client
+creates a request, when office staff approve it, and whenever a ticket schedule
+is created or changed, including schedule fields submitted through manual
+technician assignment. Capacity-sensitive schedule, capacity, and closure
+writes serialize on the shared policy row before checking their target rows.
+Exact ticket times map to the same slots. Existing
+appointments remain visible and editable and are never cancelled by an
+availability change. Availability does not start, pause, or extend SLA clocks;
+operators use the normal reasoned reschedule/dismiss workflow when existing
+work must change.
+
 ## Quotations and deposits
 
 One quotation record belongs to each ticket (`QuotationRecord.ticket` is
@@ -236,3 +253,31 @@ active maintenance case; a due or due-soon schedule ensures a current linked
 case exists. `dismissed` means reminders stopped, not record deleted, and the
 schedule remains visible through the **Stopped** filter. The default list is
 the active queue and excludes both completed and stopped schedules.
+
+## Document templates and custom document types
+
+Added 2026-11-06. Source of truth: `backend/services/views/document_templates.py`, `backend/services/document_templates.py`, `DocumentTemplateVersion` / `DocumentTemplate` / `DocumentDefinition` in `backend/services/models/documents.py`.
+
+**Template version** (`publication_status`; at most one `active` per design, enforced by a database constraint):
+
+| From | To | How | Rules |
+| --- | --- | --- | --- |
+| (upload) | `draft` | `POST /document-template-versions/` (also the new version made by `fill-blanks`) | File safety checks; `validation_status` is `valid` or `invalid`. |
+| `draft` | `draft` | `revalidate`, `accept-fields` (custom only), `place-fields` (PDF only) | The stored file never changes; `fill-blanks` never edits a version, it creates a new draft. |
+| `draft` | `active` | `activate` or `use-design` | `validation_status == valid`; PDFs need `readiness_status` `ready_fill`/`ready_auto`; core documents need every required component (aliases: quotation `attention`, technical data sheet `last_name`/`first_name`, commissioning checklist `site_name` count as the client). The previously active version of the same design becomes `retired`. |
+| `retired` | `active` | `rollback` | Only to an earlier version; a version that was active before is allowed even if today's required components changed. |
+
+`use-design` additionally makes its design the enabled default, and switches a custom document type on when the user also has `documents.definitions.manage`.
+
+**Design** (`DocumentTemplate`): `is_default` and `is_enabled` toggle (**Set default**, **Retire**/**Enable**). Delete only when it has no active version, no generated outputs and no prepared instances.
+
+**Custom document type** (`DocumentDefinition.category == 'custom'`):
+
+| From | To | How | Rules |
+| --- | --- | --- | --- |
+| (register) | inactive | `POST /document-definitions/` | Always created inactive. |
+| inactive | active | `PATCH is_active=true` or `use-design` | Needs an enabled default design with an active, valid version. |
+| active | inactive | `PATCH is_active=false` (**Disable document**) | History kept. |
+| inactive or active | deleted | `DELETE /document-definitions/<id>/` | Only if it never produced an output or a prepared instance; removes its designs, versions, stored files and fields. |
+
+The six core document types cannot be edited, disabled or deleted.

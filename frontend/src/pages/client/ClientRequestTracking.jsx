@@ -101,7 +101,7 @@ export default function ClientRequestTracking() {
       setCancelReason('');
       await loadRequests();
     } catch (err) {
-      setError(err.message || 'Failed to cancel request');
+      setError(err.message || 'Failed to dismiss request');
     } finally {
       setCancelling(false);
     }
@@ -118,7 +118,7 @@ export default function ClientRequestTracking() {
     { value: 'approved', label: 'Approved' },
     { value: 'in_progress', label: 'In progress' },
     { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' },
+    { value: 'cancelled', label: 'Dismissed' },
   ];
 
   useEffect(() => {
@@ -132,7 +132,7 @@ export default function ClientRequestTracking() {
       <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm text-slate-500">Monitor progress, technician assignment, and cancellations.</p>
+            <p className="text-sm text-slate-500">Monitor progress, technician assignment, and dismissed requests.</p>
           </div>
           <button
             onClick={() => navigate('/client/service-requests')}
@@ -320,7 +320,7 @@ export default function ClientRequestTracking() {
                           }}
                           className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
                         >
-                          <FiX size={16} /> Cancel
+                          <FiX size={16} /> Dismiss
                         </button>
                       )}
                     </div>
@@ -419,7 +419,7 @@ export default function ClientRequestTracking() {
                                   setCancelReason('');
                                 }}
                                 className="grid h-9 w-9 place-items-center rounded-lg border border-rose-200 text-rose-600 transition hover:bg-rose-50"
-                                aria-label={`Cancel request ${request.id}`}
+                                aria-label={`Dismiss request ${request.id}`}
                               >
                                 <FiX size={16} />
                               </button>
@@ -449,11 +449,11 @@ export default function ClientRequestTracking() {
       </div>
       {cancelTarget && (
         <ConfirmationDialog
-          title="Cancel service request?"
-          message={`${formatRequestId(cancelTarget.id)} will be removed from active processing if work has not started. AFN will be notified.`}
+          title="Dismiss service request?"
+          message={`${formatRequestId(cancelTarget.id)} will be closed and removed from active processing if work has not started. AFN will be notified, and the request will remain in its history.`}
           tone="danger"
           icon="warning"
-          confirmLabel="Cancel request"
+          confirmLabel="Dismiss request"
           cancelLabel="Keep request"
           loading={cancelling}
           onCancel={() => {
@@ -469,7 +469,7 @@ export default function ClientRequestTracking() {
               onChange={(event) => setCancelReason(event.target.value)}
               rows={3}
               maxLength={240}
-              placeholder="Briefly explain why this request is being cancelled."
+              placeholder="Briefly explain why this request should be dismissed."
               className="mt-2 w-full resize-none rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
             />
           </label>

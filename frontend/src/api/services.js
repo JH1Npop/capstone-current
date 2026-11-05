@@ -192,7 +192,7 @@ export const terminateServiceTicketForClientWithdrawal = async (ticketId, detail
     });
     return data;
   } catch (error) {
-    throw new Error(getApiErrorMessage(error, 'Unable to terminate the service ticket.'));
+    throw new Error(getApiErrorMessage(error, 'Unable to dismiss the service ticket.'));
   }
 };
 
@@ -276,11 +276,28 @@ export const fetchTicketTimeline = async (ticketId) => {
   }
 };
 
+const downloadBlobResponse = (response, fallbackFilename) => {
+  const contentDisposition = response.headers?.['content-disposition'] || '';
+  const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  const filename = filenameMatch?.[1] || fallbackFilename;
+  const url = window.URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
 export const downloadTicketDocument = async (ticketId, documentType = 'field_service_report', options = {}) => {
   try {
     const payload = { document_type: documentType };
     if (options?.reportId !== undefined && options?.reportId !== null && options?.reportId !== '') {
       payload.report_id = options.reportId;
+    }
+    if (options?.templateId !== undefined && options?.templateId !== null && options?.templateId !== '') {
+      payload.template_id = options.templateId;
     }
 
     const response = await api.post(
@@ -288,19 +305,398 @@ export const downloadTicketDocument = async (ticketId, documentType = 'field_ser
       payload,
       { responseType: 'blob' }
     );
-    const contentDisposition = response.headers?.['content-disposition'] || '';
-    const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
-    const filename = filenameMatch?.[1] || `${documentType}_${ticketId}.docx`;
-    const url = window.URL.createObjectURL(response.data);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+    downloadBlobResponse(response, `${documentType}_${ticketId}.docx`);
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to generate the document.'));
+  }
+};
+
+export const fetchDocumentDefinitions = async (params = undefined) => {
+  try {
+    const { data } = await api.get('/services/document-definitions/', { params });
+    return Array.isArray(data) ? data : (data?.results || []);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load document definitions.'));
+  }
+};
+
+export const createDocumentDefinition = async (payload) => {
+  try {
+    const { data } = await api.post('/services/document-definitions/', payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to register the custom document.'));
+  }
+};
+
+export const updateDocumentDefinition = async (definitionId, payload) => {
+  try {
+    const { data } = await api.patch(`/services/document-definitions/${definitionId}/`, payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to update the custom document.'));
+  }
+};
+
+export const fetchDocumentFieldDefinitions = async (definitionId) => {
+  try {
+    const { data } = await api.get('/services/document-field-definitions/', { params: { definition: definitionId } });
+    return Array.isArray(data) ? data : (data?.results || []);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load custom document fields.'));
+  }
+};
+
+export const createDocumentFieldDefinition = async (payload) => {
+  try {
+    const { data } = await api.post('/services/document-field-definitions/', payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to add the custom field.'));
+  }
+};
+
+export const updateDocumentFieldDefinition = async (fieldId, payload) => {
+  try {
+    const { data } = await api.patch(`/services/document-field-definitions/${fieldId}/`, payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to update the custom field.'));
+  }
+};
+
+export const fetchDocumentTemplates = async (definitionId) => {
+  try {
+    const { data } = await api.get('/services/document-templates/', {
+      params: definitionId ? { definition: definitionId } : undefined
+    });
+    return Array.isArray(data) ? data : (data?.results || []);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load document designs.'));
+  }
+};
+
+export const createDocumentTemplate = async (payload) => {
+  try {
+    const { data } = await api.post('/services/document-templates/', payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to create the document design.'));
+  }
+};
+
+export const updateDocumentTemplate = async (templateId, payload) => {
+  try {
+    const { data } = await api.patch(`/services/document-templates/${templateId}/`, payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to update the document design.'));
+  }
+};
+
+export const deleteDocumentDefinition = async (definitionId) => {
+  try {
+    await api.delete(`/services/document-definitions/${definitionId}/`);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to delete the document type.'));
+  }
+};
+
+export const deleteDocumentTemplate = async (templateId) => {
+  try {
+    await api.delete(`/services/document-templates/${templateId}/`);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to delete the document design.'));
+  }
+};
+
+export const fetchDocumentTemplateVersions = async (templateId) => {
+  try {
+    const { data } = await api.get('/services/document-template-versions/', {
+      params: templateId ? { template: templateId } : undefined
+    });
+    return Array.isArray(data) ? data : (data?.results || []);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load template versions.'));
+  }
+};
+
+export const uploadDocumentTemplateVersion = async ({ templateId, file, changeNotes = '', onProgress = null }) => {
+  const formData = new FormData();
+  formData.append('template', templateId);
+  formData.append('file', file);
+  formData.append('change_notes', changeNotes);
+  try {
+    const { data } = await api.post('/services/document-template-versions/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: onProgress ? (event) => onProgress(event.total ? Math.round((event.loaded / event.total) * 100) : null) : undefined,
+    });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to save the document template.'));
+  }
+};
+
+export const downloadDocumentTemplateVersion = async (versionId, fallbackFilename = 'document-template') => {
+  try {
+    const response = await api.get(
+      `/services/document-template-versions/${versionId}/download/`,
+      { responseType: 'blob' }
+    );
+    downloadBlobResponse(response, fallbackFilename);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to download the original template.'));
+  }
+};
+
+export const downloadBuiltInDesign = async (definitionId, fallbackFilename = 'afn-design.docx') => {
+  try {
+    const response = await api.get(`/services/document-definitions/${definitionId}/built-in-design/`, { responseType: 'blob' });
+    downloadBlobResponse(response, fallbackFilename);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to download the original design.'));
+  }
+};
+
+export const downloadDocumentStarter = async (definitionId, fallbackFilename = 'document-starter.docx') => {
+  try {
+    const response = await api.get(`/services/document-definitions/${definitionId}/starter/`, { responseType: 'blob' });
+    downloadBlobResponse(response, fallbackFilename);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to download the starter file.'));
+  }
+};
+
+export const fetchDocumentTemplateSource = async (versionId) => {
+  try {
+    const response = await api.get(
+      `/services/document-template-versions/${versionId}/download/`,
+      { responseType: 'blob' }
+    );
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to open the original template.'));
+  }
+};
+
+export const fetchDocumentTemplateFields = async (versionId) => {
+  try {
+    const { data } = await api.get('/services/document-template-fields/', { params: { template_version: versionId } });
+    return Array.isArray(data) ? data : (data?.results || []);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load template fields.'));
+  }
+};
+
+export const createDocumentTemplateField = async (payload) => {
+  try {
+    const { data } = await api.post('/services/document-template-fields/', payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to save the template field.'));
+  }
+};
+
+export const updateDocumentTemplateField = async (fieldId, payload) => {
+  try {
+    const { data } = await api.patch(`/services/document-template-fields/${fieldId}/`, payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to update the template field.'));
+  }
+};
+
+export const deleteDocumentTemplateField = async (fieldId) => {
+  try {
+    await api.delete(`/services/document-template-fields/${fieldId}/`);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to remove the template field.'));
+  }
+};
+
+const runTemplateVersionAction = async (versionId, action, fallbackMessage) => {
+  try {
+    const { data } = await api.post(`/services/document-template-versions/${versionId}/${action}/`);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, fallbackMessage));
+  }
+};
+
+export const activateDocumentTemplateVersion = (versionId) => runTemplateVersionAction(
+  versionId,
+  'activate',
+  'Unable to activate this template version.'
+);
+
+// One step: check the design again, make it the active design, make it the default, and switch its document on.
+export const adoptDocumentTemplateVersion = (versionId) => runTemplateVersionAction(
+  versionId,
+  'use-design',
+  'Unable to use this design.'
+);
+
+// Check a draft design again, for example after its custom fields were registered.
+export const revalidateDocumentTemplateVersion = (versionId) => runTemplateVersionAction(
+  versionId,
+  'revalidate',
+  'Unable to check this design again.'
+);
+
+// Turn plain names found in a custom design (for example "[Site Name]") into fill-in fields.
+export const addDocumentFieldsFromDesign = async (versionId, names) => {
+  try {
+    const { data } = await api.post(`/services/document-template-versions/${versionId}/accept-fields/`, { names });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to add these fields.'));
+  }
+};
+
+export const placePdfFields = async (versionId, names) => {
+  try {
+    const response = await api.post(`/services/document-template-versions/${versionId}/place-fields/`, { names });
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to place the fields on this PDF.'));
+  }
+};
+
+export const fillDesignBlanks = async (versionId, names) => {
+  try {
+    const response = await api.post(`/services/document-template-versions/${versionId}/fill-blanks/`, { names });
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to fill the blanks in this design.'));
+  }
+};
+
+export const rollbackDocumentTemplateVersion = (versionId) => runTemplateVersionAction(
+  versionId,
+  'rollback',
+  'Unable to roll back to this template version.'
+);
+
+export const testRenderDocumentTemplateVersion = async (versionId, ticketId, reportId = null) => {
+  try {
+    const payload = { ticket_id: ticketId };
+    if (reportId) payload.report_id = reportId;
+    const response = await api.post(
+      `/services/document-template-versions/${versionId}/test-render/`,
+      payload,
+      { responseType: 'blob' }
+    );
+    const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+    const extension = contentType.includes('pdf') ? 'pdf' : 'docx';
+    downloadBlobResponse(response, `template-test-v${versionId}.${extension}`);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to render this template version.'));
+  }
+};
+
+export const fetchDocumentOutputs = async (ticketId, instanceId = null) => {
+  try {
+    const { data } = await api.get('/services/document-outputs/', {
+      params: ticketId ? { ticket: ticketId } : (instanceId ? { instance: instanceId } : undefined)
+    });
+    return Array.isArray(data) ? data : (data?.results || []);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load generated document history.'));
+  }
+};
+
+export const fetchDocumentInstances = async (params = {}) => {
+  try {
+    const { data } = await api.get('/services/document-instances/', { params });
+    return Array.isArray(data) ? data : (data?.results || []);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load document drafts.'));
+  }
+};
+
+export const createDocumentInstance = async (payload) => {
+  try {
+    const { data } = await api.post('/services/document-instances/', payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to save the document draft.'));
+  }
+};
+
+export const updateDocumentInstance = async (instanceId, payload) => {
+  try {
+    const { data } = await api.patch(`/services/document-instances/${instanceId}/`, payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to update the document draft.'));
+  }
+};
+
+export const generateCustomDocument = async (instanceId, templateId = null) => {
+  try {
+    const response = await api.post(
+      `/services/document-instances/${instanceId}/generate/`,
+      templateId ? { template_id: templateId } : {},
+      { responseType: 'blob' }
+    );
+    downloadBlobResponse(response, `custom-document-${instanceId}.docx`);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to generate the document.'));
+  }
+};
+
+export const previewDocumentInstance = async (instanceId, templateId = null) => {
+  try {
+    const response = await api.post(
+      `/services/document-instances/${instanceId}/preview/`,
+      templateId ? { template_id: templateId } : {},
+      { responseType: 'blob' }
+    );
+    return { blob: response.data, contentType: response.headers?.['content-type'] || response.data?.type || '' };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to preview the document.'));
+  }
+};
+
+export const fetchDocumentAttachments = async (instanceId) => {
+  try {
+    const { data } = await api.get('/services/document-attachments/', { params: { instance: instanceId } });
+    return Array.isArray(data) ? data : (data?.results || []);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load document attachments.'));
+  }
+};
+
+export const uploadDocumentAttachment = async ({ instanceId, file, description = '' }) => {
+  const formData = new FormData();
+  formData.append('instance', instanceId);
+  formData.append('file', file);
+  formData.append('description', description);
+  try {
+    const { data } = await api.post('/services/document-attachments/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to upload the attachment.'));
+  }
+};
+
+export const downloadDocumentAttachment = async (attachmentId, fallbackFilename) => {
+  try {
+    const response = await api.get(`/services/document-attachments/${attachmentId}/download/`, { responseType: 'blob' });
+    downloadBlobResponse(response, fallbackFilename || `attachment-${attachmentId}`);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to download the attachment.'));
+  }
+};
+
+export const downloadDocumentOutput = async (outputId, fallbackFilename = `document-output-${outputId}.docx`) => {
+  try {
+    const response = await api.get(`/services/document-outputs/${outputId}/download/`, { responseType: 'blob' });
+    downloadBlobResponse(response, fallbackFilename);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to download this archived document.'));
   }
 };
 
@@ -371,6 +767,17 @@ export const createServiceRequest = async (requestData, idempotencyKey = globalT
     return data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to create service request.'));
+  }
+};
+
+export const fetchAppointmentAvailability = async ({ start, end }) => {
+  try {
+    const { data } = await api.get('/services/service-requests/appointment-availability/', {
+      params: { start, end },
+    });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load appointment availability.'));
   }
 };
 

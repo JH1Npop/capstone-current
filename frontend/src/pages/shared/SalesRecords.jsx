@@ -339,7 +339,7 @@ export default function SalesRecords() {
                     {!showVoidForm ? <button type="button" onClick={() => setShowVoidForm(true)} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"><FiSlash /> Void and replace</button> : (
                       <div className="rounded-lg border border-red-200 bg-red-50 p-3">
                         <label className="text-sm font-medium text-red-800">Reason for voiding<textarea value={voidReason} onChange={(event) => setVoidReason(event.target.value)} rows={2} className="mt-1 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-slate-800" /></label>
-                        <div className="mt-2 flex gap-2"><button type="button" onClick={handleVoid} disabled={saving || !voidReason.trim()} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Confirm void</button><button type="button" onClick={() => setShowVoidForm(false)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Cancel</button></div>
+                        <div className="mt-2 flex gap-2"><button type="button" onClick={handleVoid} disabled={saving || !voidReason.trim()} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Confirm void</button><button type="button" onClick={() => setShowVoidForm(false)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Dismiss</button></div>
                       </div>
                     )}
                   </div>

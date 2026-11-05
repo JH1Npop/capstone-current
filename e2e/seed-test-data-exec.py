@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from inventory.models import InventoryCategory, InventoryItem, InventoryTransaction
 from messages_app.models import CustomerSupportCase
-from services.models import ServiceLocation, ServiceRequest, ServiceRequestService, ServiceTicket, ServiceType
+from services.models import DocumentDefinition, DocumentTemplate, ServiceLocation, ServiceRequest, ServiceRequestService, ServiceTicket, ServiceType
 from users.models import TechnicianProfile, ClientProfile, ManagementProfile, UserCapabilityGrant
 from users.rbac import ROLE_CAPABILITY_MAP
 
@@ -58,6 +58,34 @@ ensure_user(
 )
 tech = ensure_user('tech_test', 'technician', 'tech_test@afntest.com', 'Test', 'Technician', TECH_CAPABILITIES)
 client = ensure_user('client_test', 'client', 'client_test@afntest.com', 'Test', 'Client', [])
+
+# Django's E2E reset intentionally flushes all rows after migrations. Restore
+# the core registry normally created by migration 0065 so template-management
+# browser journeys exercise the same document catalog as deployed databases.
+for order, (code, name) in enumerate([
+    ('technical_data_sheet', 'Technical Data Sheet'),
+    ('quotation_proposal', 'Quotation / Proposal'),
+    ('installation_contract', 'Installation Contract'),
+    ('commissioning_checklist', 'Solar Commissioning Checklist'),
+    ('turnover_acceptance', 'Project Turnover and Acceptance'),
+    ('field_service_report', 'Field Service Report'),
+], start=1):
+    definition = DocumentDefinition.objects.create(
+        code=code,
+        name=name,
+        category='core',
+        data_source='ticket',
+        core_workflow_binding=code,
+        is_active=True,
+        display_order=order * 10,
+    )
+    DocumentTemplate.objects.create(
+        definition=definition,
+        name='Standard',
+        description='Legacy-compatible standard design.',
+        is_default=True,
+        is_enabled=True,
+    )
 
 # A deterministic ticket makes the Documents browser test exercise real
 # prefill and draft persistence instead of silently passing an empty state.

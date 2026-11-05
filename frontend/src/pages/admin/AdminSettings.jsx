@@ -133,6 +133,23 @@ export default function AdminSettings() {
       setMessage({ type: 'error', text: 'Support email is required.' });
       return false;
     }
+    const numericSettings = [
+      ['maintenanceReminderDays', 'Maintenance reminder', 3, 30],
+      ['arrivalRadiusMeters', 'Allowed radius', 1, 1000],
+      ...(settings.canManageOrganizationSettings ? [
+        ['quotationValidityDays', 'Quotation validity', 1, 365],
+        ['defaultWarrantyDays', 'Default warranty', 1, 3650],
+      ] : []),
+    ];
+    const invalidNumericSetting = numericSettings.find(([key, , min, max]) => {
+      const value = Number(settings[key]);
+      return settings[key] === '' || !Number.isFinite(value) || value < min || value > max;
+    });
+    if (invalidNumericSetting) {
+      const [, label, min, max] = invalidNumericSetting;
+      setMessage({ type: 'error', text: `${label} must be between ${min} and ${max}.` });
+      return false;
+    }
     const overtimeMinutes = Number(settings.overtimeDailyCapacityMinutes || 600);
     if (
       settings.allowOvertimeDispatch &&
@@ -153,6 +170,12 @@ export default function AdminSettings() {
       const payload = {
         ...settings,
         overtimeDailyCapacityMinutes: overtimeMinutes,
+        maintenanceReminderDays: Number(settings.maintenanceReminderDays),
+        arrivalRadiusMeters: Number(settings.arrivalRadiusMeters),
+        ...(settings.canManageOrganizationSettings ? {
+          quotationValidityDays: Number(settings.quotationValidityDays),
+          defaultWarrantyDays: Number(settings.defaultWarrantyDays),
+        } : {}),
       };
       if (!settings.canManageOrganizationSettings) {
         ['companyName', 'companyAddress', 'documentFooter', 'currencyCode', 'quotationValidityDays', 'defaultWarrantyDays', 'externalPaymentNotice']
@@ -412,7 +435,7 @@ export default function AdminSettings() {
                 <div className="mt-4 grid gap-4 md:grid-cols-3">
                   <label className="block"><span className="text-sm font-medium text-slate-700">Opening Time</span><input type="time" className={inputClass} value={settings.businessOpenTime || '08:00'} onChange={(e) => updateSetting('businessOpenTime', e.target.value)} disabled={loading} /></label>
                   <label className="block"><span className="text-sm font-medium text-slate-700">Closing Time</span><input type="time" className={inputClass} value={settings.businessCloseTime || '17:00'} onChange={(e) => updateSetting('businessCloseTime', e.target.value)} disabled={loading} /></label>
-                  <label className="block"><span className="text-sm font-medium text-slate-700">Maintenance Reminder</span><input type="number" min="3" max="30" className={inputClass} value={settings.maintenanceReminderDays || 7} onChange={(e) => updateSetting('maintenanceReminderDays', Number(e.target.value))} disabled={loading} /><span className="mt-1 block text-xs text-slate-500">Days before due date</span></label>
+                  <label className="block"><span className="text-sm font-medium text-slate-700">Maintenance Reminder</span><input type="number" min="3" max="30" className={inputClass} value={settings.maintenanceReminderDays ?? 7} onChange={(e) => updateSetting('maintenanceReminderDays', e.target.value)} disabled={loading} /><span className="mt-1 block text-xs text-slate-500">Days before due date</span></label>
                 </div>
                 <label className="mt-4 block"><span className="text-sm font-medium text-slate-700">Holiday Dates</span><input className={inputClass} value={(settings.holidayDates || []).join(', ')} onChange={(e) => updateSetting('holidayDates', e.target.value.split(',').map((value) => value.trim()).filter(Boolean))} placeholder="2026-12-25, 2027-01-01" disabled={loading} /><span className="mt-1 block text-xs text-slate-500">Use YYYY-MM-DD, separated by commas.</span></label>
               </div>
@@ -425,8 +448,8 @@ export default function AdminSettings() {
                   <label className="block"><span className="text-sm font-medium text-slate-700">Company Name</span><input className={inputClass} value={settings.companyName || ''} onChange={(e) => updateSetting('companyName', e.target.value)} disabled={loading || !settings.canManageOrganizationSettings} /></label>
                   <label className="block"><span className="text-sm font-medium text-slate-700">Currency</span><input className={inputClass} maxLength={3} value={settings.currencyCode || 'PHP'} onChange={(e) => updateSetting('currencyCode', e.target.value.toUpperCase())} disabled={loading || !settings.canManageOrganizationSettings} /></label>
                   <label className="block md:col-span-2"><span className="text-sm font-medium text-slate-700">Company Address</span><textarea className={inputClass} rows={2} value={settings.companyAddress || ''} onChange={(e) => updateSetting('companyAddress', e.target.value)} disabled={loading || !settings.canManageOrganizationSettings} /></label>
-                  <label className="block"><span className="text-sm font-medium text-slate-700">Quotation Validity (days)</span><input type="number" min="1" max="365" className={inputClass} value={settings.quotationValidityDays || 30} onChange={(e) => updateSetting('quotationValidityDays', Number(e.target.value))} disabled={loading || !settings.canManageOrganizationSettings} /></label>
-                  <label className="block"><span className="text-sm font-medium text-slate-700">Default Warranty (days)</span><input type="number" min="1" max="3650" className={inputClass} value={settings.defaultWarrantyDays || 365} onChange={(e) => updateSetting('defaultWarrantyDays', Number(e.target.value))} disabled={loading || !settings.canManageOrganizationSettings} /></label>
+                  <label className="block"><span className="text-sm font-medium text-slate-700">Quotation Validity (days)</span><input type="number" min="1" max="365" className={inputClass} value={settings.quotationValidityDays ?? 30} onChange={(e) => updateSetting('quotationValidityDays', e.target.value)} disabled={loading || !settings.canManageOrganizationSettings} /></label>
+                  <label className="block"><span className="text-sm font-medium text-slate-700">Default Warranty (days)</span><input type="number" min="1" max="3650" className={inputClass} value={settings.defaultWarrantyDays ?? 365} onChange={(e) => updateSetting('defaultWarrantyDays', e.target.value)} disabled={loading || !settings.canManageOrganizationSettings} /></label>
                   <label className="block md:col-span-2"><span className="text-sm font-medium text-slate-700">External Payment Notice</span><textarea className={inputClass} rows={2} value={settings.externalPaymentNotice || ''} onChange={(e) => updateSetting('externalPaymentNotice', e.target.value)} disabled={loading || !settings.canManageOrganizationSettings} /></label>
                   <label className="block md:col-span-2"><span className="text-sm font-medium text-slate-700">Document Footer</span><textarea className={inputClass} rows={2} value={settings.documentFooter || ''} onChange={(e) => updateSetting('documentFooter', e.target.value)} disabled={loading || !settings.canManageOrganizationSettings} /></label>
                 </div>
@@ -462,7 +485,7 @@ export default function AdminSettings() {
                       min="1"
                       max="1000"
                       value={settings.arrivalRadiusMeters ?? 30}
-                      onChange={(event) => updateSetting('arrivalRadiusMeters', Number(event.target.value))}
+                      onChange={(event) => updateSetting('arrivalRadiusMeters', event.target.value)}
                       className={inputClass}
                       disabled={loading}
                     />

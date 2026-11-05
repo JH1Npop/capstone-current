@@ -56,7 +56,12 @@ export function TrendTotals({ rows = [] }) {
 // Workflow pipeline: one segmented bar for the current share, then a ranked stage list.
 export function StatusPipeline({ data = [] }) {
   if (!data.length) return <EmptyState>No tickets match these filters.</EmptyState>;
-  const rows = data.map((row, index) => ({ ...row, color: statusColor(row, index), count: Number(row.count || 0) }));
+  const rows = data.map((row, index) => ({
+    ...row,
+    color: statusColor(row, index),
+    count: Number(row.count || 0),
+    displayLabel: String(row.label || '').trim().toLowerCase() === 'cancelled' ? 'Dismissed' : row.label,
+  }));
   const total = rows.reduce((sum, row) => sum + row.count, 0);
   const hasPrevious = rows.some((row) => row.previous_count != null);
   const previousTotal = hasPrevious ? rows.reduce((sum, row) => sum + Number(row.previous_count || 0), 0) : null;
@@ -74,14 +79,14 @@ export function StatusPipeline({ data = [] }) {
       </div>
       <div className="mt-3 flex h-3 gap-0.5 overflow-hidden rounded-full bg-slate-100">
         {rows.filter((row) => row.count > 0).map((row) => (
-          <div key={row.label} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${(row.count / Math.max(total, 1)) * 100}%`, backgroundColor: row.color }} title={`${row.label}: ${row.count}`} />
+          <div key={row.label} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${(row.count / Math.max(total, 1)) * 100}%`, backgroundColor: row.color }} title={`${row.displayLabel}: ${row.count}`} />
         ))}
       </div>
       <ul className="mt-4 divide-y divide-slate-100">
         {rows.map((row) => (
           <li key={row.label} className="flex items-center gap-3 py-2.5">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: row.color }} aria-hidden="true" />
-            <span className="min-w-0 flex-1 text-sm font-medium text-slate-700">{row.label || 'Unspecified'}</span>
+            <span className="min-w-0 flex-1 text-sm font-medium text-slate-700">{row.displayLabel || 'Unspecified'}</span>
             {hasPrevious ? <span className="text-xs tabular-nums text-slate-400">prev. {Number(row.previous_count || 0).toLocaleString('en-PH')}</span> : null}
             <span className="w-10 text-right text-xs tabular-nums text-slate-500">{total ? `${Math.round((row.count / total) * 100)}%` : '—'}</span>
             <strong className="w-8 text-right text-sm font-bold tabular-nums text-slate-900">{row.count.toLocaleString('en-PH')}</strong>

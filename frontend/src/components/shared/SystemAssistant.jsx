@@ -189,7 +189,7 @@ const SYSTEM_KNOWLEDGE = [
   },
   {
     keywords: ['checklist', 'inspection', 'proof', 'completion proof'],
-    answer: 'The checklist is currently the technician validation workflow before closing a job. It stores site/electrical/structural/safety checks, procedure checklist items, required equipment snapshot, proof media, warranty details, maintenance settings, and follow-up case details. It is not yet a separate pre-install survey approval phase; finished or cancelled jobs are locked.'
+    answer: 'The checklist is currently the technician validation workflow before closing a job. It stores site/electrical/structural/safety checks, procedure checklist items, required equipment snapshot, proof media, warranty details, maintenance settings, and follow-up case details. It is not yet a separate pre-install survey approval phase; finished or dismissed jobs are locked.'
   },
   {
     keywords: ['inventory', 'stock', 'parts', 'equipment', 'reservation'],
@@ -249,7 +249,7 @@ const SYSTEM_KNOWLEDGE = [
   },
   {
     keywords: ['activity log', 'audit', 'change log', 'logs'],
-    answer: 'Activity Logs and Change Logs support auditability. They record operational events such as login/logout, create/update/delete, assignments, reschedules, completions, cancellations, errors, and critical data changes.'
+    answer: 'Activity Logs and Change Logs support auditability. They record operational events such as login/logout, create/update/delete, assignments, reschedules, completions, dismissals, errors, and critical data changes.'
   },
   {
     keywords: ['pwa', 'installable', 'offline', 'mobile app'],

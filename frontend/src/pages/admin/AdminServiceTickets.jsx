@@ -66,6 +66,8 @@ const timeSlotOptions = [
   { value: 'afternoon', label: 'Afternoon (2 PM - 5 PM)' }
 ];
 
+const isUnavailableAppointmentStatus = (status) => status === 'closed' || status === 'full';
+
 const getServiceTypeName = (serviceType) => serviceType?.name || serviceType?.service || `Service #${serviceType?.id}`;
 const getClientLabel = (client) => {
   const mainLabel = client?.name || client?.full_name || client?.username || client?.email || formatClientId(client?.id);
@@ -159,6 +161,7 @@ export default function AdminServiceTickets() {
   const [walkInSearchQuery, setWalkInSearchQuery] = useState('');
   const [walkInSearchResults, setWalkInSearchResults] = useState([]);
   const [walkInMapCenter, setWalkInMapCenter] = useState(CALABARZON_CENTER);
+  const [walkInDateAvailability, setWalkInDateAvailability] = useState(null);
   const [walkInDiscardAction, setWalkInDiscardAction] = useState(null);
   const [rescheduleTicket, setRescheduleTicket] = useState(null);
   const [timelineTicket, setTimelineTicket] = useState(null);
@@ -301,6 +304,13 @@ export default function AdminServiceTickets() {
     try {
       const result = await reverseGeocodeLocation({ lat, lng });
       if (!result) return;
+      if (result.lookup_status === 'unavailable') {
+        setWalkInError(
+          result.message ||
+          'The map location is selected, but its address could not be loaded. Enter the address manually.'
+        );
+        return;
+      }
 
       const addr = result.address || {};
       const houseNumber = addr.house_number || '';
@@ -366,6 +376,7 @@ export default function AdminServiceTickets() {
 
   const resetWalkInForm = () => {
     setWalkInForm(initialWalkInForm);
+    setWalkInDateAvailability(null);
     setWalkInSearchQuery('');
     setWalkInSearchResults([]);
     setWalkInMapCenter(CALABARZON_CENTER);
@@ -515,14 +526,14 @@ export default function AdminServiceTickets() {
     setTerminationError('');
     try {
       await terminateServiceTicketForClientWithdrawal(terminationTarget.id, details);
-      const terminatedTicketId = terminationTarget.id;
+      const dismissedTicketId = terminationTarget.id;
       setTerminationTarget(null);
       setTerminationReason('');
       await loadData();
-      setRescheduleMessage(`${formatTicketId(terminatedTicketId)} terminated because the client backed out.`);
+      setRescheduleMessage(`${formatTicketId(dismissedTicketId)} dismissed because the client withdrew.`);
       setError('');
     } catch (terminationRequestError) {
-      setTerminationError(terminationRequestError.message || 'Unable to terminate the service ticket.');
+      setTerminationError(terminationRequestError.message || 'Unable to dismiss the service ticket.');
     } finally {
       setTerminatingTicket(false);
     }
@@ -547,6 +558,15 @@ export default function AdminServiceTickets() {
     }
     if (!walkInForm.preferredDate) {
       setWalkInError('Please choose the preferred service date.');
+      return;
+    }
+    if (walkInDateAvailability?.availability?.status === 'unavailable') {
+      setWalkInError('The selected appointment date is full or closed. Please choose another date.');
+      return;
+    }
+    const selectedSlotStatus = walkInDateAvailability?.availability?.slots?.[walkInForm.preferredTimeSlot]?.status;
+    if (walkInForm.preferredTimeSlot && isUnavailableAppointmentStatus(selectedSlotStatus)) {
+      setWalkInError('The selected time slot is full or closed. Please choose an available time slot.');
       return;
     }
     if (!walkInForm.address.trim() || !walkInForm.city.trim() || !walkInForm.province.trim()) {
@@ -587,6 +607,7 @@ export default function AdminServiceTickets() {
 
       await loadData();
       setWalkInForm(initialWalkInForm);
+      setWalkInDateAvailability(null);
       setWalkInSearchQuery('');
       setWalkInSearchResults([]);
       setWalkInMapCenter(CALABARZON_CENTER);
@@ -722,6 +743,7 @@ export default function AdminServiceTickets() {
         serviceTypes={serviceTypes}
         priorityOptions={priorityOptions}
         timeSlotOptions={timeSlotOptions}
+        selectedDateAvailability={walkInDateAvailability}
         mapCenter={walkInMapCenter}
         searchQuery={walkInSearchQuery}
         searchResults={walkInSearchResults}
@@ -730,6 +752,7 @@ export default function AdminServiceTickets() {
         getClientLabel={getClientLabel}
         getServiceTypeName={getServiceTypeName}
         onChange={updateWalkInForm}
+        onSelectedDateAvailabilityChange={setWalkInDateAvailability}
         onToggleService={toggleServiceType}
         onSearchQueryChange={setWalkInSearchQuery}
         onSearchSelect={handleWalkInSearchSelect}
@@ -1208,7 +1231,7 @@ export default function AdminServiceTickets() {
                     className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 px-4 py-3 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
                   >
                     <span className="flex items-center gap-3">
-                      <FiXCircle className="text-rose-500" size={18} /> Terminate — Client backed out
+                      <FiXCircle className="text-rose-500" size={18} /> Dismiss ticket
                     </span>
                     <span className="text-xs font-medium text-rose-500">Requires reason</span>
                   </button>
@@ -1221,11 +1244,11 @@ export default function AdminServiceTickets() {
 
       {terminationTarget && (
         <ConfirmationDialog
-          title="Terminate service ticket?"
-          message={`${formatTicketId(terminationTarget.id)} will be cancelled because the client backed out. The ticket stays in the audit history, assigned staff are released, and pending inventory reservations are returned.`}
+          title="Dismiss service ticket?"
+          message={`${formatTicketId(terminationTarget.id)} will be closed because the client withdrew. The ticket stays in the audit history, assigned staff are released, and pending inventory reservations are returned.`}
           tone="danger"
           icon="warning"
-          confirmLabel="Terminate ticket"
+          confirmLabel="Dismiss ticket"
           cancelLabel="Keep ticket active"
           loading={terminatingTicket}
           disabled={terminationReason.trim().length < 5}
