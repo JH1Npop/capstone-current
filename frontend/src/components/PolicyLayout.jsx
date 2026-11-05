@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import LandingNavbar from './LandingNavbar';
 import Footer from './LandingFooter';
-import { POLICY_EFFECTIVE_DATE, POLICY_VERSION, PRIVACY_CONTACT } from '../policies';
+import { PRIVACY_CONTACT } from '../policies';
 
 /** Shared frame for the Privacy Policy and Terms of Service pages. `sections` is [{ id, title, body }]. */
 export default function PolicyLayout({ title, intro, sections, otherPolicy }) {
@@ -12,7 +12,6 @@ export default function PolicyLayout({ title, intro, sections, otherPolicy }) {
         <article className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">{PRIVACY_CONTACT.company}</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">{title}</h1>
-          <p className="mt-2 text-sm text-slate-500">Effective {POLICY_EFFECTIVE_DATE} · Version {POLICY_VERSION}</p>
           <p className="mt-5 leading-7 text-slate-700">{intro}</p>
 
           <nav aria-label="On this page" className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">

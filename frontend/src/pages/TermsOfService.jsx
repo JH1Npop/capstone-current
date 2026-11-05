@@ -105,8 +105,7 @@ const SECTIONS = [
     title: 'Changes to these terms',
     body: (
       <p>
-        We may update these terms. The version and date are shown at the top; if a change affects you, we will ask you to agree to the
-        new version before you continue.
+        We may update these terms. If a change affects you, we will ask you to agree to the new version before you continue.
       </p>
     ),
   },

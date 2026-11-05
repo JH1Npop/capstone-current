@@ -138,8 +138,8 @@ const SECTIONS = [
     title: 'Changes to this policy',
     body: (
       <p>
-        When we change this policy we will update the version and date at the top. If the change affects how your information is
-        used, we will ask you to agree to the new version.
+        We may update this policy. If a change affects how your information is used, we will ask you to agree to the new
+        version.
       </p>
     ),
   },
