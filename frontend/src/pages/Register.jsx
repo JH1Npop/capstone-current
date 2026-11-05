@@ -43,6 +43,7 @@ export default function Register() {
     company_name: '',
     address: '',
     role: 'client',
+    accept_policies: false,
   });
   const [addressParts, setAddressParts] = useState({
     provinceCode: '',
@@ -181,6 +182,11 @@ export default function Register() {
 
     if (formData.password !== formData.password_confirm) {
       setFieldErrors({ password_confirm: 'Passwords do not match.' });
+      return;
+    }
+
+    if (!formData.accept_policies) {
+      setFieldErrors({ accept_policies: 'Please agree to the Privacy Policy and Terms of Service to create an account.' });
       return;
     }
 
@@ -459,6 +465,30 @@ export default function Register() {
             </div>
             {renderFieldError('password_confirm')}
           </label>
+        </div>
+
+        <div className="space-y-1">
+          <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              name="accept_policies"
+              checked={formData.accept_policies}
+              onChange={(event) => {
+                setFormData((previous) => ({ ...previous, accept_policies: event.target.checked }));
+                setFieldErrors((previous) => ({ ...previous, accept_policies: '' }));
+              }}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              aria-invalid={Boolean(fieldErrors.accept_policies)}
+              aria-describedby={fieldErrors.accept_policies ? 'accept_policies-error' : undefined}
+            />
+            <span>
+              I have read and agree to the{' '}
+              <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-700 underline hover:text-brand-900">Privacy Policy</Link>
+              {' '}and{' '}
+              <Link to="/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-700 underline hover:text-brand-900">Terms of Service</Link>.
+            </span>
+          </label>
+          {renderFieldError('accept_policies')}
         </div>
 
         {error && (

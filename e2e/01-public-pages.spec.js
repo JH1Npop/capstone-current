@@ -264,9 +264,15 @@ test.describe('Public Pages', () => {
     await page.getByLabel('Email *').fill('calabarzon-client@example.com');
     await page.getByLabel('Password *', { exact: true }).fill('StrongPass123!');
     await page.getByLabel('Confirm password *').fill('StrongPass123!');
+    // Without agreeing to the Privacy Policy and Terms the form explains why and sends nothing.
+    await page.getByRole('button', { name: /create account/i }).click();
+    await expect(page.getByText('Please agree to the Privacy Policy and Terms of Service to create an account.')).toBeVisible();
+    expect(submittedRegistration).toBeNull();
+    await page.getByRole('checkbox', { name: /I have read and agree to the Privacy Policy and Terms of Service/ }).check();
     await page.getByRole('button', { name: /create account/i }).click();
 
     await expect.poll(() => submittedRegistration?.address).toBe('Barangay 1, City of Lucena, Quezon');
+    expect(submittedRegistration.accept_policies).toBe(true);
     await expect(page.getByRole('heading', { name: /check your email/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /resend available in/i })).toBeDisabled();
   });
@@ -290,9 +296,32 @@ test.describe('Public Pages', () => {
     await expect(page.getByText('Passwords do not match.')).toBeVisible();
 
     await page.getByLabel('Confirm password *').fill('StrongPass123!');
+    await page.getByRole('checkbox', { name: /I have read and agree/ }).check();
     await page.getByRole('button', { name: /create account/i }).click();
     await expect(page.getByText('This email address is already in use.')).toBeVisible();
     await expect(page.getByLabel('Email *')).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  test('1.4c — Privacy Policy and Terms of Service pages open from the footer and the register form', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('contentinfo').getByRole('link', { name: 'Privacy Policy' }).click();
+    await expect(page).toHaveURL(/\/privacy$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeVisible();
+    for (const heading of ['Information we collect', 'Who we share it with', 'Your rights']) {
+      await expect(page.getByRole('heading', { name: new RegExp(heading) })).toBeVisible();
+    }
+    await expect(page.getByText(/Data Privacy Act of 2012/)).toBeVisible();
+    await expect(page.getByRole('link', { name: 'afnsunenergyserv@gmail.com' }).first()).toBeVisible();
+    await page.getByRole('main').getByRole('link', { name: 'Terms of Service' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Terms of Service' })).toBeVisible();
+    await expect(page.getByText(/A request is not a confirmed booking/)).toBeVisible();
+
+    await page.goto('/register');
+    const consent = page.getByRole('checkbox', { name: /I have read and agree/ });
+    await expect(consent).not.toBeChecked();
+    await expect(page.getByRole('link', { name: 'Privacy Policy' }).first()).toHaveAttribute('href', '/privacy');
+    await expect(page.getByRole('link', { name: 'Terms of Service' }).first()).toHaveAttribute('href', '/terms');
+    await page.screenshot({ path: 'test-results/screenshots/01-register-consent.png', fullPage: false });
   });
 
   test('1.5 — Forgot Password page renders with email input', async ({ page }) => {

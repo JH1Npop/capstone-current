@@ -36,6 +36,8 @@ import { RouteSkeleton } from './components/ui/LoadingSkeleton';
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const Login = lazy(() => import('./pages/Login'));
 const AboutPage = lazy(() => import('./pages/AboutUs'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const Register = lazy(() => import('./pages/Register'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
@@ -193,6 +195,8 @@ function AppRoutes() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/about-us" element={<AboutPage />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
           <Route path="/solar-calculator" element={<LandingPage />} />
 
           <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']} requiredAnyCapability={SUPERVISOR_DASHBOARD_CAPABILITIES}><AdminDashboard /></ProtectedRoute>} />
