@@ -179,8 +179,7 @@ test.describe('Admin Documents and Calendar - controls', () => {
     await visitWorkspacePage(page, '/admin/documents');
     for (const [opener, dialogName, closer, closesOnEscape] of [
       ['Fill template', 'Fill a document', 'Close document filling', true],
-      // The replacement wizard has no Escape handler (the other two dialogs do), so only its Close button is tested.
-      ['Replace design', 'Use a new Word or PDF design', 'Close replacement wizard', false],
+      ['Replace design', 'Use a new Word or PDF design', 'Close replacement wizard', true],
       ['Template library', 'Document templates', 'Close template manager', true],
     ]) {
       await page.getByRole('button', { name: opener, exact: true }).click();
@@ -486,12 +485,15 @@ test.describe('Admin Documents and Calendar - controls', () => {
     await expect(note).toContainText(name);
     await expect(tab).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByPlaceholder(/search ticket by id/i)).toBeFocused();
+    // The previous built-in document's editor is hidden so it is not mistaken for this one.
+    await expect(page.getByText('Editor preview')).toBeHidden();
     await page.screenshot({ path: 'test-results/screenshots/12-custom-tab-needs-ticket.png' });
 
     // Cancel clears the note and the tab.
     await note.getByRole('button', { name: 'Cancel' }).click();
     await expect(note).toHaveCount(0);
     await expect(tab).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByText('Editor preview')).toBeVisible();
 
     // 2. Pick a ticket after choosing the tab: the Fill window opens on its own.
     await tab.click();

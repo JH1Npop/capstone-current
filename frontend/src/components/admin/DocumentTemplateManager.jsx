@@ -304,14 +304,15 @@ export default function DocumentTemplateManager({ open, onClose, ticketId, initi
 
   const addCustomField = async (event) => {
     event.preventDefault();
-    if (!newField.field_key.trim() || !newField.label.trim()) return;
+    if (!newField.label.trim()) return;
     const validationConfig = newField.field_type === 'dropdown'
       ? { options: newField.options.split(',').map((item) => item.trim()).filter(Boolean) }
       : {};
     await run('field', async () => {
       await createDocumentFieldDefinition({
         definition: definitionId,
-        field_key: newField.field_key.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_'),
+        // Blank key: made from the label, the same way a plain name such as [Certificate Note] is read.
+        field_key: (newField.field_key.trim() || newField.label.trim()).toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, ''),
         label: newField.label.trim(),
         field_type: newField.field_type,
         is_required: newField.is_required,
@@ -401,20 +402,24 @@ export default function DocumentTemplateManager({ open, onClose, ticketId, initi
         {canManageDefinitions ? <button type="button" onClick={() => setDeleteCandidate({ ...selectedDefinition, kind: 'type' })} disabled={!!busy} className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"><FiTrash2 /> Delete document type</button> : null}
       </div>
       <div className="mt-4">
-        <h4 className="text-sm font-semibold text-slate-800">Manual fields</h4>
+        <h4 className="text-sm font-semibold text-slate-800">Fields staff fill in</h4>
+        <p className="mt-1 text-xs text-slate-500">Usually added from the design with <strong>Add as fields</strong>. Type them in Word as shown.</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          {fields.map((field) => <span key={field.id} className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs ${field.is_active ? 'border-slate-200 bg-white text-slate-700' : 'border-slate-200 bg-slate-100 text-slate-400'}`}><code>{`{{${field.field_key}}}`}</code>{field.is_required ? 'Required' : 'Optional'}{canManageDefinitions ? <button type="button" onClick={() => toggleField(field)} className="font-semibold text-brand-700">{field.is_active ? 'Disable' : 'Enable'}</button> : null}</span>)}
-          {fields.length === 0 ? <span className="text-xs text-slate-500">No manual fields registered.</span> : null}
+          {fields.map((field) => <span key={field.id} className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs ${field.is_active ? 'border-slate-200 bg-white text-slate-700' : 'border-slate-200 bg-slate-100 text-slate-400'}`}><span className="font-semibold" title={`Technical key: ${field.field_key}`}>{`[${field.field_key.split('_').filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}]`}</span>{field.label ? <span className="text-slate-500">{field.label}</span> : null}{field.is_required ? 'Required' : 'Optional'}{canManageDefinitions ? <button type="button" onClick={() => toggleField(field)} className="font-semibold text-brand-700">{field.is_active ? 'Disable' : 'Enable'}</button> : null}</span>)}
+          {fields.length === 0 ? <span className="text-xs text-slate-500">No fields of its own yet.</span> : null}
         </div>
         {canManageDefinitions ? (
+          <details className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-700">Add a field by hand (advanced)</summary>
           <form onSubmit={addCustomField} className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-[1fr_1fr_10rem_auto] lg:items-end">
-            <label className="text-xs font-semibold text-slate-600">Field key<input value={newField.field_key} onChange={(event) => setNewField((value) => ({ ...value, field_key: event.target.value }))} placeholder="certificate_note" className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm font-normal" /></label>
-            <label className="text-xs font-semibold text-slate-600">Label<input value={newField.label} onChange={(event) => setNewField((value) => ({ ...value, label: event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm font-normal" /></label>
+            <label className="text-xs font-semibold text-slate-600">Label<input value={newField.label} onChange={(event) => setNewField((value) => ({ ...value, label: event.target.value }))} placeholder="Certificate note" className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm font-normal" /></label>
+            <label className="text-xs font-semibold text-slate-600">Field key (optional)<input value={newField.field_key} onChange={(event) => setNewField((value) => ({ ...value, field_key: event.target.value }))} placeholder="made from the label" className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm font-normal" /></label>
             <label className="text-xs font-semibold text-slate-600">Type<select value={newField.field_type} onChange={(event) => setNewField((value) => ({ ...value, field_type: event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm font-normal"><option value="text">Text</option><option value="multiline">Multiline</option><option value="number">Number</option><option value="date">Date</option><option value="boolean">Yes / No</option><option value="dropdown">Dropdown</option></select></label>
-            <button disabled={!newField.field_key.trim() || !newField.label.trim() || !!busy} className="h-9 rounded-lg border border-indigo-300 bg-white px-3 text-sm font-semibold text-indigo-800 disabled:opacity-50">Add field</button>
+            <button disabled={!newField.label.trim() || !!busy} className="h-9 rounded-lg border border-indigo-300 bg-white px-3 text-sm font-semibold text-indigo-800 disabled:opacity-50">Add field</button>
             {newField.field_type === 'dropdown' ? <label className="text-xs font-semibold text-slate-600 md:col-span-2 lg:col-span-4">Options, separated by commas<input value={newField.options} onChange={(event) => setNewField((value) => ({ ...value, options: event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm font-normal" /></label> : null}
             <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={newField.is_required} onChange={(event) => setNewField((value) => ({ ...value, is_required: event.target.checked }))} /> Required</label>
           </form>
+          </details>
         ) : null}
       </div>
     </section>

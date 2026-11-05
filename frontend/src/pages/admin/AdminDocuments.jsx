@@ -4058,7 +4058,8 @@ export default function AdminDocuments() {
 
         {/* One grid: actions, paper, then details. Phones stack them in that order; desktop puts
             actions and details in the left column with the paper spanning the right. */}
-        <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)] xl:grid-rows-[auto_1fr]">
+        {/* Hidden (not removed) while a custom document waits for a ticket, so the previous document is not mistaken for it. */}
+        <section className={`grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)] xl:grid-rows-[auto_1fr] ${pendingCustomCode && !selectedTicketId ? 'hidden' : ''}`}>
           <div className="xl:col-start-1 xl:row-start-1">{actionsCard}</div>
 
           {/* The paper itself, scaled to fit the screen; printing always uses full size. */}

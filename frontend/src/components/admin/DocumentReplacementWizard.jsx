@@ -110,6 +110,18 @@ export default function DocumentReplacementWizard({ open, onClose, ticketId, ini
     return () => { document.body.style.overflow = previousOverflow; };
   }, [open]);
 
+  // Escape closes the wizard like the other dialogs, except while the PDF field editor is open on top of it (that
+  // editor handles its own Escape) or while an upload or action is still running. Loading lists does not block it.
+  useEffect(() => {
+    if (!open) return undefined;
+    const actionRunning = Boolean(busy) && !['definitions', 'templates'].includes(busy);
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape' && !fieldEditorVersion && !actionRunning) onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, fieldEditorVersion, busy, onClose]);
+
   useEffect(() => {
     if (!open) return;
     let active = true;

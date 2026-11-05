@@ -40,7 +40,7 @@ The command is checksum-idempotent and never activates a template. Use the norma
 
 1. In **Template library**, choose **New document type**.
 2. Enter a clear name and description, then select its source: service ticket, client, or project. Choose **Create document type**.
-3. Choose **Download a blank starter file**, restyle it in Word, and upload it as the design. Fields can also be written as plain names such as `[Site Note]`; the checklist offers **Add as fields** for new ones. The manual **Field key** form remains for exact control. Field keys cannot be renamed after use.
+3. Choose **Download a blank starter file**, restyle it in Word, and upload it as the design. Fields can also be written as plain names such as `[Site Note]`; the checklist offers **Add as fields** for new ones. For exact control, **Add a field by hand (advanced)** takes a label and an optional field key (made from the label when blank). Field keys cannot be renamed after use.
 4. Optionally test with **Test DOCX**, then choose **Use this design**. It activates the version, makes the design the default and enables the document (enabling needs the definitions-manage permission).
 
 New definitions stay inactive until an enabled default design has an active validated version. **Disable document** hides a type and keeps its history; **Delete document type** removes a type only if it has never produced a document or prepared instance.

@@ -1253,10 +1253,11 @@ test.describe('Admin Workspace - All Pages', () => {
     await templateManager.getByRole('button', { name: 'Save new design' }).click();
     await expect(templateManager.getByRole('status')).toContainText('Template saved');
     await expect(templateManager.getByText('Custom document setup')).toBeVisible();
-    await templateManager.getByLabel('Field key').fill('e2e_note');
-    await templateManager.getByLabel('Label').fill('E2E note');
+    // Adding a field by hand is tucked under an advanced section; the key is optional (made from the label).
+    await templateManager.getByText('Add a field by hand (advanced)').click();
+    await templateManager.getByLabel('Label', { exact: true }).fill('E2E note');
     await templateManager.getByRole('button', { name: 'Add field' }).click();
-    await expect(templateManager.getByText('{{e2e_note}}').first()).toBeVisible();
+    await expect(templateManager.getByText('[E2e Note]').first()).toBeVisible();
     await templateManager.getByRole('button', { name: 'Retire' }).click();
     await expect(templateManager.getByRole('status')).toContainText('Design retired');
     await templateManager.getByRole('button', { name: 'Delete', exact: true }).click();
