@@ -335,6 +335,8 @@ export default function AdminCalendar() {
   const monthRange = useMemo(() => getMonthRange(calendarMonth), [calendarMonth]);
   const monthLabel = calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const today = useMemo(() => new Date(), []);
+  // Dates before today are shown slightly grayed out (they stay readable as job history).
+  const todayKey = getLocalDateKey(today);
 
   const loadCalendar = useCallback(async () => {
     const requestId = calendarRequestId.current + 1;
@@ -839,6 +841,7 @@ export default function AdminCalendar() {
                 const closedRestrictionLabel = getClosedRestrictionLabel(closedRestrictions);
                 const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
                 const isToday = sameDay(day, today);
+                const isPastDay = key < todayKey;
                 const isSelected = key === selectedDateKey && !selectMode;
                 const isPicked = selectMode && selectedDates.includes(key);
 
@@ -854,9 +857,11 @@ export default function AdminCalendar() {
                         ? 'bg-brand-100 text-brand-900 outline outline-2 -outline-offset-2 outline-brand-600'
                         : isSelected
                         ? 'bg-blue-100 text-blue-800 ring-2 ring-inset ring-blue-400'
-                        : isCurrentMonth
-                          ? 'bg-white text-slate-700'
-                          : 'bg-slate-50 text-slate-400'
+                        : isPastDay
+                          ? 'bg-slate-100 text-slate-400'
+                          : isCurrentMonth
+                            ? 'bg-white text-slate-700'
+                            : 'bg-slate-50 text-slate-400'
                     }`}
                   >
                     <span className={`flex h-6 w-6 items-center justify-center rounded-full font-semibold ${isToday ? 'bg-brand-600 text-white' : ''}`}>
@@ -900,6 +905,7 @@ export default function AdminCalendar() {
                     const visibleEvents = dayEvents.slice(0, 2);
                     const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
                     const isToday = sameDay(day, today);
+                const isPastDay = key < todayKey;
                     const isSelected = key === selectedDateKey && !selectMode;
                 const isPicked = selectMode && selectedDates.includes(key);
 
@@ -918,9 +924,11 @@ export default function AdminCalendar() {
                             ? 'bg-brand-50 outline outline-2 -outline-offset-2 outline-brand-600'
                             : isSelected
                             ? 'bg-blue-50 ring-2 ring-inset ring-blue-300'
-                            : isCurrentMonth
-                              ? 'bg-white hover:bg-slate-50'
-                              : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
+                            : isPastDay
+                              ? 'bg-slate-100/80 text-slate-400'
+                              : isCurrentMonth
+                                ? 'bg-white hover:bg-slate-50'
+                                : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
                         }`}
                       >
                     <button
@@ -934,12 +942,12 @@ export default function AdminCalendar() {
                     aria-pressed={selectMode ? isPicked : undefined}
                     />
                     <div className="pointer-events-none relative z-[1] mb-1.5 flex items-center justify-between gap-1">
-                      <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>
+                      <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${isToday ? 'text-blue-600' : isPastDay ? 'text-slate-400' : 'text-slate-700'}`}>
                         {day.getDate()}
                       </span>
                       <div className="flex items-center gap-1">
                         {isPicked ? <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Selected</span> : null}
-                        {availabilityMeta && <span className={`h-2.5 w-2.5 rounded-full ${availabilityMeta.dot}`} title={availabilityMeta.label} />}
+                        {availabilityMeta && <span className={`h-2.5 w-2.5 rounded-full ${availabilityMeta.dot} ${isPastDay ? 'opacity-30' : ''}`} title={availabilityMeta.label} />}
                         {dayEvents.length > 0 && (
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
                             {dayEvents.length}
