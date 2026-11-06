@@ -70,14 +70,21 @@ const createTicketIcon = (crewCount = 0) => {
 
 const TRACKING_REFRESH_MS = 15000;
 
+// Field work has started once the technician sets off: en route, on site, or working.
+const STARTED_TICKET_STATUSES = new Set(['navigating', 'arrived_on_site', 'in_progress']);
+
 const routeTone = {
   not_started: '#2563eb',
+  navigating: '#0891b2',
+  arrived_on_site: '#059669',
   in_progress: '#059669',
   on_hold: '#d97706'
 };
 
 const ticketStatusPresentation = {
   not_started: { label: 'Not started', className: 'border-slate-200 bg-slate-100 text-slate-700' },
+  navigating: { label: 'En route', className: 'border-cyan-200 bg-cyan-50 text-cyan-700' },
+  arrived_on_site: { label: 'On site', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
   in_progress: { label: 'In progress', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
   on_hold: { label: 'On hold', className: 'border-amber-200 bg-amber-50 text-amber-700' },
 };
@@ -260,11 +267,11 @@ export default function AdminTechnicianTracking() {
   const filteredTechs = trackData.techMarkers
     .filter((tech) => filterStatus === 'all' || tech.status === filterStatus)
     .filter((tech) => gpsFilter === 'all' || tech.gpsState === gpsFilter)
-    .filter((tech) => !normalizedSearch || [tech.name, tech.email, tech.phone, ...(tech.activeJobs || []).flatMap((job) => [job.service, job.client, job.id])]
+    .filter((tech) => !normalizedSearch || [tech.name, tech.email, tech.phone, ...(tech.activeJobs || []).flatMap((job) => [job.service, job.client, job.id, formatTicketId(job.id)])]
       .some((value) => String(value || '').toLowerCase().includes(normalizedSearch)));
   const openTickets = trackData.ticketMarkers
     .filter((ticket) => ticket.status !== 'completed')
-    .filter((ticket) => ticketFilter === 'all' || ticket.status === 'in_progress');
+    .filter((ticket) => ticketFilter === 'all' || STARTED_TICKET_STATUSES.has(ticket.status));
   const hasCoords = (target) =>
     Number.isFinite(target?.lat) &&
     Number.isFinite(target?.lng) &&
@@ -461,7 +468,7 @@ export default function AdminTechnicianTracking() {
                 className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal normal-case tracking-normal text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
               >
                 <option value="all">All Active Tickets</option>
-                <option value="in_progress">Only Started Jobs</option>
+                <option value="in_progress">Only Started Jobs (en route, on site, in progress)</option>
               </select>
             </label>
             <button
@@ -475,6 +482,7 @@ export default function AdminTechnicianTracking() {
             </button>
             {focusedTarget ? (
               <button
+                type="button"
                 onClick={clearFocus}
                 className="h-10 rounded-lg bg-slate-900 px-3 text-sm font-medium text-white hover:bg-slate-800"
               >
@@ -742,7 +750,16 @@ export default function AdminTechnicianTracking() {
                           <p className="font-semibold text-slate-900">{formatTicketId(job.id)} · {job.service}</p>
                           <p className="mt-1 text-xs text-slate-500">{job.client} · {job.locationDesc}</p>
                         </div>
-                        <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{String(job.status || '').replaceAll('_', ' ')}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{getTicketStatusPresentation(job.status).label}</span>
+                          <Link
+                            to={`/admin/service-tickets?ticketId=${job.id}`}
+                            aria-label={`Open ticket ${formatTicketId(job.id)}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Open ticket <FiExternalLink />
+                          </Link>
+                        </div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
                         <p className="inline-flex items-center gap-1.5"><FiClock />{formatJobSchedule(job)} · {job.priority || 'Normal'} priority</p>
@@ -874,7 +891,9 @@ export default function AdminTechnicianTracking() {
               })}
             </ul>
           ) : (
-            <p className="text-sm text-slate-500">No technicians found with the selected status.</p>
+            <p className="text-sm text-slate-500">
+              {normalizedSearch ? `No technician or job matches "${search.trim()}".` : 'No technicians match the selected filters.'}
+            </p>
           )}
         </div>
       </div>

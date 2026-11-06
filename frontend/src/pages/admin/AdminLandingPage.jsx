@@ -1,6 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { FiAlertCircle, FiCheckCircle, FiExternalLink, FiEye, FiPlus, FiSave, FiSun, FiTrash2, FiUploadCloud, FiX } from 'react-icons/fi';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
+import { getLocalDateInputValue } from '../../utils/date';
 import Layout from '../../components/layout/Layout';
 import { useAuth } from '../../context/AuthContext';
 import { fetchAdminSettings, updateAdminSettings, uploadLandingPageImage } from '../../api/admin';
@@ -54,9 +56,9 @@ const contactFields = [
 
 // Optional lists; a section stays hidden on the public page until it has at least one entry.
 const listEditors = [
-  { key: 'highlights', title: 'Key numbers', hint: 'Only real figures, e.g. "150+" / "Solar systems installed". Numbers count up when shown.', fields: [['value', 'Value'], ['label', 'Label']] },
-  { key: 'testimonials', title: 'Client testimonials', hint: "Publish only with the client's permission.", fields: [['quote', 'Quote', true], ['name', 'Client name'], ['location', 'Location (optional)']] },
-  { key: 'faqs', title: 'Frequently asked questions', hint: 'Shown as an expandable list near the bottom of the page.', fields: [['question', 'Question'], ['answer', 'Answer', true]] },
+  { key: 'highlights', title: 'Key numbers', itemLabel: 'Key number', max: 8, hint: 'Only real figures, e.g. "150+" / "Solar systems installed". Numbers count up when shown.', fields: [['value', 'Value'], ['label', 'Label']] },
+  { key: 'testimonials', title: 'Client testimonials', itemLabel: 'Testimonial', max: 12, hint: "Publish only with the client's permission.", fields: [['quote', 'Quote', true], ['name', 'Client name'], ['location', 'Location (optional)']] },
+  { key: 'faqs', title: 'Frequently asked questions', itemLabel: 'Question', max: 15, hint: 'Shown as an expandable list near the bottom of the page.', fields: [['question', 'Question'], ['answer', 'Answer', true]] },
 ];
 
 // Tabs follow the public page from top to bottom; each says where its content appears.
@@ -95,6 +97,98 @@ const calculatorFields = [
   ['defaultExportCredit', 'Net-metering export credit (PHP/kWh)', 0, 100, 0.1],
 ];
 
+const MAX_PROMOTIONS = 24;
+const MAX_PROJECTS = 12;
+const isWebUrl = (value) => /^https?:\/\//i.test(String(value || '').trim());
+const isLinkTarget = (value) => /^(\/|#|https?:\/\/)/i.test(String(value || '').trim());
+const isImageTarget = (value) => /^(\/|https?:\/\/)/i.test(String(value || '').trim());
+const isBlankNumber = (value) => value === '' || value === null || value === undefined;
+
+// What visitors see for a promotion today (same rules as the public endpoint).
+const promotionStatus = (promotion, today) => {
+  if (!promotion.active) return { label: 'Hidden (inactive)', tone: 'bg-slate-200 text-slate-700' };
+  if (promotion.startDate && promotion.startDate > today) return { label: `Scheduled from ${promotion.startDate}`, tone: 'bg-amber-100 text-amber-800' };
+  if (promotion.endDate && promotion.endDate < today) return { label: 'Expired', tone: 'bg-rose-100 text-rose-700' };
+  return { label: 'Live now', tone: 'bg-emerald-100 text-emerald-800' };
+};
+
+// Checks the draft the same way the server does, so problems are shown on the right tab.
+const findDraftProblem = ({ content, calculator, promotions, projects, today }) => {
+  const blankKey = REQUIRED_LANDING_CONTENT_KEYS.find((key) => !String(content[key] || '').trim());
+  if (blankKey) return { tab: tabForField(blankKey), text: `"${FIELD_META[blankKey]?.label || blankKey}" cannot be blank.` };
+
+  for (const editor of listEditors) {
+    const items = (Array.isArray(content[editor.key]) ? content[editor.key] : [])
+      .filter((item) => editor.fields.some(([field]) => String(item[field] || '').trim()));
+    if (items.length > editor.max) {
+      return { tab: editor.key === 'faqs' ? 'faq' : 'proof', text: `${editor.title}: use at most ${editor.max} entries.` };
+    }
+  }
+
+  for (const [key, min, max] of [['mapLatitude', -90, 90], ['mapLongitude', -180, 180]]) {
+    const raw = String(content[key] || '').trim();
+    if (!raw) continue;
+    const number = Number(raw);
+    if (!Number.isFinite(number) || number < min || number > max) {
+      return { tab: 'contact', text: `${FIELD_META[key].label} must be a decimal number from ${min} to ${max}.` };
+    }
+  }
+  for (const key of ['facebookUrl', 'mapUrl']) {
+    const raw = String(content[key] || '').trim();
+    if (raw && !isWebUrl(raw)) return { tab: 'contact', text: `${FIELD_META[key].label} must start with https://.` };
+  }
+
+  const invalidCalculatorField = calculatorFields.find(([key, , min, max]) => {
+    const value = Number(calculator[key]);
+    return calculator[key] === '' || !Number.isFinite(value) || value < min || value > max;
+  });
+  if (invalidCalculatorField) {
+    const [, label, min, max] = invalidCalculatorField;
+    return { tab: 'calculator', text: `${label} must be between ${min} and ${max}.` };
+  }
+
+  for (const [index, promotion] of promotions.entries()) {
+    const name = `Promotion ${index + 1}${promotion.name?.trim() ? ` (${promotion.name.trim()})` : ''}`;
+    if (!promotion.name?.trim()) return { tab: 'promotions', text: `${name} needs a name.` };
+    for (const [key, label] of [['regularPrice', 'regular price'], ['promoPrice', 'promotional price']]) {
+      if (!isBlankNumber(promotion[key]) && !(Number(promotion[key]) >= 0)) return { tab: 'promotions', text: `${name}: the ${label} must be 0 or more.` };
+    }
+    if (!isBlankNumber(promotion.regularPrice) && !isBlankNumber(promotion.promoPrice) && Number(promotion.promoPrice) > Number(promotion.regularPrice)) {
+      return { tab: 'promotions', text: `${name}: the promotional price cannot be higher than the regular price.` };
+    }
+    if (!isBlankNumber(promotion.panelWattage) && Number(promotion.panelWattage) !== 0
+      && !(Number(promotion.panelWattage) >= 100 && Number(promotion.panelWattage) <= 1000)) {
+      return { tab: 'promotions', text: `${name}: panel wattage must be from 100 to 1000, or blank.` };
+    }
+    if (promotion.startDate && promotion.endDate && promotion.startDate > promotion.endDate) {
+      return { tab: 'promotions', text: `${name}: the end date cannot be before the start date.` };
+    }
+    if (promotion.ctaUrl?.trim() && !isLinkTarget(promotion.ctaUrl)) {
+      return { tab: 'promotions', text: `${name}: the call-to-action URL must start with #, /, or https://.` };
+    }
+    if (promotion.imageUrl?.trim() && !isImageTarget(promotion.imageUrl)) {
+      return { tab: 'promotions', text: `${name}: the image URL must start with / or https://.` };
+    }
+  }
+
+  for (const [index, project] of projects.entries()) {
+    const name = `Project ${index + 1}${project.title?.trim() ? ` (${project.title.trim()})` : ''}`;
+    if (project.completedDate && project.completedDate > today) {
+      return { tab: 'projects', text: `${name}: the completion date cannot be in the future.` };
+    }
+    if (project.imageUrl?.trim() && !isImageTarget(project.imageUrl)) {
+      return { tab: 'projects', text: `${name}: the image URL must start with / or https://.` };
+    }
+    if (project.published && (
+      !project.title?.trim() || !project.serviceType || !project.location?.trim() || !project.completedDate
+      || !project.description?.trim() || !project.imageUrl || !project.clientConsentConfirmed
+    )) {
+      return { tab: 'projects', text: `${name} needs complete details, a photo, and confirmed client permission before it can be published.` };
+    }
+  }
+  return null;
+};
+
 const createPromotion = () => ({
   id: `promotion-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   name: '', description: '', regularPrice: '', promoPrice: '', imageUrl: '',
@@ -121,6 +215,14 @@ export default function AdminLandingPage() {
   const [uploadingPromotionId, setUploadingPromotionId] = useState(null);
   const [uploadingProjectId, setUploadingProjectId] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [loadError, setLoadError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  // Upload results are shown next to the photo they belong to, not at the top of the page.
+  const [imageNotice, setImageNotice] = useState({ id: null, type: '', text: '' });
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [pendingLeave, setPendingLeave] = useState(null);
+  const navigate = useNavigate();
+  const today = getLocalDateInputValue();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = TABS.some((tab) => tab.key === searchParams.get('tab')) ? searchParams.get('tab') : 'hero';
   const currentTab = TABS.find((tab) => tab.key === activeTab);
@@ -135,6 +237,8 @@ export default function AdminLandingPage() {
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setLoadError('');
     fetchAdminSettings()
       .then((data) => {
         if (!active) return;
@@ -150,48 +254,50 @@ export default function AdminLandingPage() {
           projects: merged.landingPageProjects,
         }));
       })
-      .catch((error) => active && setMessage({ type: 'error', text: error.message }))
+      .catch((error) => active && setLoadError(error.message || 'Unable to load the landing page content.'))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, []);
+  }, [loadAttempt]);
+
+  // Closing or reloading the tab warns while there are unpublished changes.
+  useEffect(() => {
+    if (!hasUnsavedChanges) return undefined;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasUnsavedChanges]);
+
+  // Leaving through an in-app link (sidebar, top bar) asks first while there are unpublished changes.
+  useEffect(() => {
+    if (!hasUnsavedChanges) return undefined;
+    const guard = (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = event.target.closest?.('a[href]');
+      if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setPendingLeave(`${url.pathname}${url.search}${url.hash}`);
+    };
+    document.addEventListener('click', guard, true);
+    return () => document.removeEventListener('click', guard, true);
+  }, [hasUnsavedChanges]);
+
+  const showImageNotice = useCallback((id, type, text) => setImageNotice({ id, type, text }), []);
 
   const save = async () => {
     if (!canPublishLandingPage) {
       setMessage({ type: 'error', text: 'You have view-only access. Ask a superadmin for the Publish public site capability.' });
       return;
     }
-    const blankKey = REQUIRED_LANDING_CONTENT_KEYS.find((key) => !String(content[key] || '').trim());
-    if (blankKey) {
-      openTab(tabForField(blankKey));
-      setMessage({ type: 'error', text: `"${FIELD_META[blankKey]?.label || blankKey}" cannot be blank.` });
-      return;
-    }
-    const invalidCalculatorField = calculatorFields.find(([key, , min, max]) => {
-      const value = Number(calculator[key]);
-      return calculator[key] === '' || !Number.isFinite(value) || value < min || value > max;
-    });
-    if (invalidCalculatorField) {
-      const [, label, min, max] = invalidCalculatorField;
-      openTab('calculator');
-      setMessage({ type: 'error', text: `${label} must be between ${min} and ${max}.` });
-      return;
-    }
-    const invalidPromotion = promotions.find((promotion) => !promotion.name.trim() || (promotion.startDate && promotion.endDate && promotion.startDate > promotion.endDate));
-    if (invalidPromotion) {
-      setMessage({ type: 'error', text: 'Each promotion needs a name and an end date that is not before its start date.' });
-      return;
-    }
-    const invalidPublishedProject = projects.find((project) => project.published && (
-      !project.title.trim()
-      || !project.serviceType
-      || !project.location.trim()
-      || !project.completedDate
-      || !project.description.trim()
-      || !project.imageUrl
-      || !project.clientConsentConfirmed
-    ));
-    if (invalidPublishedProject) {
-      setMessage({ type: 'error', text: 'Every published project needs complete details, a photo, and confirmed client permission.' });
+    const problem = findDraftProblem({ content, calculator, promotions, projects, today });
+    if (problem) {
+      openTab(problem.tab);
+      setMessage({ type: 'error', text: problem.text });
       return;
     }
 
@@ -226,70 +332,46 @@ export default function AdminLandingPage() {
     }
   };
 
-  const uploadPromotionImage = async (promotionId, file) => {
+  const uploadImage = async (kind, itemId, file) => {
     if (!file) return;
+    const setItems = kind === 'promotion' ? setPromotions : setProjects;
+    const setUploading = kind === 'promotion' ? setUploadingPromotionId : setUploadingProjectId;
     if (!canUploadLandingAssets) {
-      setMessage({ type: 'error', text: 'You need the Upload public-site assets capability to add an image.' });
+      showImageNotice(itemId, 'error', 'You need the Upload public-site assets capability to add an image.');
       return;
     }
-    const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
-    if (!allowedTypes.has(file.type)) {
-      setMessage({ type: 'error', text: 'Upload a JPG, PNG, or WebP image.' });
+    if (!new Set(['image/jpeg', 'image/png', 'image/webp']).has(file.type)) {
+      showImageNotice(itemId, 'error', `"${file.name}" is not a JPG, PNG, or WebP image.`);
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setMessage({ type: 'error', text: 'Promotion image must be 5 MB or smaller.' });
+      showImageNotice(itemId, 'error', `"${file.name}" is larger than 5 MB.`);
       return;
     }
 
-    setUploadingPromotionId(promotionId);
-    setMessage({ type: '', text: '' });
+    setUploading(itemId);
+    showImageNotice(itemId, '', '');
     try {
       const uploaded = await uploadLandingPageImage(file);
-      setPromotions((items) => items.map((item) => item.id === promotionId ? {
+      setItems((items) => items.map((item) => item.id === itemId ? {
         ...item,
         imageUrl: uploaded.url,
         imageAssetId: uploaded.id,
       } : item));
-      setMessage({ type: 'success', text: 'Image uploaded. Publish changes to show it publicly.' });
+      showImageNotice(itemId, 'success', 'Photo uploaded. Publish changes to show it publicly.');
     } catch (error) {
-      setMessage({ type: 'error', text: error.message || 'Unable to upload image.' });
+      showImageNotice(itemId, 'error', error.message || 'Unable to upload the image.');
     } finally {
-      setUploadingPromotionId(null);
+      setUploading(null);
     }
   };
 
-  const uploadProjectImage = async (projectId, file) => {
-    if (!file) return;
-    if (!canUploadLandingAssets) {
-      setMessage({ type: 'error', text: 'You need the Upload public-site assets capability to add an image.' });
-      return;
-    }
-    const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
-    if (!allowedTypes.has(file.type)) {
-      setMessage({ type: 'error', text: 'Upload a JPG, PNG, or WebP image.' });
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setMessage({ type: 'error', text: 'Project image must be 5 MB or smaller.' });
-      return;
-    }
-
-    setUploadingProjectId(projectId);
-    setMessage({ type: '', text: '' });
-    try {
-      const uploaded = await uploadLandingPageImage(file);
-      setProjects((items) => items.map((item) => item.id === projectId ? {
-        ...item,
-        imageUrl: uploaded.url,
-        imageAssetId: uploaded.id,
-      } : item));
-      setMessage({ type: 'success', text: 'Project photo uploaded. Publish changes when the entry is ready.' });
-    } catch (error) {
-      setMessage({ type: 'error', text: error.message || 'Unable to upload project image.' });
-    } finally {
-      setUploadingProjectId(null);
-    }
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    const setItems = pendingDelete.kind === 'promotion' ? setPromotions : setProjects;
+    setItems((items) => items.filter((item) => item.id !== pendingDelete.id));
+    setMessage({ type: 'success', text: `Removed ${pendingDelete.name} from the draft. Publish changes to update the public site.` });
+    setPendingDelete(null);
   };
 
   return (
@@ -300,8 +382,10 @@ export default function AdminLandingPage() {
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div className="min-w-0">
                 <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">Public website</p>
-                <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-600" role="status">
-                  {loading ? 'Loading published content…' : hasUnsavedChanges ? (
+                <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-600" role="status" data-testid="landing-save-state">
+                  {loading ? 'Loading published content…' : loadError ? (
+                    <><FiAlertCircle className="text-rose-500" /> The content could not be loaded, so editing is paused.</>
+                  ) : hasUnsavedChanges ? (
                     <><FiAlertCircle className="text-amber-500" /> Unsaved changes — publish to update the public site.</>
                   ) : (
                     <><FiCheckCircle className="text-emerald-500" /> Everything here is published.</>
@@ -309,17 +393,29 @@ export default function AdminLandingPage() {
                 </p>
               </div>
               <div className="flex gap-3">
-                <Link to={`/admin/landing-page/preview${currentTab?.anchor || ''}`} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                <Link to={`/admin/landing-page/preview${currentTab?.anchor || ''}`} target="_blank" rel="noopener" title="Opens the published page in a new tab" className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
                   <FiEye /> Preview
                 </Link>
-                <button type="button" onClick={save} disabled={loading || saving || !canPublishLandingPage || !hasUnsavedChanges} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
+                <button type="button" onClick={save} disabled={loading || saving || Boolean(loadError) || !canPublishLandingPage || !hasUnsavedChanges} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
                   <FiSave /> {saving ? 'Publishing…' : 'Publish changes'}
                 </button>
               </div>
             </div>
           </div>
 
-          {message.text ? <div className={`mb-5 rounded-lg border px-4 py-3 text-sm ${message.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{message.text}</div> : null}
+          {loadError ? (
+            <div role="alert" className="mb-5 flex flex-col justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:flex-row sm:items-center">
+              <span>{loadError}</span>
+              <button type="button" onClick={() => setLoadAttempt((value) => value + 1)} className="shrink-0 rounded-lg border border-rose-300 bg-white px-3 py-1.5 font-semibold text-rose-700 hover:bg-rose-100">Retry</button>
+            </div>
+          ) : null}
+
+          {message.text ? (
+            <div role={message.type === 'error' ? 'alert' : 'status'} className={`mb-5 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${message.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+              <span>{message.text}</span>
+              <button type="button" onClick={() => setMessage({ type: '', text: '' })} className="shrink-0 font-semibold">Dismiss</button>
+            </div>
+          ) : null}
 
           {!canPublishLandingPage ? <div className="mb-5 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800">You have view-only access. Preview is available, but publishing requires the <strong>Publish public site</strong> capability.</div> : null}
 
@@ -339,12 +435,12 @@ export default function AdminLandingPage() {
 
           <div className="mb-5 flex flex-col justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-sm text-brand-900 sm:flex-row sm:items-center">
             <p><strong>Where this appears:</strong> {currentTab?.where}</p>
-            <Link to={`/admin/landing-page/preview${currentTab?.anchor || ''}`} className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-brand-700 hover:text-brand-800">
+            <Link to={`/admin/landing-page/preview${currentTab?.anchor || ''}`} target="_blank" rel="noopener" className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-brand-700 hover:text-brand-800">
               View on the published page <FiExternalLink />
             </Link>
           </div>
 
-          <fieldset disabled={loading || !canPublishLandingPage} className="contents">
+          <fieldset disabled={loading || Boolean(loadError) || !canPublishLandingPage} className="contents">
           {activeTab === 'hero' ? (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
               <EditorPanel title="Hero" description="Keep the headline short; the highlighted line appears in brand blue underneath it.">
@@ -426,7 +522,7 @@ export default function AdminLandingPage() {
                 <h2 className="text-lg font-bold text-slate-900">Products and promotions</h2>
                 <p className="mt-1 text-sm text-slate-500">Schedule public offers. Expired, future, and inactive promotions stay hidden from visitors.</p>
               </div>
-              <button type="button" onClick={() => setPromotions((items) => [...items, createPromotion()])} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+              <button type="button" onClick={() => setPromotions((items) => [...items, createPromotion()])} disabled={promotions.length >= MAX_PROMOTIONS} title={promotions.length >= MAX_PROMOTIONS ? `Up to ${MAX_PROMOTIONS} promotions` : undefined} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
                 <FiPlus /> Add promotion
               </button>
             </div>
@@ -435,47 +531,52 @@ export default function AdminLandingPage() {
 
             <div className="mt-5 space-y-5">
               {promotions.map((promotion, index) => {
-                const updatePromotion = (key, value) => setPromotions((items) => items.map((item) => item.id === promotion.id ? { ...item, [key]: value } : item));
+                const updatePromotion = (changes) => setPromotions((items) => items.map((item) => item.id === promotion.id ? { ...item, ...changes } : item));
+                const heading = `Promotion ${index + 1}${promotion.name ? `: ${promotion.name}` : ''}`;
+                const status = promotionStatus(promotion, today);
                 return (
                   <article key={promotion.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="mb-4 flex items-center justify-between gap-4">
-                      <h3 className="font-bold text-slate-800">Promotion {index + 1}{promotion.name ? `: ${promotion.name}` : ''}</h3>
-                      <button type="button" onClick={() => setPromotions((items) => items.filter((item) => item.id !== promotion.id))} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" title="Delete promotion"><FiTrash2 /></button>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <h3 className="font-bold text-slate-800">{heading}</h3>
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.tone}`}>{status.label}</span>
+                      </div>
+                      <button type="button" onClick={() => setPendingDelete({ kind: 'promotion', id: promotion.id, name: promotion.name ? `"${promotion.name}"` : `promotion ${index + 1}` })} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" aria-label={`Delete ${heading}`} title="Delete promotion"><FiTrash2 /></button>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      <EditorField label="Product or promotion name"><input className={inputClass} value={promotion.name} onChange={(event) => updatePromotion('name', event.target.value)} /></EditorField>
-                      <EditorField label="Regular price (PHP)"><input type="number" min="0" className={inputClass} value={promotion.regularPrice} onChange={(event) => updatePromotion('regularPrice', event.target.value)} /></EditorField>
-                      <EditorField label="Promotional price (PHP)"><input type="number" min="0" className={inputClass} value={promotion.promoPrice} onChange={(event) => updatePromotion('promoPrice', event.target.value)} /></EditorField>
+                      <EditorField label="Product or promotion name"><input className={inputClass} value={promotion.name} maxLength={120} onChange={(event) => updatePromotion({ name: event.target.value })} /></EditorField>
+                      <EditorField label="Regular price (PHP)"><input type="number" min="0" className={inputClass} value={promotion.regularPrice} onChange={(event) => updatePromotion({ regularPrice: event.target.value })} /></EditorField>
+                      <EditorField label="Promotional price (PHP)"><input type="number" min="0" className={inputClass} value={promotion.promoPrice} onChange={(event) => updatePromotion({ promoPrice: event.target.value })} /></EditorField>
                       <div className="md:col-span-2 lg:col-span-3">
-                        <EditorField label="Promotion image">
+                        <span className="text-sm font-medium text-slate-700">Promotion image</span>
                           <div className="mt-1 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center">
                             <div className="grid h-28 w-full shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-100 sm:w-40">
                               {promotion.imageUrl ? <img src={promotion.imageUrl} alt="Promotion preview" className="h-full w-full object-cover" /> : <FiUploadCloud className="text-3xl text-slate-300" />}
                             </div>
                             <div className="flex-1">
                               <div className="flex flex-wrap gap-2">
-                                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white focus-within:ring-2 focus-within:ring-brand-300 hover:bg-brand-700">
                                   <FiUploadCloud /> {uploadingPromotionId === promotion.id ? 'Uploading…' : promotion.imageUrl ? 'Replace photo' : 'Upload photo'}
-                                  <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!canUploadLandingAssets || uploadingPromotionId === promotion.id} className="hidden" onChange={(event) => { uploadPromotionImage(promotion.id, event.target.files?.[0]); event.target.value = ''; }} />
+                                  <input type="file" accept="image/jpeg,image/png,image/webp" aria-label={`Upload photo for ${heading}`} disabled={!canUploadLandingAssets || uploadingPromotionId === promotion.id} className="sr-only" onChange={(event) => { uploadImage('promotion', promotion.id, event.target.files?.[0]); event.target.value = ''; }} />
                                 </label>
-                                {promotion.imageUrl ? <button type="button" onClick={() => { updatePromotion('imageUrl', ''); updatePromotion('imageAssetId', null); }} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><FiX /> Remove photo</button> : null}
+                                {promotion.imageUrl ? <button type="button" onClick={() => updatePromotion({ imageUrl: '', imageAssetId: null })} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><FiX /> Remove photo</button> : null}
                               </div>
                               <p className="mt-2 text-xs text-slate-500">JPG, PNG, or WebP. Maximum file size: 5 MB.</p>
-                              <input className={`${inputClass} mt-3`} value={promotion.imageUrl || ''} onChange={(event) => { updatePromotion('imageUrl', event.target.value); updatePromotion('imageAssetId', null); }} placeholder="Or paste /image.jpg or https://…" />
+                              <ImageNotice notice={imageNotice} id={promotion.id} />
+                              <input aria-label="Promotion image URL" className={`${inputClass} mt-3`} value={promotion.imageUrl || ''} onChange={(event) => updatePromotion({ imageUrl: event.target.value, imageAssetId: null })} placeholder="Or paste /image.jpg or https://…" />
                             </div>
                           </div>
-                        </EditorField>
                       </div>
-                      <EditorField label="Start date"><input type="date" className={inputClass} value={promotion.startDate} onChange={(event) => updatePromotion('startDate', event.target.value)} /></EditorField>
-                      <EditorField label="End date"><input type="date" className={inputClass} value={promotion.endDate} onChange={(event) => updatePromotion('endDate', event.target.value)} /></EditorField>
-                      <EditorField label="Call-to-action label"><input className={inputClass} value={promotion.ctaLabel} onChange={(event) => updatePromotion('ctaLabel', event.target.value)} /></EditorField>
-                      <EditorField label="Call-to-action URL"><input className={inputClass} value={promotion.ctaUrl} onChange={(event) => updatePromotion('ctaUrl', event.target.value)} placeholder="#contact or https://…" /></EditorField>
-                      <EditorField label="Panel wattage (optional)"><input type="number" min="100" max="1000" className={inputClass} value={promotion.panelWattage} onChange={(event) => updatePromotion('panelWattage', event.target.value)} /><span className="mt-1 block text-xs text-slate-400">Enables “Use in calculator”.</span></EditorField>
-                      <div className="md:col-span-2 lg:col-span-3"><EditorField label="Description"><textarea rows="3" className={inputClass} value={promotion.description} onChange={(event) => updatePromotion('description', event.target.value)} /></EditorField></div>
+                      <EditorField label="Start date"><input type="date" className={inputClass} value={promotion.startDate} max={promotion.endDate || undefined} onChange={(event) => updatePromotion({ startDate: event.target.value })} /></EditorField>
+                      <EditorField label="End date"><input type="date" className={inputClass} value={promotion.endDate} min={promotion.startDate || undefined} onChange={(event) => updatePromotion({ endDate: event.target.value })} /></EditorField>
+                      <EditorField label="Call-to-action label"><input className={inputClass} value={promotion.ctaLabel} maxLength={80} onChange={(event) => updatePromotion({ ctaLabel: event.target.value })} /></EditorField>
+                      <EditorField label="Call-to-action URL"><input className={inputClass} value={promotion.ctaUrl} onChange={(event) => updatePromotion({ ctaUrl: event.target.value })} placeholder="#contact or https://…" /></EditorField>
+                      <EditorField label="Panel wattage (optional)"><input type="number" min="100" max="1000" className={inputClass} value={promotion.panelWattage} onChange={(event) => updatePromotion({ panelWattage: event.target.value })} /><span className="mt-1 block text-xs text-slate-400">Enables “Use in calculator”.</span></EditorField>
+                      <div className="md:col-span-2 lg:col-span-3"><EditorField label="Description"><textarea rows="3" maxLength={500} className={inputClass} value={promotion.description} onChange={(event) => updatePromotion({ description: event.target.value })} /></EditorField></div>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-5">
-                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input type="checkbox" checked={promotion.active} onChange={(event) => updatePromotion('active', event.target.checked)} /> Active</label>
-                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input type="checkbox" checked={promotion.featured} onChange={(event) => updatePromotion('featured', event.target.checked)} /> Featured</label>
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input type="checkbox" checked={promotion.active} onChange={(event) => updatePromotion({ active: event.target.checked })} /> Active</label>
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input type="checkbox" checked={promotion.featured} onChange={(event) => updatePromotion({ featured: event.target.checked })} /> Featured</label>
                     </div>
                   </article>
                 );
@@ -492,7 +593,7 @@ export default function AdminLandingPage() {
                 <h2 className="text-lg font-bold text-slate-900">Our Work</h2>
                 <p className="mt-1 text-sm text-slate-500">Publish real completed projects only. Use a general location and confirm the client approved the photo for public use.</p>
               </div>
-              <button type="button" onClick={() => setProjects((items) => [...items, createProject()])} disabled={projects.length >= 12} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
+              <button type="button" onClick={() => setProjects((items) => [...items, createProject()])} disabled={projects.length >= MAX_PROJECTS} title={projects.length >= MAX_PROJECTS ? `Up to ${MAX_PROJECTS} projects` : undefined} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
                 <FiPlus /> Add completed project
               </button>
             </div>
@@ -507,9 +608,11 @@ export default function AdminLandingPage() {
                   index={index}
                   uploading={uploadingProjectId === project.id}
                   canUpload={canUploadLandingAssets}
-                  onUpload={uploadProjectImage}
-                  onUpdate={(key, value) => setProjects((items) => items.map((item) => item.id === project.id ? { ...item, [key]: value } : item))}
-                  onDelete={() => setProjects((items) => items.filter((item) => item.id !== project.id))}
+                  today={today}
+                  imageNotice={imageNotice}
+                  onUpload={(projectId, file) => uploadImage('project', projectId, file)}
+                  onUpdate={(changes) => setProjects((items) => items.map((item) => item.id === project.id ? { ...item, ...changes } : item))}
+                  onDelete={() => setPendingDelete({ kind: 'project', id: project.id, name: project.title ? `"${project.title}"` : `project ${index + 1}` })}
                 />
               ))}
             </div>
@@ -518,6 +621,37 @@ export default function AdminLandingPage() {
           </fieldset>
         </div>
       </div>
+
+      {pendingDelete ? (
+        <ConfirmationDialog
+          title={`Delete ${pendingDelete.name}?`}
+          message="It is removed from the draft. Visitors still see it until you publish changes."
+          tone="danger"
+          icon="danger"
+          confirmLabel="Delete"
+          cancelLabel="Keep it"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={confirmDelete}
+        />
+      ) : null}
+
+      {pendingLeave ? (
+        <ConfirmationDialog
+          title="Leave without publishing?"
+          message="Your landing page changes have not been published. Leaving this page discards them."
+          tone="warning"
+          icon="warning"
+          confirmLabel="Leave and discard"
+          cancelLabel="Stay on this page"
+          onCancel={() => setPendingLeave(null)}
+          onConfirm={() => {
+            const target = pendingLeave;
+            setPendingLeave(null);
+            setPublishedSnapshot(draftSnapshot);
+            navigate(target);
+          }}
+        />
+      ) : null}
     </Layout>
   );
 }
@@ -610,14 +744,14 @@ function ListEditor({ editor, items, onChange }) {
   const emptyItem = Object.fromEntries(editor.fields.map(([field]) => [field, '']));
   const update = (index, field, value) => onChange(items.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item)));
   return (
-    <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-lg font-bold text-slate-900">{editor.title}</h2>
-          <p className="mt-1 text-sm text-slate-500">{editor.hint}</p>
+          <p className="mt-1 text-sm text-slate-500">{editor.hint} Up to {editor.max}.</p>
         </div>
-        <button type="button" onClick={() => onChange([...items, { ...emptyItem }])} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-          <FiPlus /> Add entry
+        <button type="button" onClick={() => onChange([...items, { ...emptyItem }])} disabled={items.length >= editor.max} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
+          <FiPlus /> Add {editor.itemLabel.toLowerCase()}
         </button>
       </div>
       {items.length === 0 ? <div className="mt-5 rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">No entries yet. This section stays hidden on the public page until you add one.</div> : null}
@@ -625,17 +759,17 @@ function ListEditor({ editor, items, onChange }) {
         {items.map((item, index) => (
           <article key={index} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-3 flex items-center justify-between gap-4">
-              <h3 className="font-bold text-slate-800">{editor.title} {index + 1}</h3>
-              <button type="button" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" aria-label={`Delete ${editor.title} entry ${index + 1}`}><FiTrash2 /></button>
+              <h3 className="font-bold text-slate-800">{editor.itemLabel} {index + 1}</h3>
+              <button type="button" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" aria-label={`Delete ${editor.itemLabel.toLowerCase()} ${index + 1}`} title="Delete entry"><FiTrash2 /></button>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               {editor.fields.map(([field, label, long]) => (
                 <label key={field} className={long ? 'md:col-span-2' : ''}>
                   <span className="text-sm font-medium text-slate-700">{label}</span>
                   {long ? (
-                    <textarea rows="3" className={inputClass} value={item[field] || ''} onChange={(event) => update(index, field, event.target.value)} />
+                    <textarea rows="3" maxLength={500} className={inputClass} value={item[field] || ''} onChange={(event) => update(index, field, event.target.value)} />
                   ) : (
-                    <input className={inputClass} value={item[field] || ''} onChange={(event) => update(index, field, event.target.value)} />
+                    <input maxLength={500} className={inputClass} value={item[field] || ''} onChange={(event) => update(index, field, event.target.value)} />
                   )}
                 </label>
               ))}
@@ -647,36 +781,49 @@ function ListEditor({ editor, items, onChange }) {
   );
 }
 
+function ImageNotice({ notice, id }) {
+  if (notice.id !== id || !notice.text) return null;
+  return (
+    <p role={notice.type === 'error' ? 'alert' : 'status'} className={`mt-2 text-xs font-medium ${notice.type === 'error' ? 'text-rose-700' : 'text-emerald-700'}`}>
+      {notice.text}
+    </p>
+  );
+}
+
 function EditorField({ label, children }) {
   return <label className="block"><span className="text-sm font-medium text-slate-700">{label}</span>{children}</label>;
 }
 
-function ProjectEditor({ project, index, uploading, canUpload, onUpload, onUpdate, onDelete }) {
+function ProjectEditor({ project, index, uploading, canUpload, today, imageNotice, onUpload, onUpdate, onDelete }) {
+  const heading = `Project ${index + 1}${project.title ? `: ${project.title}` : ''}`;
   return (
     <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
-          <h3 className="font-bold text-slate-800">Project {index + 1}{project.title ? `: ${project.title}` : ''}</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-bold text-slate-800">{heading}</h3>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${project.published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>{project.published ? 'Published' : 'Draft'}</span>
+          </div>
           <p className="mt-1 text-xs text-slate-500">Drafts remain private. Published entries appear in the public Our Work section.</p>
         </div>
-        <button type="button" onClick={onDelete} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" title="Delete project"><FiTrash2 /></button>
+        <button type="button" onClick={onDelete} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" aria-label={`Delete ${heading}`} title="Delete project"><FiTrash2 /></button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <EditorField label="Project title"><input className={inputClass} value={project.title} maxLength="120" onChange={(event) => onUpdate('title', event.target.value)} /></EditorField>
+        <EditorField label="Project title"><input className={inputClass} value={project.title} maxLength="120" onChange={(event) => onUpdate({ title: event.target.value })} /></EditorField>
         <EditorField label="Service type">
-          <select className={inputClass} value={project.serviceType} onChange={(event) => onUpdate('serviceType', event.target.value)}>
+          <select className={inputClass} value={project.serviceType} onChange={(event) => onUpdate({ serviceType: event.target.value })}>
             <option value="solar">Solar</option>
             <option value="cctv">CCTV</option>
             <option value="aircon">Aircon</option>
           </select>
         </EditorField>
-        <EditorField label="Completion date"><input type="date" className={inputClass} value={project.completedDate} onChange={(event) => onUpdate('completedDate', event.target.value)} /></EditorField>
+        <EditorField label="Completion date"><input type="date" className={inputClass} value={project.completedDate} max={today} onChange={(event) => onUpdate({ completedDate: event.target.value })} /></EditorField>
         <div className="md:col-span-2 lg:col-span-3">
-          <EditorField label="General location only"><input className={inputClass} value={project.location} maxLength="120" onChange={(event) => onUpdate('location', event.target.value)} placeholder="Example: Malolos, Bulacan (never a street address)" /><span className="mt-1 block text-xs text-slate-500">Do not enter a client name, exact address, or identifiable property details.</span></EditorField>
+          <EditorField label="General location only"><input className={inputClass} value={project.location} maxLength="120" onChange={(event) => onUpdate({ location: event.target.value })} placeholder="Example: Malolos, Bulacan (never a street address)" /><span className="mt-1 block text-xs text-slate-500">Do not enter a client name, exact address, or identifiable property details.</span></EditorField>
         </div>
         <div className="md:col-span-2 lg:col-span-3">
-          <EditorField label="Project summary"><textarea rows="3" className={inputClass} value={project.description} maxLength="500" onChange={(event) => onUpdate('description', event.target.value)} placeholder="Describe the completed scope and outcome without unsupported performance claims." /></EditorField>
+          <EditorField label="Project summary"><textarea rows="3" className={inputClass} value={project.description} maxLength="500" onChange={(event) => onUpdate({ description: event.target.value })} placeholder="Describe the completed scope and outcome without unsupported performance claims." /></EditorField>
         </div>
         <div className="md:col-span-2 lg:col-span-3">
           <span className="text-sm font-medium text-slate-700">Project photo</span>
@@ -686,14 +833,15 @@ function ProjectEditor({ project, index, uploading, canUpload, onUpload, onUpdat
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap gap-2">
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-                  <FiUploadCloud /> {uploading ? 'Uploading...' : project.imageUrl ? 'Replace photo' : 'Upload photo'}
-                  <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!canUpload || uploading} className="hidden" onChange={(event) => { onUpload(project.id, event.target.files?.[0]); event.target.value = ''; }} />
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white focus-within:ring-2 focus-within:ring-brand-300 hover:bg-brand-700">
+                  <FiUploadCloud /> {uploading ? 'Uploading…' : project.imageUrl ? 'Replace photo' : 'Upload photo'}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" aria-label={`Upload photo for ${heading}`} disabled={!canUpload || uploading} className="sr-only" onChange={(event) => { onUpload(project.id, event.target.files?.[0]); event.target.value = ''; }} />
                 </label>
-                {project.imageUrl ? <button type="button" onClick={() => { onUpdate('imageUrl', ''); onUpdate('imageAssetId', null); onUpdate('published', false); }} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><FiX /> Remove photo</button> : null}
+                {project.imageUrl ? <button type="button" onClick={() => onUpdate({ imageUrl: '', imageAssetId: null, published: false })} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><FiX /> Remove photo</button> : null}
               </div>
               <p className="mt-2 text-xs text-slate-500">JPG, PNG, or WebP, up to 5 MB. Remove faces, address markers, plates, screens, and sensitive CCTV views.</p>
-              <input aria-label="Project image URL" className={`${inputClass} mt-3`} value={project.imageUrl || ''} onChange={(event) => { onUpdate('imageUrl', event.target.value); onUpdate('imageAssetId', null); }} placeholder="Or paste /image.jpg or https://..." />
+              <ImageNotice notice={imageNotice} id={project.id} />
+              <input aria-label="Project image URL" className={`${inputClass} mt-3`} value={project.imageUrl || ''} onChange={(event) => onUpdate({ imageUrl: event.target.value, imageAssetId: null })} placeholder="Or paste /image.jpg or https://..." />
             </div>
           </div>
         </div>
@@ -701,11 +849,11 @@ function ProjectEditor({ project, index, uploading, canUpload, onUpload, onUpdat
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
-          <input type="checkbox" className="mt-0.5" checked={Boolean(project.clientConsentConfirmed)} onChange={(event) => { onUpdate('clientConsentConfirmed', event.target.checked); if (!event.target.checked) onUpdate('published', false); }} />
+          <input type="checkbox" className="mt-0.5" checked={Boolean(project.clientConsentConfirmed)} onChange={(event) => onUpdate(event.target.checked ? { clientConsentConfirmed: true } : { clientConsentConfirmed: false, published: false })} />
           <span><strong className="block text-slate-900">Client permission confirmed</strong>The client approved this photo and non-identifying project information for public use.</span>
         </label>
         <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
-          <input type="checkbox" className="mt-0.5" checked={Boolean(project.published)} disabled={!project.clientConsentConfirmed} onChange={(event) => onUpdate('published', event.target.checked)} />
+          <input type="checkbox" className="mt-0.5" checked={Boolean(project.published)} disabled={!project.clientConsentConfirmed} onChange={(event) => onUpdate({ published: event.target.checked })} />
           <span><strong className="block text-slate-900">Publish publicly</strong>Show this completed project in the landing page Our Work section.</span>
         </label>
       </div>

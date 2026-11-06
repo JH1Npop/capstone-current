@@ -13,7 +13,7 @@ import {
   resumeMaintenanceSchedule,
 } from '../../api/services';
 import { useAuth } from '../../context/AuthContext';
-import { CAPABILITIES, hasCapability } from '../../rbac';
+import { ADMIN_JOB_HISTORY_CAPABILITIES, CAPABILITIES, hasAnyCapability, hasCapability } from '../../rbac';
 import { formatDate, formatDateTime } from '../../utils/dashboardHelpers';
 
 const FILTERS = [
@@ -65,6 +65,18 @@ export default function AdminMaintenance() {
   const [actionError, setActionError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const canManageMaintenance = hasCapability(user, CAPABILITIES.afterSalesCasesManage);
+  // Job History is not in the default admin role; only offer the link when it can open.
+  const canOpenJobHistory = hasAnyCapability(user, ADMIN_JOB_HISTORY_CAPABILITIES);
+
+  // Escape closes the details (the action dialog handles its own Escape).
+  useEffect(() => {
+    if (!selected || actionMode) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setSelected(null);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selected, actionMode]);
 
   useEffect(() => {
     setSearch(appliedSearch);
@@ -205,18 +217,24 @@ export default function AdminMaintenance() {
   return (
     <Layout>
       <div className="space-y-6">
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <section aria-label="Maintenance summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {[
-            ['Active', summary.active || 0, 'text-brand-700'],
-            ['Upcoming', summary.upcoming || 0, 'text-blue-700'],
-            ['Due today', summary.due_today || 0, 'text-amber-700'],
-            ['Overdue', summary.overdue || 0, 'text-rose-700'],
-            ['Stopped', summary.dismissed || 0, 'text-slate-700'],
-          ].map(([label, value, tone]) => (
-            <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-              <p className={`mt-2 text-3xl font-bold ${tone}`}>{value}</p>
-            </div>
+            ['Active', summary.active || 0, 'active'],
+            ['Upcoming', summary.upcoming || 0, 'upcoming'],
+            ['Due today', summary.due_today || 0, 'due'],
+            ['Overdue', summary.overdue || 0, 'overdue'],
+            ['Stopped', summary.dismissed || 0, 'dismissed'],
+          ].map(([label, value, filter]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => changeStatus(filter)}
+              aria-pressed={status === filter}
+              className={`rounded-xl border bg-white p-4 text-left shadow-sm transition hover:border-brand-300 hover:shadow-md ${status === filter ? 'border-brand-400 ring-1 ring-brand-200' : 'border-slate-200'}`}
+            >
+              <span className="block text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</span>
+              <span className="mt-2 block text-3xl font-bold text-slate-900">{value}</span>
+            </button>
           ))}
         </section>
 
@@ -224,7 +242,7 @@ export default function AdminMaintenance() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap gap-2">
               {FILTERS.map(([value, label]) => (
-                <button key={value} type="button" onClick={() => changeStatus(value)} className={`rounded-lg px-3 py-2 text-sm font-semibold ${status === value ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{label}</button>
+                <button key={value} type="button" onClick={() => changeStatus(value)} aria-pressed={status === value} className={`rounded-lg px-3 py-2 text-sm font-semibold ${status === value ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{label}</button>
               ))}
             </div>
             <label className="relative block w-full lg:max-w-sm">
@@ -235,7 +253,7 @@ export default function AdminMaintenance() {
           </div>
         </section>
 
-        {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div> : null}
+        {error ? <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div> : null}
         {success ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{success}</div> : null}
 
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -260,7 +278,7 @@ export default function AdminMaintenance() {
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
               <div><p className="text-xs font-bold uppercase tracking-wider text-brand-600">{selected.ticket_code}</p><h2 className="mt-1 text-xl font-bold text-slate-950">{selected.client_name}</h2><p className="mt-1 text-sm text-slate-500">{selected.service_type_name}</p></div>
-              <button type="button" onClick={() => setSelected(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close"><FiX /></button>
+              <button type="button" onClick={() => setSelected(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close maintenance details"><FiX /></button>
             </div>
             <div className="space-y-5 p-5">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -285,8 +303,22 @@ export default function AdminMaintenance() {
                     <button type="button" onClick={() => openAction('dismiss')} className="inline-flex items-center gap-2 rounded-lg border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50"><FiSlash />Stop reminders</button>
                   </>
                 ) : null}
-                <button type="button" onClick={() => navigate(`/admin/after-sales-cases?case_type=maintenance`)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Open after-sales</button>
-                <button type="button" onClick={() => navigate('/admin/job-history')} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"><FiCalendar />Open job history</button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/admin/after-sales-cases?case_type=maintenance&search=${encodeURIComponent(selected.client_email || selected.client_name || '')}`)}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Open this client's after-sales
+                </button>
+                {canOpenJobHistory ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/admin/job-history?search=${encodeURIComponent(selected.ticket_code || '')}`)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                  >
+                    <FiCalendar />Open job history
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>

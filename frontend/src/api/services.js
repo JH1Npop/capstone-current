@@ -1051,6 +1051,12 @@ export const fetchCompletedJobsHistory = async (filters = {}) => {
     if (filters.client) params.client = filters.client;
     if (filters.technician) params.technician = filters.technician;
     if (filters.search) params.search = filters.search;
+    // Paging and sorting are server-side (page, page_size, ordering, direction). Without them
+    // every request returned page 1, so Next, sorting, row count and the CSV export all broke.
+    if (filters.page) params.page = filters.page;
+    if (filters.pageSize) params.page_size = filters.pageSize;
+    if (filters.ordering) params.ordering = filters.ordering;
+    if (filters.direction) params.direction = filters.direction;
 
     const { data } = await api.get('/services/coverage-heatmap/completed_jobs/', { params });
     return data;

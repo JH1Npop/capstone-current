@@ -12,13 +12,17 @@ import {
   FiUsers,
 } from 'react-icons/fi';
 import { fetchAdminSettings, fetchSlaRules, updateAdminSettings, updateSlaRule } from '../../api/api';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import Layout from '../../components/layout/Layout';
 import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 
 const inputClass = 'mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
 const tableInputClass = 'block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
 const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-const hourOptions = Array.from({ length: 25 }, (_, index) => index);
+// SLA times are picked as days + hours + minutes, from minutes up to a year.
+const MAX_SLA_DAYS = 365;
+const dayOptions = Array.from({ length: MAX_SLA_DAYS + 1 }, (_, index) => index);
+const hourOptions = Array.from({ length: 24 }, (_, index) => index);
 const minuteOptions = Array.from({ length: 60 }, (_, index) => index);
 const weekDays = [
   { value: 1, label: 'Mon' }, { value: 2, label: 'Tue' }, { value: 3, label: 'Wed' },
@@ -66,12 +70,32 @@ const formatCapacityHours = (minutes) => {
 const splitDuration = (minutes) => {
   const totalMinutes = Math.max(0, Number(minutes) || 0);
   return {
-    hours: Math.floor(totalMinutes / 60),
+    days: Math.floor(totalMinutes / 1440),
+    hours: Math.floor((totalMinutes % 1440) / 60),
     minutes: totalMinutes % 60,
   };
 };
 
-const combineDuration = (hours, minutes) => (Number(hours) * 60) + Number(minutes);
+const combineDuration = (days, hours, minutes) => (Number(days) * 1440) + (Number(hours) * 60) + Number(minutes);
+
+// "2 days 4 hr", "45 min": shown beside each SLA time.
+const formatSlaDuration = (minutes) => {
+  const { days, hours, minutes: mins } = splitDuration(minutes);
+  const parts = [];
+  if (days) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+  if (hours) parts.push(`${hours} hr`);
+  if (mins || !parts.length) parts.push(`${mins} min`);
+  return parts.join(' ');
+};
+
+// Holiday dates are typed as text and parsed on save, so commas can be typed freely.
+const parseHolidayText = (text) => String(text || '').split(',').map((value) => value.trim()).filter(Boolean);
+const isRealDate = (value) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+};
 
 const formatDateTimeLabel = (value) => {
   if (!value) return 'Not updated yet';
@@ -89,6 +113,8 @@ export default function AdminSettings() {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [savedSettingsSnapshot, setSavedSettingsSnapshot] = useState('');
   const [savedSlaSnapshot, setSavedSlaSnapshot] = useState('');
+  const [holidayText, setHolidayText] = useState('');
+  const [confirmRefresh, setConfirmRefresh] = useState(false);
 
   const activeRules = useMemo(
     () => slaRules.filter((rule) => rule.is_active).length,
@@ -105,6 +131,7 @@ export default function AdminSettings() {
       setSettings((current) => {
         const merged = { ...current, ...settingsData };
         setSavedSettingsSnapshot(JSON.stringify(merged));
+        setHolidayText((merged.holidayDates || []).join(', '));
         return merged;
       });
       setSlaRules(loadedRules);
@@ -160,6 +187,20 @@ export default function AdminSettings() {
     }
     if (!settings.locationValidationEnabled && !settings.locationValidationDisabledReason?.trim()) {
       setMessage({ type: 'error', text: 'A reason is required when location validation is turned off.' });
+      return false;
+    }
+    // Checked here with a clear message; the server enforces the same rules.
+    if (!(settings.businessDays || []).length) {
+      setMessage({ type: 'error', text: 'Choose at least one working day.' });
+      return false;
+    }
+    if (String(settings.businessCloseTime || '') <= String(settings.businessOpenTime || '')) {
+      setMessage({ type: 'error', text: 'Closing time must be later than opening time.' });
+      return false;
+    }
+    const badHolidays = (settings.holidayDates || []).filter((value) => !isRealDate(value));
+    if (badHolidays.length) {
+      setMessage({ type: 'error', text: `Holiday dates must be real dates written as YYYY-MM-DD. Check: ${badHolidays.join(', ')}.` });
       return false;
     }
 
@@ -247,6 +288,15 @@ export default function AdminSettings() {
   const hasUnsavedChanges = settingsDirty || slaDirty;
   const saving = savingSettings || savingSla;
 
+  // Refresh reloads saved values; ask first when that would discard edits.
+  const requestRefresh = () => {
+    if (hasUnsavedChanges) {
+      setConfirmRefresh(true);
+      return;
+    }
+    loadSettings();
+  };
+
   const saveAllChanges = async () => {
     let saved = true;
     if (settingsDirty) saved = await saveSettings();
@@ -271,7 +321,7 @@ export default function AdminSettings() {
       <div className="py-2">
         <div className="mx-auto max-w-6xl">
           {message.text ? (
-            <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+            <div role={message.type === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
               message.type === 'success'
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                 : 'border-rose-200 bg-rose-50 text-rose-700'
@@ -311,7 +361,7 @@ export default function AdminSettings() {
                 </div>
                 <button
                   type="button"
-                  onClick={loadSettings}
+                  onClick={requestRefresh}
                   disabled={loading}
                   className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                 >
@@ -422,7 +472,7 @@ export default function AdminSettings() {
                   {weekDays.map((day) => {
                     const selected = (settings.businessDays || []).includes(day.value);
                     return (
-                      <button key={day.value} type="button" disabled={loading}
+                      <button key={day.value} type="button" disabled={loading} aria-pressed={selected}
                         onClick={() => updateSetting('businessDays', selected
                           ? settings.businessDays.filter((value) => value !== day.value)
                           : [...(settings.businessDays || []), day.value].sort())}
@@ -437,7 +487,7 @@ export default function AdminSettings() {
                   <label className="block"><span className="text-sm font-medium text-slate-700">Closing Time</span><input type="time" className={inputClass} value={settings.businessCloseTime || '17:00'} onChange={(e) => updateSetting('businessCloseTime', e.target.value)} disabled={loading} /></label>
                   <label className="block"><span className="text-sm font-medium text-slate-700">Maintenance Reminder</span><input type="number" min="3" max="30" className={inputClass} value={settings.maintenanceReminderDays ?? 7} onChange={(e) => updateSetting('maintenanceReminderDays', e.target.value)} disabled={loading} /><span className="mt-1 block text-xs text-slate-500">Days before due date</span></label>
                 </div>
-                <label className="mt-4 block"><span className="text-sm font-medium text-slate-700">Holiday Dates</span><input className={inputClass} value={(settings.holidayDates || []).join(', ')} onChange={(e) => updateSetting('holidayDates', e.target.value.split(',').map((value) => value.trim()).filter(Boolean))} placeholder="2026-12-25, 2027-01-01" disabled={loading} /><span className="mt-1 block text-xs text-slate-500">Use YYYY-MM-DD, separated by commas.</span></label>
+                <label className="mt-4 block"><span className="text-sm font-medium text-slate-700">Holiday Dates</span><input className={inputClass} value={holidayText} onChange={(e) => { setHolidayText(e.target.value); updateSetting('holidayDates', parseHolidayText(e.target.value)); }} placeholder="2026-12-25, 2027-01-01" disabled={loading} /><span className="mt-1 block text-xs text-slate-500">Use YYYY-MM-DD, separated by commas.</span></label>
               </div>
 
               <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
@@ -548,6 +598,7 @@ export default function AdminSettings() {
                       </td>
                       <td className="px-3 py-3">
                         <DurationSelect
+                          label={`${rule.label || rule.key} warning`}
                           value={rule.warning_minutes}
                           onChange={(value) => updateLocalSlaRule(rule.id, { warning_minutes: value })}
                           disabled={loading}
@@ -555,6 +606,7 @@ export default function AdminSettings() {
                       </td>
                       <td className="px-3 py-3">
                         <DurationSelect
+                          label={`${rule.label || rule.key} overdue`}
                           value={rule.overdue_minutes}
                           onChange={(value) => updateLocalSlaRule(rule.id, { overdue_minutes: value })}
                           disabled={loading}
@@ -564,6 +616,7 @@ export default function AdminSettings() {
                         <label className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
                           <input
                             type="checkbox"
+                            aria-label={`${rule.label || rule.key} active`}
                             checked={Boolean(rule.is_active)}
                             onChange={(event) => updateLocalSlaRule(rule.id, { is_active: event.target.checked })}
                             className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
@@ -574,6 +627,7 @@ export default function AdminSettings() {
                       </td>
                       <td className="px-3 py-3">
                         <input
+                          aria-label={`${rule.label || rule.key} notes`}
                           value={rule.notes || ''}
                           onChange={(event) => updateLocalSlaRule(rule.id, { notes: event.target.value })}
                           className={tableInputClass}
@@ -593,10 +647,32 @@ export default function AdminSettings() {
             </div>
           </section>
 
+          {confirmRefresh ? (
+            <ConfirmationDialog
+              title="Discard unsaved settings?"
+              message="Refreshing reloads the saved settings and discards the changes you have not saved."
+              tone="warning"
+              icon="warning"
+              confirmLabel="Discard and refresh"
+              cancelLabel="Keep editing"
+              onCancel={() => setConfirmRefresh(false)}
+              onConfirm={() => {
+                setConfirmRefresh(false);
+                loadSettings();
+              }}
+            />
+          ) : null}
+
           <div className="sticky bottom-0 z-30 mt-6 pb-2">
             <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white/95 p-3 pr-20 shadow-elevated backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-              <p className={`text-sm font-medium ${hasUnsavedChanges ? 'text-amber-700' : 'text-slate-500'}`} role="status">
-                {hasUnsavedChanges ? 'You have unsaved changes.' : 'All changes are saved.'}
+              <p
+                className={`text-sm font-medium ${message.type === 'error' && message.text ? 'text-rose-700' : hasUnsavedChanges ? 'text-amber-700' : 'text-slate-500'}`}
+                aria-live="polite"
+                data-testid="settings-save-state"
+              >
+                {message.type === 'error' && message.text
+                  ? message.text
+                  : hasUnsavedChanges ? 'You have unsaved changes.' : (message.type === 'success' && message.text) || 'All changes are saved.'}
               </p>
               <button
                 type="button"
@@ -636,41 +712,62 @@ function SwitchCard({ icon: Icon, title, description, checked, onChange, disable
   );
 }
 
-function DurationSelect({ value, onChange, disabled }) {
-  const { hours, minutes } = splitDuration(value);
+function DurationSelect({ label, value, onChange, disabled }) {
+  const { days, hours, minutes } = splitDuration(value);
+  // Keep a stored value beyond the list selectable instead of silently showing 0.
+  const dayChoices = dayOptions.includes(days) ? dayOptions : [...dayOptions, days];
+  const fieldName = (unit) => (label ? `${label} ${unit}` : unit);
 
   return (
-    <div className="grid min-w-[12rem] grid-cols-2 gap-2">
-      <label className="block">
-        <span className="sr-only">Hours</span>
-        <select
-          value={hours}
-          onChange={(event) => onChange(combineDuration(event.target.value, minutes))}
-          className={tableInputClass}
-          disabled={disabled}
-        >
-          {hourOptions.map((hour) => (
-            <option key={hour} value={hour}>
-              {hour} hr
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block">
-        <span className="sr-only">Minutes</span>
-        <select
-          value={minutes}
-          onChange={(event) => onChange(combineDuration(hours, event.target.value))}
-          className={tableInputClass}
-          disabled={disabled}
-        >
-          {minuteOptions.map((minute) => (
-            <option key={minute} value={minute}>
-              {minute} min
-            </option>
-          ))}
-        </select>
-      </label>
+    <div className="min-w-[15rem]">
+      <div className="grid grid-cols-3 gap-2">
+        <label className="block">
+          <span className="sr-only">{fieldName('days')}</span>
+          <select
+            value={days}
+            onChange={(event) => onChange(combineDuration(event.target.value, hours, minutes))}
+            className={tableInputClass}
+            disabled={disabled}
+          >
+            {dayChoices.map((day) => (
+              <option key={day} value={day}>
+                {day} d
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="sr-only">{fieldName('hours')}</span>
+          <select
+            value={hours}
+            onChange={(event) => onChange(combineDuration(days, event.target.value, minutes))}
+            className={tableInputClass}
+            disabled={disabled}
+          >
+            {hourOptions.map((hour) => (
+              <option key={hour} value={hour}>
+                {hour} hr
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="sr-only">{fieldName('minutes')}</span>
+          <select
+            value={minutes}
+            onChange={(event) => onChange(combineDuration(days, hours, event.target.value))}
+            className={tableInputClass}
+            disabled={disabled}
+          >
+            {minuteOptions.map((minute) => (
+              <option key={minute} value={minute}>
+                {minute} min
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="mt-1 text-xs text-slate-500">{formatSlaDuration(value)}</p>
     </div>
   );
 }

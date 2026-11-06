@@ -16,7 +16,6 @@ const routeMeta = [
   { prefix: '/admin/service-tickets', section: 'Operations', title: 'Service Tickets', subtitle: '' },
   { prefix: '/admin/dispatch-board', section: 'Operations', title: 'Dispatch Board', subtitle: '' },
   { prefix: '/admin/analytics', section: 'Home', title: 'Analytics', subtitle: '' },
-  { prefix: '/admin/operations-report', section: 'Operations', title: 'Operations Report', subtitle: '' },
   { prefix: '/admin/reports', section: 'Home', title: 'Reports', subtitle: '' },
   { prefix: '/admin/technician-tracking', section: 'Operations', title: 'Technician Tracking', subtitle: '' },
   { prefix: '/admin/coverage-heatmap', section: 'Operations', title: 'Coverage Heatmap', subtitle: '' },

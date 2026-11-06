@@ -113,6 +113,52 @@ class LandingPageSettingsTests(APITestCase):
             response = self.client.put('/api/admin/settings/', {'landingPageContent': bad_content}, format='json')
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad_content)
 
+    def test_contact_links_must_be_web_addresses(self):
+        UserCapabilityGrant.objects.create(user=self.admin, capability_code=PUBLIC_SITE_MANAGE)
+        self.client.force_authenticate(user=self.admin)
+        for bad_content in (
+            {'facebookUrl': 'javascript:alert(1)'},
+            {'mapUrl': 'data:text/html,hi'},
+            {'mapUrl': 'maps.google.com/xyz'},
+        ):
+            response = self.client.put('/api/admin/settings/', {'landingPageContent': bad_content}, format='json')
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad_content)
+
+        good = {'facebookUrl': 'https://www.facebook.com/afn', 'mapUrl': '', 'headline': 'Solar'}
+        response = self.client.put('/api/admin/settings/', {'landingPageContent': good}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+    def test_promotion_prices_wattage_and_dates_are_validated(self):
+        UserCapabilityGrant.objects.create(user=self.admin, capability_code=PUBLIC_SITE_MANAGE)
+        self.client.force_authenticate(user=self.admin)
+        base = {'id': 'offer', 'name': 'Panel offer', 'ctaUrl': '#contact'}
+        for bad in (
+            {'regularPrice': -5},
+            {'promoPrice': 'cheap'},
+            {'regularPrice': 1000, 'promoPrice': 1500},
+            {'panelWattage': 5000},
+            {'startDate': '2027-02-30'},
+            {'startDate': '2027-03-10', 'endDate': '2027-03-01'},
+        ):
+            response = self.client.put(
+                '/api/admin/settings/', {'landingPagePromotions': [{**base, **bad}]}, format='json',
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, bad)
+
+        response = self.client.put(
+            '/api/admin/settings/',
+            {'landingPagePromotions': [{
+                **base, 'regularPrice': 30000, 'promoPrice': 25000, 'panelWattage': 0,
+                'startDate': '2027-03-01', 'endDate': '2027-03-31',
+            }]},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        stored = AdminSettings.objects.get().landing_page_promotions[0]
+        self.assertEqual(stored['promoPrice'], 25000)
+        # 0 has always meant "no panel", so it is stored as blank.
+        self.assertEqual(stored['panelWattage'], '')
+
     def test_client_cannot_update_landing_content(self):
         self.client.force_authenticate(user=self.client_user)
         response = self.client.put(

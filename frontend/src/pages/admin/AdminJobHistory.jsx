@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -42,7 +43,13 @@ const formatDateTime = (value) => {
 };
 
 
-const escapeCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+// Quote every cell, and prefix cells a spreadsheet would run as a formula (CSV injection):
+// client names and feedback are typed by users.
+const escapeCsvValue = (value) => {
+  const text = String(value ?? '');
+  const safe = /^[=+\-@\t\r]/.test(text.trimStart()) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+};
 
 const isImageSource = (url = '') => {
   const value = String(url).toLowerCase();
@@ -380,7 +387,10 @@ export default function AdminJobHistory() {
   const [sortDirection, setSortDirection] = useState('desc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [search, setSearch] = useState('');
+  // Other pages (Maintenance) can open the history already searched, e.g. ?search=TKT-0012.
+  const [urlParams] = useSearchParams();
+  const initialSearch = (urlParams.get('search') || '').trim();
+  const [search, setSearch] = useState(initialSearch);
   const [daysFilter, setDaysFilter] = useState('');
   const [serviceTypeFilter, setServiceTypeFilter] = useState('');
   const [clientFilter, setClientFilter] = useState('');
@@ -390,10 +400,14 @@ export default function AdminJobHistory() {
   const [documentError, setDocumentError] = useState('');
   const [downloadingDocument, setDownloadingDocument] = useState('');
   const [exporting, setExporting] = useState(false);
-  const searchTimeout = useRef(null);
-  const hasLoadedOnce = useRef(false);
+  // The search box is debounced; every other control loads immediately.
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
+  // Only the newest request may update the table (fast typing or clicking).
+  const requestSequence = useRef(0);
 
   const loadData = async () => {
+    const requestId = requestSequence.current + 1;
+    requestSequence.current = requestId;
     setLoading(true);
 
     try {
@@ -402,21 +416,25 @@ export default function AdminJobHistory() {
       if (serviceTypeFilter) filters.serviceType = serviceTypeFilter;
       if (clientFilter) filters.client = clientFilter;
       if (technicianFilter) filters.technician = technicianFilter;
-      if (search.trim()) filters.search = search.trim();
+      if (debouncedSearch) filters.search = debouncedSearch;
       filters.page = page;
       filters.pageSize = pageSize;
       filters.ordering = sortField;
       filters.direction = sortDirection;
 
       const result = await fetchCompletedJobsHistory(filters);
+      if (requestId !== requestSequence.current) return;
       setData(result);
       setError('');
+      // The server clamps an out-of-range page (for example after records leave a filter).
+      if (Number(result?.page) && Number(result.page) !== page) setPage(Number(result.page));
     } catch (loadError) {
+      if (requestId !== requestSequence.current) return;
       setData(null);
       setError(loadError.message || 'Unable to load job history.');
     }
 
-    setLoading(false);
+    if (requestId === requestSequence.current) setLoading(false);
   };
 
   useEffect(() => {
@@ -425,34 +443,32 @@ export default function AdminJobHistory() {
   }, []);
 
   useEffect(() => {
+    const timeoutId = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(timeoutId);
+  }, [search]);
+
+  // A new search, filter, sort or page size starts again at page 1.
+  const firstQueryRender = useRef(true);
+  useEffect(() => {
+    if (firstQueryRender.current) {
+      firstQueryRender.current = false;
+      return;
+    }
     setPage(1);
-  }, [search, daysFilter, serviceTypeFilter, clientFilter, technicianFilter, page, pageSize, sortField, sortDirection]);
+  }, [debouncedSearch, daysFilter, serviceTypeFilter, clientFilter, technicianFilter, pageSize, sortField, sortDirection]);
 
   useEffect(() => {
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
-    }
-
-    if (!hasLoadedOnce.current) {
-      hasLoadedOnce.current = true;
-      loadData();
-      return () => clearTimeout(searchTimeout.current);
-    }
-
-    searchTimeout.current = setTimeout(() => {
-      loadData();
-    }, 400);
-
-    return () => clearTimeout(searchTimeout.current);
-  }, [search, daysFilter, serviceTypeFilter, clientFilter, technicianFilter]);
+    loadData();
+  }, [debouncedSearch, daysFilter, serviceTypeFilter, clientFilter, technicianFilter, page, pageSize, sortField, sortDirection]);
 
   const jobs = data?.results || [];
 
   const sortedJobs = jobs;
   const totalJobs = Number(data?.total || 0);
   const totalPages = Math.max(1, Number(data?.total_pages || 1));
-  const currentPage = Math.min(Number(data?.page || page), totalPages);
-  const pageStartIndex = (currentPage - 1) * pageSize;
+  // The rows on screen are the page the server returned.
+  const currentPage = Math.min(Number(data?.page || 1), totalPages);
+  const pageStartIndex = (currentPage - 1) * Number(data?.page_size || pageSize);
   const paginatedJobs = sortedJobs;
   const selectedJob = sortedJobs.find((job) => job.id === selectedJobId) || null;
   const detailsJob = sortedJobs.find((job) => job.id === detailsJobId) || null;
@@ -472,12 +488,6 @@ export default function AdminJobHistory() {
     : '';
 
   useEffect(() => {
-    if (page !== currentPage) {
-      setPage(currentPage);
-    }
-  }, [currentPage, page]);
-
-  useEffect(() => {
     if (!sortedJobs.length) {
       setSelectedJobId(null);
       return;
@@ -490,15 +500,19 @@ export default function AdminJobHistory() {
   }, [selectedJobId, sortedJobs]);
 
   useEffect(() => {
+    // Escape closes only the top layer: the proof preview first, then the job details.
     const handleEscape = (event) => {
       if (event.key !== 'Escape') return;
       if (equipmentReturnJob) return;
-      setSelectedProof(null);
+      if (selectedProof) {
+        setSelectedProof(null);
+        return;
+      }
       setDetailsJobId(null);
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [equipmentReturnJob]);
+  }, [equipmentReturnJob, selectedProof]);
 
   const handleSort = (field) => {
     setPage(1);
@@ -581,7 +595,7 @@ export default function AdminJobHistory() {
         'Completion Notes',
       ].map(escapeCsvValue).join(','),
       ...exportJobs.map((job) => [
-        job.ticket_id || job.id,
+        formatTicketId(job.ticket_id || job.id),
         job.completed_date || job.scheduled_date || '',
         job.client || '',
         job.technician || '',
@@ -808,7 +822,7 @@ export default function AdminJobHistory() {
                                 }}
                                 className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                                 title="View details"
-                                aria-label="View job details"
+                                aria-label={`View job details for ${formatTicketId(job.ticket_id)}`}
                               >
                                 View
                               </button>
@@ -828,16 +842,16 @@ export default function AdminJobHistory() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                    disabled={currentPage === 1}
+                    onClick={() => setPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1 || loading}
                     className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Previous
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                    disabled={currentPage === totalPages}
+                    onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages || loading}
                     className="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Next

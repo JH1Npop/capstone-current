@@ -1713,7 +1713,12 @@ def build_ticket_search_query(search_string):
             Q(request__client__first_name__icontains=token) |
             Q(request__client__last_name__icontains=token) |
             Q(request__client__client_profile__company_name__icontains=token) |
-            Q(request__service_type__name__icontains=token)
+            Q(request__service_type__name__icontains=token) |
+            Q(technician__username__icontains=token) |
+            Q(technician__first_name__icontains=token) |
+            Q(technician__last_name__icontains=token) |
+            Q(request__location__address__icontains=token) |
+            Q(request__location__city__icontains=token)
         )
         if not base_q:
             base_q = token_q

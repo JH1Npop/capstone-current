@@ -28,6 +28,9 @@ const normalizeReportValue = (value) =>
 
 const getReportOptionValue = (value) => String(value || '').trim();
 
+const COMPLETED_REPORT_STATUSES = ['completed', 'turned over / accepted'];
+const DISMISSED_REPORT_STATUSES = ['cancelled', 'canceled', 'rejected'];
+
 const getUniqueReportOptions = (rows, getValue) => {
   const seen = new Set();
   return rows.reduce((options, row) => {
@@ -75,7 +78,7 @@ const convertToCSV = (rows) => {
     row.service,
     row.priority,
     row.status,
-    row.sla?.status || '-',
+    getSlaLabel(row.sla),
     row.technician_fullname || formatTechnicianId(row.technician_id),
     row.next_step
   ]);
@@ -87,15 +90,30 @@ const convertToCSV = (rows) => {
 
 
 
-const getSlaColor = (status) => {
-  switch (normalizeReportValue(status)) {
+// The report API sends the SLA evaluation as { state, label, ... } (services/sla.py).
+const SLA_STATE_LABELS = {
+  overdue: 'Overdue',
+  breached: 'Overdue',
+  warning: 'Warning',
+  healthy: 'On track',
+  paused: 'Paused',
+  inactive: 'Not tracked',
+};
+
+const getSlaState = (sla) => normalizeReportValue(sla?.state || sla?.status);
+const getSlaLabel = (sla) => SLA_STATE_LABELS[getSlaState(sla)] || '-';
+
+const getSlaColor = (sla) => {
+  switch (getSlaState(sla)) {
     case 'breached':
     case 'overdue':
       return 'bg-red-100 text-red-800';
     case 'warning':
       return 'bg-amber-100 text-amber-800';
-    default:
+    case 'healthy':
       return 'bg-emerald-100 text-emerald-800';
+    default:
+      return 'bg-slate-100 text-slate-600';
   }
 };
 
@@ -179,8 +197,9 @@ export default function AdminReports() {
       }
 
       if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
+        const searchLower = searchTerm.trim().toLowerCase();
         return (
+          formatTicketId(ticket.id).toLowerCase().includes(searchLower) ||
           ticket.client?.toLowerCase().includes(searchLower) ||
           ticket.client_fullname?.toLowerCase().includes(searchLower) ||
           ticket.service?.toLowerCase().includes(searchLower) ||
@@ -204,15 +223,20 @@ export default function AdminReports() {
   const summaryStats = useMemo(() => {
     const total = filteredTickets.length;
     const completed = filteredTickets.filter((ticket) =>
-      ['completed', 'turned over / accepted'].includes(normalizeReportValue(ticket.status))
+      COMPLETED_REPORT_STATUSES.includes(normalizeReportValue(ticket.status))
     ).length;
     const cancelled = filteredTickets.filter((ticket) =>
-      ['cancelled', 'canceled', 'rejected'].includes(normalizeReportValue(ticket.status))
+      DISMISSED_REPORT_STATUSES.includes(normalizeReportValue(ticket.status))
     ).length;
     const active = Math.max(0, total - completed - cancelled);
-    const unassigned = filteredTickets.filter((ticket) => !ticket.technician_id).length;
+    // "Currently unassigned" is part of the active workload: finished or cancelled
+    // tickets without a technician do not need one any more.
+    const unassigned = filteredTickets.filter((ticket) => (
+      !ticket.technician_id
+      && ![...COMPLETED_REPORT_STATUSES, ...DISMISSED_REPORT_STATUSES].includes(normalizeReportValue(ticket.status))
+    )).length;
     const slaRisk = filteredTickets.filter((ticket) =>
-      ['warning', 'overdue', 'breached'].includes(normalizeReportValue(ticket.sla?.status))
+      ['warning', 'overdue', 'breached'].includes(getSlaState(ticket.sla))
     ).length;
     const completionRate = total ? (completed / total) * 100 : 0;
 
@@ -230,7 +254,7 @@ export default function AdminReports() {
         const entry = result.get(key) || { label, color: service?.color || '', total: 0, completed: 0 };
         entry.color = service?.color || entry.color;
         entry.total += 1;
-        if (['completed', 'turned over / accepted'].includes(normalizeReportValue(ticket.status))) entry.completed += 1;
+        if (COMPLETED_REPORT_STATUSES.includes(normalizeReportValue(ticket.status))) entry.completed += 1;
         result.set(key, entry);
       });
       return result;
@@ -331,7 +355,7 @@ export default function AdminReports() {
           <span>${escapeHtml(formatTechnicianId(ticket.technician_id))}</span>
         </td>
         <td>
-          <strong>${escapeHtml(ticket.sla?.status || '-')}</strong>
+          <strong>${escapeHtml(getSlaLabel(ticket.sla))}</strong>
           <span>${escapeHtml(ticket.next_step || '-')}</span>
         </td>
       </tr>
@@ -455,7 +479,7 @@ export default function AdminReports() {
           searchValue={searchTerm}
           onSearchChange={setSearchTerm}
           searchLabel="Find a service ticket"
-          searchPlaceholder="Search client, technician, address, or service"
+          searchPlaceholder="Search ticket ID, client, technician, or service"
           filters={[
             { key: 'from', label: 'From date', type: 'date', value: dateFrom, defaultValue: '', onChange: setDateFrom },
             { key: 'to', label: 'To date', type: 'date', value: dateTo, defaultValue: '', min: dateFrom || undefined, onChange: setDateTo },
@@ -614,7 +638,7 @@ export default function AdminReports() {
                       </div>
                       <div className="min-w-0 rounded-lg bg-slate-50 p-2.5">
                         <dt className="font-semibold uppercase tracking-wide text-slate-500">SLA / Next step</dt>
-                        <dd className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getSlaColor(ticket.sla?.status)}`}>{ticket.sla?.status || '-'}</dd>
+                        <dd className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getSlaColor(ticket.sla)}`}>{getSlaLabel(ticket.sla)}</dd>
                         <dd className="mt-1 break-words text-slate-600">{ticket.next_step || '-'}</dd>
                       </div>
                     </dl>
@@ -657,8 +681,8 @@ export default function AdminReports() {
                         <div className="mt-0.5 text-xs text-slate-500">{formatTechnicianId(ticket.technician_id)}</div>
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2 align-middle">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getSlaColor(ticket.sla?.status)}`}>
-                          {ticket.sla?.status || '-'}
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getSlaColor(ticket.sla)}`}>
+                          {getSlaLabel(ticket.sla)}
                         </span>
                         <div className="mt-1 line-clamp-2 text-xs text-slate-600" title={ticket.next_step || ''}>{ticket.next_step || '-'}</div>
                       </td>

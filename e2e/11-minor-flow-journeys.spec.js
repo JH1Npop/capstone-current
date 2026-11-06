@@ -444,7 +444,9 @@ test.describe('Minor flows through the real UI', () => {
     await adminPage.getByLabel('Reason for manual value').fill('Walk-in service priced on site.');
     await adminPage.getByRole('button', { name: 'Save draft' }).click();
     await adminPage.getByRole('button', { name: 'Confirm record' }).click();
-    await expect(adminPage.getByText('Sales record confirmed and made available to the client.')).toBeVisible();
+    // Confirming publishes the record to the client, so the page asks first.
+    await adminPage.getByRole('dialog', { name: /^Confirm SAL/ }).getByRole('button', { name: 'Confirm record' }).click();
+    await expect(adminPage.getByText(/confirmed and made available to the client\./)).toBeVisible();
 
     const payments = adminPage.getByRole('region', { name: 'Payments received' });
     await payments.getByRole('button', { name: 'Record payment' }).click();
@@ -462,7 +464,7 @@ test.describe('Minor flows through the real UI', () => {
     await adminPage.getByRole('button', { name: 'Void and replace' }).click();
     await adminPage.getByLabel('Reason for voiding').fill('Contract value corrected after review.');
     await adminPage.getByRole('button', { name: 'Confirm void' }).click();
-    await expect(adminPage.getByText(/Sales record voided/)).toBeVisible();
+    await expect(adminPage.getByText(/ voided\. Use Prepare replacement/)).toBeVisible();
     await adminPage.locator('select').filter({ has: adminPage.locator('option', { hasText: 'Select a completed ticket' }) })
       .selectOption({ value: String(ticket.id) });
     await adminPage.getByRole('button', { name: 'Prepare record' }).click();

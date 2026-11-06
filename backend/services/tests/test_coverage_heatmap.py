@@ -167,3 +167,82 @@ class CoverageHeatmapTests(APITestCase):
         self.assertEqual(point['count'], 1)
         self.assertEqual(point['clients'][0]['id'], self.client_user.id)
         self.assertEqual(point['technicians'][0]['id'], technician.id)
+
+
+class CoverageHeatmapAccuracyTests(APITestCase):
+    """Counts, multi-service requests, crew, faceted filter options and bad input."""
+
+    def setUp(self):
+        from services.models import ServiceRequestService
+        self.ServiceRequestService = ServiceRequestService
+        self.admin_user = User.objects.create_user(username='heat_admin2', password='pass', role='admin')
+        self.client.force_authenticate(user=self.admin_user)
+        self.first_client = User.objects.create_user(username='heat_c1', password='pass', role='client', first_name='Ana', last_name='One')
+        self.second_client = User.objects.create_user(username='heat_c2', password='pass', role='client', first_name='Ben', last_name='Two')
+        self.solar = ServiceType.objects.create(name='Heat Solar', description='x', estimated_duration=60)
+        self.battery = ServiceType.objects.create(name='Heat Battery', description='x', estimated_duration=60)
+        self.lead = User.objects.create_user(username='heat_lead', password='pass', role='technician', status='active', first_name='Lea', last_name='Lead')
+        self.crew = User.objects.create_user(username='heat_crew', password='pass', role='technician', status='active', first_name='Cru', last_name='Crew')
+
+    def _completed(self, client, services, lat, lng, *, lead=None, crew=()):
+        request_obj = ServiceRequest.objects.create(
+            client=client, service_type=services[0], description='Done', priority='Normal', status='Completed',
+        )
+        for order, service in enumerate(services):
+            self.ServiceRequestService.objects.create(request=request_obj, service_type=service, sort_order=order)
+        ServiceLocation.objects.create(request=request_obj, address='Heat St', city='Cabuyao', province='Laguna', latitude=lat, longitude=lng)
+        if lead:
+            ticket = ServiceTicket.objects.create(
+                request=request_obj, technician=lead, scheduled_date=timezone.localdate(),
+                status='Completed', completed_date=timezone.now(),
+            )
+            for member in crew:
+                TicketCrewAssignment.objects.create(ticket=ticket, technician=member)
+        return request_obj
+
+    def _get(self, **params):
+        response = self.client.get('/api/services/coverage-heatmap/service_density/', params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        return response.data
+
+    def test_total_jobs_counts_jobs_not_hotspots(self):
+        self._completed(self.first_client, [self.solar], 14.2786, 121.1210)
+        self._completed(self.first_client, [self.solar], 14.2787, 121.1220)
+        self._completed(self.second_client, [self.solar], 14.5000, 121.0000)
+        data = self._get()
+        self.assertEqual(data['total_points'], 2)
+        self.assertEqual(data['total_jobs'], 3)
+
+    def test_every_service_of_a_multi_service_request_counts(self):
+        self._completed(self.first_client, [self.solar, self.battery], 14.2786, 121.1250)
+        point = self._get()['heatmap_data'][0]
+        self.assertEqual(point['count'], 1)
+        self.assertEqual({item['name'] for item in point['service_breakdown']}, {'Heat Solar', 'Heat Battery'})
+        filtered = self._get(service_type=self.battery.id)
+        self.assertEqual(filtered['total_jobs'], 1)
+
+    def test_crew_members_are_listed_and_filterable(self):
+        self._completed(self.first_client, [self.solar], 14.2786, 121.1250, lead=self.lead, crew=[self.crew])
+        point = self._get()['heatmap_data'][0]
+        self.assertEqual({tech['id'] for tech in point['technicians']}, {self.lead.id, self.crew.id})
+        self.assertEqual(self._get(technician=self.crew.id)['total_jobs'], 1)
+
+    def test_choosing_a_value_keeps_the_other_choices_for_that_filter(self):
+        self._completed(self.first_client, [self.solar], 14.2786, 121.1250, lead=self.lead)
+        self._completed(self.second_client, [self.battery], 14.5000, 121.0000, lead=self.crew)
+        data = self._get(client=self.first_client.id)
+        self.assertEqual(data['total_jobs'], 1)
+        self.assertEqual({option['id'] for option in data['client_options']}, {self.first_client.id, self.second_client.id})
+        # The other filters narrow to what the chosen client has.
+        self.assertEqual([option['id'] for option in data['technician_options']], [self.lead.id])
+        self.assertEqual([option['id'] for option in data['service_options']], [self.solar.id])
+        technician_data = self._get(technician=self.lead.id)
+        self.assertEqual({option['id'] for option in technician_data['technician_options']}, {self.lead.id, self.crew.id})
+
+    def test_malformed_filter_values_are_ignored(self):
+        self._completed(self.first_client, [self.solar], 14.2786, 121.1250)
+        for params in ({'client': 'abc'}, {'technician': '1;drop'}, {'service_type': '-4'}):
+            with self.subTest(params=params):
+                self.assertEqual(self._get(**params)['total_jobs'], 1)
+        coverage = self.client.get('/api/services/coverage-heatmap/technician_coverage/', {'technician': 'abc'})
+        self.assertEqual(coverage.status_code, status.HTTP_200_OK)

@@ -298,6 +298,11 @@ export default function AdminInventory() {
   const [reservationDecisionReason, setReservationDecisionReason] = useState('');
   const [reservationDecisionLoading, setReservationDecisionLoading] = useState(false);
   const [notice, setNotice] = useState('');
+  // "Discard unsaved changes?" for the item, stock-movement and category forms.
+  const [discardPrompt, setDiscardPrompt] = useState(null);
+  const [itemFormSnapshot, setItemFormSnapshot] = useState('');
+  const [stockFormSnapshot, setStockFormSnapshot] = useState('');
+  const [categoryFormSnapshot, setCategoryFormSnapshot] = useState(JSON.stringify({ id: null, name: '', description: '', parent: '' }));
 
   const getDefaultCategoryId = (categoryList = categories) => categoryList[0]?.id || '';
 
@@ -309,9 +314,12 @@ export default function AdminInventory() {
   };
 
   const openAddItem = () => {
+    const blank = buildDefaultItem(getDefaultCategoryId());
     setEditingId(null);
-    setEditingItem(buildDefaultItem(getDefaultCategoryId()));
-    setNewItem(buildDefaultItem(getDefaultCategoryId()));
+    setEditingItem(blank);
+    setNewItem(blank);
+    setItemFormSnapshot(JSON.stringify(blank));
+    setError('');
     setAdding(true);
   };
 
@@ -319,18 +327,43 @@ export default function AdminInventory() {
     setAdding(false);
     setEditingId(item.id);
     setEditingItem(item);
+    setItemFormSnapshot(JSON.stringify(item));
+    setError('');
     setAdjustForm(buildDefaultStockAdjustment());
   };
 
   const openStockMovement = (item, transactionType = 'purchase') => {
-    setAdjustTarget(item);
-    setAdjustForm({
+    const form = {
       ...buildDefaultStockAdjustment(),
       transaction_type: transactionType,
       quantity: transactionType === 'adjustment' ? Number(item.quantity || 0) : 1
-    });
+    };
+    setAdjustTarget(item);
+    setAdjustForm(form);
+    setStockFormSnapshot(JSON.stringify(form));
     setError('');
   };
+
+  // Closing a form with changes asks first; an untouched form closes at once.
+  const guardedClose = (dirty, close) => {
+    if (dirty) {
+      setDiscardPrompt({ onDiscard: close });
+      return;
+    }
+    close();
+  };
+  const closeItemForm = () => guardedClose(
+    JSON.stringify(adding ? newItem : editingItem) !== itemFormSnapshot,
+    () => { resetEditor(); setError(''); },
+  );
+  const closeStockForm = () => guardedClose(
+    JSON.stringify(adjustForm) !== stockFormSnapshot,
+    () => { setAdjustTarget(null); setError(''); },
+  );
+  const closeCategoryModal = () => guardedClose(
+    JSON.stringify(categoryForm) !== categoryFormSnapshot,
+    () => { setCategoryModalOpen(false); resetCategoryForm(); setError(''); },
+  );
 
   const loadItemTransactions = async (itemId) => {
     setTransactionLoading(true);
@@ -446,7 +479,21 @@ export default function AdminInventory() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, categoryFilter, statusFilter]);
+  }, [searchTerm, categoryFilter, statusFilter, stockConditionFilter]);
+
+  // Escape closes the top dialog (forms go through the same unsaved-changes check).
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape' || discardPrompt || lifecycleTarget || categoryPendingDelete || deleteTarget) return;
+      if (reviewingReservationGroup) closeReservationReview();
+      else if (adjustTarget) closeStockForm();
+      else if (adding || editingId) closeItemForm();
+      else if (categoryModalOpen) closeCategoryModal();
+      else if (selectedItem) setSelectedItem(null);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  });
 
   const buildCreatePayload = (item) => ({
     name: item.name.trim(),
@@ -505,6 +552,7 @@ export default function AdminInventory() {
       setNewItem(buildDefaultItem(defaultCategoryId));
       setAdding(false);
       setError('');
+      setNotice(`${data?.name || newItem.name} was added to inventory.`);
       await loadData();
     } catch (addError) {
       setError(getApiErrorMessage(addError, 'Failed to add item. Please try again.'));
@@ -523,6 +571,7 @@ export default function AdminInventory() {
       );
       resetEditor();
       setError('');
+      setNotice(`${editingItem.name} was updated.`);
       await loadData();
     } catch (updateError) {
       setError(getApiErrorMessage(updateError, 'Failed to update item. Please try again.'));
@@ -530,10 +579,12 @@ export default function AdminInventory() {
   };
 
   const deleteItem = async (id) => {
+    const deletedName = inventory.find((item) => item.id === id)?.name || 'The item';
     try {
       await api.delete(`/inventory/items/${id}/`);
       setInventory((current) => current.filter((item) => item.id !== id));
       setError('');
+      setNotice(`${deletedName} was deleted.`);
       await loadData();
     } catch (deleteError) {
       setError(getApiErrorMessage(deleteError, 'Failed to delete item. Please try again.'));
@@ -565,7 +616,9 @@ export default function AdminInventory() {
   };
 
   const resetCategoryForm = () => {
-    setCategoryForm({ id: null, name: '', description: '', parent: '' });
+    const blank = { id: null, name: '', description: '', parent: '' };
+    setCategoryForm(blank);
+    setCategoryFormSnapshot(JSON.stringify(blank));
   };
 
   const saveCategory = async () => {
@@ -587,6 +640,7 @@ export default function AdminInventory() {
       }
       resetCategoryForm();
       setError('');
+      setNotice(categoryForm.id ? `Category ${name} was updated.` : `Category ${name} was added.`);
       await loadData();
     } catch (categoryError) {
       setError(getApiErrorMessage(categoryError, 'Failed to save category.'));
@@ -594,12 +648,15 @@ export default function AdminInventory() {
   };
 
   const editCategory = (category) => {
-    setCategoryForm({
+    const form = {
       id: category.id,
       name: category.name || '',
       description: category.description || '',
       parent: category.parent || ''
-    });
+    };
+    setCategoryForm(form);
+    setCategoryFormSnapshot(JSON.stringify(form));
+    setError('');
   };
 
   const deleteCategory = (category) => {
@@ -614,6 +671,7 @@ export default function AdminInventory() {
       await api.delete(`/inventory/categories/${category.id}/`);
       if (categoryForm.id === category.id) resetCategoryForm();
       setError('');
+      setNotice(`Category ${category.name} was deleted.`);
       await loadData();
     } catch (categoryError) {
       setError(getApiErrorMessage(categoryError, 'Move this category\'s items and subcategories before deleting it.'));
@@ -657,6 +715,11 @@ export default function AdminInventory() {
       setAdjustForm(buildDefaultStockAdjustment());
       setAdjustTarget(null);
       setError('');
+      const before = Number(stockTarget.quantity || 0);
+      const after = adjustForm.transaction_type === 'adjustment'
+        ? quantity
+        : before + (adjustForm.transaction_type === 'issue' ? -quantity : quantity);
+      setNotice(`${getStockMovementCopy(adjustForm.transaction_type).title} saved for ${stockTarget.name}: ${before} → ${after}.`);
       await loadData();
       if (selectedItem?.id === stockTarget.id) {
         await Promise.all([
@@ -891,12 +954,13 @@ export default function AdminInventory() {
         <div className="flex gap-2">
           {canManageInventory ? <button
             type="button"
-            onClick={() => setCategoryModalOpen(true)}
+            onClick={() => { setError(''); resetCategoryForm(); setCategoryModalOpen(true); }}
             className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             Manage Categories
           </button> : null}
           {canManageInventory ? <button
+            type="button"
             onClick={openAddItem}
             disabled={categoryMissing}
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
@@ -980,11 +1044,18 @@ export default function AdminInventory() {
         }}
       />
 
-      {error && (
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      {notice && (
+        <div role="status" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} className="font-semibold">Dismiss</button>
+        </div>
+      )}
+
+      {error && !adjustTarget && !itemModalOpen && !categoryModalOpen && !reviewingReservationGroup && (
+        <div role="alert" className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <FiAlertCircle size={16} />
           {error}
-          <button onClick={() => setError('')} className="ml-auto font-bold">
+          <button type="button" onClick={() => setError('')} aria-label="Dismiss error" className="ml-auto font-bold">
             &times;
           </button>
         </div>
@@ -1091,16 +1162,20 @@ export default function AdminInventory() {
                     <td className="whitespace-nowrap px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                       <button
+                        type="button"
                         onClick={() => openItemDetails(item)}
                         className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
                         title="Details"
+                        aria-label={`Details for ${item.name}`}
                       >
                         <FiEye size={15} />
                       </button>
                       {canManageInventory ? <button
+                        type="button"
                         onClick={() => openItemDetails(item, 'manage')}
                         className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                         title="Manage item"
+                        aria-label={`Manage ${item.name}`}
                       >
                         Manage
                       </button> : null}
@@ -1138,8 +1213,8 @@ export default function AdminInventory() {
                 <div><dt className="text-xs uppercase tracking-wide text-slate-400">Available</dt><dd className="mt-1 font-semibold text-emerald-700">{item.available_quantity}</dd></div>
               </dl>
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => openItemDetails(item)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Details</button>
-                {canManageInventory ? <button type="button" onClick={() => openItemDetails(item, 'manage')} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white">Manage</button> : null}
+                <button type="button" onClick={() => openItemDetails(item)} aria-label={`Details for ${item.name}`} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Details</button>
+                {canManageInventory ? <button type="button" onClick={() => openItemDetails(item, 'manage')} aria-label={`Manage ${item.name}`} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white">Manage</button> : null}
               </div>
             </article>;
           })}
@@ -1171,13 +1246,6 @@ export default function AdminInventory() {
           </div>
         )}
       </div>
-
-      {notice && (
-        <div role="status" className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice('')} className="font-semibold">Dismiss</button>
-        </div>
-      )}
 
       <section id="pending-equipment-requests" className="mt-6 scroll-mt-24 rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Pending equipment requests">
         <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1684,7 +1752,7 @@ export default function AdminInventory() {
       {adjustTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
-          onClick={() => setAdjustTarget(null)}
+          onClick={closeStockForm}
         >
           <div
             role="dialog"
@@ -1774,10 +1842,13 @@ export default function AdminInventory() {
               ) : null}
             </div>
 
+            {error ? (
+              <p role="alert" className="mx-6 mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+            ) : null}
             <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button
                 type="button"
-                onClick={() => setAdjustTarget(null)}
+                onClick={closeStockForm}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Dismiss
@@ -1874,7 +1945,7 @@ export default function AdminInventory() {
       {categoryModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
-          onClick={() => { setCategoryModalOpen(false); resetCategoryForm(); }}
+          onClick={closeCategoryModal}
         >
           <div
             role="dialog"
@@ -1891,7 +1962,7 @@ export default function AdminInventory() {
               </div>
               <button
                 type="button"
-                onClick={() => { setCategoryModalOpen(false); resetCategoryForm(); }}
+                onClick={closeCategoryModal}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Close
@@ -1914,8 +1985,8 @@ export default function AdminInventory() {
                           </p>
                         </div>
                         <div className="flex shrink-0 gap-2">
-                          <button type="button" onClick={() => editCategory(category)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
-                          <button type="button" onClick={() => deleteCategory(category)} className="rounded-lg p-1.5 text-red-500 hover:bg-red-50" title="Delete category"><FiTrash2 size={16} /></button>
+                          <button type="button" onClick={() => editCategory(category)} aria-label={`Edit category ${category.name}`} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
+                          <button type="button" onClick={() => deleteCategory(category)} className="rounded-lg p-1.5 text-red-500 hover:bg-red-50" title="Delete category" aria-label={`Delete category ${category.name}`}><FiTrash2 size={16} /></button>
                         </div>
                       </div>
                     ))}
@@ -1940,7 +2011,7 @@ export default function AdminInventory() {
                   <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
                   <textarea aria-label="Category description" rows="3" value={categoryForm.description} onChange={(event) => setCategoryForm({ ...categoryForm, description: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 </div>
-                {error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+                {error ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
                 <div className="flex justify-end gap-2">
                   {categoryForm.id ? <button type="button" onClick={resetCategoryForm} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">Dismiss edit</button> : null}
                   <button type="button" onClick={saveCategory} className="rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600">{categoryForm.id ? 'Save' : 'Add Category'}</button>
@@ -1954,7 +2025,7 @@ export default function AdminInventory() {
       {itemModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
-          onClick={() => resetEditor()}
+          onClick={closeItemForm}
         >
           <div
             role="dialog"
@@ -1970,7 +2041,7 @@ export default function AdminInventory() {
               </div>
               <button
                 type="button"
-                onClick={() => resetEditor()}
+                onClick={closeItemForm}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Close
@@ -2005,6 +2076,7 @@ export default function AdminInventory() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Brand</label>
                 <input
+                  aria-label="Brand"
                   value={activeItem.brand || ''}
                   onChange={(event) => updateActiveItem({ brand: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -2014,6 +2086,7 @@ export default function AdminInventory() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Model</label>
                 <input
+                  aria-label="Model"
                   value={activeItem.model || ''}
                   onChange={(event) => updateActiveItem({ model: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -2023,6 +2096,7 @@ export default function AdminInventory() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Size</label>
                 <input
+                  aria-label="Size"
                   value={activeItem.size || ''}
                   onChange={(event) => updateActiveItem({ size: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -2046,6 +2120,7 @@ export default function AdminInventory() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Capacity</label>
                 <input
+                  aria-label="Capacity"
                   value={activeItem.capacity || ''}
                   onChange={(event) => updateActiveItem({ capacity: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -2117,6 +2192,7 @@ export default function AdminInventory() {
                 <input
                   type="number"
                   min="0"
+                  aria-label="Minimum stock"
                   value={activeItem.minimum_stock}
                   onChange={(event) => updateActiveItem({ minimum_stock: parseIntegerInput(event.target.value) })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -2128,6 +2204,7 @@ export default function AdminInventory() {
                   type="number"
                   min="0"
                   step="0.01"
+                  aria-label="Unit price"
                   value={activeItem.unit_price}
                   onChange={(event) => updateActiveItem({ unit_price: event.target.value === '' ? '' : Number(event.target.value) })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -2139,6 +2216,7 @@ export default function AdminInventory() {
                   type="number"
                   min="0"
                   max="100"
+                  aria-label="Low-stock threshold percent"
                   value={activeItem.low_stock_threshold ?? 40}
                   onChange={(event) => updateActiveItem({ low_stock_threshold: parseIntegerInput(event.target.value, 40) })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
@@ -2147,26 +2225,26 @@ export default function AdminInventory() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Warehouse location</label>
-                <input value={activeItem.warehouse_location || ''} onChange={(event) => updateActiveItem({ warehouse_location: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Rack, room, or warehouse" />
+                <input aria-label="Warehouse location" value={activeItem.warehouse_location || ''} onChange={(event) => updateActiveItem({ warehouse_location: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Rack, room, or warehouse" />
               </div>
               <details className="rounded-xl border border-slate-200 p-4 md:col-span-2">
                 <summary className="cursor-pointer text-sm font-semibold text-slate-900">Supplier and warranty <span className="font-normal text-slate-500">(optional)</span></summary>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Supplier</label>
-                <input value={activeItem.supplier || ''} onChange={(event) => updateActiveItem({ supplier: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <input aria-label="Supplier" value={activeItem.supplier || ''} onChange={(event) => updateActiveItem({ supplier: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Supplier contact</label>
-                <input value={activeItem.supplier_contact || ''} onChange={(event) => updateActiveItem({ supplier_contact: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <input aria-label="Supplier contact" value={activeItem.supplier_contact || ''} onChange={(event) => updateActiveItem({ supplier_contact: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Purchase date</label>
-                <input type="date" value={activeItem.purchase_date || ''} onChange={(event) => updateActiveItem({ purchase_date: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <input type="date" aria-label="Purchase date" value={activeItem.purchase_date || ''} onChange={(event) => updateActiveItem({ purchase_date: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Warranty expiry</label>
-                <input type="date" value={activeItem.warranty_expiry || ''} onChange={(event) => updateActiveItem({ warranty_expiry: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <input type="date" aria-label="Warranty expiry" value={activeItem.warranty_expiry || ''} onChange={(event) => updateActiveItem({ warranty_expiry: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
                 </div>
               </details>
@@ -2175,22 +2253,22 @@ export default function AdminInventory() {
                 <div className="mt-4 grid gap-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
-                <textarea rows="3" value={activeItem.description || ''} onChange={(event) => updateActiveItem({ description: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <textarea rows="3" aria-label="Description" value={activeItem.description || ''} onChange={(event) => updateActiveItem({ description: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Internal notes</label>
-                <textarea rows="3" value={activeItem.notes || ''} onChange={(event) => updateActiveItem({ notes: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <textarea rows="3" aria-label="Internal notes" value={activeItem.notes || ''} onChange={(event) => updateActiveItem({ notes: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
                 </div>
               </details>
             </div>
 
-            {error ? <div className="mx-6 mb-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+            {error ? <div role="alert" className="mx-6 mb-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
 
             <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
               <button
                 type="button"
-                onClick={() => resetEditor()}
+                onClick={closeItemForm}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Dismiss
@@ -2214,10 +2292,13 @@ export default function AdminInventory() {
           onClick={() => setDeleteTarget(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-inventory-item-title"
             className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-slate-950">Delete inventory item?</h3>
+            <h3 id="delete-inventory-item-title" className="text-lg font-semibold text-slate-950">Delete inventory item?</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               This will permanently remove <span className="font-semibold text-slate-900">{deleteTarget.name}</span>. This option is available only because the item has no operational history, reservations, service requirements, or return records.
             </p>
@@ -2266,6 +2347,22 @@ export default function AdminInventory() {
             </p>
           ) : null}
         </ConfirmationDialog>
+      ) : null}
+      {discardPrompt ? (
+        <ConfirmationDialog
+          title="Discard unsaved changes?"
+          message="The changes in this form have not been saved."
+          tone="warning"
+          icon="warning"
+          confirmLabel="Discard changes"
+          cancelLabel="Keep editing"
+          onCancel={() => setDiscardPrompt(null)}
+          onConfirm={() => {
+            const { onDiscard } = discardPrompt;
+            setDiscardPrompt(null);
+            onDiscard();
+          }}
+        />
       ) : null}
       {categoryPendingDelete ? (
         <ConfirmationDialog

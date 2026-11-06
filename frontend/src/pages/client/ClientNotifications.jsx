@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import { EmptyState, ErrorState } from '../../components/ui/StateDisplay';
@@ -35,6 +36,13 @@ export default function ClientNotifications() {
   const [deletingAll, setDeletingAll] = useState(false);
   const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
   const [error, setError] = useState('');
+  // Errors from actions (mark read, delete) are a short message, not the full-page load error.
+  const [actionError, setActionError] = useState('');
+  const [deleteAllError, setDeleteAllError] = useState('');
+  const [notice, setNotice] = useState('');
+  // The shell's live unread count (pushed by the server) refreshes this list too.
+  const { unreadCount: liveUnreadCount } = useNotifications();
+  const lastLiveCount = useRef(null);
 
   useEffect(() => {
     if (user && token) {
@@ -46,19 +54,34 @@ export default function ClientNotifications() {
     setCurrentPage(1);
   }, [filter]);
 
-  const loadNotifications = async () => {
-    setLoading(true);
+  const loadNotifications = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const notifArray = await fetchAllPages('/notifications/');
       const sorted = [...notifArray].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
       setNotifications(sorted);
       setError('');
     } catch (loadError) {
-      setNotifications([]);
-      setError(loadError.message || 'Unable to load notifications.');
+      if (!silent) {
+        setNotifications([]);
+        setError(loadError.message || 'Unable to load notifications.');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
+  };
+
+  // New notifications appear without reloading the page.
+  useEffect(() => {
+    if (lastLiveCount.current !== null && liveUnreadCount !== lastLiveCount.current && !loading) {
+      loadNotifications({ silent: true });
+    }
+    lastLiveCount.current = liveUnreadCount;
+  }, [liveUnreadCount]);
+
+  const done = (message) => {
+    setActionError('');
+    setNotice(message);
   };
 
   const handleMarkAsRead = async (notifId) => {
@@ -70,8 +93,9 @@ export default function ClientNotifications() {
         )
       );
       announceNotificationsUpdated();
+      setActionError('');
     } catch (markError) {
-      setError(markError.message || 'Unable to mark notification as read.');
+      setActionError(markError.message || 'Unable to mark notification as read.');
     }
   };
 
@@ -80,18 +104,21 @@ export default function ClientNotifications() {
       await api.post('/notifications/mark_all_read/');
       setNotifications((current) => current.map((notification) => ({ ...notification, status: 'read' })));
       announceNotificationsUpdated();
+      done('All notifications marked as read.');
     } catch (markAllError) {
-      setError(markAllError.message || 'Unable to update notifications.');
+      setActionError(markAllError.message || 'Unable to update notifications.');
     }
   };
 
   const handleDeleteNotification = async (notifId) => {
+    const title = notifications.find((notification) => notification.id === notifId)?.title || 'Notification';
     try {
       await api.delete(`/notifications/${notifId}/`);
       setNotifications((current) => current.filter((notification) => notification.id !== notifId));
       announceNotificationsUpdated();
+      done(`Deleted "${title}".`);
     } catch (deleteError) {
-      setError(deleteError.message || 'Unable to delete notification.');
+      setActionError(deleteError.message || 'Unable to delete notification.');
     }
   };
 
@@ -105,9 +132,10 @@ export default function ClientNotifications() {
       announceNotificationsUpdated();
       setCurrentPage(1);
       setDeleteAllConfirmOpen(false);
-      setError('');
-    } catch (deleteAllError) {
-      setError(deleteAllError.message || 'Unable to delete notifications.');
+      setDeleteAllError('');
+      done('All notifications deleted.');
+    } catch (requestError) {
+      setDeleteAllError(requestError.message || 'Unable to delete notifications.');
     } finally {
       setDeletingAll(false);
     }
@@ -166,12 +194,10 @@ export default function ClientNotifications() {
       <div className="py-2">
         <div className="mx-auto max-w-3xl">
           <div className="mb-6 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <div>
-              <p className="text-sm text-slate-500">Alerts, updates, reminders, and request activity.</p>
-            </div>
-            <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+            <div className="flex flex-wrap items-center justify-start gap-2 sm:ml-auto sm:justify-end">
               {unreadCount > 0 && (
                 <button
+                  type="button"
                   onClick={handleMarkAllAsRead}
                   className="rounded-lg px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50"
                 >
@@ -181,7 +207,7 @@ export default function ClientNotifications() {
               {notifications.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setDeleteAllConfirmOpen(true)}
+                  onClick={() => { setDeleteAllError(''); setDeleteAllConfirmOpen(true); }}
                   disabled={deletingAll}
                   className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -195,9 +221,18 @@ export default function ClientNotifications() {
           {error && (
             <ErrorState
               error={error}
-              onRetry={loadNotifications}
+              onRetry={() => loadNotifications()}
             />
           )}
+          {actionError ? (
+            <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</p>
+          ) : null}
+          {notice ? (
+            <div role="status" className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <span>{notice}</span>
+              <button type="button" onClick={() => setNotice('')} className="font-semibold">Dismiss</button>
+            </div>
+          ) : null}
 
           <div className="mb-6 flex flex-wrap gap-2">
             {[
@@ -209,7 +244,9 @@ export default function ClientNotifications() {
             ].map((tab) => (
               <button
                 key={tab.value}
+                type="button"
                 onClick={() => setFilter(tab.value)}
+                aria-pressed={filter === tab.value}
                 className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-colors ${
                   filter === tab.value
                     ? 'bg-brand-600 text-white'
@@ -259,33 +296,40 @@ export default function ClientNotifications() {
                         </p>
                       </div>
                       <button
+                        type="button"
                         onClick={() => handleDeleteNotification(notification.id)}
                         className="text-slate-400 transition-colors hover:text-slate-600"
-                        aria-label="Delete notification"
+                        aria-label={`Delete notification: ${notification.title || 'Notification'}`}
                       >
                         <FiTrash2 size={18} />
                       </button>
                     </div>
-                    {notification.status === 'unread' && (
-                      <button
-                        onClick={() => handleMarkAsRead(notification.id)}
-                        className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700"
-                      >
-                        Mark as read
-                      </button>
-                    )}
-                    {destination && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (notification.status === 'unread') await handleMarkAsRead(notification.id);
-                          navigate(destination.path);
-                        }}
-                        className="mt-3 ml-4 text-sm font-semibold text-brand-600 hover:text-brand-700"
-                      >
-                        {destination.label}
-                      </button>
-                    )}
+                    {notification.status === 'unread' || destination ? (
+                      <div className="mt-3 flex flex-wrap gap-4">
+                        {notification.status === 'unread' && (
+                          <button
+                            type="button"
+                            onClick={() => handleMarkAsRead(notification.id)}
+                            aria-label={`Mark as read: ${notification.title || 'Notification'}`}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                          >
+                            Mark as read
+                          </button>
+                        )}
+                        {destination && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (notification.status === 'unread') await handleMarkAsRead(notification.id);
+                              navigate(destination.path);
+                            }}
+                            className="text-sm font-semibold text-brand-600 hover:text-brand-700"
+                          >
+                            {destination.label}
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 );
@@ -317,9 +361,11 @@ export default function ClientNotifications() {
           confirmLabel="Delete all"
           cancelLabel="Keep notifications"
           loading={deletingAll}
-          onCancel={() => setDeleteAllConfirmOpen(false)}
+          onCancel={() => { setDeleteAllConfirmOpen(false); setDeleteAllError(''); }}
           onConfirm={handleDeleteAllNotifications}
-        />
+        >
+          {deleteAllError ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{deleteAllError}</p> : null}
+        </ConfirmationDialog>
       )}
     </Layout>
   );

@@ -8,6 +8,7 @@ import CustomDocumentWorkspace from '../../components/admin/CustomDocumentWorksp
 import DocumentActionCard from '../../components/admin/DocumentActionCard';
 import QuotationDepositPanel from '../../components/sales/QuotationDepositPanel';
 import StatusBadge from '../../components/ui/StatusBadge';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import { useAuth } from '../../context/AuthContext';
 import { DOCUMENTS_MANAGE_CAPABILITIES, DOCUMENT_TEMPLATES_ACCESS_CAPABILITIES, hasAnyCapability } from '../../rbac';
 import { formatTicketId } from '../../utils/roleIds';
@@ -2548,6 +2549,16 @@ export default function AdminDocuments() {
   const [searchParams] = useSearchParams();
   const initialTemplate = searchParams.get('template');
   const [activeTemplate, setActiveTemplate] = useState(initialTemplate || 'field_service_report');
+  // Document types edited since they were loaded or last saved. Switching ticket reloads every
+  // form from the new ticket, so it asks first instead of discarding these edits silently.
+  const [editedTemplates, setEditedTemplates] = useState([]);
+  const [pendingTicketChange, setPendingTicketChange] = useState(null);
+  const markEdited = (templateId = activeTemplate) => {
+    setEditedTemplates((current) => (current.includes(templateId) ? current : [...current, templateId]));
+  };
+  const clearEdited = (templateId = activeTemplate) => {
+    setEditedTemplates((current) => current.filter((entry) => entry !== templateId));
+  };
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
   const [replacementWizardOpen, setReplacementWizardOpen] = useState(false);
   const [customDocumentsOpen, setCustomDocumentsOpen] = useState(false);
@@ -2801,6 +2812,8 @@ export default function AdminDocuments() {
   };
 
   const handleTicketSelection = async (ticketId, ticketList = tickets) => {
+    setEditedTemplates([]);
+    setPendingTicketChange(null);
     setSelectedTicketId(ticketId);
     setPrefillReadyTicketId('');
     setDocumentDraftLoading(Boolean(ticketId && activeTemplate !== 'commissioning_checklist'));
@@ -2835,6 +2848,27 @@ export default function AdminDocuments() {
 
     await refreshTicketPrefill(ticketId, ticketList);
   };
+
+  // Choosing another ticket (or clearing it) reloads every form; ask when edits are unsaved.
+  const requestTicketSelection = (ticketId) => {
+    if (String(ticketId || '') === String(selectedTicketId || '')) return;
+    if (editedTemplates.length) {
+      setPendingTicketChange({ ticketId });
+      return;
+    }
+    handleTicketSelection(ticketId);
+  };
+
+  // Leaving or reloading the page with unsaved document edits asks the browser to confirm.
+  useEffect(() => {
+    if (!editedTemplates.length) return undefined;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [editedTemplates.length]);
 
   const applySavedDraft = (templateId, data) => {
     if (!data) {
@@ -3035,22 +3069,27 @@ export default function AdminDocuments() {
   }, [activeTemplate, selectedFieldServiceReportId, selectedTicketId, tickets, documentPrefill, installedEquipmentRecords]);
 
   const updateField = (key, value) => {
+    markEdited('field_service_report');
     setForm((current) => updateFieldServiceReportField(current, key, value));
   };
 
   const updateRow = (rowId, key, value) => {
+    markEdited('field_service_report');
     setForm((current) => updateFieldServiceReportRow(current, rowId, key, value));
   };
 
   const addRow = () => {
+    markEdited('field_service_report');
     setForm(addFieldServiceReportRow);
   };
 
   const removeRow = (rowId) => {
+    markEdited('field_service_report');
     setForm((current) => removeFieldServiceReportRow(current, rowId));
   };
 
   const resetForm = () => {
+    clearEdited(activeTemplate);
     const selectedTicketBase = tickets.find((ticket) => String(ticket.id) === String(selectedTicketId));
     const selectedTicket = buildTicketContextFromPrefill(selectedTicketBase, documentPrefill);
     if (activeTemplate === 'commissioning_checklist') {
@@ -3091,38 +3130,47 @@ export default function AdminDocuments() {
   };
 
   const updateCommissioningField = (key, value) => {
+    markEdited('commissioning_checklist');
     setCommissioningForm((current) => updateSolarCommissioningField(current, key, value));
   };
 
   const updateCommissioningItem = (itemNo, key, value) => {
+    markEdited('commissioning_checklist');
     setCommissioningForm((current) => updateSolarCommissioningItem(current, itemNo, key, value));
   };
 
   const updateCommissioningReading = (group, key, value) => {
+    markEdited('commissioning_checklist');
     setCommissioningForm((current) => updateSolarCommissioningReading(current, group, key, value));
   };
 
   const updateQuotationField = (key, value) => {
+    markEdited('quotation_proposal');
     setQuotationForm((current) => updateQuotationSchemaField(current, key, value));
   };
 
   const updateTdsField = (key, value) => {
+    markEdited('technical_data_sheet');
     setTdsForm((current) => updateTechnicalDataSheetField(current, key, value));
   };
 
   const updateTdsLoadRow = (rowId, key, value) => {
+    markEdited('technical_data_sheet');
     setTdsForm((current) => updateTechnicalDataSheetRow(current, 'loadRows', rowId, key, value));
   };
 
   const updateTdsPurposeRow = (rowId, key, value) => {
+    markEdited('technical_data_sheet');
     setTdsForm((current) => updateTechnicalDataSheetRow(current, 'purposeRows', rowId, key, value));
   };
 
   const updateInstallationContractField = (key, value) => {
+    markEdited('installation_contract');
     setInstallationContractForm((current) => updateInstallationContractSchemaField(current, key, value));
   };
 
   const updateQuotationTableRow = (tableKey, rowId, key, value) => {
+    markEdited('quotation_proposal');
     setQuotationForm((current) => {
       const updatedRows = current[tableKey].map((row) => {
         if (row.id !== rowId) return row;
@@ -3159,6 +3207,7 @@ export default function AdminDocuments() {
   };
 
   const addQuotationRow = (type) => {
+    markEdited('quotation_proposal');
     const tableKey = type === 'price' ? 'priceRows' : type === 'bom' ? 'bomRows' : 'warrantyRows';
     setQuotationForm((current) => {
       const nextRowNumber = type === 'bom'
@@ -3169,20 +3218,24 @@ export default function AdminDocuments() {
   };
 
   const removeQuotationRow = (tableKey, rowId) => {
+    markEdited('quotation_proposal');
     setQuotationForm((current) => {
       return removeQuotationSchemaRow(current, tableKey, rowId);
     });
   };
 
   const updateTurnoverField = (key, value) => {
+    markEdited('turnover_acceptance');
     setTurnoverForm((current) => updateTurnoverSchemaField(current, key, value));
   };
 
   const updateTurnoverTableRow = (tableKey, rowId, key, value) => {
+    markEdited('turnover_acceptance');
     setTurnoverForm((current) => updateTurnoverSchemaRow(current, tableKey, rowId, key, value));
   };
 
   const addTurnoverRow = (type) => {
+    markEdited('turnover_acceptance');
     const tableKey = type === 'components'
       ? 'componentsRows'
       : type === 'performance'
@@ -3199,6 +3252,7 @@ export default function AdminDocuments() {
   };
 
   const removeTurnoverRow = (tableKey, rowId) => {
+    markEdited('turnover_acceptance');
     setTurnoverForm((current) => {
       return removeTurnoverSchemaRow(current, tableKey, rowId);
     });
@@ -3224,6 +3278,7 @@ export default function AdminDocuments() {
       setCommissioningBaseline(nextForm);
       setDocumentPrefill((current) => current ? { ...current, solar_commissioning: saved } : current);
       setCommissioningMessage('Solar commissioning checklist saved.');
+      clearEdited('commissioning_checklist');
     } catch (error) {
       setCommissioningMessage(error.message || 'Unable to save the commissioning checklist.');
     } finally {
@@ -3292,6 +3347,7 @@ export default function AdminDocuments() {
         },
       } : current);
       setTurnoverMessage(finalize ? 'Turnover Finalized and Ticket updated!' : 'Turnover draft saved.');
+      clearEdited('turnover_acceptance');
     } catch (error) {
       setTurnoverMessage(error.message || 'Unable to save turnover acceptance.');
     } finally {
@@ -3330,6 +3386,7 @@ export default function AdminDocuments() {
       });
       setDocumentDrafts((current) => ({ ...current, [activeTemplate]: savedDraft }));
       setDocumentDraftMessage('Document draft saved successfully.');
+      clearEdited(activeTemplate);
     } catch (error) {
       setDocumentDraftMessage(error.message || 'Unable to save the document draft.');
     } finally {
@@ -3389,6 +3446,7 @@ export default function AdminDocuments() {
       });
       setDocumentDrafts((current) => ({ ...current, quotation_proposal: savedDraft }));
       setDocumentDraftMessage('Quotation saved and sent to the client to accept or decline in their portal.');
+      clearEdited('quotation_proposal');
     } catch (error) {
       setDocumentDraftMessage(error.message || 'Unable to save quotation data.');
     } finally {
@@ -3426,6 +3484,7 @@ export default function AdminDocuments() {
       });
       setDocumentDrafts((current) => ({ ...current, technical_data_sheet: savedDraft }));
       setDocumentDraftMessage('Technical data sheet and printable draft saved successfully.');
+      clearEdited('technical_data_sheet');
     } catch (error) {
       setDocumentDraftMessage(error.message || 'Unable to save the technical data sheet.');
     } finally {
@@ -3457,6 +3516,7 @@ export default function AdminDocuments() {
       });
       setDocumentDrafts((current) => ({ ...current, installation_contract: savedDraft }));
       setDocumentDraftMessage('Installation contract and printable draft saved successfully.');
+      clearEdited('installation_contract');
     } catch (error) {
       setDocumentDraftMessage(error.message || 'Unable to save contract data.');
     } finally {
@@ -3915,7 +3975,7 @@ export default function AdminDocuments() {
                         disabled={ticketsLoading && !isDropdownOpen}
                       />
                       {selectedTicketId && !isDropdownOpen ? (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); handleTicketSelection(''); setTicketSearch(''); }} className="text-slate-400 hover:text-rose-500">
+                        <button type="button" aria-label="Clear selected ticket" onClick={(e) => { e.stopPropagation(); requestTicketSelection(''); setTicketSearch(''); }} className="text-slate-400 hover:text-rose-500">
                           <FiX size={16} />
                         </button>
                       ) : (
@@ -3934,7 +3994,7 @@ export default function AdminDocuments() {
                               key={ticket.id}
                               type="button"
                               onClick={() => {
-                                handleTicketSelection(ticket.id);
+                                requestTicketSelection(ticket.id);
                                 setIsDropdownOpen(false);
                                 setTicketSearch('');
                               }}
@@ -4124,18 +4184,21 @@ export default function AdminDocuments() {
                   activeTemplate={activeTemplate}
                   form={form}
                   onUpdateRow={(id, field, value) => {
+                    markEdited('field_service_report');
                     setForm((prev) => ({
                       ...prev,
                       rows: prev.rows.map((row) => (row.id === id ? { ...row, [field]: value } : row))
                     }));
                   }}
                   onAddRow={() => {
+                    markEdited('field_service_report');
                     setForm((prev) => ({
                       ...prev,
                       rows: [...prev.rows, { id: `row-${Date.now()}`, brandModel: '', trHp: '', serialNumber: '', indoorTemp: '', outdoorTemp: '', ampere: '', others: '', recommendation: '' }]
                     }));
                   }}
                   onRemoveRow={(id) => {
+                    markEdited('field_service_report');
                     setForm((prev) => ({
                       ...prev,
                       rows: prev.rows.filter((row) => row.id !== id)
@@ -4307,6 +4370,20 @@ export default function AdminDocuments() {
         />
 
       </div>
+      {pendingTicketChange ? (
+        <ConfirmationDialog
+          title="Discard unsaved document changes?"
+          message={`You have unsaved changes in ${editedTemplates
+            .map((templateId) => TEMPLATE_OPTIONS.find((template) => template.id === templateId)?.label || 'a document')
+            .join(', ')}. ${pendingTicketChange.ticketId ? 'Opening another ticket' : 'Clearing the ticket'} reloads every form and discards them.`}
+          tone="warning"
+          icon="warning"
+          confirmLabel="Discard changes"
+          cancelLabel="Keep editing"
+          onCancel={() => setPendingTicketChange(null)}
+          onConfirm={() => handleTicketSelection(pendingTicketChange.ticketId)}
+        />
+      ) : null}
     </Layout>
   );
 }

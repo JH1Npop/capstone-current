@@ -44,9 +44,10 @@ export default function SalesPaymentsPanel({ record, formatMoney, formatDate, on
     setError('');
     try {
       await recordSalesPayment(record.id, { ...form, amount: form.amount });
+      const recorded = formatMoney(form.amount, record.currency_code);
       setForm(emptyForm());
       setShowForm(false);
-      await onChanged();
+      await onChanged(`Payment of ${recorded} recorded for ${record.record_number}.`);
     } catch (submitError) {
       setError(submitError.message);
     } finally {
@@ -62,7 +63,7 @@ export default function SalesPaymentsPanel({ record, formatMoney, formatDate, on
       await voidSalesPayment(record.id, voiding, voidReason.trim());
       setVoiding(null);
       setVoidReason('');
-      await onChanged();
+      await onChanged(`Payment voided on ${record.record_number}. The balance was updated.`);
     } catch (voidError) {
       setError(voidError.message);
     } finally {
@@ -82,7 +83,7 @@ export default function SalesPaymentsPanel({ record, formatMoney, formatDate, on
         <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Balance due</p><p className={`mt-1 font-semibold tabular-nums ${balance > 0 ? 'text-red-700' : 'text-slate-900'}`}>{formatMoney(record.balance_due, record.currency_code)}</p></div>
       </div>
 
-      {error ? <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+      {error ? <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       {payments.length ? (
         <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
@@ -93,11 +94,11 @@ export default function SalesPaymentsPanel({ record, formatMoney, formatDate, on
                 <tr key={payment.id} className={payment.is_voided ? 'text-slate-400' : ''}>
                   <td className="px-3 py-2">{formatDate(payment.paid_on)}</td>
                   <td className="px-3 py-2">{payment.method_label}</td>
-                  <td className="px-3 py-2">{payment.reference || '-'}{payment.is_voided ? <span className="ml-2 text-xs text-red-600">Voided: {payment.void_reason}</span> : null}</td>
+                  <td className="px-3 py-2">{payment.reference || '-'}{payment.notes ? <span className="block text-xs text-slate-500">{payment.notes}</span> : null}{payment.is_voided ? <span className="ml-2 text-xs text-red-600">Voided: {payment.void_reason}</span> : null}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${payment.is_voided ? 'line-through' : 'font-semibold text-slate-900'}`}>{formatMoney(payment.amount, record.currency_code)}</td>
                   <td className="px-3 py-2 text-right">
                     {!payment.is_voided ? (
-                      <button type="button" onClick={() => { setVoiding(payment.id); setVoidReason(''); }} className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:underline" aria-label={`Void payment of ${payment.amount}`}><FiSlash aria-hidden="true" /> Void</button>
+                      <button type="button" onClick={() => { setVoiding(payment.id); setVoidReason(''); }} className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:underline" aria-label={`Void payment of ${formatMoney(payment.amount, record.currency_code)} on ${formatDate(payment.paid_on)}`}><FiSlash aria-hidden="true" /> Void</button>
                     ) : null}
                   </td>
                 </tr>
@@ -124,6 +125,7 @@ export default function SalesPaymentsPanel({ record, formatMoney, formatDate, on
             <label className="text-sm font-medium text-slate-700">Date received<input required type="date" max={getLocalDateInputValue()} value={form.paid_on} onChange={(event) => setForm((current) => ({ ...current, paid_on: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2" /></label>
             <label className="text-sm font-medium text-slate-700">Method<select value={form.method} onChange={(event) => setForm((current) => ({ ...current, method: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2">{METHODS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             <label className="text-sm font-medium text-slate-700">Reference (optional)<input value={form.reference} maxLength={120} placeholder="Receipt or transaction no." onChange={(event) => setForm((current) => ({ ...current, reference: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700 sm:col-span-2">Notes (optional)<textarea rows={2} value={form.notes} maxLength={500} placeholder="For example: first installment, paid at the office" onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2" /></label>
             <div className="flex flex-wrap gap-2 sm:col-span-2">
               <button type="submit" disabled={busy} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{busy ? 'Saving...' : 'Save payment'}</button>
               <button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Dismiss</button>

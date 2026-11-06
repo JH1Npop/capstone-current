@@ -202,12 +202,14 @@ function ProcedureEditor({ procedures, onChange }) {
                 <input
                   className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
                   placeholder="Step title"
+                  aria-label={`Checklist step ${i + 1} title`}
                   value={proc.title}
                   onChange={(e) => updateStep(i, 'title', e.target.value)}
                 />
                 <input
                   className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
                   placeholder="Description (optional)"
+                  aria-label={`Checklist step ${i + 1} description`}
                   value={proc.description || ''}
                   onChange={(e) => updateStep(i, 'description', e.target.value)}
                 />
@@ -223,6 +225,7 @@ function ProcedureEditor({ procedures, onChange }) {
               <button
                 type="button"
                 onClick={() => removeStep(i)}
+                aria-label={`Remove checklist step ${i + 1}`}
                 className="mt-1.5 rounded-lg p-1 text-red-400 hover:bg-red-50 hover:text-red-600"
               >
                 <FiTrash2 size={14} />
@@ -342,6 +345,7 @@ function EquipmentEditor({ equipment, onChange }) {
               <input
                 className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
                 placeholder="Tool name"
+                aria-label={`Equipment name ${i + 1}`}
                 value={item.name}
                 onChange={(e) => updateItem(i, 'name', e.target.value)}
               />
@@ -377,7 +381,11 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const menuButtonRef = useRef(null);
-  const selectableInventoryItems = inventoryItems.filter((item) => item.status !== 'retired');
+  // An item can be a template for a service only once (the server enforces it too).
+  const templatedItemIds = new Set(requirements.map((requirement) => Number(requirement.item)));
+  const selectableInventoryItems = inventoryItems.filter((item) => (
+    item.status !== 'retired' && !templatedItemIds.has(Number(item.id))
+  ));
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -546,6 +554,20 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
                     <FiPower size={15} aria-hidden="true" />
                     {service.is_active === false ? 'Reactivate' : 'Deactivate'}
                   </button>
+                  {canPermanentlyDeleteService(service) ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onCatalogAction(service, 'delete');
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50 focus:bg-red-50 focus:outline-none"
+                    >
+                      <FiTrash2 size={15} aria-hidden="true" />
+                      Delete unused service
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -620,6 +642,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
                     {canManageInventory ? <button
                       type="button"
                       onClick={() => onDeleteRequirement(req.id)}
+                      aria-label={`Remove inventory template ${req.item_name}`}
                       className="rounded p-1 text-red-400 hover:text-red-600"
                     >
                       <FiTrash2 size={13} />
@@ -634,6 +657,7 @@ function ServiceCard({ service, requirements, inventoryItems, canManage, canMana
               <div className="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <select
                   className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                  aria-label="Inventory template item"
                   value={reqForm.item}
                   onChange={(e) => setReqForm({ ...reqForm, item: Number(e.target.value) })}
                 >
@@ -690,7 +714,14 @@ export default function AdminServices() {
   const [serviceActionBusy, setServiceActionBusy] = useState(false);
   const [requirementDeleteTarget, setRequirementDeleteTarget] = useState(null);
   const [serviceFormData, setServiceFormData] = useState(DEFAULT_SERVICE_FORM);
-  const [feedback, setFeedback] = useState('');
+  // Page-level messages carry an explicit tone; guessing from words showed errors in green.
+  const [feedback, setFeedbackState] = useState({ text: '', tone: 'success' });
+  const setFeedback = (text, tone = 'success') => setFeedbackState({ text: text || '', tone });
+  const showError = (text) => setFeedback(text, 'error');
+  // Errors while the form is open are shown inside the form, not behind it.
+  const [formError, setFormError] = useState('');
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const formSnapshot = useRef(JSON.stringify(DEFAULT_SERVICE_FORM));
   const [showForm, setShowForm] = useState(false);
   const [serviceVisibility, setServiceVisibility] = useState('active');
 
@@ -709,7 +740,7 @@ export default function AdminServices() {
       setServices([]);
       setInventoryItems([]);
       setRequirements([]);
-      setFeedback(error.message || 'Unable to load services.');
+      showError(error.message || 'Unable to load services.');
     } finally {
       setLoading(false);
     }
@@ -721,23 +752,23 @@ export default function AdminServices() {
     try {
       const serviceName = serviceFormData.name.trim();
       if (!serviceName) {
-        setFeedback('Service name is required.');
+        setFormError('Service name is required.');
         return;
       }
       if (services.some((service) => service.name.toLowerCase() === serviceName.toLowerCase() && service.id !== editingService?.id)) {
-        setFeedback('A service with this name already exists.');
+        setFormError('A service with this name already exists.');
         return;
       }
       if (Number(serviceFormData.estimated_duration || 0) <= 0) {
-        setFeedback('Duration must be greater than zero.');
+        setFormError('Duration must be greater than zero.');
         return;
       }
       if (Number(serviceFormData.estimated_cost || 0) < 0) {
-        setFeedback('Estimated cost cannot be negative.');
+        setFormError('Estimated cost cannot be negative.');
         return;
       }
       if (Number(serviceFormData.max_daily_assignments || 0) <= 0) {
-        setFeedback('Max daily assignments must be at least 1.');
+        setFormError('Max daily assignments must be at least 1.');
         return;
       }
       const invalidEquipment = serviceFormData.required_equipment.find((item) => (
@@ -745,15 +776,15 @@ export default function AdminServices() {
         && (!Number.isFinite(Number(item?.quantity)) || Number(item.quantity) < 1)
       ));
       if (invalidEquipment) {
-        setFeedback(`Equipment quantity must be at least 1 for ${invalidEquipment.name || 'each item'}.`);
+        setFormError(`Equipment quantity must be at least 1 for ${invalidEquipment.name || 'each item'}.`);
         return;
       }
       if (serviceFormData.deposit_policy === 'percentage' && (Number(serviceFormData.deposit_value) <= 0 || Number(serviceFormData.deposit_value) > 100)) {
-        setFeedback('Deposit percentage must be greater than 0 and no more than 100.');
+        setFormError('Deposit percentage must be greater than 0 and no more than 100.');
         return;
       }
       if (serviceFormData.deposit_policy === 'fixed' && Number(serviceFormData.deposit_value) <= 0) {
-        setFeedback('Fixed deposit amount must be greater than zero.');
+        setFormError('Fixed deposit amount must be greater than zero.');
         return;
       }
 
@@ -767,21 +798,59 @@ export default function AdminServices() {
         deposit_value: serviceFormData.deposit_policy === 'none' ? 0 : Number(serviceFormData.deposit_value || 0),
       };
 
+      setFormError('');
       if (editingService) {
         await updateService(editingService.id, payload);
-        setFeedback('Service updated.');
+        setFeedback(`${serviceName} updated.`);
       } else {
         await createService(payload);
-        setFeedback('Service created.');
+        setFeedback(`${serviceName} created.`);
       }
-      setEditingService(null);
-      setServiceFormData(DEFAULT_SERVICE_FORM);
-      setShowForm(false);
+      closeForm();
       await load();
     } catch (error) {
-      setFeedback(error.message || 'Error saving service.');
+      setFormError(error.message || 'Unable to save the service.');
     }
   };
+
+  const openForm = (service = null) => {
+    const formState = service ? toServiceFormState(service) : DEFAULT_SERVICE_FORM;
+    setEditingService(service);
+    setServiceFormData(formState);
+    formSnapshot.current = JSON.stringify(formState);
+    setFormError('');
+    setConfirmDiscard(false);
+    setShowForm(true);
+    setFeedback('');
+  };
+
+  const closeForm = () => {
+    setServiceFormData(DEFAULT_SERVICE_FORM);
+    setEditingService(null);
+    setFormError('');
+    setConfirmDiscard(false);
+    setShowForm(false);
+  };
+
+  // Backdrop, Escape, Close and Dismiss ask before throwing away unsaved changes.
+  const requestCloseForm = () => {
+    if (JSON.stringify(serviceFormData) !== formSnapshot.current) {
+      setConfirmDiscard(true);
+      return;
+    }
+    closeForm();
+  };
+
+  useEffect(() => {
+    if (!showForm) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      if (confirmDiscard) setConfirmDiscard(false);
+      else requestCloseForm();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  });
 
   const onConfirmCatalogAction = async () => {
     if (!deleteTarget || serviceActionBusy) return;
@@ -796,23 +865,18 @@ export default function AdminServices() {
           : `${service.name} is now inactive and hidden from new requests. Historical records were preserved. Use the Deactivated services view to reactivate it.`);
       } else {
         await deleteService(service.id);
-        setFeedback('Unused service deleted.');
+        setFeedback(`${service.name} was deleted.`);
       }
       setDeleteTarget(null);
       await load();
     } catch (error) {
-      setFeedback(error.message || `Unable to ${mode} service.`);
+      showError(error.message || `Unable to ${mode} service.`);
     } finally {
       setServiceActionBusy(false);
     }
   };
 
-  const onEditService = (service) => {
-    setEditingService(service);
-    setServiceFormData(toServiceFormState(service));
-    setShowForm(true);
-    setFeedback('');
-  };
+  const onEditService = (service) => openForm(service);
 
   const onSaveRequirement = async (formData) => {
     try {
@@ -820,7 +884,7 @@ export default function AdminServices() {
       setFeedback('Inventory template added.');
       await load();
     } catch (error) {
-      setFeedback(error.message || 'Error saving template.');
+      showError(error.message || 'Unable to save the inventory template.');
     }
   };
 
@@ -831,7 +895,7 @@ export default function AdminServices() {
       setRequirementDeleteTarget(null);
       await load();
     } catch (error) {
-      setFeedback(error.message || 'Error deleting template.');
+      showError(error.message || 'Unable to remove the inventory template.');
     }
   };
 
@@ -846,13 +910,16 @@ export default function AdminServices() {
 
   return (
     <Layout>
-      {feedback && (
-        <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
-          feedback.toLowerCase().includes('error') || feedback.toLowerCase().includes('unable') || feedback.toLowerCase().includes('required') || feedback.toLowerCase().includes('cannot')
-            ? 'border-red-200 bg-red-50 text-red-700'
-            : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-        }`}>
-          {feedback}
+      {feedback.text && (
+        <div
+          role={feedback.tone === 'error' ? 'alert' : 'status'}
+          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+            feedback.tone === 'error'
+              ? 'border-red-200 bg-red-50 text-red-700'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          }`}
+        >
+          {feedback.text}
         </div>
       )}
 
@@ -860,30 +927,25 @@ export default function AdminServices() {
       {showForm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
-          onClick={() => {
-            setServiceFormData(DEFAULT_SERVICE_FORM);
-            setEditingService(null);
-            setShowForm(false);
-          }}
+          onClick={requestCloseForm}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="service-form-title"
             className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">Services</p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-950">
+                <h3 id="service-form-title" className="mt-1 text-lg font-semibold text-slate-950">
                   {editingService ? 'Manage Service' : 'Create Service'}
                 </h3>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setServiceFormData(DEFAULT_SERVICE_FORM);
-                  setEditingService(null);
-                  setShowForm(false);
-                }}
+                onClick={requestCloseForm}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Close
@@ -892,9 +954,10 @@ export default function AdminServices() {
 
           <div className="grid grid-cols-1 gap-4 px-6 py-5 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Service Name</label>
+              <label htmlFor="service-name" className="mb-1 block text-sm font-medium text-slate-700">Service Name</label>
               <input
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                id="service-name"
                 placeholder="e.g. Aircon Installation"
                 value={serviceFormData.name}
                 onChange={(e) => setServiceFormData({ ...serviceFormData, name: e.target.value })}
@@ -902,9 +965,10 @@ export default function AdminServices() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Category</label>
+              <label htmlFor="service-category" className="mb-1 block text-sm font-medium text-slate-700">Category</label>
               <input
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                id="service-category"
                 placeholder="e.g. Solar, Air Conditioning, FDAS"
                 value={serviceFormData.category}
                 onChange={(e) => setServiceFormData({ ...serviceFormData, category: e.target.value })}
@@ -915,6 +979,7 @@ export default function AdminServices() {
               <div className="flex items-center gap-2">
                 <input
                   type="color"
+                  aria-label="Service color picker"
                   className="h-10 w-12 rounded-lg border border-slate-200 bg-white p-1"
                   value={serviceFormData.color || '#2563eb'}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, color: e.target.value })}
@@ -923,24 +988,27 @@ export default function AdminServices() {
                   className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
                   value={serviceFormData.color}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, color: e.target.value })}
+                  aria-label="Service color hex code"
                   placeholder="#2563eb"
                 />
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Display Order</label>
+              <label htmlFor="service-display-order" className="mb-1 block text-sm font-medium text-slate-700">Display Order</label>
               <input
                 type="number"
                 min="0"
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                id="service-display-order"
                 value={serviceFormData.display_order}
                 onChange={(e) => setServiceFormData({ ...serviceFormData, display_order: e.target.value })}
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Icon Key</label>
+              <label htmlFor="service-icon" className="mb-1 block text-sm font-medium text-slate-700">Icon Key</label>
               <input
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                id="service-icon"
                 placeholder="Optional, e.g. solar, aircon, fire"
                 value={serviceFormData.icon}
                 onChange={(e) => setServiceFormData({ ...serviceFormData, icon: e.target.value })}
@@ -999,13 +1067,14 @@ export default function AdminServices() {
               </p>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Estimated Cost (Philippine Peso)</label>
+              <label htmlFor="service-cost" className="mb-1 block text-sm font-medium text-slate-700">Estimated Cost (Philippine Peso)</label>
               <div className="relative">
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 pl-12 text-sm"
+                  id="service-cost"
                   value={serviceFormData.estimated_cost}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, estimated_cost: e.target.value })}
                 />
@@ -1084,10 +1153,11 @@ export default function AdminServices() {
               </p>
             </div>
             <div className="md:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
+              <label htmlFor="service-description" className="mb-1 block text-sm font-medium text-slate-700">Description</label>
               <textarea
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                 rows={2}
+                id="service-description"
                 placeholder="Describe the service"
                 value={serviceFormData.description}
                 onChange={(e) => setServiceFormData({ ...serviceFormData, description: e.target.value })}
@@ -1121,15 +1191,29 @@ export default function AdminServices() {
             />
           </div>
 
-          <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+          <div className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-4">
+          {formError ? (
+            <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+              {formError}
+            </p>
+          ) : null}
+          {confirmDiscard ? (
+            <div role="alertdialog" aria-labelledby="discard-service-title" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <p id="discard-service-title" className="text-sm font-medium text-amber-900">Discard your unsaved changes?</p>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setConfirmDiscard(false)} className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 hover:bg-amber-100">
+                  Keep editing
+                </button>
+                <button type="button" onClick={closeForm} className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700">
+                  Discard changes
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={() => {
-                setServiceFormData(DEFAULT_SERVICE_FORM);
-                setEditingService(null);
-                setShowForm(false);
-                setFeedback('');
-              }}
+              onClick={requestCloseForm}
               className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
               Dismiss
@@ -1141,6 +1225,7 @@ export default function AdminServices() {
             >
               {editingService ? 'Save Changes' : 'Create Service'}
             </button>
+          </div>
           </div>
           </div>
         </div>
@@ -1170,12 +1255,7 @@ export default function AdminServices() {
           {canManageServices ? (
             <button
               type="button"
-              onClick={() => {
-                setEditingService(null);
-                setServiceFormData(DEFAULT_SERVICE_FORM);
-                setShowForm(true);
-                setFeedback('');
-              }}
+              onClick={() => openForm()}
               className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
             >
               <FiPlus size={15} aria-hidden="true" />
@@ -1186,7 +1266,8 @@ export default function AdminServices() {
       </div>
 
       {/* Services List */}
-      {loading ? (
+      {/* Skeleton only on the first load: replacing the list on every reload collapsed the open cards. */}
+      {loading && services.length === 0 ? (
         <ListSkeleton rows={5} />
       ) : services.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">
@@ -1233,10 +1314,13 @@ export default function AdminServices() {
           }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="service-catalog-action-title"
             className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-slate-950">
+            <h3 id="service-catalog-action-title" className="text-lg font-semibold text-slate-950">
               {deleteTarget.mode === 'activate'
                 ? 'Activate service?'
                 : (deleteTarget.mode === 'deactivate' ? 'Deactivate service?' : 'Delete unused service?')}
@@ -1296,10 +1380,13 @@ export default function AdminServices() {
           onClick={() => setRequirementDeleteTarget(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-template-title"
             className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-slate-950">Remove inventory template?</h3>
+            <h3 id="remove-template-title" className="text-lg font-semibold text-slate-950">Remove inventory template?</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               This removes the template from this service. It does not delete the inventory item itself.
             </p>

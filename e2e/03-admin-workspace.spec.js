@@ -889,7 +889,7 @@ test.describe('Admin Workspace - All Pages', () => {
     await page.route(itemTransactionRoute, async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(itemViewTransactions) });
     });
-    await itemRow.getByRole('button', { name: 'Manage', exact: true }).click();
+    await itemRow.getByRole('button', { name: /^Manage / }).click();
     const manageDialog = page.getByRole('dialog', { name: `Manage ${itemName}` });
     await expect(manageDialog).toBeVisible();
     await expect(manageDialog.getByRole('heading', { name: 'Ticket Reservations' })).toBeVisible();
@@ -929,7 +929,7 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(adjustmentDialog.getByText('Replaces recorded total')).toBeVisible();
     await expect(adjustmentDialog.getByText('Difference from system:', { exact: false })).toBeVisible();
     await adjustmentDialog.getByRole('button', { name: 'Dismiss' }).click();
-    await itemRow.getByRole('button', { name: 'Manage', exact: true }).click();
+    await itemRow.getByRole('button', { name: /^Manage / }).click();
     await manageDialog.getByRole('button', { name: 'Receive Stock' }).click();
     const movementDialog = page.getByRole('dialog', { name: `Receive Stock for ${itemName}` });
     await expect(movementDialog).toBeVisible();
@@ -965,7 +965,7 @@ test.describe('Admin Workspace - All Pages', () => {
       .locator('xpath=ancestor::section');
     await expect(stockHistory.getByText('Qty 5')).toBeVisible();
     await detailsDialog.getByRole('button', { name: 'Close' }).click();
-    await itemRow.getByRole('button', { name: 'Manage', exact: true }).click();
+    await itemRow.getByRole('button', { name: /^Manage / }).click();
     await expect(manageDialog.getByRole('button', { name: 'Delete Item' })).toHaveCount(0);
     await expect(manageDialog.getByRole('button', { name: 'Retire Item' })).toBeVisible();
     await expect(manageDialog.getByText('Permanent deletion is unavailable.')).toHaveCount(0);
@@ -994,7 +994,7 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.getByRole('button', { name: 'Add Item', exact: true })).toHaveCount(0);
     await page.getByTitle('Details').first().click();
     await expect(page.getByRole('button', { name: 'Receive Stock', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Manage', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Manage / })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
   });
 
@@ -1693,8 +1693,9 @@ test.describe('Admin Workspace - All Pages', () => {
     await visitWorkspacePage(page, '/admin/reports', 'test-results/screenshots/03-admin-reports.png');
   });
 
-  test('3.12 - Operations Report loads', async ({ page }) => {
-    await visitWorkspacePage(page, '/admin/operations-report', 'test-results/screenshots/03-admin-operations-report.png');
+  test('3.12 - Removed Operations Report address falls back to the workspace', async ({ page }) => {
+    await page.goto('/admin/operations-report');
+    await expect(page).toHaveURL(/\/admin\/dashboard/);
   });
 
   test('3.13 - After-Sales Cases page loads', async ({ page }) => {
@@ -2104,7 +2105,7 @@ test.describe('Admin Workspace - All Pages', () => {
     });
     await visitWorkspacePage(page, '/admin/sales-records', 'test-results/screenshots/03-admin-sales-records.png');
     await expect(page.getByRole('heading', { name: 'Sales Records', exact: true })).toBeVisible();
-    await expect(page.getByText(/Payments are collected outside the system/i)).toBeVisible();
+    await expect(page.getByText(/Payments are collected outside the system/i)).toHaveCount(0);
     await expect(page.getByText('Recorded contract value', { exact: true })).toBeVisible();
     await expect(page.getByText('Source: Accepted quotation', { exact: true })).toBeVisible();
     await expect(page.getByText(/Value controlled by accepted quotation/i)).toBeVisible();

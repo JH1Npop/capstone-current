@@ -342,6 +342,17 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                 )
                 service_request.auto_ticket_created = True
                 service_request.save(update_fields=['auto_ticket_created'])
+                # Start the ticket's audit trail (View Timeline) with its creation.
+                ServiceStatusHistory.objects.create(
+                    ticket=ticket,
+                    status=ticket.status,
+                    changed_by=request.user,
+                    notes=(
+                        'Request approved; inspection ticket created.'
+                        if require_inspection
+                        else 'Request approved; service ticket created.'
+                    ),
+                )
                 logger.info(f"Auto-created missing Ticket #{ticket.id} for Request #{service_request.id} during approval")
             else:
                 if require_inspection and ticket.status == 'Not Started':

@@ -17,6 +17,52 @@ from users.permissions import CanViewAuditLogs
 from users.serializers import ActivityLogSerializer
 
 
+# The list shows a derived action (an "update" of the technician is shown as "Assigned", a status change
+# to cancelled as "Dismissed"), so the Action filter has to match what is shown, not the stored value.
+# metadata is a TEXT column, so these are plain substring matches (no JSON operators).
+DERIVED_ASSIGN_FIELDS = ('assigned_admin_id', 'technician_id')
+DERIVED_RESCHEDULE_FIELDS = (
+    'scheduled_date', 'scheduled_time', 'scheduled_time_slot', 'reschedule_requested', 'reschedule_reason',
+)
+
+
+def _metadata_has(key, value):
+    return Q(metadata__contains=f'"{key}": "{value}"') | Q(metadata__contains=f'"{key}":"{value}"')
+
+
+def _status_changed_to(value):
+    new_value = Q(metadata__icontains=f'"new_value": "{value}"') | Q(metadata__icontains=f'"new_value":"{value}"')
+    new_display = Q(metadata__icontains=f'"new_display_value": "{value}"') | Q(metadata__icontains=f'"new_display_value":"{value}"')
+    return _metadata_has('field_name', 'status') & (new_value | new_display)
+
+
+def _derived_update_q(action):
+    if action == 'assign':
+        return _metadata_has('field_name', DERIVED_ASSIGN_FIELDS[0]) | _metadata_has('field_name', DERIVED_ASSIGN_FIELDS[1])
+    if action == 'reschedule':
+        condition = Q()
+        for field in DERIVED_RESCHEDULE_FIELDS:
+            condition |= _metadata_has('field_name', field)
+        return condition
+    if action == 'complete':
+        return _status_changed_to('completed')
+    if action == 'cancel':
+        return _status_changed_to('cancelled')
+    return None
+
+
+def filter_by_displayed_action(queryset, action):
+    derived = _derived_update_q(action)
+    if derived is not None:
+        return queryset.filter(Q(action=action) | (Q(action='update') & derived))
+    if action == 'update':
+        shown_otherwise = Q()
+        for name in ('assign', 'reschedule', 'complete', 'cancel'):
+            shown_otherwise |= _derived_update_q(name)
+        return queryset.filter(action='update').exclude(shown_otherwise)
+    return queryset.filter(action=action)
+
+
 class AdminActivityLogPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
@@ -43,6 +89,18 @@ class AdminActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
         if text.startswith(('=', '+', '-', '@', '\t', '\r')):
             return f"'{text}"
         return text
+
+    @action(detail=False, methods=['get'])
+    def facets(self, request):
+        """Categories and actions that exist in the log, so every recorded kind can be filtered."""
+        queryset = self.get_queryset()
+        categories = set(queryset.order_by().values_list('category', flat=True).distinct())
+        stored_actions = set(queryset.order_by().values_list('action', flat=True).distinct())
+        standard_actions = {choice for choice, _label in ActivityLog.ACTION_CHOICES}
+        return Response({
+            'categories': sorted(categories | {choice for choice, _label in ActivityLog.CATEGORY_CHOICES}),
+            'actions': sorted(stored_actions | standard_actions),
+        })
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
@@ -114,7 +172,7 @@ class AdminActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
 
         action = query_params.get('action') or query_params.get('activity_type')
         if action:
-            queryset = queryset.filter(action=action)
+            queryset = filter_by_displayed_action(queryset, action)
 
         model = query_params.get('model')
         if model:

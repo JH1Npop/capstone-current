@@ -64,7 +64,7 @@ Purchase Records, or after-sales before creating the records they depend on.
 | 20 | Client | Open Purchase Records and verify the owned read-only record and value source | Client sees no edit/payment controls or another client's data |
 | 21 | Client then admin | Create a support/after-sales case, reply, assign owner, resolve with reason, reopen with reason | Both sides see the correct status and append-only activity |
 | 22 | All roles | Exchange authorized messages and exercise notifications/read/delete/badges | Messages persist and notification counts synchronize |
-| 23 | Admin | Reconcile Dashboard, Analytics, Reports, Operations Report, Coverage, Activity Logs, Settings, and Landing editor/public preview | Totals and published content agree with their source records |
+| 23 | Admin | Reconcile Dashboard, Analytics, Reports, Coverage, Activity Logs, Settings, and Landing editor/public preview | Totals and published content agree with their source records |
 | 24 | Each role | Complete the route tables in Sections 8–10, including empty, loading, validation, and permission cases | Every listed route has a recorded result |
 | 25 | Each role | Run mobile, keyboard, 200% zoom, pagination, offline, double-submit, two-session concurrency, upload, export, and deep-link tests | Section 11 has no unrecorded Critical/High failure |
 | 26 | Each role | Test the logout modal and direct protected URLs after logout | Back/refresh cannot reveal protected content |
@@ -414,7 +414,7 @@ Complete this even if the golden lifecycle already touched the page.
 | ADM-10 | `/admin/sales-records` | Draft, source-controlled value, manual fallback reason, confirm, void/replace, pagination |
 | ADM-11 | `/admin/analytics` | Every tab/chart/filter/date range, formula explanation, empty/small/large data, refresh |
 | ADM-12 | `/admin/reports` | Date/type filters, generate/export, empty and populated periods, totals against source records |
-| ADM-13 | `/admin/operations-report` | All sections, dates, totals, export/print, permission boundary |
+| ADM-13 | (removed) | Operations Report was removed on 2026-11-06; its features are on `/admin/reports` (ADM-12) |
 | ADM-14 | `/admin/after-sales-cases` | Filters/pagination, create, ownership, notes, resolve/reopen reasons, deadlines/activity |
 | ADM-15 | `/admin/settings` | Each visible setting, validation, save/reload, auto-dispatch/overtime/arrival/landing/calculator effects |
 | ADM-16 | `/admin/landing-page` | Edit/save/preview/publish copy and projects, consent gate, upload/delete permission boundaries |

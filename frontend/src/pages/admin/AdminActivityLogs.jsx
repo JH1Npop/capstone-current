@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { FiActivity, FiChevronDown, FiClock, FiCopy, FiDatabase, FiDownload, FiExternalLink, FiRefreshCw, FiUser } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
-import { downloadActivityLogs, fetchActivityLogs, fetchActivityLogSummary } from '../../api/api';
+import { downloadActivityLogs, fetchActivityLogFacets, fetchActivityLogs, fetchActivityLogSummary } from '../../api/api';
+import { getLocalDateInputValue } from '../../utils/date';
 import SearchFilterBar from '../../components/shared/SearchFilterBar';
 
 const ITEMS_PER_PAGE = 10;
@@ -36,7 +37,30 @@ const actionLabels = {
   system: 'System event'
 };
 
+const extraActionLabels = {
+  document_generate: 'Document generated',
+  custom_document_generate: 'Custom document generated',
+  document_download: 'Document downloaded',
+  document_attachment_upload: 'Attachment uploaded',
+  document_attachment_download: 'Attachment downloaded',
+  template_upload: 'Template uploaded',
+  template_rollback: 'Template rolled back',
+  template_revalidate: 'Template re-checked',
+  template_fields_placed: 'Template fields placed',
+  template_field_create: 'Template field added',
+  template_field_update: 'Template field changed',
+  template_field_delete: 'Template field removed',
+  custom_field_create: 'Custom field added',
+  custom_definition_create: 'Custom document registered',
+  custom_definition_update: 'Custom document changed',
+  custom_definition_delete: 'Custom document deleted',
+  starter_download: 'Starter design downloaded',
+  built_in_design_download: 'Built-in design downloaded',
+  throttled: 'Rate limited',
+};
+
 const categoryLabels = {
+  documents: 'Documents',
   security: 'Security',
   users: 'Users',
   requests: 'Requests',
@@ -134,7 +158,17 @@ const formatModelLabel = (value = '') =>
 
 const formatCategoryLabel = (value = '') => categoryLabels[value] || formatModelLabel(value || 'system');
 
-const formatActionLabel = (value = '') => actionLabels[value] || formatModelLabel(value || 'activity');
+const formatActionLabel = (value = '') => actionLabels[value] || extraActionLabels[value] || formatModelLabel(value || 'activity');
+
+// Standard options first, then anything else the log actually contains.
+const buildOptions = (standard, extraValues, labelFor, anyLabel) => {
+  const known = new Set(standard.map((option) => option.value));
+  const extras = [...new Set(extraValues)]
+    .filter((value) => value && !known.has(value))
+    .map((value) => ({ value, label: labelFor(value) }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+  return [{ value: '', label: anyLabel }, ...standard.filter((option) => option.value), ...extras];
+};
 
 const formatTargetLabel = (model = '', objectId = '', objectLabel = '') => {
   const normalizedModel = String(model || '').toLowerCase();
@@ -269,16 +303,8 @@ const getFriendlyTitle = (log) => {
   if (log.action === 'reschedule') return 'Schedule was changed';
   if (log.action === 'complete') return 'Work was completed';
   if (log.action === 'error') return 'System needs attention';
+  if (!actionLabels[log.action]) return action;
   return `${modelLabel} was ${action.toLowerCase()}`;
-};
-
-const isLocationNoiseLog = (log) => {
-  const normalizedModel = String(log.model || '').toLowerCase();
-  const field = String(log.fieldName || log.metadata?.field_name || '').toLowerCase();
-  return (
-    ['technicianprofile', 'technician_profile'].includes(normalizedModel) &&
-    ['current_latitude', 'current_longitude', 'last_location_update'].includes(field)
-  );
 };
 
 const shortValue = (value) => {
@@ -327,67 +353,6 @@ const serviceLogFields = (log) => {
   ];
 };
 
-const normalizeSearchValue = (value) => String(value ?? '').toLowerCase();
-
-const flattenSearchValue = (value) => {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'object') {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return '';
-    }
-  }
-  return String(value);
-};
-
-const getLogSearchText = (log) => [
-  log.category,
-  log.action,
-  log.message,
-  log.summary,
-  log.model,
-  log.appLabel,
-  log.objectId,
-  log.objectLabel,
-  log.changedBy,
-  log.changedByName,
-  log.changedByRole,
-  log.fieldName,
-  log.oldValue,
-  log.newValue,
-  log.ipAddress,
-  log.changedAt,
-  log.serviceContext,
-  log.metadata
-].map(flattenSearchValue).join(' ').toLowerCase();
-
-const isDateInRange = (value, dateFrom, dateTo) => {
-  if (!dateFrom && !dateTo) return true;
-  if (!value) return false;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-  const logDate = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0')
-  ].join('-');
-  if (dateFrom && logDate < dateFrom) return false;
-  if (dateTo && logDate > dateTo) return false;
-  return true;
-};
-
-const matchesActivityFilters = (log, filters) => {
-  if (filters.category && log.category !== filters.category) return false;
-  if (filters.action && log.action !== filters.action) return false;
-  if (!isDateInRange(log.changedAt, filters.dateFrom, filters.dateTo)) return false;
-
-  const search = normalizeSearchValue(filters.search).trim();
-  if (search && !getLogSearchText(log).includes(search)) return false;
-
-  return true;
-};
-
 export default function AdminActivityLogs() {
   const [logs, setLogs] = useState([]);
   const [expandedLogs, setExpandedLogs] = useState({});
@@ -407,6 +372,29 @@ export default function AdminActivityLogs() {
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [lastRefreshed, setLastRefreshed] = useState(null);
+  const [facets, setFacets] = useState({ categories: [], actions: [] });
+  const hasLoadedOnce = useRef(false);
+  const today = getLocalDateInputValue();
+
+  useEffect(() => {
+    fetchActivityLogFacets().then(setFacets).catch(() => {});
+  }, []);
+
+  // A confirmation fades after a few seconds.
+  useEffect(() => {
+    if (!statusMessage) return undefined;
+    const timer = window.setTimeout(() => setStatusMessage(''), 5000);
+    return () => window.clearTimeout(timer);
+  }, [statusMessage]);
+
+  const categorySelectOptions = useMemo(
+    () => buildOptions(categoryOptions, facets.categories, formatCategoryLabel, 'Any system area'),
+    [facets.categories],
+  );
+  const actionSelectOptions = useMemo(
+    () => buildOptions(actionOptions, facets.actions, formatActionLabel, 'Any action type'),
+    [facets.actions],
+  );
 
   const loadLogs = async (nextFilters = filters, nextPage = currentPage) => {
     const requestId = requestSeq.current + 1;
@@ -422,8 +410,17 @@ export default function AdminActivityLogs() {
         fetchActivityLogSummary(nextFilters),
       ]);
       if (requestId !== requestSeq.current) return;
-      setLogs(Array.isArray(data?.rows) ? data.rows : []);
-      setTotalCount(Number(data?.count || 0));
+      const rows = Array.isArray(data?.rows) ? data.rows : [];
+      const count = Number(data?.count || 0);
+      // The last page can disappear between refreshes; step back to the new last page.
+      if (rows.length === 0 && count > 0 && nextPage > 1) {
+        const lastPage = Math.max(1, Math.ceil(count / ITEMS_PER_PAGE));
+        setCurrentPage(lastPage);
+        loadLogs(nextFilters, lastPage);
+        return;
+      }
+      setLogs(rows);
+      setTotalCount(count);
       setSummary(nextSummary);
       setLastRefreshed(new Date());
       setError('');
@@ -434,6 +431,7 @@ export default function AdminActivityLogs() {
       setError(loadError.message || 'Unable to load activity logs.');
     } finally {
       if (requestId === requestSeq.current) {
+        hasLoadedOnce.current = true;
         setLoading(false);
       }
     }
@@ -448,10 +446,7 @@ export default function AdminActivityLogs() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  const visibleLogs = useMemo(
-    () => logs.filter((log) => !isLocationNoiseLog(log)),
-    [logs]
-  );
+  const visibleLogs = logs;
 
   const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
   const pageStartIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -500,26 +495,33 @@ export default function AdminActivityLogs() {
   return (
     <Layout>
       <section className="space-y-5">
-        <div>
-          <p className="text-sm text-slate-500">Review user actions, ticket updates, and system events.</p>
-        </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filtered results</p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">{summary.total}</p>
-          </div>
-          <div className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recorded today</p>
-            <p className="mt-2 text-2xl font-bold text-indigo-600">{summary.today}</p>
-          </div>
-          <div className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Needs attention</p>
-            <p className="mt-2 text-2xl font-bold text-rose-600">{summary.attention}</p>
-          </div>
-          <div className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">User actions</p>
-            <p className="mt-2 text-2xl font-bold text-emerald-600">{summary.userActions}</p>
-          </div>
+          {[
+            ['Filtered results', summary.total, null],
+            ['Recorded today', summary.today, null],
+            ['Needs attention', summary.attention, 'error'],
+            ['User actions', summary.userActions, null],
+          ].map(([label, value, actionFilter]) => {
+            const body = (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+              </>
+            );
+            return actionFilter ? (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={filters.action === actionFilter}
+                onClick={() => updateFilter('action', filters.action === actionFilter ? '' : actionFilter)}
+                className={`rounded-xl border bg-white p-4 text-left shadow-sm transition hover:border-brand-300 ${filters.action === actionFilter ? 'border-brand-500 ring-1 ring-brand-300' : 'border-surface-200'}`}
+              >
+                {body}
+              </button>
+            ) : (
+              <div key={label} className="rounded-xl border border-surface-200 bg-white p-4 shadow-sm">{body}</div>
+            );
+          })}
         </div>
 
         <SearchFilterBar
@@ -528,10 +530,10 @@ export default function AdminActivityLogs() {
           searchLabel="Find an activity"
           searchPlaceholder="Search user, action, ticket, request, or item"
           filters={[
-            { key: 'area', label: 'System area', value: filters.category, defaultValue: '', onChange: (value) => updateFilter('category', value), options: categoryOptions.map((option) => ({ ...option, label: option.value ? option.label : 'Any system area' })) },
-            { key: 'action', label: 'Action type', value: filters.action, defaultValue: '', onChange: (value) => updateFilter('action', value), options: actionOptions.map((option) => ({ ...option, label: option.value ? option.label : 'Any action type' })) },
-            { key: 'from', label: 'From date', type: 'date', value: filters.dateFrom, defaultValue: '', onChange: (value) => updateFilter('dateFrom', value) },
-            { key: 'to', label: 'To date', type: 'date', value: filters.dateTo, defaultValue: '', min: filters.dateFrom || undefined, onChange: (value) => updateFilter('dateTo', value) },
+            { key: 'area', label: 'System area', value: filters.category, defaultValue: '', onChange: (value) => updateFilter('category', value), options: categorySelectOptions },
+            { key: 'action', label: 'Action type', value: filters.action, defaultValue: '', onChange: (value) => updateFilter('action', value), options: actionSelectOptions },
+            { key: 'from', label: 'From date', type: 'date', value: filters.dateFrom, defaultValue: '', max: filters.dateTo || today, onChange: (value) => updateFilter('dateFrom', value) },
+            { key: 'to', label: 'To date', type: 'date', value: filters.dateTo, defaultValue: '', min: filters.dateFrom || undefined, max: today, onChange: (value) => updateFilter('dateTo', value) },
           ]}
           onClear={() => {
             setFilters({ search: '', category: '', action: '', dateFrom: '', dateTo: '' });
@@ -567,7 +569,10 @@ export default function AdminActivityLogs() {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+          <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <span>{error}</span>
+            <button type="button" onClick={() => loadLogs(filters, currentPage)} className="shrink-0 font-semibold">Try again</button>
+          </div>
         )}
 
         <section className="overflow-hidden rounded-xl border border-surface-200 bg-white shadow-sm">
@@ -577,8 +582,8 @@ export default function AdminActivityLogs() {
               <h2 className="text-base font-semibold text-slate-900">Activity Timeline</h2>
             </div>
           </div>
-          <div className="divide-y divide-surface-200">
-            {loading ? (
+          <div className={`divide-y divide-surface-200 transition-opacity ${loading && hasLoadedOnce.current ? 'opacity-60' : ''}`} aria-busy={loading}>
+            {loading && !hasLoadedOnce.current ? (
               <ListSkeleton rows={6} />
             ) : visibleLogs.length === 0 ? (
               <div className="px-4 py-12 text-center text-sm text-slate-500">No activity logs match the current filters.</div>
@@ -632,6 +637,8 @@ export default function AdminActivityLogs() {
                           onClick={() => toggleLog(log.id)}
                           className="inline-flex items-center justify-center gap-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-surface-50"
                           aria-expanded={expanded}
+                          aria-controls={`activity-details-${log.id}`}
+                          aria-label={`${expanded ? 'Hide' : 'View'} details for ACT-${log.id}`}
                         >
                           {expanded ? 'Hide details' : 'View details'}
                           <FiChevronDown className={`h-4 w-4 transition ${expanded ? 'rotate-180' : ''}`} />
@@ -640,7 +647,7 @@ export default function AdminActivityLogs() {
                     </div>
 
                     {expanded && (
-                      <div className="mt-4 rounded-xl border border-surface-200 bg-surface-50 p-4">
+                      <div id={`activity-details-${log.id}`} className="mt-4 rounded-xl border border-surface-200 bg-surface-50 p-4">
                         {hasContext ? (
                           <div>
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Service Details</p>
@@ -713,7 +720,7 @@ export default function AdminActivityLogs() {
               })
             )}
           </div>
-          {!loading && totalCount > 0 ? (
+          {totalCount > 0 && !(loading && !hasLoadedOnce.current) ? (
             <div className="flex flex-col gap-3 border-t border-surface-200 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
               <span>
                 Showing {pageStartIndex + 1}-{Math.min(pageStartIndex + visibleLogs.length, totalCount)} of {totalCount} events
@@ -722,7 +729,7 @@ export default function AdminActivityLogs() {
                 <button
                   type="button"
                   onClick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
+                  disabled={currentPage === 1 || loading}
                   className="rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-surface-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Previous
@@ -733,7 +740,7 @@ export default function AdminActivityLogs() {
                 <button
                   type="button"
                   onClick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
+                  disabled={currentPage === totalPages || loading}
                   className="rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-surface-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Next

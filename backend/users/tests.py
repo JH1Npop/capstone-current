@@ -1962,6 +1962,58 @@ class AdminActivityLogTests(APITestCase):
         rows = self.results(response)
         self.assertEqual([row['id'] for row in rows], [visible.id])
 
+    def test_action_filter_matches_the_action_shown_in_the_list(self):
+        ActivityLog.objects.all().delete()
+
+        def make(action, **metadata):
+            return ActivityLog.objects.create(
+                actor=self.superadmin_user, actor_role='superadmin', category='tickets', action=action,
+                target_model='serviceticket', target_id=1, message=f'{action} {metadata}', metadata=metadata,
+            )
+
+        assigned = make('update', field_name='technician_id', new_value='Tech One')
+        rescheduled = make('update', field_name='scheduled_date', new_value='2027-01-01')
+        completed = make('update', field_name='status', new_value='completed')
+        cancelled = make('update', field_name='status', new_value='Cancelled')
+        plain_update = make('update', field_name='priority', new_value='High')
+        no_metadata = make('update')
+        stored_assign = make('assign')
+        self.authenticate(self.superadmin_user)
+
+        def ids(action):
+            response = self.client.get('/api/admin/activity-logs/', {'action': action, 'page_size': 100})
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            rows = self.results(response)
+            # Whatever the filter returns is exactly what the list shows for that action.
+            self.assertTrue(all(row['action'] == action for row in rows), rows)
+            return {row['id'] for row in rows}
+
+        self.assertEqual(ids('assign'), {assigned.id, stored_assign.id})
+        self.assertEqual(ids('reschedule'), {rescheduled.id})
+        self.assertEqual(ids('complete'), {completed.id})
+        self.assertEqual(ids('cancel'), {cancelled.id})
+        self.assertEqual(ids('update'), {plain_update.id, no_metadata.id})
+        summary = self.client.get('/api/admin/activity-logs/summary/', {'action': 'assign'})
+        self.assertEqual(summary.data['total'], 2)
+
+    def test_facets_list_every_recorded_category_and_action(self):
+        ActivityLog.objects.all().delete()
+        ActivityLog.objects.create(
+            actor=self.superadmin_user, actor_role='superadmin', category='documents',
+            action='template_upload', message='Uploaded a template.',
+        )
+        self.authenticate(self.superadmin_user)
+
+        response = self.client.get('/api/admin/activity-logs/facets/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('documents', response.data['categories'])
+        self.assertIn('security', response.data['categories'])
+        self.assertIn('template_upload', response.data['actions'])
+        self.assertIn('assign', response.data['actions'])
+        filtered = self.client.get('/api/admin/activity-logs/', {'category': 'documents'})
+        self.assertEqual(len(self.results(filtered)), 1)
+
     def test_cancelled_service_request_is_recorded_as_cancel_activity(self):
         self.authenticate(self.superadmin_user)
         service_request = ServiceRequest.objects.create(
