@@ -36,7 +36,11 @@ export default function LandingFooter({
             {email ? <li><a href={`mailto:${email}`} className="inline-flex items-center gap-2 hover:text-brand-700"><Mail className="h-4 w-4 text-brand-600" />{email}</a></li> : null}
             {content.facebookUrl ? <li><a href={content.facebookUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 hover:text-brand-700"><MessageCircle className="h-4 w-4 text-brand-600" />Facebook</a></li> : null}
           </ul>
-          <p className="text-xs text-slate-500">© {new Date().getFullYear()} AFN Solar Power Engineering Services</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+            <Link to="/privacy" className="hover:text-brand-700 hover:underline">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-brand-700 hover:underline">Terms of Service</Link>
+            <p>© {new Date().getFullYear()} AFN Solar Power Engineering Services</p>
+          </div>
         </div>
       </div>
     </footer>

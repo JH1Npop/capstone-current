@@ -16,6 +16,8 @@ const PUBLIC_PAGES = [
   ['reset password', '/reset-password'],
   ['verify email', '/verify-email'],
   ['solar calculator', '/solar-calculator'],
+  ['privacy policy', '/privacy'],
+  ['terms of service', '/terms'],
 ];
 
 const WORKSPACE_PAGES = [

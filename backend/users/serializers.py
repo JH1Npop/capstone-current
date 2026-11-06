@@ -155,6 +155,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     middle_name = serializers.CharField(max_length=150, required=False, allow_blank=True, default='')
     landline = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
     company_name = serializers.CharField(max_length=255, required=False, allow_blank=True, default='', write_only=True)
+    # A client signing themselves up must agree to the Privacy Policy and Terms (users/policies.py).
+    accept_policies = serializers.BooleanField(required=False, default=False, write_only=True)
     VALID_ROLES = {'superadmin', 'admin', 'technician', 'client'}
     ELEVATED_ROLES = {'superadmin', 'admin', 'technician'}
 
@@ -163,7 +165,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         fields = ['username', 'email', 'password', 'password_confirm',
                   'first_name', 'middle_name', 'last_name', 'role', 'phone', 'landline', 'address',
                   'current_latitude', 'current_longitude', 'is_available',
-                  'skill_level', 'max_daily_assignments', 'company_name']
+                  'skill_level', 'max_daily_assignments', 'company_name', 'accept_policies']
 
     def validate_email(self, value):
         normalized_email = str(value or '').strip()
@@ -209,11 +211,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                 'role': 'Only the superadmin can create admin or staff accounts.'
             })
 
+        is_self_registration = not (request and getattr(request, 'user', None) and request.user.is_authenticated)
+        if requested_role == 'client' and is_self_registration and not attrs.get('accept_policies'):
+            raise serializers.ValidationError({
+                'accept_policies': 'Please agree to the Privacy Policy and Terms of Service to create an account.'
+            })
+
         attrs['role'] = requested_role
         return attrs
 
     def create(self, validated_data):
         validated_data.pop('password_confirm')
+        if validated_data.pop('accept_policies', False):
+            from users.policies import POLICY_VERSION
+            validated_data['policy_accepted_at'] = timezone.now()
+            validated_data['policy_version'] = POLICY_VERSION
         company_name = validated_data.pop('company_name', '')
         role = validated_data.get('role') or 'client'
         validated_data['role'] = role

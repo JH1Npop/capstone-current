@@ -90,6 +90,9 @@ class User(AbstractUser):
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
     pending_email = models.EmailField(blank=True, null=True)
     pending_email_verification_sent_at = models.DateTimeField(blank=True, null=True)
+    # When a self-registered client agreed to the Privacy Policy and Terms, and which version (users/policies.py).
+    policy_accepted_at = models.DateTimeField(blank=True, null=True)
+    policy_version = models.CharField(max_length=20, blank=True, default='')
     mfa_enabled = models.BooleanField(default=False)
     mfa_secret_encrypted = models.TextField(blank=True, default='')
     mfa_recovery_code_hashes = models.JSONField(blank=True, default=list)

@@ -457,6 +457,7 @@ class EmailVerificationTests(APITestCase):
             'password': 'Password123!',
             'password_confirm': 'Password123!',
             'role': 'client',
+            'accept_policies': True,
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -467,6 +468,9 @@ class EmailVerificationTests(APITestCase):
         self.assertFalse(user.email_verified)
         self.assertIsNotNone(user.email_verification_sent_at)
         self.assertTrue(response.data['verification_required'])
+        from users.policies import POLICY_VERSION
+        self.assertEqual(user.policy_version, POLICY_VERSION)
+        self.assertIsNotNone(user.policy_accepted_at)
 
     def test_unverified_client_can_request_an_enumeration_safe_verification_resend(self):
         user = User.objects.create_user(
@@ -2196,3 +2200,40 @@ class AdminActivityLogTests(APITestCase):
             self.assertEqual(contract_changelog.new_value, 'finalized')
         finally:
             set_current_user(None)
+
+
+class PolicyAcceptanceTests(APITestCase):
+    """A client signing themselves up must agree to the Privacy Policy and Terms; staff-made accounts are not asked."""
+
+    register_url = '/api/users/register/'
+
+    def payload(self, **extra):
+        data = {
+            'username': 'policy_client', 'email': 'policy-client@gmail.com',
+            'password': 'Password123!', 'password_confirm': 'Password123!', 'role': 'client',
+        }
+        data.update(extra)
+        return data
+
+    def test_self_registration_without_agreeing_is_refused_and_creates_nothing(self):
+        for extra in ({}, {'accept_policies': False}):
+            response = self.client.post(self.register_url, self.payload(**extra), format='json')
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn('accept_policies', response.data)
+        self.assertFalse(User.objects.filter(username='policy_client').exists())
+
+    def test_agreeing_records_the_time_and_version(self):
+        from users.policies import POLICY_VERSION
+        before = timezone.now()
+        response = self.client.post(self.register_url, self.payload(accept_policies=True), format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        user = User.objects.get(username='policy_client')
+        self.assertEqual(user.policy_version, POLICY_VERSION)
+        self.assertGreaterEqual(user.policy_accepted_at, before)
+
+    def test_superadmin_creating_a_staff_account_is_not_asked_to_agree(self):
+        superadmin = User.objects.create_superuser(username='policy_super', password='Password123!', email='policy-super@example.com', role='superadmin')
+        self.client.force_authenticate(superadmin)
+        response = self.client.post(self.register_url, self.payload(username='policy_tech', email='policy-tech@gmail.com', role='technician'), format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(User.objects.get(username='policy_tech').policy_version, '')
