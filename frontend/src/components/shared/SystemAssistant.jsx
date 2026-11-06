@@ -797,7 +797,8 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
     );
   }
 
-  if (includesAny(normalizedQuestion, ['where', 'open', 'page', 'route', 'link', 'go to'])) {
+  // Only navigation questions ("which page…", "where can I find…"); everyday words like "open cases" or "where do requests come from" are answered below.
+  if (includesAny(normalizedQuestion, ['which page', 'what page', 'go to', 'link to', 'where can i find', 'where do i find', 'how do i open'])) {
     return withSource(OUT_OF_SCOPE_RESPONSE, 'analytics assistant scope', 'high');
   }
 
