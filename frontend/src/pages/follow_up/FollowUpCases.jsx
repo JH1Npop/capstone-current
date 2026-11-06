@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import { useSearchParams } from 'react-router-dom';
 import { FiAlertCircle, FiCheckCircle, FiClock, FiUser } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
@@ -13,6 +14,7 @@ import {
   updateFollowUpCase
 } from '../../api/api';
 import { formatTicketId, formatCaseId } from '../../utils/roleIds';
+import { getLocalDateInputValue } from '../../utils/date';
 import SearchFilterBar from '../../components/shared/SearchFilterBar';
 
 const CASE_TYPE_OPTIONS = [
@@ -134,7 +136,7 @@ const getSourceLabel = (caseItem) => (
 const isCaseOverdue = (caseItem) => {
   if (!['open', 'in_progress'].includes(caseItem.status)) return false;
   if (!caseItem.due_date) return false;
-  return caseItem.due_date < new Date().toISOString().slice(0, 10);
+  return caseItem.due_date < getLocalDateInputValue();
 };
 
 const flattenSearchValue = (value) => {
@@ -188,7 +190,14 @@ export default function FollowUpCases() {
   const [assignees, setAssignees] = useState([]);
   const [completedTickets, setCompletedTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
+  // Messages carry their tone; guessing from the word "Unable" showed some errors in green.
+  const [message, setMessageState] = useState({ text: '', tone: 'success' });
+  const setMessage = (text, tone = 'success') => setMessageState({ text: text || '', tone });
+  const showError = (text) => setMessage(text, 'error');
+  // Errors from an open dialog are shown inside it, not behind it.
+  const [formError, setFormError] = useState('');
+  const [dialogError, setDialogError] = useState('');
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedCase, setSelectedCase] = useState(null);
   const [statusDecision, setStatusDecision] = useState(null);
@@ -244,7 +253,7 @@ export default function FollowUpCases() {
       if (!preserveMessage) setMessage('');
     } catch (error) {
       setCases([]);
-      setMessage(error.message || 'Unable to load after-sales cases.');
+      showError(error.message || 'Unable to load after-sales cases.');
     } finally {
       setLoading(false);
     }
@@ -257,7 +266,7 @@ export default function FollowUpCases() {
   useEffect(() => {
     fetchFollowUpAssignees()
       .then(setAssignees)
-      .catch((error) => setMessage(error.message || 'Unable to load after-sales case owners.'));
+      .catch((error) => showError(error.message || 'Unable to load after-sales case owners.'));
   }, []);
 
   useEffect(() => {
@@ -290,15 +299,57 @@ export default function FollowUpCases() {
     setSearchParams(new URLSearchParams());
   };
 
+  const openCreateForm = () => {
+    setFormError('');
+    setConfirmDiscard(false);
+    setForm((current) => ({ ...emptyForm, service_ticket: current.service_ticket || completedTickets[0]?.id || '' }));
+    setShowCreateForm(true);
+  };
+
+  const formHasChanges = Boolean(form.summary.trim() || form.details.trim() || form.due_date || form.assigned_to
+    || form.case_type !== emptyForm.case_type || form.priority !== emptyForm.priority || form.requires_revisit);
+
+  const closeCreateForm = () => {
+    setShowCreateForm(false);
+    setConfirmDiscard(false);
+    setFormError('');
+  };
+
+  // Backdrop, Escape, Close and Dismiss ask before throwing away a typed follow-up.
+  const requestCloseCreateForm = () => {
+    if (formHasChanges) {
+      setConfirmDiscard(true);
+      return;
+    }
+    closeCreateForm();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape' || confirmDiscard) return;
+      if (statusDecision && !savingCase) {
+        setStatusDecision(null);
+        setDialogError('');
+      } else if (showCreateForm) requestCloseCreateForm();
+      else if (selectedCase && !savingCase) {
+        setSelectedCase(null);
+        setDialogError('');
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  });
+
   const createCase = async () => {
+    setFormError('');
     try {
-      await createFollowUpCase({
+      const created = await createFollowUpCase({
         ...form,
         service_ticket: Number(form.service_ticket),
         assigned_to: form.assigned_to ? Number(form.assigned_to) : null,
         due_date: form.due_date || null
       });
-      setMessage('After-sales case created.');
+      setMessage(`After-sales case created${created?.id ? `: ${formatCaseId(created.id)}` : ''}.`);
       setShowCreateForm(false);
       setForm({
         ...emptyForm,
@@ -306,23 +357,27 @@ export default function FollowUpCases() {
       });
       await load({ preserveMessage: true });
     } catch (error) {
-      setMessage(error.message || 'Unable to create after-sales case.');
+      setFormError(error.message || 'Unable to create after-sales case.');
     }
   };
 
+  const STATUS_RESULT = { in_progress: 'is being handled', resolved: 'is marked as done', open: 'was reopened', closed: 'was closed' };
+
   const updateStatus = async (caseItem, status, note = '') => {
     setSavingCase(true);
+    setDialogError('');
     try {
       const payload = { status, status_change_note: note };
       if (status === 'resolved' || status === 'closed') payload.resolution_notes = note;
       await updateFollowUpCase(caseItem.id, payload);
-      setMessage('After-sales case updated.');
+      setMessage(`After-sales case updated. ${formatCaseId(caseItem.id)} ${STATUS_RESULT[status] || 'was updated'}.`);
       setStatusDecision(null);
       setStatusNote('');
       setSelectedCase(null);
       await load({ preserveMessage: true });
     } catch (error) {
-      setMessage(error.message || 'Unable to update after-sales case.');
+      if (statusDecision) setDialogError(error.message || 'Unable to update after-sales case.');
+      else showError(error.message || 'Unable to update after-sales case.');
     } finally {
       setSavingCase(false);
     }
@@ -335,20 +390,24 @@ export default function FollowUpCases() {
     }
     setStatusDecision({ caseItem, status });
     setStatusNote('');
+    setDialogError('');
   };
 
   const updateOwner = async (caseItem, assignedTo) => {
     setSavingCase(true);
+    setDialogError('');
     try {
       const updatedCase = await updateFollowUpCase(caseItem.id, {
         assigned_to: assignedTo ? Number(assignedTo) : null,
         status_change_note: 'Case owner updated.'
       });
       setSelectedCase(updatedCase);
-      setMessage('Case owner updated.');
+      setMessage(`Case owner updated for ${formatCaseId(caseItem.id)}: ${updatedCase?.assigned_to_full_name || 'Unassigned'}.`);
+      // The change is saved; refreshing the list must not keep the dialog locked.
+      setSavingCase(false);
       await load({ preserveMessage: true });
     } catch (error) {
-      setMessage(error.message || 'Unable to update the case owner.');
+      setDialogError(error.message || 'Unable to update the case owner.');
     } finally {
       setSavingCase(false);
     }
@@ -380,7 +439,8 @@ export default function FollowUpCases() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap lg:max-w-md lg:justify-end">
             <button
-              onClick={() => setShowCreateForm(true)}
+              type="button"
+              onClick={openCreateForm}
               className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-600"
             >
               + New Follow-Up
@@ -389,53 +449,42 @@ export default function FollowUpCases() {
         </div>
       </section>
 
-      {message && (
-        <div className={`mt-4 rounded-xl border p-4 text-sm ${
-          message.includes('Unable')
-            ? 'border-red-200 bg-red-50 text-red-800'
-            : 'border-emerald-200 bg-emerald-50 text-emerald-800'
-        }`}>
-          {message}
+      {message.text && (
+        <div
+          role={message.tone === 'error' ? 'alert' : 'status'}
+          className={`mt-4 rounded-xl border p-4 text-sm ${
+            message.tone === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          }`}
+        >
+          {message.text}
         </div>
       )}
 
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[13px] font-medium text-slate-500">New Handoffs</p>
-              <p className="mt-2 text-3xl font-bold text-amber-600">{caseSummary.new_cases ?? newHandoffs}</p>
-            </div>
-            <FiAlertCircle className="text-4xl text-amber-200" />
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[13px] font-medium text-slate-500">Being Handled</p>
-              <p className="mt-2 text-3xl font-bold text-blue-600">{inProgressCases}</p>
-            </div>
-            <FiClock className="text-4xl text-blue-200" />
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[13px] font-medium text-slate-500">Overdue</p>
-              <p className="mt-2 text-3xl font-bold text-red-600">{overdueCases}</p>
-            </div>
-            <FiAlertCircle className="text-4xl text-red-200" />
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[13px] font-medium text-slate-500">Done</p>
-              <p className="mt-2 text-3xl font-bold text-emerald-600">{resolvedCases}</p>
-            </div>
-            <FiCheckCircle className="text-4xl text-emerald-200" />
-          </div>
-        </div>
+      <section aria-label="After-sales summary" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'New Handoffs', value: caseSummary.new_cases ?? newHandoffs, icon: FiAlertCircle, status: 'open' },
+          { label: 'Being Handled', value: inProgressCases, icon: FiClock, status: 'in_progress' },
+          { label: 'Overdue', value: overdueCases, icon: FiAlertCircle, status: 'overdue' },
+          { label: 'Done', value: resolvedCases, icon: FiCheckCircle, status: 'resolved' },
+        ].map(({ label, value, icon: Icon, status }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => updateFilter('status', status)}
+            aria-pressed={statusFilter === status}
+            className={`rounded-xl border bg-white p-5 text-left shadow-sm transition hover:border-brand-300 hover:shadow-md ${statusFilter === status ? 'border-brand-400 ring-1 ring-brand-200' : 'border-slate-200'}`}
+          >
+            <span className="flex items-center justify-between">
+              <span>
+                <span className="block text-[13px] font-medium text-slate-500">{label}</span>
+                <span className="mt-2 block text-3xl font-bold text-slate-900">{value}</span>
+              </span>
+              <Icon className="text-4xl text-slate-200" aria-hidden="true" />
+            </span>
+          </button>
+        ))}
       </section>
 
       <SearchFilterBar
@@ -512,14 +561,17 @@ export default function FollowUpCases() {
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() => setSelectedCase(caseItem)}
+                        onClick={() => { setDialogError(''); setSelectedCase(caseItem); }}
+                        aria-label={`Details for ${formatCaseId(caseItem.id)}`}
                         className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                       >
                         Details
                       </button>
                       {caseItem.status === 'open' && (
                         <button
+                          type="button"
                           onClick={() => requestStatusChange(caseItem, 'in_progress')}
+                          aria-label={`Start work on ${formatCaseId(caseItem.id)}`}
                           className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                         >
                           Start work
@@ -527,7 +579,9 @@ export default function FollowUpCases() {
                       )}
                       {caseItem.status !== 'resolved' && caseItem.status !== 'closed' && (
                         <button
+                          type="button"
                           onClick={() => requestStatusChange(caseItem, 'resolved')}
+                          aria-label={`Mark as Done: ${formatCaseId(caseItem.id)}`}
                           className="rounded-lg bg-emerald-500 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600"
                         >
                           Mark as Done
@@ -535,7 +589,9 @@ export default function FollowUpCases() {
                       )}
                       {(caseItem.status === 'resolved' || caseItem.status === 'closed') && (
                         <button
+                          type="button"
                           onClick={() => requestStatusChange(caseItem, 'open')}
+                          aria-label={`Reopen ${formatCaseId(caseItem.id)}`}
                           className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                         >
                           Reopen
@@ -603,14 +659,17 @@ export default function FollowUpCases() {
                         <div className="flex flex-wrap justify-end gap-2">
                           <button
                             type="button"
-                            onClick={() => setSelectedCase(caseItem)}
+                            onClick={() => { setDialogError(''); setSelectedCase(caseItem); }}
+                            aria-label={`Details for ${formatCaseId(caseItem.id)}`}
                             className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                           >
                             Details
                           </button>
                           {caseItem.status === 'open' && (
                             <button
-                              onClick={() => requestStatusChange(caseItem, 'in_progress')}
+                              type="button"
+                          onClick={() => requestStatusChange(caseItem, 'in_progress')}
+                          aria-label={`Start work on ${formatCaseId(caseItem.id)}`}
                               className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                             >
                               Start work
@@ -618,7 +677,9 @@ export default function FollowUpCases() {
                           )}
                           {caseItem.status !== 'resolved' && caseItem.status !== 'closed' && (
                             <button
-                              onClick={() => requestStatusChange(caseItem, 'resolved')}
+                              type="button"
+                          onClick={() => requestStatusChange(caseItem, 'resolved')}
+                          aria-label={`Mark as Done: ${formatCaseId(caseItem.id)}`}
                               className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
                             >
                               Mark as Done
@@ -626,7 +687,9 @@ export default function FollowUpCases() {
                           )}
                           {(caseItem.status === 'resolved' || caseItem.status === 'closed') && (
                             <button
-                              onClick={() => requestStatusChange(caseItem, 'open')}
+                              type="button"
+                          onClick={() => requestStatusChange(caseItem, 'open')}
+                          aria-label={`Reopen ${formatCaseId(caseItem.id)}`}
                               className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                             >
                               Reopen
@@ -671,19 +734,22 @@ export default function FollowUpCases() {
       {showCreateForm ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
-          onClick={() => setShowCreateForm(false)}
+          onClick={requestCloseCreateForm}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-follow-up-title"
             className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">New Follow-Up</h3>
+                <h3 id="new-follow-up-title" className="text-lg font-semibold text-slate-900">New Follow-Up</h3>
               </div>
               <button
                 type="button"
-                onClick={() => setShowCreateForm(false)}
+                onClick={requestCloseCreateForm}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Close
@@ -692,8 +758,9 @@ export default function FollowUpCases() {
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Completed service ticket</label>
+                <label htmlFor="follow-up-ticket" className="mb-1 block text-sm font-medium text-slate-700">Completed service ticket</label>
                 <select
+                  id="follow-up-ticket"
                   value={form.service_ticket}
                   onChange={(event) => setForm({ ...form, service_ticket: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -708,8 +775,9 @@ export default function FollowUpCases() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Reason</label>
+                <label htmlFor="follow-up-reason" className="mb-1 block text-sm font-medium text-slate-700">Reason</label>
                 <select
+                  id="follow-up-reason"
                   value={form.case_type}
                   onChange={(event) => setForm({ ...form, case_type: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -720,8 +788,9 @@ export default function FollowUpCases() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Urgency</label>
+                <label htmlFor="follow-up-urgency" className="mb-1 block text-sm font-medium text-slate-700">Urgency</label>
                 <select
+                  id="follow-up-urgency"
                   value={form.priority}
                   onChange={(event) => setForm({ ...form, priority: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -732,8 +801,9 @@ export default function FollowUpCases() {
                 </select>
               </div>
               <div className="md:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-slate-700">What needs attention</label>
+                <label htmlFor="follow-up-summary" className="mb-1 block text-sm font-medium text-slate-700">What needs attention</label>
                 <input
+                  id="follow-up-summary"
                   value={form.summary}
                   onChange={(event) => setForm({ ...form, summary: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -741,17 +811,20 @@ export default function FollowUpCases() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Follow up by</label>
+                <label htmlFor="follow-up-due" className="mb-1 block text-sm font-medium text-slate-700">Follow up by</label>
                 <input
                   type="date"
+                  id="follow-up-due"
+                  min={getLocalDateInputValue()}
                   value={form.due_date}
                   onChange={(event) => setForm({ ...form, due_date: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Case owner</label>
+                <label htmlFor="follow-up-owner" className="mb-1 block text-sm font-medium text-slate-700">Case owner</label>
                 <select
+                  id="follow-up-owner"
                   value={form.assigned_to}
                   onChange={(event) => setForm({ ...form, assigned_to: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -763,8 +836,9 @@ export default function FollowUpCases() {
                 </select>
               </div>
               <div className="md:col-span-2 xl:col-span-3">
-                <label className="mb-1 block text-sm font-medium text-slate-700">Notes</label>
+                <label htmlFor="follow-up-notes" className="mb-1 block text-sm font-medium text-slate-700">Notes</label>
                 <textarea
+                  id="follow-up-notes"
                   value={form.details}
                   onChange={(event) => setForm({ ...form, details: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -774,10 +848,13 @@ export default function FollowUpCases() {
               </div>
             </div>
 
+            {formError ? (
+              <p role="alert" className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{formError}</p>
+            ) : null}
             <div className="sticky bottom-0 mt-5 flex justify-end gap-3 border-t border-slate-200 bg-white pt-4">
               <button
                 type="button"
-                onClick={() => setShowCreateForm(false)}
+                onClick={requestCloseCreateForm}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Dismiss
@@ -798,9 +875,12 @@ export default function FollowUpCases() {
       {selectedCase ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
-          onClick={() => setSelectedCase(null)}
+          onClick={() => !savingCase && setSelectedCase(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="after-sales-case-title"
             className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
@@ -813,7 +893,7 @@ export default function FollowUpCases() {
                   </span>
                   <StatusBadge status={selectedCase.status} size="sm" />
                 </div>
-                <h3 className="mt-3 text-lg font-semibold leading-6 text-slate-950">{getCaseTitle(selectedCase)}</h3>
+                <h3 id="after-sales-case-title" className="mt-3 text-lg font-semibold leading-6 text-slate-950">{getCaseTitle(selectedCase)}</h3>
                 <p className="mt-1 text-sm text-slate-500">
                   {formatTicketId(selectedCase.ticket_id)} · {selectedCase.service_type_name || 'Service record'}
                 </p>
@@ -875,6 +955,7 @@ export default function FollowUpCases() {
                       ))}
                     </select>
                   </div>
+                  {dialogError ? <p role="alert" className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{dialogError}</p> : null}
                 </div>
               </section>
 
@@ -980,10 +1061,13 @@ export default function FollowUpCases() {
           onClick={() => !savingCase && setStatusDecision(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="case-status-decision-title"
             className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-slate-950">
+            <h3 id="case-status-decision-title" className="text-lg font-semibold text-slate-950">
               {statusDecision.status === 'open' ? 'Reopen case' : 'Resolve case'}
             </h3>
             <p className="mt-2 text-sm text-slate-600">
@@ -1004,10 +1088,11 @@ export default function FollowUpCases() {
                 className="mt-2 w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </label>
+            {dialogError ? <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{dialogError}</p> : null}
             <div className="mt-5 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setStatusDecision(null)}
+                onClick={() => { setStatusDecision(null); setDialogError(''); }}
                 disabled={savingCase}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
               >
@@ -1024,6 +1109,18 @@ export default function FollowUpCases() {
             </div>
           </div>
         </div>
+      ) : null}
+      {confirmDiscard ? (
+        <ConfirmationDialog
+          title="Discard this follow-up?"
+          message="The follow-up you started has not been created."
+          tone="warning"
+          icon="warning"
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          onCancel={() => setConfirmDiscard(false)}
+          onConfirm={closeCreateForm}
+        />
       ) : null}
     </Layout>
   );

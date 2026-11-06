@@ -204,4 +204,16 @@ ServiceTicket.objects.create(
     ticket_type='inspection',
     status='For Inspection',
 )
+# The flush before seeding removes the SLA rules that migration services.0025 creates on a real
+# database; recreate the same defaults so SLA screens and calculations match production.
+from services.models import SLARule
+for sla_key, sla_warning, sla_overdue in [
+    ('approval_delay', 180, 480),
+    ('assignment_delay', 120, 360),
+    ('start_delay', 15, 60),
+    ('execution_delay', 90, 120),
+    ('reschedule_delay', 240, 720),
+]:
+    SLARule.objects.get_or_create(key=sla_key, defaults={'warning_minutes': sla_warning, 'overdue_minutes': sla_overdue, 'is_active': True})
+
 print(f'\n=== Done! All test accounts ready (password: {TEST_PASSWORD}) ===\n')

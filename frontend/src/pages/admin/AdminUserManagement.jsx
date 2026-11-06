@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { FiPlus, FiSearch, FiUserCheck, FiUsers } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
+import useEscapeKey from '../../hooks/useEscapeKey';
 import { useAuth } from '../../context/AuthContext';
 import {
   api,
@@ -139,6 +141,15 @@ const SKILL_LEVEL_OPTIONS = [
   { value: 'expert', label: 'Expert' }
 ];
 
+const PH_MOBILE_MESSAGE = 'Phone must be a Philippine mobile number starting with 09 (11 digits).';
+const isPhMobile = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.startsWith('09') && digits.length === 11;
+};
+// An account that was given an email but has not confirmed it yet cannot sign in.
+const isPendingVerification = (record) => Boolean(record.email) && !record.email_verified;
+const sameCapabilities = (left, right) => JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
+
 const getRoleLabel = (role) => ROLE_SECTIONS.find((section) => section.value === role)?.label || role || 'Unknown';
 const getEntityLabel = (role) => (role === 'technician' ? 'Technician' : role === 'client' ? 'Client' : role === 'admin' ? 'Administrator' : 'User');
 const isHardDeleteRole = (role) => false;
@@ -163,7 +174,7 @@ const matchesSearch = (user, query) => !query || [
   user.role,
   getRoleLabel(user.role),
   user.role === 'technician' ? getTechnicianStatusLabel(user.technicianStatus) : '',
-  user.role === 'client' && !user.email_verified ? 'pending verification' : '',
+  isPendingVerification(user) ? 'pending verification' : '',
   user.active ? 'active' : 'inactive'
 ].some((value) => String(value || '').toLowerCase().includes(query));
 const getFullName = (user) => [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || '-';
@@ -214,6 +225,25 @@ export default function AdminUserManagement() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingAccess, setIsSavingAccess] = useState(false);
+  // Errors from a dialog are shown inside it; `error` is for the page itself.
+  const [dialogError, setDialogError] = useState('');
+  const [pendingDiscard, setPendingDiscard] = useState(null);
+  const [editBaseline, setEditBaseline] = useState('');
+  const [accessBaseline, setAccessBaseline] = useState([]);
+  const hasLoadedOnce = useRef(false);
+
+  // Mirrors the server: only a superadmin creates, deactivates or edits clients and admin accounts.
+  // An admin may edit technicians (profile with Manage users, skills with Manage technician skills).
+  const canCreateAccounts = isSuperadmin;
+  const canEditRecord = (record) => {
+    if (record.id === user?.id || record.role === 'superadmin') return false;
+    if (isSuperadmin) return true;
+    return record.role === 'technician' && (canManageUsers || canManageTechnicianSkills);
+  };
+  const canDeactivateRecord = (record) => isSuperadmin && record.id !== user?.id && record.role !== 'superadmin';
+  const createDirty = JSON.stringify(createForm) !== JSON.stringify(emptyCreate);
+  const editDirty = Boolean(editingProfileUser) && JSON.stringify(editForm) !== editBaseline;
+  const accessDirty = Boolean(editingAccessUser) && !sameCapabilities(editingCapabilities, accessBaseline);
 
   useEffect(() => {
     if (message) {
@@ -223,7 +253,7 @@ export default function AdminUserManagement() {
   }, [message]);
 
   const load = async ({ preserveFeedback = false } = {}) => {
-    setLoading(true);
+    if (!hasLoadedOnce.current) setLoading(true);
     try {
       const fetchedUsers = await fetchAdminUsers();
       setUsers([...fetchedUsers].sort((left, right) => Number(right.id || 0) - Number(left.id || 0)));
@@ -236,6 +266,7 @@ export default function AdminUserManagement() {
       if (!preserveFeedback) setMessage('');
       setError(loadError.message || 'Unable to load users.');
     } finally {
+      hasLoadedOnce.current = true;
       setLoading(false);
     }
   };
@@ -282,6 +313,9 @@ export default function AdminUserManagement() {
     () => filteredByAccess.filter((record) => !record.active).length,
     [filteredByAccess]
   );
+  useEffect(() => {
+    if (showInactive && inactiveCount === 0 && !loading) setShowInactive(false);
+  }, [showInactive, inactiveCount, loading]);
   const roleCounts = useMemo(
     () => ROLE_SECTIONS.reduce((counts, section) => ({
       ...counts,
@@ -311,26 +345,85 @@ export default function AdminUserManagement() {
     ? ['admin'].includes(role)
     : false;
 
+  const resetCreate = () => {
+    setCreateForm(emptyCreate);
+    setShowCreateForm(false);
+    setDialogError('');
+  };
+  const closeCreate = () => {
+    if (isSubmitting) return;
+    if (createDirty) setPendingDiscard('create');
+    else resetCreate();
+  };
+  const resetProfile = () => {
+    setEditingProfileUser(null);
+    setEditForm(emptyEdit);
+    setDialogError('');
+  };
+  const closeProfile = () => {
+    if (isSavingProfile) return;
+    if (editDirty) setPendingDiscard('profile');
+    else resetProfile();
+  };
+  const resetAccess = () => {
+    setEditingAccessUser(null);
+    setEditingCapabilities([]);
+    setDialogError('');
+  };
+  const closeAccess = () => {
+    if (isSavingAccess) return;
+    if (accessDirty) setPendingDiscard('access');
+    else resetAccess();
+  };
+  const confirmDiscard = () => {
+    if (pendingDiscard === 'create') resetCreate();
+    if (pendingDiscard === 'profile') resetProfile();
+    if (pendingDiscard === 'access') resetAccess();
+    setPendingDiscard(null);
+  };
+
+  // Escape closes the top layer only; the confirmation dialogs handle their own Escape.
+  useEscapeKey(
+    Boolean(viewingAccessUser || editingAccessUser || editingProfileUser || showCreateForm) && !pendingDiscard && !deleteTarget,
+    () => {
+      if (viewingAccessUser) setViewingAccessUser(null);
+      else if (editingAccessUser) closeAccess();
+      else if (editingProfileUser) closeProfile();
+      else if (showCreateForm) closeCreate();
+    },
+  );
+
   const handleCreate = async (event) => {
     event.preventDefault();
-    if (!canManageUsers) return;
+    if (!canCreateAccounts) return;
     setMessage('');
     setError('');
-    if (!createForm.username.trim()) return setError('Username is required.');
-    if (!createForm.password) return setError('Password is required.');
-    if (createForm.password !== createForm.passwordConfirm) return setError('Passwords do not match.');
-    const basePayload = { username: createForm.username, name: createForm.name, role: createForm.role, email: createForm.email, phone: createForm.phone, password: createForm.password, passwordConfirm: createForm.passwordConfirm };
+    setDialogError('');
+    if (!createForm.username.trim()) return setDialogError('Username is required.');
+    if (createForm.email.trim() && !/^\S+@\S+\.\S+$/.test(createForm.email.trim())) return setDialogError('Enter a valid email address.');
+    if (createForm.phone.trim() && !isPhMobile(createForm.phone)) return setDialogError(PH_MOBILE_MESSAGE);
+    if (!createForm.password) return setDialogError('Password is required.');
+    if (createForm.password.length < 8) return setDialogError('Password must be at least 8 characters.');
+    if (createForm.password !== createForm.passwordConfirm) return setDialogError('Passwords do not match.');
+    const basePayload = { username: createForm.username.trim(), name: createForm.name, role: createForm.role, email: createForm.email, phone: createForm.phone, password: createForm.password, passwordConfirm: createForm.passwordConfirm };
     setIsSubmitting(true);
     try {
       if (createForm.role === 'technician') await createAdminTechnician({ ...basePayload, status: createForm.status });
       else if (createForm.role === 'client') await createAdminClient({ ...basePayload, address: createForm.address });
       else await createAdminUser(basePayload);
-      setCreateForm(emptyCreate);
-      setShowCreateForm(false);
-      setMessage(`${getEntityLabel(createForm.role)} created.`);
+      const createdEmail = createForm.email.trim();
+      const createdRole = createForm.role;
+      resetCreate();
+      setMessage(
+        !createdEmail
+          ? `${getEntityLabel(createdRole)} created.`
+          : createdRole === 'client'
+            ? `Client created. A verification email was sent to ${createdEmail}; they appear in this list once they verify.`
+            : `${getEntityLabel(createdRole)} created. A verification email was sent to ${createdEmail}; they can sign in once they verify.`,
+      );
       await load({ preserveFeedback: true });
     } catch (createError) {
-      setError(createError.message || 'Failed to create user.');
+      setDialogError(createError.message || 'Failed to create user.');
     } finally {
       setIsSubmitting(false);
     }
@@ -345,7 +438,8 @@ export default function AdminUserManagement() {
         ? await fetchAdminTechnician(record.id)
         : record;
       setEditingProfileUser(resolvedRecord);
-      setEditForm({
+      setDialogError('');
+      const nextForm = {
         ...emptyEdit,
         name: resolvedRecord.name || '',
         email: resolvedRecord.email || '',
@@ -362,7 +456,9 @@ export default function AdminUserManagement() {
                 }))
               : [])
           : [],
-      });
+      };
+      setEditForm(nextForm);
+      setEditBaseline(JSON.stringify(nextForm));
     } catch (loadError) {
       setEditingProfileUser(null);
       setEditForm(emptyEdit);
@@ -374,6 +470,30 @@ export default function AdminUserManagement() {
 
   const saveProfile = async () => {
     if (!editingProfileUser || (!canManageUsers && !canManageTechnicianSkills)) return;
+    setDialogError('');
+    if (canManageUsers) {
+      if (!editForm.name.trim()) {
+        setDialogError('Full name is required.');
+        return;
+      }
+      if (editForm.email.trim() && !/^\S+@\S+\.\S+$/.test(editForm.email.trim())) {
+        setDialogError('Enter a valid email address.');
+        return;
+      }
+      if (editForm.phone.trim() && !isPhMobile(editForm.phone)) {
+        setDialogError(PH_MOBILE_MESSAGE);
+        return;
+      }
+      if (editingProfileUser.role === 'technician') {
+        for (const [key, label, limit] of [['lat', 'Latitude', 90], ['lng', 'Longitude', 180]]) {
+          const raw = String(editForm[key] ?? '').trim();
+          if (raw !== '' && !(Number.isFinite(Number(raw)) && Math.abs(Number(raw)) <= limit)) {
+            setDialogError(`${label} must be a number between -${limit} and ${limit}.`);
+            return;
+          }
+        }
+      }
+    }
     const technicianSkills = editingProfileUser.role === 'technician'
       ? (Array.isArray(editForm.skills) ? editForm.skills : [])
       : [];
@@ -383,11 +503,11 @@ export default function AdminUserManagement() {
         const skill = technicianSkills[index];
         const serviceTypeId = String(skill?.service_type || '').trim();
         if (!serviceTypeId) {
-          setError(`Select a service type for skill #${index + 1}.`);
+          setDialogError(`Select a service type for skill #${index + 1}.`);
           return;
         }
         if (seenServiceTypes.has(serviceTypeId)) {
-          setError('Each service type can only be assigned once per technician.');
+          setDialogError('Each service type can only be assigned once per technician.');
           return;
         }
         seenServiceTypes.add(serviceTypeId);
@@ -397,6 +517,7 @@ export default function AdminUserManagement() {
     setIsSavingProfile(true);
     setMessage('');
     setError('');
+    setDialogError('');
     try {
       if (editingProfileUser.role === 'technician') {
         const skills = technicianSkills.map((skill) => ({
@@ -426,12 +547,12 @@ export default function AdminUserManagement() {
       }
       else if (editingProfileUser.role === 'client') await updateAdminClient(editingProfileUser.id, { ...updates, address: editForm.address });
       else await updateAdminUser(editingProfileUser.id, updates);
-      setEditingProfileUser(null);
-      setEditForm(emptyEdit);
-      setMessage(`${getEntityLabel(editingProfileUser.role)} updated.`);
+      const savedName = editForm.name.trim() || editingProfileUser.username;
+      resetProfile();
+      setMessage(`${savedName} updated.`);
       await load({ preserveFeedback: true });
     } catch (saveError) {
-      setError(saveError.message || 'Unable to update user.');
+      setDialogError(saveError.message || 'Unable to update user.');
     } finally {
       setIsSavingProfile(false);
     }
@@ -481,31 +602,46 @@ export default function AdminUserManagement() {
     }));
   };
 
+  const reactivateUser = async (record) => {
+    if (!canEditRecord(record) || record.active) return;
+    setBusyUserId(record.id);
+    setMessage('');
+    setError('');
+    try {
+      const names = { first_name: record.first_name || '', last_name: record.last_name || '' };
+      if (record.role === 'technician') await updateAdminTechnician(record.id, { ...names, status: 'available' });
+      else if (record.role === 'client') await updateAdminClient(record.id, { ...names, status: 'active' });
+      else await updateAdminUser(record.id, { ...names, status: 'active' });
+      setMessage(`${getFullName(record) !== '-' ? getFullName(record) : record.username} reactivated.`);
+      await load({ preserveFeedback: true });
+    } catch (reactivateError) {
+      setError(reactivateError.message || 'Unable to reactivate this account.');
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
   const removeUser = async (record) => {
-    if (!canManageUsers) return;
+    if (!canDeactivateRecord(record)) return;
     if (!record.active) return;
+    setDialogError('');
     const hardDelete = isHardDeleteRole(record.role);
     setBusyUserId(record.id);
     setMessage('');
     setError('');
     try {
-      if (record.role === 'technician') {
-        await deleteAdminTechnician(record.id);
-        setMessage('Technician deactivated.');
-      } else if (record.role === 'client') {
-        await deleteAdminClient(record.id);
-        setMessage('Client deactivated.');
-      } else {
-        await deactivateAdminUser(record.id);
-        setMessage(`${getEntityLabel(record.role)} deactivated.`);
-      }
+      const label = getFullName(record) !== '-' ? getFullName(record) : record.username;
+      if (record.role === 'technician') await deleteAdminTechnician(record.id);
+      else if (record.role === 'client') await deleteAdminClient(record.id);
+      else await deactivateAdminUser(record.id);
+      setMessage(`${label} deactivated.`);
       if (editingProfileUser?.id === record.id) setEditingProfileUser(null);
       if (editingAccessUser?.id === record.id) setEditingAccessUser(null);
       if (viewingAccessUser?.id === record.id) setViewingAccessUser(null);
       if (deleteTarget?.id === record.id) setDeleteTarget(null);
       await load({ preserveFeedback: true });
     } catch (removeError) {
-      setError(removeError.message || 'Unable to remove user.');
+      setDialogError(removeError.message || 'Unable to deactivate this account.');
     } finally {
       setBusyUserId(null);
     }
@@ -524,7 +660,10 @@ export default function AdminUserManagement() {
       const currentCapabilities = Array.isArray(accessData.direct_capabilities) && accessData.direct_capabilities.length > 0
         ? accessData.direct_capabilities
         : accessData.effective_capabilities || [];
-      setEditingCapabilities(sanitizeCapabilities(currentCapabilities, accessData.available_capabilities || []));
+      const initialCapabilities = sanitizeCapabilities(currentCapabilities, accessData.available_capabilities || []);
+      setEditingCapabilities(initialCapabilities);
+      setAccessBaseline(initialCapabilities);
+      setDialogError('');
     } catch (accessError) {
       setError(accessError.message || 'Unable to load user access.');
     } finally {
@@ -537,15 +676,16 @@ export default function AdminUserManagement() {
     setIsSavingAccess(true);
     setMessage('');
     setError('');
+    setDialogError('');
     try {
       const payload = sanitizeCapabilities(editingCapabilities, catalog);
       await updateUserCapabilities(editingAccessUser.id, payload);
-      setEditingAccessUser(null);
-      setEditingCapabilities([]);
-      setMessage(`Access updated for ${editingAccessUser.username}.`);
+      const savedUsername = editingAccessUser.username;
+      resetAccess();
+      setMessage(`Access updated for ${savedUsername}.`);
       await load({ preserveFeedback: true });
     } catch (saveError) {
-      setError(saveError.message || 'Unable to update user access.');
+      setDialogError(saveError.message || 'Unable to update user access.');
     } finally {
       setIsSavingAccess(false);
     }
@@ -556,15 +696,15 @@ export default function AdminUserManagement() {
       <div className="mb-5 flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {message ? (
-            <div className="fixed left-1/2 top-6 z-[100] flex -translate-x-1/2 items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-800 shadow-xl ring-1 ring-black/5">
+            <div role="status" className="fixed left-1/2 top-6 z-[100] flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-800 shadow-xl ring-1 ring-black/5">
               <FiUserCheck className="h-5 w-5 text-emerald-500" />
               {message}
             </div>
           ) : null}
-          {canManageUsers ? (
+          {canCreateAccounts ? (
             <button
               type="button"
-              onClick={() => setShowCreateForm(true)}
+              onClick={() => { setDialogError(''); setShowCreateForm(true); }}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
             >
               <FiPlus size={16} />
@@ -573,10 +713,15 @@ export default function AdminUserManagement() {
           ) : null}
         </div>
       </div>
-      {error ? <div className="mb-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div> : null}
-      {canManageUsers && showCreateForm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm" onClick={() => { if (!isSubmitting) setShowCreateForm(false); }}>
-          <form onSubmit={handleCreate} className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      {error ? (
+        <div role="alert" className="mb-5 flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError('')} className="shrink-0 font-semibold">Dismiss</button>
+        </div>
+      ) : null}
+      {canCreateAccounts && showCreateForm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm" onClick={closeCreate}>
+          <form onSubmit={handleCreate} noValidate role="dialog" aria-modal="true" aria-label="Create user" className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="grid h-10 w-10 place-items-center rounded-lg bg-brand-50 text-brand-700">
@@ -584,9 +729,10 @@ export default function AdminUserManagement() {
                 </span>
                 <div>
                   <h3 className="font-semibold text-slate-900">Create user</h3>
+                  <p className="text-xs text-slate-500">If you enter an email, a verification email is sent and the account can sign in once it is verified.</p>
                 </div>
               </div>
-              <button type="button" disabled={isSubmitting} onClick={() => setShowCreateForm(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
+              <button type="button" disabled={isSubmitting} onClick={closeCreate} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
                 Close
               </button>
             </div>
@@ -611,7 +757,7 @@ export default function AdminUserManagement() {
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-slate-700">Phone</span>
-                <input className={inputClass} value={createForm.phone} onChange={(event) => setCreateForm({ ...createForm, phone: event.target.value })} />
+                <input type="tel" placeholder="09XXXXXXXXX" className={inputClass} value={createForm.phone} onChange={(event) => setCreateForm({ ...createForm, phone: event.target.value })} />
               </label>
               {createForm.role === 'client' ? (
                 <label className="block md:col-span-2">
@@ -621,17 +767,20 @@ export default function AdminUserManagement() {
               ) : null}
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-slate-700">Password</span>
-                <input type="password" className={inputClass} value={createForm.password} onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })} />
+                <input type="password" autoComplete="new-password" className={inputClass} value={createForm.password} onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })} />
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-slate-700">Confirm password</span>
-                <input type="password" className={inputClass} value={createForm.passwordConfirm} onChange={(event) => setCreateForm({ ...createForm, passwordConfirm: event.target.value })} />
+                <input type="password" autoComplete="new-password" className={inputClass} value={createForm.passwordConfirm} onChange={(event) => setCreateForm({ ...createForm, passwordConfirm: event.target.value })} />
               </label>
             </div>
-            <div className="sticky bottom-0 mt-5 flex justify-end border-t border-slate-200 bg-white pt-4">
+            <div className="sticky bottom-0 mt-5 border-t border-slate-200 bg-white pt-4">
+              {dialogError ? <p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{dialogError}</p> : null}
+              <div className="flex justify-end">
               <button type="submit" disabled={isSubmitting} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60">
                 {isSubmitting ? 'Creating...' : 'Create User'}
               </button>
+              </div>
             </div>
           </form>
         </div>
@@ -643,10 +792,10 @@ export default function AdminUserManagement() {
             <div>
               <p className="mb-2 text-sm font-semibold text-slate-700">Category</p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setRoleFilter('all')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${roleFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>All ({scopedUsers.length})</button>
+                <button type="button" aria-pressed={roleFilter === 'all'} onClick={() => setRoleFilter('all')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${roleFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>All ({scopedUsers.length})</button>
                 {ROLE_SECTIONS.map((section) => {
                   const count = roleCounts[section.value] || 0;
-                  return <button key={section.value} type="button" onClick={() => setRoleFilter(section.value)} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${roleFilter === section.value ? 'bg-brand-500 text-white' : 'bg-brand-50 text-brand-700 hover:bg-brand-100'}`}>{section.label} ({count})</button>;
+                  return <button key={section.value} type="button" aria-pressed={roleFilter === section.value} onClick={() => setRoleFilter(section.value)} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${roleFilter === section.value ? 'bg-brand-500 text-white' : 'bg-brand-50 text-brand-700 hover:bg-brand-100'}`}>{section.label} ({count})</button>;
                 })}
               </div>
             </div>
@@ -654,10 +803,11 @@ export default function AdminUserManagement() {
             <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">Technician accounts available: <span className="font-semibold text-slate-900">{scopedUsers.filter((record) => record.role === 'technician').length}</span></div>
           )}
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Search users</label>
+            <label htmlFor="user-search" className="mb-2 block text-sm font-semibold text-slate-700">Search users</label>
             <div className="relative">
               <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
+                id="user-search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-9 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
@@ -671,7 +821,7 @@ export default function AdminUserManagement() {
             <FiUsers size={15} />
             <span>Showing {visibleUsers.length} {showInactive ? 'inactive' : 'active'} user{visibleUsers.length === 1 ? '' : 's'}{roleFilter === 'all' ? ' across all roles.' : ` in ${getRoleLabel(roleFilter)}.`}</span>
           </p>
-          {canManageUsers && inactiveCount > 0 ? (
+          {canManageUsers && (inactiveCount > 0 || showInactive) ? (
             <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-medium text-slate-600">
               <input
                 type="checkbox"
@@ -710,12 +860,14 @@ export default function AdminUserManagement() {
               <tbody>
                 {paginatedUsers.map((record) => {
                   const canEditAccess = allowCapabilityManagement && canManageAccessTarget(record.role);
-                  const verificationPending = record.role === 'client' && !record.email_verified;
-                  const hardDelete = false;
-                  const canRemove = canManageUsers && record.id !== user?.id && record.active;
+                  const verificationPending = isPendingVerification(record);
+                  const canEdit = canEditRecord(record);
+                  const canRemove = canDeactivateRecord(record) && record.active;
+                  const canReactivate = canEdit && !record.active && canManageUsers;
                   const removeLabel = 'Deactivate';
                   const busyRemoveLabel = 'Deactivating...';
                   const accessAreas = getAccessAreas(record);
+                  const recordName = getFullName(record) !== '-' ? getFullName(record) : record.username;
                   return (
                     <tr key={record.id} className="bg-white transition hover:bg-brand-50/40">
                       <td className="border-b border-slate-100 px-3 py-2 align-middle">
@@ -744,41 +896,49 @@ export default function AdminUserManagement() {
                       <td className="border-b border-slate-100 px-3 py-2 align-middle">
                         {canEditAccess ? (
                           <div className="flex flex-wrap gap-1.5">
-                            <button type="button" onClick={() => setViewingAccessUser(record)} className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100">
+                            <button type="button" aria-label={`Accessible areas for ${recordName}`} onClick={() => setViewingAccessUser(record)} className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100">
                               Areas ({accessAreas.length})
                             </button>
-                            <button type="button" disabled={busyUserId === record.id} onClick={() => openAccessEditor(record)} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
+                            <button type="button" aria-label={`Manage access for ${recordName}`} disabled={busyUserId === record.id} onClick={() => openAccessEditor(record)} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
                               {busyUserId === record.id && editingAccessUser?.id !== record.id ? 'Loading...' : 'Manage'}
                             </button>
                           </div>
                         ) : (
-                          <button type="button" onClick={() => setViewingAccessUser(record)} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
+                          <button type="button" aria-label={`Accessible areas for ${recordName}`} onClick={() => setViewingAccessUser(record)} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
                             {accessAreas.length === 0 ? (canViewAllUsers ? 'Read only' : 'Technician only') : `Areas (${accessAreas.length})`}
                           </button>
                         )}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2 align-middle">
-                        <span className={`rounded-lg px-2 py-1 text-xs font-semibold ${verificationPending ? 'bg-amber-100 text-amber-800' : record.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
-                          {verificationPending ? 'Pending verification' : record.active ? 'Active' : 'Inactive'}
+                        <span className={`rounded-lg px-2 py-1 text-xs font-semibold ${!record.active ? 'bg-slate-200 text-slate-700' : verificationPending ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {!record.active ? 'Inactive' : verificationPending ? 'Pending verification' : 'Active'}
                         </span>
                       </td>
                       {(canManageUsers || canManageTechnicianSkills) ? (
                         <td className="min-w-[128px] border-b border-slate-100 px-3 py-2 align-middle text-right">
-                          {(canManageUsers || (canManageTechnicianSkills && record.role === 'technician')) ? <div className="flex flex-col items-end gap-1.5">
-                            <button
-                              type="button"
-                              disabled={loadingProfileUserId === record.id}
-                              onClick={() => openProfileEditor(record)}
-                              className="min-w-[76px] rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {loadingProfileUserId === record.id ? 'Loading...' : 'Edit'}
-                            </button>
+                          {canEdit || canRemove || canReactivate ? <div className="flex flex-col items-end gap-1.5">
+                            {canEdit ? (
+                              <button
+                                type="button"
+                                aria-label={`Edit ${recordName}`}
+                                disabled={loadingProfileUserId === record.id}
+                                onClick={() => openProfileEditor(record)}
+                                className="min-w-[76px] rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {loadingProfileUserId === record.id ? 'Loading...' : 'Edit'}
+                              </button>
+                            ) : null}
                             {canRemove ? (
-                              <button type="button" disabled={busyUserId === record.id} onClick={() => setDeleteTarget(record)} className="min-w-[76px] rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60">{busyUserId === record.id ? busyRemoveLabel : removeLabel}</button>
-                            ) : record.role === 'superadmin' ? (
-                              <span className="text-sm text-slate-400">Owner account</span>
-                            ) : <span className="text-sm text-slate-400">Inactive</span>}
-                          </div> : <span className="text-sm text-slate-400">—</span>}
+                              <button type="button" aria-label={`Deactivate ${recordName}`} disabled={busyUserId === record.id} onClick={() => { setDialogError(''); setDeleteTarget(record); }} className="min-w-[76px] rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60">{busyUserId === record.id ? busyRemoveLabel : removeLabel}</button>
+                            ) : null}
+                            {canReactivate ? (
+                              <button type="button" aria-label={`Reactivate ${recordName}`} disabled={busyUserId === record.id} onClick={() => reactivateUser(record)} className="min-w-[76px] rounded-lg border border-emerald-200 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60">{busyUserId === record.id ? 'Reactivating...' : 'Reactivate'}</button>
+                            ) : null}
+                          </div> : (
+                            <span className="text-sm text-slate-400">
+                              {record.id === user?.id ? 'You' : record.role === 'superadmin' ? 'Owner account' : record.active ? 'View only' : 'Inactive'}
+                            </span>
+                          )}
                         </td>
                       ) : null}
                     </tr>
@@ -818,7 +978,7 @@ export default function AdminUserManagement() {
       )}
       {viewingAccessUser ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm" onClick={() => setViewingAccessUser(null)}>
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-label="Accessible areas" className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Accessible areas</h3>
@@ -841,14 +1001,14 @@ export default function AdminUserManagement() {
         </div>
       ) : null}
       {editingProfileUser ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm" onClick={() => { if (!isSavingProfile) { setEditingProfileUser(null); setEditForm(emptyEdit); } }}>
-          <div className={`max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl ${editingProfileUser.role === 'technician' ? 'max-w-4xl' : 'max-w-2xl'}`} onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm" onClick={closeProfile}>
+          <div role="dialog" aria-modal="true" aria-label={`Edit ${getEntityLabel(editingProfileUser.role)}`} className={`max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl ${editingProfileUser.role === 'technician' ? 'max-w-4xl' : 'max-w-2xl'}`} onClick={(event) => event.stopPropagation()}>
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
               <div>
                 <h3 className="text-lg font-semibold">Edit {getEntityLabel(editingProfileUser.role)}</h3>
                 <p className="mt-1 text-sm text-slate-500">Update this account's profile information.</p>
               </div>
-              <button type="button" onClick={() => { setEditingProfileUser(null); setEditForm(emptyEdit); }} disabled={isSavingProfile} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">Close</button>
+              <button type="button" onClick={closeProfile} disabled={isSavingProfile} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">Close</button>
             </div>
             <div className="px-6 py-5">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -870,7 +1030,7 @@ export default function AdminUserManagement() {
                 </label>
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Phone number</span>
-                  <input type="tel" className={inputClass} value={editForm.phone} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} />
+                  <input type="tel" placeholder="09XXXXXXXXX" className={inputClass} value={editForm.phone} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} />
                 </label>
               {editingProfileUser.role === 'technician' ? (
                 <label className="block">
@@ -878,8 +1038,9 @@ export default function AdminUserManagement() {
                   <select className={inputClass} value={editForm.status} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, status: event.target.value })}>
                     <option value="available">Available</option>
                     <option value="on_job">On job</option>
-                    <option value="offline">Offline</option>
+                    <option value="offline">Offline (deactivates the account)</option>
                   </select>
+                  <span className="mt-1 block text-xs text-slate-500">Offline deactivates the account. A technician with open tickets cannot be set offline.</span>
                 </label>
               ) : null}
               {editingProfileUser.role === 'client' ? (
@@ -892,11 +1053,11 @@ export default function AdminUserManagement() {
                 <>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Latitude</span>
-                    <input type="number" className={inputClass} value={editForm.lat} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, lat: event.target.value })} />
+                    <input type="number" step="any" className={inputClass} value={editForm.lat} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, lat: event.target.value })} />
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Longitude</span>
-                    <input type="number" className={inputClass} value={editForm.lng} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, lng: event.target.value })} />
+                    <input type="number" step="any" className={inputClass} value={editForm.lng} disabled={!canManageUsers} onChange={(event) => setEditForm({ ...editForm, lng: event.target.value })} />
                   </label>
                 </>
               ) : null}
@@ -927,19 +1088,19 @@ export default function AdminUserManagement() {
                 ) : (
                   <div className="mt-4 space-y-3">
                     {editForm.skills.map((skill, index) => (
-                      <div key={`${skill.service_type || 'new'}-${index}`} className="grid gap-3 md:grid-cols-[1.6fr_1fr_auto]">
-                        <select className={inputClass} value={skill.service_type} disabled={!canManageTechnicianSkills} onChange={(event) => updateSkillRow(index, 'service_type', event.target.value)}>
+                      <div key={index} className="grid gap-3 md:grid-cols-[1.6fr_1fr_auto]">
+                        <select aria-label={`Skill ${index + 1} service type`} className={inputClass} value={skill.service_type} disabled={!canManageTechnicianSkills} onChange={(event) => updateSkillRow(index, 'service_type', event.target.value)}>
                           <option value="">Select service type</option>
                           {availableServiceTypes.map((serviceType) => (
                             <option key={serviceType.id} value={serviceType.id}>{serviceType.name}</option>
                           ))}
                         </select>
-                        <select className={inputClass} value={skill.skill_level} disabled={!canManageTechnicianSkills} onChange={(event) => updateSkillRow(index, 'skill_level', event.target.value)}>
+                        <select aria-label={`Skill ${index + 1} level`} className={inputClass} value={skill.skill_level} disabled={!canManageTechnicianSkills} onChange={(event) => updateSkillRow(index, 'skill_level', event.target.value)}>
                           {SKILL_LEVEL_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
                           ))}
                         </select>
-                        <button type="button" onClick={() => removeSkillRow(index)} disabled={!canManageTechnicianSkills} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">
+                        <button type="button" aria-label={`Remove skill ${index + 1}`} onClick={() => removeSkillRow(index)} disabled={!canManageTechnicianSkills} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">
                           Remove
                         </button>
                       </div>
@@ -949,47 +1110,57 @@ export default function AdminUserManagement() {
               </div>
             ) : null}
             </div>
-            <div className="sticky bottom-0 flex justify-end border-t border-slate-200 bg-white px-6 py-4">
-              <button type="button" onClick={saveProfile} disabled={isSavingProfile} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
-                {isSavingProfile ? 'Saving...' : 'Save changes'}
-              </button>
+            <div className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-4">
+              {dialogError ? <p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{dialogError}</p> : null}
+              <div className="flex items-center justify-end gap-3">
+                {editDirty ? <span className="text-xs font-medium text-amber-700">Unsaved changes</span> : null}
+                <button type="button" onClick={saveProfile} disabled={isSavingProfile || !editDirty} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
+                  {isSavingProfile ? 'Saving...' : 'Save changes'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       ) : null}
 
       {deleteTarget ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm" onClick={() => { if (busyUserId !== deleteTarget.id) setDeleteTarget(null); }}>
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-slate-900">
-              {isHardDeleteRole(deleteTarget.role) ? 'Delete user?' : 'Deactivate user?'}
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              {isHardDeleteRole(deleteTarget.role)
-                ? `This will permanently delete ${getFullName(deleteTarget) !== '-' ? getFullName(deleteTarget) : deleteTarget.username}.`
-                : `This will deactivate ${getFullName(deleteTarget) !== '-' ? getFullName(deleteTarget) : deleteTarget.username} and remove their active access.`}
-            </p>
-            <div className="mt-5 flex justify-end gap-3">
-              <button type="button" disabled={busyUserId === deleteTarget.id} onClick={() => setDeleteTarget(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
-                Dismiss
-              </button>
-              <button type="button" disabled={busyUserId === deleteTarget.id} onClick={() => removeUser(deleteTarget)} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60">
-                {busyUserId === deleteTarget.id ? (isHardDeleteRole(deleteTarget.role) ? 'Deleting...' : 'Deactivating...') : (isHardDeleteRole(deleteTarget.role) ? 'Delete' : 'Deactivate')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmationDialog
+          title={`Deactivate ${getFullName(deleteTarget) !== '-' ? getFullName(deleteTarget) : deleteTarget.username}?`}
+          message={`This removes their active access. ${deleteTarget.role === 'technician' ? 'A technician with open tickets must be reassigned first. ' : ''}You can reactivate the account later from Show inactive accounts.`}
+          tone="danger"
+          icon="danger"
+          confirmLabel="Deactivate"
+          cancelLabel="Keep active"
+          loading={busyUserId === deleteTarget.id}
+          onCancel={() => { setDeleteTarget(null); setDialogError(''); }}
+          onConfirm={() => removeUser(deleteTarget)}
+        >
+          {dialogError ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{dialogError}</p> : null}
+        </ConfirmationDialog>
+      ) : null}
+
+      {pendingDiscard ? (
+        <ConfirmationDialog
+          title="Discard your changes?"
+          message="You have changes that are not saved. Closing now discards them."
+          tone="warning"
+          icon="warning"
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          onCancel={() => setPendingDiscard(null)}
+          onConfirm={confirmDiscard}
+        />
       ) : null}
 
       {editingAccessUser ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm" onClick={() => { setEditingAccessUser(null); setEditingCapabilities([]); }}>
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm" onClick={closeAccess}>
+          <div role="dialog" aria-modal="true" aria-label={`Capabilities for ${editingAccessUser.username}`} className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Capabilities for {getRoleLabel(editingAccessUser.role)}</h3>
                 <p className="text-sm text-slate-500">Select which capabilities {editingAccessUser.username} can access.</p>
               </div>
-              <button type="button" onClick={() => { setEditingAccessUser(null); setEditingCapabilities([]); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">Close</button>
+              <button type="button" onClick={closeAccess} disabled={isSavingAccess} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">Close</button>
             </div>
             <div className="space-y-5">
               {Object.entries(capabilityGroups).map(([category, capabilities]) => (
@@ -1017,10 +1188,14 @@ export default function AdminUserManagement() {
             {catalog.length === 0 ? (
               <div className="mt-4 rounded-2xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">No capabilities are available for this account.</div>
             ) : null}
-            <div className="sticky bottom-0 mt-5 flex justify-end border-t border-slate-200 bg-white pt-4">
-              <button type="button" onClick={saveAccess} disabled={isSavingAccess} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
-                {isSavingAccess ? 'Saving access...' : 'Save access'}
-              </button>
+            <div className="sticky bottom-0 mt-5 border-t border-slate-200 bg-white pt-4">
+              {dialogError ? <p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{dialogError}</p> : null}
+              <div className="flex items-center justify-end gap-3">
+                {accessDirty ? <span className="text-xs font-medium text-amber-700">Unsaved changes</span> : null}
+                <button type="button" onClick={saveAccess} disabled={isSavingAccess || !accessDirty} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
+                  {isSavingAccess ? 'Saving access...' : 'Save access'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

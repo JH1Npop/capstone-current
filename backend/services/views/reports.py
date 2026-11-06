@@ -19,6 +19,15 @@ def _bounded_days(request, default=30, minimum=1, maximum=365):
     return max(minimum, min(maximum, days))
 
 
+def _optional_id(value):
+    """A positive integer filter value, or None for blank or malformed input."""
+    try:
+        number = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
 def _period_start(days):
     return timezone.now().date() - timezone.timedelta(days=days - 1)
 
@@ -45,43 +54,77 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def service_density(self, request):
         """Get completed service density data for coverage heatmap visualization."""
-        client_id = request.query_params.get('client')
-        technician_id = request.query_params.get('technician')
-        service_type_id = request.query_params.get('service_type')
+        client_id = _optional_id(request.query_params.get('client'))
+        technician_id = _optional_id(request.query_params.get('technician'))
+        service_type_id = _optional_id(request.query_params.get('service_type'))
 
         # Coverage heatmap is the completed service footprint grouped by location.
-        service_requests = ServiceRequest.objects.filter(
-            status='Completed'
-        ).select_related(
+        mapped_completed = ServiceRequest.objects.filter(
+            status='Completed',
+            location__latitude__isnull=False,
+            location__longitude__isnull=False,
+        )
+
+        def apply_filters(queryset, *, by_client=True, by_technician=True, by_service=True):
+            if by_client and client_id:
+                queryset = queryset.filter(client_id=client_id)
+            if by_technician and technician_id:
+                # The lead and every crew member worked the job.
+                queryset = queryset.filter(
+                    Q(serviceticket__technician_id=technician_id)
+                    | Q(serviceticket__crew_assignments__technician_id=technician_id)
+                )
+            if by_service and service_type_id:
+                # Multi-service requests list every service in service_items.
+                queryset = queryset.filter(
+                    Q(service_type_id=service_type_id)
+                    | Q(service_items__service_type_id=service_type_id)
+                )
+            return queryset.distinct()
+
+        service_requests = apply_filters(mapped_completed).select_related(
             'client',
             'service_type',
             'location'
         ).prefetch_related(
+            'service_items__service_type',
             Prefetch(
                 'serviceticket_set',
-                queryset=ServiceTicket.objects.filter(technician__isnull=False).select_related('technician'),
+                queryset=ServiceTicket.objects.filter(technician__isnull=False)
+                .select_related('technician')
+                .prefetch_related('crew_assignments__technician'),
                 to_attr='heatmap_tickets'
             )
         )
 
-        if client_id:
-            service_requests = service_requests.filter(client_id=client_id)
-        if technician_id:
-            service_requests = service_requests.filter(serviceticket__technician_id=technician_id).distinct()
-
+        # Each filter's options ignore that filter itself, so choosing a client (or technician,
+        # or service) never hides the other choices for that same filter.
+        client_options = [
+            {'id': user.id, 'name': _format_person_name(user)}
+            for user in User.objects.filter(
+                id__in=apply_filters(mapped_completed, by_client=False).values('client_id')
+            )
+        ]
+        technician_option_requests = apply_filters(mapped_completed, by_technician=False).values('id')
+        technician_options = [
+            {'id': user.id, 'name': _format_person_name(user)}
+            for user in User.objects.filter(role='technician').filter(
+                Q(assigned_tickets__request_id__in=technician_option_requests)
+                | Q(crew_ticket_assignments__ticket__request_id__in=technician_option_requests)
+            ).distinct()
+        ]
+        service_option_requests = apply_filters(mapped_completed, by_service=False).values('id')
         service_options_queryset = ServiceType.objects.filter(
-            servicerequest__in=service_requests
+            Q(servicerequest__in=service_option_requests)
+            | Q(request_items__request_id__in=service_option_requests)
         ).distinct().order_by('name')
-
-        if service_type_id:
-            service_requests = service_requests.filter(service_type_id=service_type_id)
 
         # Group by location and count requests
         density_data = {}
         for req in service_requests:
             try:
                 loc = req.location
-                if loc.latitude and loc.longitude:
+                if loc.latitude is not None and loc.longitude is not None:
                     # Group by 2 decimal places (~1.1km grid) to create meaningful density clusters
                     lat_val = round(float(loc.latitude), 2)
                     lng_val = round(float(loc.longitude), 2)
@@ -97,26 +140,32 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
                             'technicians': {},
                             'address': loc.address
                         }
-                    service_name = req.service_type.name if req.service_type else 'Unknown Service'
+                    service_names = [
+                        item.service_type.name
+                        for item in req.service_items.all()
+                        if item.service_type_id
+                    ] or [req.service_type.name if req.service_type else 'Unknown Service']
                     density_data[key]['count'] += 1
-                    density_data[key]['service_breakdown'][service_name] = (
-                        density_data[key]['service_breakdown'].get(service_name, 0) + 1
-                    )
+                    for service_name in service_names:
+                        density_data[key]['service_breakdown'][service_name] = (
+                            density_data[key]['service_breakdown'].get(service_name, 0) + 1
+                        )
                     density_data[key]['status_breakdown'][req.status] = (
                         density_data[key]['status_breakdown'].get(req.status, 0) + 1
                     )
-                    density_data[key]['clients'][req.client_id] = req.client.get_full_name().strip() or req.client.username
+                    density_data[key]['clients'][req.client_id] = _format_person_name(req.client)
                     for ticket in getattr(req, 'heatmap_tickets', []):
-                        density_data[key]['technicians'][ticket.technician_id] = (
-                            ticket.technician.get_full_name().strip() or ticket.technician.username
-                        )
+                        density_data[key]['technicians'][ticket.technician_id] = _format_person_name(ticket.technician)
+                        for assignment in ticket.crew_assignments.all():
+                            if assignment.technician_id:
+                                density_data[key]['technicians'][assignment.technician_id] = (
+                                    _format_person_name(assignment.technician)
+                                )
             except ServiceLocation.DoesNotExist:
                 pass
 
         # Convert to list and add service type info
         heatmap_points = []
-        client_options = {}
-        technician_options = {}
         for point in density_data.values():
             sorted_services = sorted(
                 point['service_breakdown'].items(),
@@ -136,29 +185,23 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
             ]
             point['dominant_service'] = sorted_services[0][0] if sorted_services else 'Unknown Service'
             point['clients'] = [
-                {'id': client_id, 'name': name}
-                for client_id, name in sorted(point['clients'].items(), key=lambda item: item[1])
+                {'id': person_id, 'name': name}
+                for person_id, name in sorted(point['clients'].items(), key=lambda item: item[1])
             ]
             point['technicians'] = [
-                {'id': technician_id, 'name': name}
-                for technician_id, name in sorted(point['technicians'].items(), key=lambda item: item[1])
+                {'id': person_id, 'name': name}
+                for person_id, name in sorted(point['technicians'].items(), key=lambda item: item[1])
             ]
-            client_options.update({item['id']: item['name'] for item in point['clients']})
-            technician_options.update({item['id']: item['name'] for item in point['technicians']})
             heatmap_points.append(point)
 
         return Response({
+            # total_points counts hotspots; total_jobs counts the completed jobs inside them.
             'total_points': len(heatmap_points),
+            'total_jobs': sum(point['count'] for point in heatmap_points),
             'heatmap_data': heatmap_points,
             'max_density': max([p['count'] for p in heatmap_points]) if heatmap_points else 0,
-            'client_options': [
-                {'id': option_id, 'name': name}
-                for option_id, name in sorted(client_options.items(), key=lambda item: item[1])
-            ],
-            'technician_options': [
-                {'id': option_id, 'name': name}
-                for option_id, name in sorted(technician_options.items(), key=lambda item: item[1])
-            ],
+            'client_options': sorted(client_options, key=lambda item: item['name'].lower()),
+            'technician_options': sorted(technician_options, key=lambda item: item['name'].lower()),
             'service_options': [
                 {'id': service.id, 'name': service.name}
                 for service in service_options_queryset
@@ -168,7 +211,7 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def technician_coverage(self, request):
         """Get technician coverage areas for overlay on heatmap."""
-        technician_id = request.query_params.get('technician')
+        technician_id = _optional_id(request.query_params.get('technician'))
         technicians = User.objects.filter(
             role='technician',
             status='active',
@@ -263,13 +306,21 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
         days = request.query_params.get('days')
         if days:
             start_date = _period_start(_bounded_days(request))
+            # A job counts in the period it was completed; the visit date is only a fallback for
+            # older records without a completion date.
             tickets = tickets.filter(
-                Q(completed_date__date__gte=start_date) | Q(scheduled_date__gte=start_date)
+                Q(completed_date__date__gte=start_date)
+                | Q(completed_date__isnull=True, scheduled_date__gte=start_date)
             )
 
-        service_type_id = request.query_params.get('service_type')
+        service_type_id = _optional_id(request.query_params.get('service_type'))
         if service_type_id:
-            tickets = tickets.filter(request__service_type_id=service_type_id)
+            # Multi-service requests list every service in service_items. Filtering through a
+            # subquery keeps one row per ticket without DISTINCT (which breaks related ordering).
+            tickets = tickets.filter(pk__in=ServiceTicket.objects.filter(
+                Q(request__service_type_id=service_type_id)
+                | Q(request__service_items__service_type_id=service_type_id)
+            ).values('pk'))
 
         search = request.query_params.get('search', '').strip()
         if search:
@@ -277,13 +328,16 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
 
         option_tickets = tickets.prefetch_related(None)
 
-        client_id = request.query_params.get('client')
+        client_id = _optional_id(request.query_params.get('client'))
         if client_id:
             tickets = tickets.filter(request__client_id=client_id)
 
-        technician_id = request.query_params.get('technician')
+        technician_id = _optional_id(request.query_params.get('technician'))
         if technician_id:
-            tickets = tickets.filter(technician_id=technician_id)
+            # The lead and every crew member worked the job.
+            tickets = tickets.filter(pk__in=ServiceTicket.objects.filter(
+                Q(technician_id=technician_id) | Q(crew_assignments__technician_id=technician_id)
+            ).values('pk'))
 
         ordering_map = {
             'ticket_id': 'id',
@@ -486,18 +540,24 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
         ).values(
             'request__location__latitude', 'request__location__longitude'
         ).distinct().count()
-        service_types_served = filtered_tickets.values('request__service_type_id').distinct().count()
+        service_types_served = ServiceType.objects.filter(
+            Q(servicerequest__serviceticket__in=filtered_tickets)
+            | Q(request_items__request__serviceticket__in=filtered_tickets)
+        ).distinct().count()
         jobs_with_checklist = filtered_tickets.filter(inspection__isnull=False).count()
         jobs_with_warranty = filtered_tickets.filter(inspection__warranty_provided=True).count()
         rated_jobs = filtered_tickets.filter(client_rating__isnull=False).count()
         client_options = {}
         technician_options = {}
-        for ticket in option_tickets:
+        for ticket in option_tickets.prefetch_related('crew_assignments__technician'):
             req = ticket.request
             tech = ticket.technician
             client_options[req.client_id] = _format_person_name(req.client)
             if tech:
                 technician_options[tech.id] = _format_person_name(tech)
+            for assignment in ticket.crew_assignments.all():
+                if assignment.technician_id:
+                    technician_options[assignment.technician_id] = _format_person_name(assignment.technician)
 
         return Response({
             'total': total_results,

@@ -301,7 +301,7 @@ const ROUTE_HELP = [
   { keywords: ['inventory'], answer: 'Open /admin/inventory for stock, items, summaries, and service inventory requirements.' },
   { keywords: ['services'], answer: 'Open /admin/services to manage service types, procedures, duration, cost, and required equipment.' },
   { keywords: ['analytics', 'forecast'], answer: 'Open /admin/analytics for operational trends, comparisons, historical service-location density, ticket-linked item usage, and forecast readiness.' },
-  { keywords: ['reports'], answer: 'Open /admin/reports or /admin/operations-report for management reports.' },
+  { keywords: ['reports'], answer: 'Open /admin/reports for management reports.' },
   { keywords: ['users', 'user management', 'accounts'], answer: 'Open /admin/user-management. Superadmin controls full user and capability management.' },
   { keywords: ['after sales', 'after-sales', 'follow up'], answer: 'Open /admin/after-sales-cases for follow-up, complaint, warranty, revisit, and feedback cases.' },
   { keywords: ['messages'], answer: 'Open /admin/messages or /technician/messages depending on the signed-in role and capability.' },

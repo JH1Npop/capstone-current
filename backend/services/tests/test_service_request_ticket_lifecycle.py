@@ -431,6 +431,33 @@ class ServiceRequestTicketLifecycleTests(APITestCase):
             type='warning',
         ).exists())
 
+    def test_approval_starts_the_ticket_timeline(self):
+        for require_inspection, expected_status, expected_note in (
+            (False, 'Not Started', 'Request approved; service ticket created.'),
+            (True, 'For Inspection', 'Request approved; inspection ticket created.'),
+        ):
+            with self.subTest(require_inspection=require_inspection):
+                request_obj = ServiceRequest.objects.create(
+                    client=self.client_user,
+                    service_type=self.service_type,
+                    description='Timeline should start at approval',
+                    priority='Normal',
+                    status='Pending',
+                )
+                self.client.force_authenticate(user=self.admin_user)
+                response = self.client.post(
+                    f'/api/services/service-requests/{request_obj.id}/approve/',
+                    {'require_inspection': require_inspection},
+                    format='json',
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+                ticket = ServiceTicket.objects.get(request=request_obj)
+                history = list(ServiceStatusHistory.objects.filter(ticket=ticket))
+                self.assertEqual(len(history), 1)
+                self.assertEqual(history[0].status, expected_status)
+                self.assertEqual(history[0].changed_by, self.admin_user)
+                self.assertEqual(history[0].notes, expected_note)
+
     def test_completed_ticket_becomes_heatmap_ready(self):
         self.client.force_authenticate(user=self.client_user)
 

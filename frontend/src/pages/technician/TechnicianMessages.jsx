@@ -45,6 +45,11 @@ const formatTime = (value) => {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 };
 
+// Same limits as the server (messages_app/serializers.py): checked when picking, not after upload.
+const MAX_MESSAGE_LENGTH = 5000;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
 const getRoomKeyForMessage = (message, currentUserId) => {
   if (message.roomType === 'group') {
     return `group:${message.groupKey || 'staff'}`;
@@ -77,10 +82,15 @@ export default function TechnicianMessages() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  // Errors from the edit and unsend dialogs are shown inside them, not behind them.
+  const [dialogError, setDialogError] = useState('');
+  const [attachmentError, setAttachmentError] = useState('');
   const [roomsOpen, setRoomsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const messagesEndRef = useRef(null);
   const imageInputRef = useRef(null);
+  const composerRef = useRef(null);
+  const refocusComposer = useRef(false);
 
   const rooms = useMemo(() => {
     const directRooms = participants.map((participant) => ({
@@ -231,18 +241,57 @@ export default function TechnicianMessages() {
         return next;
       });
       setError('');
+      setAttachmentError('');
       setStatusMessage(`Message sent to ${targetRoom.name}.`);
       window.setTimeout(() => setStatusMessage(''), 2500);
     } catch (sendError) {
       setError(sendError.message || 'Unable to send message.');
     } finally {
+      // Keep typing without clicking back into the box (focused once it is enabled again).
+      refocusComposer.current = true;
       setSending(false);
     }
   };
 
+  useEffect(() => {
+    if (sending || !refocusComposer.current) return;
+    refocusComposer.current = false;
+    composerRef.current?.focus();
+  }, [sending]);
+
+  const pickImage = (file) => {
+    if (!file) return;
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setAttachmentError(`${file.name} cannot be sent. Use a JPEG, PNG, WebP or GIF image.`);
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setAttachmentError(`${file.name} is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Images must be 5 MB or smaller.`);
+      return;
+    }
+    setAttachmentError('');
+    updateActiveDraft({ image: file });
+  };
+
+  // Escape closes the edit and preview dialogs (the unsend confirmation handles its own).
+  useEffect(() => {
+    if (!editingMessage && !previewAttachment) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      if (previewAttachment) setPreviewAttachment(null);
+      else {
+        setEditingMessage(null);
+        setDialogError('');
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [editingMessage, previewAttachment]);
+
   const openEditMessage = (message) => {
     setEditingMessage(message);
     setEditText(message.text || '');
+    setDialogError('');
   };
 
   const handleEditMessage = async () => {
@@ -257,7 +306,7 @@ export default function TechnicianMessages() {
       setStatusMessage('Message updated.');
       window.setTimeout(() => setStatusMessage(''), 2500);
     } catch (editError) {
-      setError(editError.message || 'Unable to edit message.');
+      setDialogError(editError.message || 'Unable to edit message.');
     }
   };
 
@@ -272,7 +321,7 @@ export default function TechnicianMessages() {
       setStatusMessage('Message unsent.');
       window.setTimeout(() => setStatusMessage(''), 2500);
     } catch (deleteError) {
-      setError(deleteError.message || 'Unable to unsend message.');
+      setDialogError(deleteError.message || 'Unable to unsend message.');
     }
   };
 
@@ -281,12 +330,12 @@ export default function TechnicianMessages() {
       <div className="mx-auto max-w-7xl">
 
         {statusMessage && (
-          <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div role="status" className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             {statusMessage}
           </div>
         )}
         {error && (
-          <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             {error}
           </div>
         )}
@@ -312,6 +361,7 @@ export default function TechnicianMessages() {
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Search"
+                  aria-label="Search message rooms"
                   className="h-10 w-full rounded-full border-0 bg-slate-100 px-4 text-sm text-slate-500 outline-none"
                 />
               </div>
@@ -332,6 +382,7 @@ export default function TechnicianMessages() {
                       setSelectedRoomKey(room.key);
                       setRoomsOpen(false);
                     }}
+                    aria-current={activeRoom?.key === room.key ? 'true' : undefined}
                     className={`w-full rounded-xl px-3 py-3 text-left transition ${activeRoom?.key === room.key ? 'bg-sky-50' : 'hover:bg-slate-50'
                       }`}
                   >
@@ -444,15 +495,15 @@ export default function TechnicianMessages() {
                                   type="button"
                                   onClick={() => openEditMessage(message)}
                                   className="grid h-6 w-7 place-items-center text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                                  aria-label="Edit message"
+                                  aria-label={`Edit message sent ${formatTime(message.timestamp)}`}
                                 >
                                   <FiEdit2 size={12} />
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => setConfirmUnsendMessage(message)}
+                                  onClick={() => { setDialogError(''); setConfirmUnsendMessage(message); }}
                                   className="grid h-6 w-7 place-items-center border-l border-slate-200 text-slate-500 transition hover:bg-red-50 hover:text-red-600"
-                                  aria-label="Unsend message"
+                                  aria-label={`Unsend message sent ${formatTime(message.timestamp)}`}
                                 >
                                   <FiTrash2 size={12} />
                                 </button>
@@ -486,15 +537,21 @@ export default function TechnicianMessages() {
                   </button>
                 </div>
               ) : null}
+              {attachmentError ? (
+                <p role="alert" className="mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{attachmentError}</p>
+              ) : null}
+              {newMessage.length > MAX_MESSAGE_LENGTH - 500 ? (
+                <p className="mb-1 text-right text-xs text-slate-500">{newMessage.length} / {MAX_MESSAGE_LENGTH} characters</p>
+              ) : null}
               <div className="flex items-end gap-2 rounded-2xl bg-slate-100 p-1.5 sm:rounded-3xl">
                 <input
                   ref={imageInputRef}
                   type="file"
-                  accept="image/*"
+                  accept={ALLOWED_IMAGE_TYPES.join(',')}
+                  aria-label="Image to attach"
                   className="hidden"
                   onChange={(event) => {
-                    const file = event.target.files?.[0] || null;
-                    updateActiveDraft({ image: file });
+                    pickImage(event.target.files?.[0] || null);
                     event.target.value = '';
                   }}
                 />
@@ -508,6 +565,9 @@ export default function TechnicianMessages() {
                   <FiImage size={18} />
                 </button>
                 <textarea
+                  ref={composerRef}
+                  aria-label={`Message ${activeRoom.name}`}
+                  maxLength={MAX_MESSAGE_LENGTH}
                   value={newMessage}
                   onChange={(event) => updateActiveDraft({ text: event.target.value })}
                   rows={1}
@@ -537,15 +597,15 @@ export default function TechnicianMessages() {
 
         {editingMessage ? (
           <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 px-4">
-            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <div role="dialog" aria-modal="true" aria-labelledby="edit-message-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold text-slate-950">Edit message</h3>
+                  <h3 id="edit-message-title" className="text-base font-semibold text-slate-950">Edit message</h3>
                   <p className="mt-1 text-sm text-slate-500">Update the text you sent.</p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setEditingMessage(null)}
+                  onClick={() => { setEditingMessage(null); setDialogError(''); }}
                   className="grid h-9 w-9 place-items-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                   aria-label="Close edit message"
                 >
@@ -553,15 +613,18 @@ export default function TechnicianMessages() {
                 </button>
               </div>
               <textarea
+                aria-label="Message text"
+                maxLength={MAX_MESSAGE_LENGTH}
                 value={editText}
                 onChange={(event) => setEditText(event.target.value)}
                 rows={5}
                 className="mt-4 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
               />
+              {dialogError ? <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{dialogError}</p> : null}
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditingMessage(null)}
+                  onClick={() => { setEditingMessage(null); setDialogError(''); }}
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   Dismiss
@@ -587,17 +650,19 @@ export default function TechnicianMessages() {
             icon="warning"
             confirmLabel="Unsend"
             cancelLabel="Dismiss"
-            onCancel={() => setConfirmUnsendMessage(null)}
+            onCancel={() => { setConfirmUnsendMessage(null); setDialogError(''); }}
             onConfirm={handleUnsendMessage}
-          />
+          >
+            {dialogError ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{dialogError}</p> : null}
+          </ConfirmationDialog>
         ) : null}
 
         {previewAttachment ? (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4">
-            <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4" onMouseDown={(event) => event.target === event.currentTarget && setPreviewAttachment(null)}>
+            <div role="dialog" aria-modal="true" aria-labelledby="message-attachment-title" className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                 <div className="min-w-0">
-                  <h3 className="truncate text-lg font-bold text-slate-900">{previewAttachment.name || 'Message attachment'}</h3>
+                  <h3 id="message-attachment-title" className="truncate text-lg font-bold text-slate-900">{previewAttachment.name || 'Message attachment'}</h3>
                   <p className="text-sm text-slate-500">Preview attachment</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

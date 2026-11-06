@@ -418,7 +418,9 @@ test.describe('Major flow journey through the real UI', () => {
     await adminPage.getByRole('button', { name: 'Prepare record' }).click();
     await expect(adminPage.getByText(quotation.quotation_number).first()).toBeVisible();
     await adminPage.getByRole('button', { name: 'Confirm record' }).click();
-    await expect(adminPage.getByText('Sales record confirmed and made available to the client.')).toBeVisible();
+    // Confirming publishes the record to the client, so the page asks first.
+    await adminPage.getByRole('dialog', { name: /^Confirm SAL/ }).getByRole('button', { name: 'Confirm record' }).click();
+    await expect(adminPage.getByText(/confirmed and made available to the client\./)).toBeVisible();
     const sale = pick(await apiGet(adminPage, '/api/services/sales-records/')).find((entry) => Number(entry.ticket) === Number(ticket.id) && entry.status === 'confirmed');
     expect(sale, 'confirmed sales record for the ticket').toBeTruthy();
 

@@ -197,14 +197,53 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
             return []
         if not isinstance(value, list):
             raise serializers.ValidationError('Procedures must be a list of steps.')
-        return value
+        # Technicians follow these steps in order: drop blank rows and renumber the rest.
+        steps = []
+        for entry in value:
+            if isinstance(entry, str):
+                entry = {'title': entry}
+            if not isinstance(entry, dict):
+                raise serializers.ValidationError('Each checklist step must have a title.')
+            title = str(entry.get('title') or entry.get('label') or '').strip()
+            if not title:
+                continue
+            if len(title) > 200:
+                raise serializers.ValidationError('Each checklist step title must be 200 characters or fewer.')
+            steps.append({
+                'step': len(steps) + 1,
+                'title': title,
+                'description': str(entry.get('description') or '').strip()[:1000],
+                'requires_photo': bool(
+                    entry.get('requires_photo') or entry.get('requiresPhoto')
+                    or entry.get('requires_image') or entry.get('photo_required')
+                ),
+            })
+        if len(steps) > 50:
+            raise serializers.ValidationError('Use at most 50 checklist steps per service.')
+        return steps
 
     def validate_required_equipment(self, value):
         if value in (None, ''):
             return []
         if not isinstance(value, list):
             raise serializers.ValidationError('Required equipment must be a list.')
-        return value
+        items = []
+        for entry in value:
+            if isinstance(entry, str):
+                entry = {'name': entry, 'quantity': 1}
+            if not isinstance(entry, dict):
+                raise serializers.ValidationError('Each tool needs a name and a quantity.')
+            name = str(entry.get('name') or entry.get('label') or '').strip()
+            if not name:
+                continue
+            try:
+                quantity = int(str(entry.get('quantity', 1)).strip())
+            except (TypeError, ValueError):
+                quantity = 0
+            if quantity < 1:
+                raise serializers.ValidationError(f'Quantity for {name} must be a whole number of at least 1.')
+            items.append({'name': name[:200], 'quantity': quantity})
+        return items
 
     def validate_inspection_procedures(self, value):
         if value in (None, ''):

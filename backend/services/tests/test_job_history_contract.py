@@ -131,3 +131,89 @@ class JobHistoryContractTests(APITestCase):
         self.assertEqual(technician_response.data['page_size'], 10)
         self.assertEqual(technician_response.data['total_pages'], 2)
         self.assertEqual(len(technician_response.data['results']), 10)
+
+
+class JobHistoryFilterAccuracyTests(APITestCase):
+    """Period, multi-service, crew, search, ordering and malformed input on completed_jobs."""
+
+    URL = '/api/services/coverage-heatmap/completed_jobs/'
+
+    def setUp(self):
+        from services.models import ServiceRequestService
+        self.ServiceRequestService = ServiceRequestService
+        self.superadmin = User.objects.create_user(username='jh2_super', password='pass', role='superadmin')
+        self.lead = User.objects.create_user(username='jh2_lead', password='pass', role='technician', first_name='Leandro', last_name='Lead')
+        self.crew = User.objects.create_user(username='jh2_crew', password='pass', role='technician', first_name='Cristina', last_name='Crew')
+        self.client_user = User.objects.create_user(username='jh2_client', password='pass', role='client', first_name='Carla', last_name='Client')
+        self.solar = ServiceType.objects.create(name='JH Solar', estimated_duration=60)
+        self.battery = ServiceType.objects.create(name='JH Battery', estimated_duration=60)
+        self.client.force_authenticate(self.superadmin)
+
+    def _job(self, *, services=None, completed_days_ago=0, scheduled_days_ago=0, address='1 Rizal St', crew=()):
+        services = services or [self.solar]
+        request_obj = ServiceRequest.objects.create(
+            client=self.client_user, service_type=services[0], description='done', status='Completed',
+        )
+        for order, service in enumerate(services):
+            self.ServiceRequestService.objects.create(request=request_obj, service_type=service, sort_order=order)
+        ServiceLocation.objects.create(request=request_obj, address=address, city='Lucena', province='Quezon', latitude=13.94, longitude=121.61)
+        ticket = ServiceTicket.objects.create(
+            request=request_obj,
+            technician=self.lead,
+            scheduled_date=timezone.localdate() - timedelta(days=scheduled_days_ago),
+            completed_date=timezone.now() - timedelta(days=completed_days_ago),
+            status='Completed',
+        )
+        for member in crew:
+            TicketCrewAssignment.objects.create(ticket=ticket, technician=member)
+        return ticket
+
+    def _ids(self, **params):
+        response = self.client.get(self.URL, params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        return [row['id'] for row in response.data['results']], response.data
+
+    def test_period_uses_the_completion_date(self):
+        recent = self._job(completed_days_ago=2, scheduled_days_ago=3)
+        # Completed long ago even though its visit date falls inside the window.
+        old = self._job(completed_days_ago=200, scheduled_days_ago=1)
+        ids, _ = self._ids(days=7)
+        self.assertIn(recent.id, ids)
+        self.assertNotIn(old.id, ids)
+
+    def test_service_filter_and_count_include_every_service(self):
+        combo = self._job(services=[self.solar, self.battery])
+        self._job(services=[self.solar])
+        ids, data = self._ids(service_type=self.battery.id)
+        self.assertEqual(ids, [combo.id])
+        _, everything = self._ids()
+        self.assertEqual(everything['service_types_served'], 2)
+        self.assertEqual(data['total'], 1)
+
+    def test_technician_filter_and_options_include_crew(self):
+        with_crew = self._job(crew=[self.crew])
+        self._job()
+        ids, data = self._ids(technician=self.crew.id)
+        self.assertEqual(ids, [with_crew.id])
+        self.assertIn(self.crew.id, {option['id'] for option in data['technician_options']})
+
+    def test_search_covers_technician_and_address(self):
+        target = self._job(address='77 Mabini Avenue')
+        ids, _ = self._ids(search='Mabini')
+        self.assertEqual(ids, [target.id])
+        ids, _ = self._ids(search='Leandro')
+        self.assertIn(target.id, ids)
+
+    def test_ordering_and_paging_return_distinct_rows(self):
+        jobs = [self._job(crew=[self.crew], completed_days_ago=day) for day in range(3)]
+        ids, data = self._ids(technician=self.crew.id, ordering='technician', direction='asc', page_size=2, page=1)
+        more, _ = self._ids(technician=self.crew.id, ordering='technician', direction='asc', page_size=2, page=2)
+        self.assertEqual(data['total'], 3)
+        self.assertEqual(sorted(ids + more), sorted(job.id for job in jobs))
+
+    def test_malformed_filter_values_are_ignored(self):
+        self._job()
+        for params in ({'client': 'abc'}, {'technician': 'x'}, {'service_type': '0'}):
+            with self.subTest(params=params):
+                _, data = self._ids(**params)
+                self.assertEqual(data['total'], 1)

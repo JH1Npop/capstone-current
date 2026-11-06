@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Layout from '../../components/layout/Layout';
 import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
 import { MapContainer, Circle, Popup, useMap } from 'react-leaflet';
@@ -57,7 +57,9 @@ export default function CoverageHeatmap() {
   const [showServiceDensity, setShowServiceDensity] = useState(true);
   const [showTechnicianCoverage, setShowTechnicianCoverage] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ totalPoints: 0, maxDensity: 0, totalTechnicians: 0 });
+  const [stats, setStats] = useState({ totalPoints: 0, totalJobs: 0, maxDensity: 0, totalTechnicians: 0 });
+  // Only the newest request may update the page when filters change quickly.
+  const requestSequence = useRef(0);
   const [error, setError] = useState('');
   const boundedHeatmapData = heatmapData.filter((point) => CALABARZON_BOUNDS.contains([point.lat, point.lng]));
   const boundedTechnicianCoverage = technicianCoverage.filter((tech) => CALABARZON_BOUNDS.contains(tech.center));
@@ -87,11 +89,20 @@ export default function CoverageHeatmap() {
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [boundedHeatmapData]);
 
+  // The same hotspot details as the map popups, in a list keyboard and screen-reader users can read.
+  const HOTSPOT_LIST_LIMIT = 10;
+  const rankedHotspots = useMemo(
+    () => [...boundedHeatmapData].sort((a, b) => b.count - a.count || String(a.address || '').localeCompare(String(b.address || ''))),
+    [boundedHeatmapData]
+  );
+
   useEffect(() => {
     loadHeatmapData();
   }, [selectedClient, selectedTechnician, selectedServiceType]);
 
   const loadHeatmapData = async () => {
+    const requestId = requestSequence.current + 1;
+    requestSequence.current = requestId;
     setLoading(true);
     try {
       const filters = {
@@ -103,6 +114,7 @@ export default function CoverageHeatmap() {
         fetchCoverageHeatmap(filters),
         fetchTechnicianCoverage(filters)
       ]);
+      if (requestId !== requestSequence.current) return;
 
       setHeatmapData(heatmapResponse.heatmap_data || []);
       setTechnicianCoverage(coverageResponse.coverage_areas || []);
@@ -114,18 +126,20 @@ export default function CoverageHeatmap() {
       setServiceOptions(heatmapResponse.service_options || []);
       setStats({
         totalPoints: heatmapResponse.total_points || 0,
+        totalJobs: heatmapResponse.total_jobs ?? (heatmapResponse.heatmap_data || []).reduce((sum, point) => sum + Number(point.count || 0), 0),
         maxDensity: heatmapResponse.max_density || 0,
         totalTechnicians: coverageResponse.total_technicians || 0
       });
       setError('');
     } catch (error) {
+      if (requestId !== requestSequence.current) return;
       setHeatmapData([]);
       setTechnicianCoverage([]);
       setServiceOptions([]);
-      setStats({ totalPoints: 0, maxDensity: 0, totalTechnicians: 0 });
+      setStats({ totalPoints: 0, totalJobs: 0, maxDensity: 0, totalTechnicians: 0 });
       setError(error.message || 'Unable to load coverage heatmap.');
     }
-    setLoading(false);
+    if (requestId === requestSequence.current) setLoading(false);
   };
 
   const resetFilters = () => {
@@ -191,18 +205,26 @@ export default function CoverageHeatmap() {
         )}
       />
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+      <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-[13px] font-medium text-slate-500">Service Areas</div>
+          <div className="text-[13px] font-medium text-slate-500">Completed jobs</div>
+          <div className="mt-1.5 text-3xl font-bold text-slate-800">{stats.totalJobs}</div>
+          <div className="mt-1 text-xs text-slate-400">With a mapped service location</div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-[13px] font-medium text-slate-500">Hotspots</div>
           <div className="mt-1.5 text-3xl font-bold text-slate-800">{stats.totalPoints}</div>
+          <div className="mt-1 text-xs text-slate-400">Areas about 1 km across</div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-[13px] font-medium text-slate-500">Highest Density</div>
+          <div className="text-[13px] font-medium text-slate-500">Busiest hotspot</div>
           <div className="mt-1.5 text-3xl font-bold text-blue-600">{stats.maxDensity}</div>
+          <div className="mt-1 text-xs text-slate-400">Completed jobs in one area</div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-[13px] font-medium text-slate-500">Active Technicians</div>
+          <div className="text-[13px] font-medium text-slate-500">Technicians with a location</div>
           <div className="mt-1.5 text-3xl font-bold text-emerald-600">{stats.totalTechnicians}</div>
+          <div className="mt-1 text-xs text-slate-400">Shown as 10 km coverage circles</div>
         </div>
       </div>
 
@@ -233,7 +255,7 @@ export default function CoverageHeatmap() {
             Coverage Map
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Showing {stats.totalPoints} completed jobs grouped into {boundedHeatmapData.length} mapped hotspot{boundedHeatmapData.length === 1 ? '' : 's'}.
+            Showing {stats.totalJobs} completed job{stats.totalJobs === 1 ? '' : 's'} grouped into {boundedHeatmapData.length} mapped hotspot{boundedHeatmapData.length === 1 ? '' : 's'}.
           </p>
         </div>
         {loading ? (
@@ -241,7 +263,12 @@ export default function CoverageHeatmap() {
             <PanelSkeleton rows={10} />
           </div>
         ) : (
-          <div className="h-[min(68vh,720px)] min-h-[520px]">
+          <div className="relative h-[min(68vh,720px)] min-h-[520px]">
+            {!showServiceDensity && !showTechnicianCoverage && (
+              <div role="status" className="pointer-events-none absolute inset-x-0 top-4 z-[500] mx-auto w-fit rounded-lg border border-amber-200 bg-white px-4 py-2 text-sm font-medium text-amber-800 shadow">
+                Both layers are hidden. Turn on Service density or Technician coverage.
+              </div>
+            )}
             <MapContainer
               center={mapCenter}
               zoom={11}
@@ -341,6 +368,27 @@ export default function CoverageHeatmap() {
               })}
             </MapContainer>
           </div>
+        )}
+
+        {!loading && rankedHotspots.length > 0 && (
+          <section aria-labelledby="busiest-hotspots-heading" className="border-t border-slate-200 p-4">
+            <h3 id="busiest-hotspots-heading" className="text-sm font-semibold text-slate-900">Busiest hotspots</h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Showing {Math.min(HOTSPOT_LIST_LIMIT, rankedHotspots.length)} of {rankedHotspots.length}, most completed jobs first.
+            </p>
+            <ol className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">
+              {rankedHotspots.slice(0, HOTSPOT_LIST_LIMIT).map((point) => (
+                <li key={`${point.lat},${point.lng}`} className="grid gap-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,1.4fr)_6rem_minmax(0,1.6fr)] sm:items-center">
+                  <span className="min-w-0 truncate font-medium text-slate-900" title={point.address || ''}>{point.address || 'Mapped service area'}</span>
+                  <span className="font-semibold text-blue-700">{point.count} job{point.count === 1 ? '' : 's'}</span>
+                  <span className="min-w-0 truncate text-xs text-slate-500">
+                    {getServiceBreakdown(point).map((service) => `${service.name} (${service.count})`).join(', ')}
+                    {(point.technicians || []).length ? ` · ${(point.technicians || []).map((tech) => tech.name).join(', ')}` : ''}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
         )}
 
         <div className="border-t border-slate-200 p-4">

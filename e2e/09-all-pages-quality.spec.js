@@ -35,7 +35,6 @@ const WORKSPACE_PAGES = [
     ['sales records', '/admin/sales-records'],
     ['analytics', '/admin/analytics'],
     ['reports', '/admin/reports'],
-    ['operations report', '/admin/operations-report'],
     ['after-sales cases', '/admin/after-sales-cases'],
     ['user management', '/admin/user-management'],
     ['settings', '/admin/settings'],

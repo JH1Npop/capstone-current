@@ -99,7 +99,8 @@ class AdminServicesViewSet(viewsets.ViewSet):
                     'usage_count': sum(usage.values()),
                 }, status=status.HTTP_400_BAD_REQUEST)
             service.delete()
-            return Response({'message': 'Service deleted'}, status=status.HTTP_204_NO_CONTENT)
+            # 204 must not carry a body; a body here broke the proxy and showed the delete as failed.
+            return Response(status=status.HTTP_204_NO_CONTENT)
         except ServiceType.DoesNotExist:
             return Response({'error': 'Service not found'}, status=status.HTTP_404_NOT_FOUND)
 

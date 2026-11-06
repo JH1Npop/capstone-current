@@ -502,6 +502,19 @@ export const fetchActivityLogSummary = async (filters = {}) => {
   }
 };
 
+// Every category and action that exists in the log, so each recorded kind can be filtered.
+export const fetchActivityLogFacets = async () => {
+  try {
+    const { data } = await api.get('/admin/activity-logs/facets/');
+    return {
+      categories: Array.isArray(data?.categories) ? data.categories : [],
+      actions: Array.isArray(data?.actions) ? data.actions : [],
+    };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load activity filters.'));
+  }
+};
+
 export const downloadActivityLogs = async (filters = {}) => {
   try {
     const response = await api.get('/admin/activity-logs/export/', {

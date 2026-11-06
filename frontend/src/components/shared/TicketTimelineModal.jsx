@@ -2,6 +2,7 @@ import { FiClock, FiX } from 'react-icons/fi';
 import StatusBadge from '../ui/StatusBadge';
 import { ListSkeleton } from '../ui/LoadingSkeleton';
 import { formatTicketId } from '../../utils/roleIds';
+import useEscapeKey from '../../hooks/useEscapeKey';
 
 const formatTimelineDate = (value) => {
   if (!value) return '-';
@@ -34,6 +35,7 @@ const SummaryPill = ({ label, value }) => (
 );
 
 export default function TicketTimelineModal({ ticket, events = [], loading = false, error = '', onClose }) {
+  useEscapeKey(Boolean(ticket), onClose);
   if (!ticket) return null;
 
   const ticketId = ticket.ticket_id || ticket.ticketId || ticket.id;
@@ -42,10 +44,10 @@ export default function TicketTimelineModal({ ticket, events = [], loading = fal
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-lg">
+      <div role="dialog" aria-modal="true" aria-labelledby="ticket-timeline-title" className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-lg">
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
           <div className="min-w-0">
-            <h2 className="text-xl font-bold text-slate-900">{formatTicketId(ticketId)}</h2>
+            <h2 id="ticket-timeline-title" className="text-xl font-bold text-slate-900">{formatTicketId(ticketId)}</h2>
             <p className="mt-1 text-sm text-slate-600">
               {serviceName} for {clientName}
             </p>

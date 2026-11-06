@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
@@ -10,11 +10,12 @@ import {
 } from '../../api/api';
 import { useAuth } from '../../context/AuthContext';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { FiCheckCircle, FiClock, FiMessageSquare, FiRefreshCw, FiSend } from 'react-icons/fi';
+import { FiCheckCircle, FiClock, FiMessageSquare, FiRefreshCw, FiSearch, FiSend } from 'react-icons/fi';
 import { formatSupportCaseId } from '../../utils/roleIds';
 import { MESSAGES_CHANGED_EVENT, startLiveRefresh } from '../../utils/liveUpdates';
 
 const CLOSED_STATUSES = ['resolved', 'closed'];
+const MAX_REPLY_LENGTH = 5000;
 
 const STATUS_LABELS = {
   open: 'Open',
@@ -32,7 +33,14 @@ const CATEGORY_LABELS = {
   warranty: 'Warranty'
 };
 
-
+const FILTERS = [
+  ['open', 'Open'],
+  ['waiting', 'Waiting for reply'],
+  ['new', 'New'],
+  ['in_review', 'In review'],
+  ['closed', 'Closed'],
+  ['all', 'All'],
+];
 
 const formatTime = (value) => {
   if (!value) return '';
@@ -49,6 +57,7 @@ const formatDate = (value) => {
 };
 
 const isOpenCase = (supportCase) => !CLOSED_STATUSES.includes(String(supportCase?.status || '').toLowerCase());
+const caseCode = (supportCase) => supportCase.case_code || formatSupportCaseId(supportCase.id);
 
 export default function AdminClientSupport() {
   const { user } = useAuth();
@@ -56,34 +65,66 @@ export default function AdminClientSupport() {
   const [messages, setMessages] = useState([]);
   const [selectedCaseId, setSelectedCaseId] = useState(null);
   const [statusFilter, setStatusFilter] = useState('open');
+  const [search, setSearch] = useState('');
   const [replyDrafts, setReplyDrafts] = useState({});
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [notice, setNotice] = useState('');
+  // Messages carry their tone; guessing from the word "Unable" showed some errors in green.
+  const [notice, setNoticeState] = useState({ text: '', tone: 'success' });
+  const setNotice = (text, tone = 'success') => setNoticeState({ text: text || '', tone });
+  const replyRef = useRef(null);
+  const refocusReply = useRef(false);
+
+  // Messages per support thread, oldest first.
+  const messagesByThread = useMemo(() => {
+    const threads = new Map();
+    messages.forEach((message) => {
+      if (message.roomType !== 'group' || message.ticketId) return;
+      const list = threads.get(message.groupKey) || [];
+      list.push(message);
+      threads.set(message.groupKey, list);
+    });
+    threads.forEach((list) => list.sort((first, second) => new Date(first.timestamp) - new Date(second.timestamp)));
+    return threads;
+  }, [messages]);
+
+  // A case is waiting when it is open and the client wrote the latest message.
+  const isWaiting = (supportCase) => {
+    if (!isOpenCase(supportCase)) return false;
+    const thread = (messagesByThread.get(supportCase.group_key) || []).filter((message) => !message.isDeleted);
+    const latest = thread[thread.length - 1];
+    return Boolean(latest && Number(latest.senderId) === Number(supportCase.client));
+  };
 
   const selectedCase = cases.find((supportCase) => supportCase.id === selectedCaseId) || null;
   const replyText = selectedCaseId == null ? '' : (replyDrafts[selectedCaseId] || '');
-  const selectedMessages = selectedCase
-    ? messages
-        .filter((message) => message.roomType === 'group' && message.groupKey === selectedCase.group_key && !message.ticketId)
-        .sort((first, second) => new Date(first.timestamp) - new Date(second.timestamp))
-    : [];
+  const selectedMessages = selectedCase ? (messagesByThread.get(selectedCase.group_key) || []) : [];
 
   const filteredCases = useMemo(() => {
-    const visible = statusFilter === 'open'
-      ? cases.filter(isOpenCase)
-      : statusFilter === 'closed'
-        ? cases.filter((supportCase) => !isOpenCase(supportCase))
-        : cases;
-
-    return [...visible].sort((first, second) => new Date(second.updated_at || 0) - new Date(first.updated_at || 0));
-  }, [cases, statusFilter]);
+    const needle = search.trim().toLowerCase();
+    const visible = cases.filter((supportCase) => {
+      if (statusFilter === 'open' && !isOpenCase(supportCase)) return false;
+      if (statusFilter === 'waiting' && !isWaiting(supportCase)) return false;
+      if (statusFilter === 'new' && supportCase.status !== 'open') return false;
+      if (statusFilter === 'in_review' && supportCase.status !== 'in_review') return false;
+      if (statusFilter === 'closed' && isOpenCase(supportCase)) return false;
+      if (!needle) return true;
+      return [caseCode(supportCase), supportCase.subject, supportCase.client_name, supportCase.ticket_code, CATEGORY_LABELS[supportCase.category]]
+        .some((value) => String(value || '').toLowerCase().includes(needle));
+    });
+    // Waiting cases first, then most recently updated.
+    return [...visible].sort((first, second) => (
+      Number(isWaiting(second)) - Number(isWaiting(first))
+      || new Date(second.updated_at || 0) - new Date(first.updated_at || 0)
+    ));
+  }, [cases, statusFilter, search, messagesByThread]);
 
   const stats = useMemo(() => ({
     open: cases.filter((supportCase) => supportCase.status === 'open').length,
     inReview: cases.filter((supportCase) => supportCase.status === 'in_review').length,
+    waiting: cases.filter(isWaiting).length,
     resolved: cases.filter((supportCase) => supportCase.status === 'resolved').length,
-  }), [cases]);
+  }), [cases, messagesByThread]);
 
   const load = async (silent = false) => {
     if (!silent && cases.length === 0) setLoading(true);
@@ -105,7 +146,7 @@ export default function AdminClientSupport() {
       if (!silent) {
         setCases([]);
         setMessages([]);
-        setNotice(error.message || 'Unable to load client support.');
+        setNotice(error.message || 'Unable to load client support.', 'error');
       }
     } finally {
       setLoading(false);
@@ -127,14 +168,20 @@ export default function AdminClientSupport() {
     }
   }, [filteredCases, selectedCaseId]);
 
-  const updateStatus = async (status) => {
+  useEffect(() => {
+    if (sending || !refocusReply.current) return;
+    refocusReply.current = false;
+    replyRef.current?.focus();
+  }, [sending]);
+
+  const updateStatus = async (status, { quiet = false } = {}) => {
     if (!selectedCase) return;
     try {
       const updatedCase = await updateCustomerSupportCase(selectedCase.id, { status });
       setCases((current) => current.map((item) => (item.id === updatedCase.id ? updatedCase : item)));
-      setNotice(`Support case marked ${STATUS_LABELS[status] || status}.`);
+      if (!quiet) setNotice(`${caseCode(selectedCase)} marked ${STATUS_LABELS[status] || status}.`);
     } catch (error) {
-      setNotice(error.message || 'Unable to update support case.');
+      setNotice(error.message || 'Unable to update support case.', 'error');
     }
   };
 
@@ -160,107 +207,132 @@ export default function AdminClientSupport() {
         return next;
       });
       if (targetCase.status === 'open') {
-        await updateStatus('in_review');
+        await updateStatus('in_review', { quiet: true });
+        setNotice(`Reply sent to ${targetCase.client_name}. ${caseCode(targetCase)} is now In Review.`);
+      } else {
+        setNotice(`Reply sent to ${targetCase.client_name}.`);
       }
     } catch (error) {
-      setNotice(error.message || 'Unable to send reply.');
+      setNotice(error.message || 'Unable to send reply.', 'error');
     } finally {
+      refocusReply.current = true;
       setSending(false);
     }
   };
 
+  const summaryCards = [
+    ['New', stats.open, 'new'],
+    ['In Review', stats.inReview, 'in_review'],
+    ['Waiting for reply', stats.waiting, 'waiting'],
+    ['Resolved', stats.resolved, 'closed'],
+  ];
+
   return (
     <Layout>
-      {notice ? (
-        <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
-          notice.includes('Unable') ? 'border-red-200 bg-red-50 text-red-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'
-        }`}>
-          {notice}
+      {notice.text ? (
+        <div
+          role={notice.tone === 'error' ? 'alert' : 'status'}
+          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+            notice.tone === 'error' ? 'border-red-200 bg-red-50 text-red-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          }`}
+        >
+          {notice.text}
         </div>
       ) : null}
 
-      <div className="mb-4">
-        <p className="text-sm text-slate-500">Review inquiries, reply to clients, and update case status.</p>
-      </div>
-
-      <section className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Open</p>
-          <p className="mt-2 text-3xl font-bold text-slate-950">{stats.open}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">In Review</p>
-          <p className="mt-2 text-3xl font-bold text-blue-600">{stats.inReview}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Resolved</p>
-          <p className="mt-2 text-3xl font-bold text-emerald-600">{stats.resolved}</p>
-        </div>
+      <section aria-label="Client support summary" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {summaryCards.map(([label, value, filter]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setStatusFilter(filter)}
+            aria-pressed={statusFilter === filter}
+            className={`rounded-xl border bg-white p-5 text-left shadow-sm transition hover:border-brand-300 hover:shadow-md ${statusFilter === filter ? 'border-brand-400 ring-1 ring-brand-200' : 'border-slate-200'}`}
+          >
+            <span className="block text-sm font-medium text-slate-500">{label}</span>
+            <span className="mt-2 block text-3xl font-bold text-slate-900">{value}</span>
+          </button>
+        ))}
       </section>
 
       <section className="mt-6 grid min-w-0 h-[34rem] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:h-[40rem] lg:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="min-h-0 min-w-0 flex flex-col border-b border-slate-200 lg:border-b-0 lg:border-r">
+        <aside className="min-h-0 min-w-0 flex flex-col border-b border-slate-200 lg:border-b-0 lg:border-r" aria-label="Support cases">
           <div className="flex-none flex items-center justify-between gap-3 border-b border-slate-100 p-4">
-            <h2 className="min-w-0 text-base font-semibold text-slate-950">Cases</h2>
+            <h2 className="min-w-0 text-base font-semibold text-slate-950">Cases <span className="text-sm font-normal text-slate-500">({filteredCases.length})</span></h2>
             <button
               type="button"
-              onClick={load}
+              onClick={() => load(false)}
               className="grid h-9 w-9 flex-none place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
               aria-label="Refresh client support"
             >
-              <FiRefreshCw size={15} />
+              <FiRefreshCw size={15} aria-hidden="true" />
             </button>
           </div>
-          <div className="flex-none flex gap-2 border-b border-slate-100 p-3">
-            {[
-              ['open', 'Open'],
-              ['closed', 'Closed'],
-              ['all', 'All']
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setStatusFilter(value)}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                  statusFilter === value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex-none space-y-2 border-b border-slate-100 p-3">
+            <label className="relative block">
+              <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              <span className="sr-only">Search support cases</span>
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search client, subject or case no."
+                className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {FILTERS.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setStatusFilter(value)}
+                  aria-pressed={statusFilter === value}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                    statusFilter === value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {loading ? (
               <ListSkeleton rows={5} compact />
             ) : filteredCases.length === 0 ? (
-              <div className="p-4 text-sm text-slate-500">No client support cases here.</div>
+              <div className="p-4 text-sm text-slate-500">{search.trim() ? `No support case matches "${search.trim()}".` : 'No client support cases here.'}</div>
             ) : (
-              filteredCases.map((supportCase) => (
-                <button
-                  key={supportCase.id}
-                  type="button"
-                  onClick={() => setSelectedCaseId(supportCase.id)}
-                  className={`min-w-0 w-full overflow-hidden rounded-xl p-3 text-left transition ${
-                    selectedCase?.id === supportCase.id ? 'bg-sky-50' : 'hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-950">
-                        [{supportCase.case_code || formatSupportCaseId(supportCase.id)}] {supportCase.subject}
-                      </p>
-                      <p className="mt-1 truncate text-xs text-slate-500">{supportCase.client_name}</p>
+              filteredCases.map((supportCase) => {
+                const waiting = isWaiting(supportCase);
+                return (
+                  <button
+                    key={supportCase.id}
+                    type="button"
+                    onClick={() => setSelectedCaseId(supportCase.id)}
+                    aria-current={selectedCase?.id === supportCase.id ? 'true' : undefined}
+                    className={`min-w-0 w-full overflow-hidden rounded-xl p-3 text-left transition ${
+                      selectedCase?.id === supportCase.id ? 'bg-sky-50' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-950">
+                          [{caseCode(supportCase)}] {supportCase.subject}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-slate-500">{supportCase.client_name}</p>
+                      </div>
+                      <StatusBadge status={supportCase.priority} size="sm" />
                     </div>
-                    <StatusBadge status={supportCase.priority} size="sm" />
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    <span>{CATEGORY_LABELS[supportCase.category] || supportCase.category}</span>
-                    <StatusBadge status={supportCase.status} size="sm" />
-                    <span>{formatDate(supportCase.updated_at)}</span>
-                  </div>
-                </button>
-              ))
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      <span>{CATEGORY_LABELS[supportCase.category] || supportCase.category}</span>
+                      <StatusBadge status={supportCase.status} size="sm" />
+                      {waiting ? <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">Client waiting</span> : null}
+                      <span>{formatDate(supportCase.updated_at)}</span>
+                    </div>
+                  </button>
+                );
+              })
             )}
           </div>
         </aside>
@@ -272,13 +344,13 @@ export default function AdminClientSupport() {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <FiMessageSquare className="text-slate-400" />
+                      <FiMessageSquare className="text-slate-400" aria-hidden="true" />
                       <h3 className="truncate text-base font-semibold text-slate-950">
-                        [{selectedCase.case_code || formatSupportCaseId(selectedCase.id)}] {selectedCase.subject}
+                        [{caseCode(selectedCase)}] {selectedCase.subject}
                       </h3>
                     </div>
                     <p className="mt-1 text-sm text-slate-500">
-                      {selectedCase.client_name} / {CATEGORY_LABELS[selectedCase.category] || selectedCase.category} / {selectedCase.priority} priority
+                      {selectedCase.client_name} / {CATEGORY_LABELS[selectedCase.category] || selectedCase.category} / {selectedCase.priority} priority / {STATUS_LABELS[selectedCase.status] || selectedCase.status}
                     </p>
                     {selectedCase.ticket_id ? (
                       <div className="mt-2">
@@ -298,7 +370,7 @@ export default function AdminClientSupport() {
                         onClick={() => updateStatus('in_review')}
                         className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                       >
-                        <FiClock size={14} /> Mark in review
+                        <FiClock size={14} aria-hidden="true" /> Mark in review
                       </button>
                     ) : null}
                     {!CLOSED_STATUSES.includes(selectedCase.status) ? (
@@ -307,7 +379,7 @@ export default function AdminClientSupport() {
                         onClick={() => updateStatus('resolved')}
                         className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
                       >
-                        <FiCheckCircle size={14} /> Resolve
+                        <FiCheckCircle size={14} aria-hidden="true" /> Resolve
                       </button>
                     ) : (
                       <button
@@ -322,20 +394,27 @@ export default function AdminClientSupport() {
                 </div>
               </header>
 
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-6">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-6" aria-label={`Conversation with ${selectedCase.client_name}`}>
                 {selectedMessages.length === 0 ? (
                   <div className="grid h-full place-items-center text-sm text-slate-500">No messages yet.</div>
                 ) : (
                   selectedMessages.map((message) => {
-                    const sentByStaff = message.senderId === user?.id;
+                    const fromClient = Number(message.senderId) === Number(selectedCase.client);
+                    const fromMe = message.senderId === user?.id;
+                    // Staff replies (yours or a colleague's) sit on the right; the client on the left.
+                    const author = fromMe ? 'You' : fromClient ? message.senderName : `${message.senderName} (staff)`;
                     return (
-                      <div key={message.id} className={`flex ${sentByStaff ? 'justify-end' : 'justify-start'}`}>
+                      <div key={message.id} className={`flex ${fromClient ? 'justify-start' : 'justify-end'}`}>
                         <div className={`max-w-[86%] rounded-2xl px-4 py-2.5 shadow-sm ${
-                          sentByStaff ? 'rounded-br-md bg-sky-600 text-white' : 'rounded-bl-md bg-white text-slate-950'
+                          fromClient
+                            ? 'rounded-bl-md bg-white text-slate-950'
+                            : fromMe
+                              ? 'rounded-br-md bg-sky-600 text-white'
+                              : 'rounded-br-md bg-indigo-100 text-indigo-950'
                         }`}>
-                          <p className="mb-1 text-xs font-semibold opacity-70">{sentByStaff ? 'You' : message.senderName}</p>
+                          <p className="mb-1 text-xs font-semibold opacity-70">{author}</p>
                           <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.isDeleted ? 'Message unsent' : message.text}</p>
-                          <p className={`mt-1 text-xs ${sentByStaff ? 'text-sky-100' : 'text-slate-400'}`}>{formatTime(message.timestamp)}</p>
+                          <p className={`mt-1 text-xs ${fromMe ? 'text-sky-100' : 'text-slate-500'}`}>{formatTime(message.timestamp)}</p>
                         </div>
                       </div>
                     );
@@ -343,9 +422,19 @@ export default function AdminClientSupport() {
                 )}
               </div>
 
-              <div className="border-t border-slate-200 bg-white p-3">
+              {/* Right padding keeps Send clear of the floating analytics assistant button. */}
+              <div className="border-t border-slate-200 bg-white p-3 pr-20">
+                {!isOpenCase(selectedCase) ? (
+                  <p className="mb-2 text-xs text-slate-500">This case is {STATUS_LABELS[selectedCase.status]?.toLowerCase() || 'closed'}. A reply keeps it that way; use Reopen if more work is needed.</p>
+                ) : null}
+                {replyText.length > MAX_REPLY_LENGTH - 500 ? (
+                  <p className="mb-1 text-right text-xs text-slate-500">{replyText.length} / {MAX_REPLY_LENGTH} characters</p>
+                ) : null}
                 <div className="flex items-end gap-2 rounded-2xl bg-slate-100 p-1.5">
                   <textarea
+                    ref={replyRef}
+                    aria-label={`Reply to ${selectedCase.client_name}`}
+                    maxLength={MAX_REPLY_LENGTH}
                     value={replyText}
                     onChange={(event) => {
                       const nextText = event.target.value;
@@ -369,7 +458,7 @@ export default function AdminClientSupport() {
                     className="grid h-10 w-10 flex-none place-items-center rounded-full bg-sky-600 text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                     aria-label="Send reply"
                   >
-                    <FiSend size={17} />
+                    <FiSend size={17} aria-hidden="true" />
                   </button>
                 </div>
               </div>

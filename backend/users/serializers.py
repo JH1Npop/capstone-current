@@ -907,6 +907,11 @@ class AdminSettingsSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({key: 'Enter a decimal coordinate, e.g. 13.9717.'})
             if not minimum <= number <= maximum:
                 raise serializers.ValidationError({key: f'Enter a value from {minimum} to {maximum}.'})
+        # These become public links, so only web addresses are accepted (never javascript: or data:).
+        for key, label in {'facebookUrl': 'Facebook page URL', 'mapUrl': 'Google Maps link'}.items():
+            raw = str(cleaned.get(key) or '').strip()
+            if raw and not raw.lower().startswith(('https://', 'http://')):
+                raise serializers.ValidationError({key: f'{label} must start with https://.'})
         return cleaned
 
     def validate_solarCalculatorSettings(self, value):
@@ -956,21 +961,52 @@ class AdminSettingsSerializer(serializers.ModelSerializer):
             if image_url and not image_url.startswith(('/', 'https://', 'http://')):
                 raise serializers.ValidationError(f'Promotion {index + 1} has an invalid image URL.')
 
+            def optional_number(field, minimum, maximum, label):
+                raw = promotion.get(field)
+                if raw in (None, ''):
+                    return ''
+                try:
+                    number = float(raw)
+                except (TypeError, ValueError):
+                    raise serializers.ValidationError(f'Promotion {index + 1} {label} must be a number.')
+                if not minimum <= number <= maximum:
+                    raise serializers.ValidationError(f'Promotion {index + 1} {label} must be from {minimum} to {maximum}.')
+                return raw
+
+            regular_price = optional_number('regularPrice', 0, 100_000_000, 'regular price')
+            promo_price = optional_number('promoPrice', 0, 100_000_000, 'promotional price')
+            if regular_price != '' and promo_price != '' and float(promo_price) > float(regular_price):
+                raise serializers.ValidationError(f'Promotion {index + 1} promotional price cannot be higher than the regular price.')
+            # 0 always meant "no panel" here, so it still saves as blank.
+            panel_wattage = '' if str(promotion.get('panelWattage') or '').strip() in ('', '0') else optional_number('panelWattage', 100, 1000, 'panel wattage')
+
+            dates = {}
+            for field, label in (('startDate', 'start date'), ('endDate', 'end date')):
+                raw = str(promotion.get(field) or '').strip()
+                if raw:
+                    try:
+                        serializers.DateField().run_validation(raw)
+                    except serializers.ValidationError:
+                        raise serializers.ValidationError(f'Promotion {index + 1} has an invalid {label}.')
+                dates[field] = raw
+            if dates['startDate'] and dates['endDate'] and dates['startDate'] > dates['endDate']:
+                raise serializers.ValidationError(f'Promotion {index + 1} end date cannot be before its start date.')
+
             normalized.append({
                 'id': str(promotion.get('id') or f'promotion-{index + 1}')[:80],
                 'name': name,
                 'description': str(promotion.get('description') or '').strip()[:500],
-                'regularPrice': promotion.get('regularPrice') or '',
-                'promoPrice': promotion.get('promoPrice') or '',
+                'regularPrice': regular_price,
+                'promoPrice': promo_price,
                 'imageUrl': image_url[:500],
                 'imageAssetId': promotion.get('imageAssetId') or None,
-                'startDate': str(promotion.get('startDate') or '')[:10],
-                'endDate': str(promotion.get('endDate') or '')[:10],
+                'startDate': dates['startDate'],
+                'endDate': dates['endDate'],
                 'featured': bool(promotion.get('featured', False)),
                 'active': bool(promotion.get('active', True)),
                 'ctaLabel': str(promotion.get('ctaLabel') or 'Learn more').strip()[:80],
                 'ctaUrl': cta_url[:500],
-                'panelWattage': promotion.get('panelWattage') or '',
+                'panelWattage': panel_wattage,
             })
         return normalized
 

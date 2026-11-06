@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FiUser, FiAlertCircle, FiArrowRight, FiFilter, FiCheckCircle, FiClipboard, FiRefreshCw, FiX } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import StatusBadge from '../../components/ui/StatusBadge';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import SLABadge, { formatSlaSummary } from '../../components/ui/SLABadge';
 import { formatClientId, formatRoleId, formatTechnicianId, formatTicketId } from '../../utils/roleIds';
 import { queueActionLabel } from '../../utils/dashboardHelpers';
@@ -126,6 +127,10 @@ export default function AdminDispatchBoard() {
   const [ticketSummary, setTicketSummary] = useState(null);
   const [equipmentPlan, setEquipmentPlan] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Find Best Match picks a lead only: the server clears crew and reserves the service's standard
+  // equipment. Ask before discarding a crew or an equipment plan the operator changed.
+  const [equipmentPlanEdited, setEquipmentPlanEdited] = useState(false);
+  const [confirmBestMatch, setConfirmBestMatch] = useState(false);
   // An inspection-first ticket is an inspection visit before its inspection (or while a held
   // inspection visit waits). After the office decision the ticket becomes an installation, so
   // Ready for Service, Awaiting Materials, and a held installation are dispatched as service work.
@@ -212,6 +217,7 @@ export default function AdminDispatchBoard() {
   }, [technicians]);
 
   useEffect(() => {
+    setEquipmentPlanEdited(false);
     if (!selectedTicket) {
       setEquipmentPlan([]);
       return;
@@ -325,16 +331,30 @@ export default function AdminDispatchBoard() {
     }, 0);
   };
 
+  const requestBestMatch = () => {
+    if (!selectedTicket) return;
+    if (selectedCrewIds.length > 0 || (equipmentPlanEdited && !selectedTicketIsInspection)) {
+      setConfirmBestMatch(true);
+      return;
+    }
+    autoAssignTicket();
+  };
+
   const autoAssignTicket = async () => {
+    setConfirmBestMatch(false);
     if (!selectedTicket) {
       setMessage('Select a job before auto-assigning.');
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const result = await autoAssignTechnician({ ticketId: selectedTicket.id });
       await loadData();
-      setMessage(`Auto-assigned ${formatTicketId(selectedTicket.id)} to ${result.technician?.username || 'technician'}.`);
+      const technicianName = technicians.find((tech) => Number(tech.id) === Number(result.technician?.id))?.name
+        || result.technician?.username
+        || 'technician';
+      setMessage(`Auto-assigned ${formatTicketId(selectedTicket.id)} to ${technicianName}.`);
       setAssignmentInsight(result.assignment_summary || '');
       setSelectedTicket(null);
       setSelectedTech(null);
@@ -342,8 +362,11 @@ export default function AdminDispatchBoard() {
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setError(err.message || 'Auto-assignment failed.');
-      setTimeout(() => setError(''), 4000);
+      // Same reading time as manual-assignment refusals.
+      setTimeout(() => setError(''), 8000);
       setAssignmentInsight('');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -355,6 +378,10 @@ export default function AdminDispatchBoard() {
     .filter((ticket) => ticket.assignedTechnicianId && !['completed', 'cancelled'].includes(ticket.status))
     .sort((firstTicket, secondTicket) => new Date(secondTicket.assignedAt || 0) - new Date(firstTicket.assignedAt || 0));
   const totalPages = Math.ceil(assignedTickets.length / ITEMS_PER_PAGE);
+  // Keep the page in range when assignments finish or are removed after a refresh.
+  useEffect(() => {
+    if (currentPage > Math.max(1, totalPages)) setCurrentPage(Math.max(1, totalPages));
+  }, [currentPage, totalPages]);
 
 const paginatedAssignedTickets = assignedTickets.slice(
   (currentPage - 1) * ITEMS_PER_PAGE,
@@ -413,16 +440,19 @@ const paginatedAssignedTickets = assignedTickets.slice(
         : 'Add inventory items before building an equipment plan.');
       return;
     }
+    setEquipmentPlanEdited(true);
     setEquipmentPlan((currentPlan) => [...currentPlan, { item: Number(nextEquipmentItem.id), quantity: '1' }]);
   };
 
   const updateEquipmentPlanRow = (index, updates) => {
+    setEquipmentPlanEdited(true);
     setEquipmentPlan((currentPlan) => currentPlan.map((entry, entryIndex) => (
       entryIndex === index ? { ...entry, ...updates } : entry
     )));
   };
 
   const removeEquipmentPlanRow = (index) => {
+    setEquipmentPlanEdited(true);
     setEquipmentPlan((currentPlan) => currentPlan.filter((_, entryIndex) => entryIndex !== index));
   };
   const activeQueueCount = ticketSummary?.activeQueue ?? tickets.filter((ticket) => !['completed', 'cancelled'].includes(ticket.status)).length;
@@ -752,8 +782,8 @@ const paginatedAssignedTickets = assignedTickets.slice(
                     </button>
                     <button
                       type="button"
-                      onClick={autoAssignTicket}
-                      disabled={!selectedTicket}
+                      onClick={requestBestMatch}
+                      disabled={!selectedTicket || isSubmitting}
                       className="inline-flex flex-1 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-surface-200 disabled:bg-surface-100 disabled:text-slate-400"
                     >
                       Find Best Match
@@ -1068,7 +1098,7 @@ const paginatedAssignedTickets = assignedTickets.slice(
                       <button
                         type="button"
                         onClick={() => editAssignment(ticket)}
-                        aria-label="Edit assignment"
+                        aria-label={`Edit assignment for ${formatTicketId(ticket.id)}`}
                         className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-800"
                       >
                           Edit
@@ -1135,6 +1165,19 @@ const paginatedAssignedTickets = assignedTickets.slice(
         </div>
       </div>
     
+      {confirmBestMatch && selectedTicket && (
+        <ConfirmationDialog
+          title="Replace your selections?"
+          message={`Find Best Match chooses a lead technician for ${formatTicketId(selectedTicket.id)} on its own. ${selectedCrewIds.length ? 'The crew you selected will be removed. ' : ''}${equipmentPlanEdited && !selectedTicketIsInspection ? "Your equipment changes are not used; the service's standard equipment is reserved instead." : ''}`}
+          tone="warning"
+          icon="warning"
+          confirmLabel="Find Best Match anyway"
+          cancelLabel="Keep my selections"
+          onCancel={() => setConfirmBestMatch(false)}
+          onConfirm={autoAssignTicket}
+        />
+      )}
+
       {/* Toast Notifications */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-sm pointer-events-none">
         {message && (

@@ -3,6 +3,7 @@ import { FiAlertCircle, FiCamera, FiCheckCircle, FiCheckSquare, FiClock, FiFileT
 import StatusBadge from '../ui/StatusBadge';
 import { fetchInspectionDetails } from '../../api/admin';
 import { formatTicketId } from '../../utils/roleIds';
+import useEscapeKey from '../../hooks/useEscapeKey';
 
 const formatField = (value) => (value ? 'Yes' : 'No');
 
@@ -34,6 +35,7 @@ const NoteBlock = ({ title, value, className }) => (
 );
 
 export default function InspectionDetailsModal({ ticket, onClose }) {
+  useEscapeKey(Boolean(ticket), onClose);
   const [inspection, setInspection] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -70,15 +72,16 @@ export default function InspectionDetailsModal({ ticket, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-4xl overflow-hidden rounded-xl bg-white shadow-lg">
+      <div role="dialog" aria-modal="true" aria-labelledby="inspection-details-title" className="w-full max-w-4xl overflow-hidden rounded-xl bg-white shadow-lg">
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
           <div className="min-w-0">
-            <h3 className="text-xl font-bold text-slate-900">{ticketLabel}</h3>
+            <h3 id="inspection-details-title" className="text-xl font-bold text-slate-900">{ticketLabel}</h3>
             <p className="mt-1 text-sm text-slate-600">
               {serviceLabel} for {clientLabel}. Review the site conditions, checklist completion, and any follow-up notes in one place.
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
             aria-label="Close inspection details dialog"

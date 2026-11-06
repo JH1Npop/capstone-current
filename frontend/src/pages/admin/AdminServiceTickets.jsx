@@ -4,7 +4,9 @@ import 'leaflet/dist/leaflet.css';
 import { FiCalendar, FiCheck, FiClipboard, FiClock, FiDownload, FiMap, FiPlus, FiRefreshCw, FiX, FiMoreVertical, FiCheckCircle, FiXCircle, FiCheckSquare } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { useAuth } from '../../context/AuthContext';
+import useEscapeKey from '../../hooks/useEscapeKey';
 import {
+  ADMIN_JOB_HISTORY_CAPABILITIES,
   SERVICE_REQUEST_REVIEW_CAPABILITIES,
   SERVICE_TICKET_MANAGE_CAPABILITIES,
   SUPERVISOR_DISPATCH_CAPABILITIES,
@@ -33,7 +35,6 @@ import {
   fetchTicketTimeline,
   downloadTicketDocument,
   reverseGeocodeLocation,
-  rejectServiceRequest,
   rescheduleServiceTicket,
   searchLocations,
   terminateServiceTicketForClientWithdrawal
@@ -150,6 +151,8 @@ export default function AdminServiceTickets() {
   const canReviewRequests = hasAnyCapability(user, SERVICE_REQUEST_REVIEW_CAPABILITIES);
   const canManageTickets = hasAnyCapability(user, SERVICE_TICKET_MANAGE_CAPABILITIES);
   const canDispatch = hasAnyCapability(user, SUPERVISOR_DISPATCH_CAPABILITIES);
+  // Job History is not part of the default admin role (users/rbac.py), so only link to it when allowed.
+  const canOpenJobHistory = hasAnyCapability(user, ADMIN_JOB_HISTORY_CAPABILITIES);
   const [tickets, setTickets] = useState([]);
   const [clients, setClients] = useState([]);
   const [serviceTypes, setServiceTypes] = useState([]);
@@ -178,9 +181,6 @@ export default function AdminServiceTickets() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [rejectDecision, setRejectDecision] = useState(null);
-  const [rejectReason, setRejectReason] = useState('');
-  const [rejectingTicket, setRejectingTicket] = useState(false);
   const [terminationTarget, setTerminationTarget] = useState(null);
   const [terminationReason, setTerminationReason] = useState('');
   const [terminatingTicket, setTerminatingTicket] = useState(false);
@@ -432,6 +432,9 @@ export default function AdminServiceTickets() {
     setSearchParams(nextSearchParams, { replace: true });
   };
 
+  // Escape closes the ticket actions menu (the timeline and inspection dialogs handle their own).
+  useEscapeKey(Boolean(actionModalTicket), closeTicketActions);
+
   const openTimelineModal = async (ticket) => {
     setTimelineTicket(ticket);
     setTimelineEvents([]);
@@ -448,22 +451,6 @@ export default function AdminServiceTickets() {
     }
   };
 
-  const handleApproveTicket = async (ticketId) => {
-    try {
-      await approveServiceRequest(ticketId);
-      await loadData();
-      closeTicketActions();
-      setError('');
-    } catch (err) {
-      setError(err.message || 'Unable to approve ticket.');
-    }
-  };
-
-  const handleRejectTicket = async (ticketId) => {
-    setRejectDecision({ id: ticketId, label: formatTicketId(ticketId) });
-    setRejectReason('');
-  };
-
   const handleDownloadFieldServiceReport = async (ticket) => {
     setDocumentDownloadId(ticket.id);
     setError(null);
@@ -473,23 +460,6 @@ export default function AdminServiceTickets() {
       setError(downloadError.message);
     } finally {
       setDocumentDownloadId(null);
-    }
-  };
-
-  const confirmRejectTicket = async () => {
-    if (!rejectDecision) return;
-    setRejectingTicket(true);
-    try {
-      await rejectServiceRequest(rejectDecision.id, rejectReason.trim() || 'Request rejected during admin review.');
-      await loadData();
-      closeTicketActions();
-      setRejectDecision(null);
-      setRejectReason('');
-      setError('');
-    } catch (err) {
-      setError(err.message || 'Unable to reject ticket.');
-    } finally {
-      setRejectingTicket(false);
     }
   };
 
@@ -688,12 +658,13 @@ export default function AdminServiceTickets() {
               <FiPlus className="mr-2" />
               Create Walk-in Request
             </button>}
-            <button
+            {canOpenJobHistory && <button
+              type="button"
               onClick={() => navigate('/admin/job-history')}
               className="inline-flex items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
             >
               <FiCheck className="mr-2" /> Job History
-            </button>
+            </button>}
         </div>
       </section>
 
@@ -791,13 +762,13 @@ export default function AdminServiceTickets() {
         <div className="stat-card p-4">
           <p className="text-[13px] font-medium text-slate-500">Completed</p>
           <p className="mt-1 text-3xl font-bold text-emerald-600">{completedCount}</p>
-          <button
+          {canOpenJobHistory && <button
             type="button"
             onClick={() => navigate('/admin/job-history')}
             className="mt-2 text-xs font-semibold text-emerald-700 hover:text-emerald-900"
           >
             View history
-          </button>
+          </button>}
         </div>
       </section>
 
@@ -862,7 +833,7 @@ export default function AdminServiceTickets() {
             ) : error && sortedTickets.length === 0 ? null : sortedTickets.length === 0 ? (
               <EmptyState
                 title="No active tickets found"
-                description="No active tickets match the current queue view or filters. Completed work is available in Job History."
+                description={`No active tickets match the current queue view or filters.${canOpenJobHistory ? ' Completed work is available in Job History.' : ''}`}
                 compact
               />
             ) : paginatedTickets.map((ticket) => (
@@ -965,7 +936,7 @@ export default function AdminServiceTickets() {
                     <td colSpan={6} className="p-4">
                       <EmptyState
                         title="No active tickets found"
-                        description="No active tickets match the current queue view or filters. Completed work is available in Job History."
+                        description={`No active tickets match the current queue view or filters.${canOpenJobHistory ? ' Completed work is available in Job History.' : ''}`}
                       />
                     </td>
                   </tr>
@@ -1093,16 +1064,17 @@ export default function AdminServiceTickets() {
       />
 
       {actionModalTicket && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-lg">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" onMouseDown={(event) => event.target === event.currentTarget && closeTicketActions()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="ticket-actions-title" className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-lg">
             <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
               <div className="min-w-0">
-                <h3 className="text-xl font-bold text-slate-900">{formatTicketId(actionModalTicket.id)}</h3>
+                <h3 id="ticket-actions-title" className="text-xl font-bold text-slate-900">{formatTicketId(actionModalTicket.id)}</h3>
                 <p className="mt-1 line-clamp-2 text-sm text-slate-600">
                   {actionModalTicket.service} for {actionModalTicket.clientFullname}
                 </p>
               </div>
               <button
+                type="button"
                 onClick={closeTicketActions}
                 className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
                 aria-label="Close ticket actions dialog"
@@ -1273,34 +1245,6 @@ export default function AdminServiceTickets() {
         </ConfirmationDialog>
       )}
 
-      {rejectDecision && (
-        <ConfirmationDialog
-          title="Reject service request?"
-          message={`${rejectDecision.label} will be rejected and the client can be notified with the reason below.`}
-          tone="danger"
-          icon="warning"
-          confirmLabel="Reject request"
-          cancelLabel="Keep request"
-          loading={rejectingTicket}
-          onCancel={() => {
-            setRejectDecision(null);
-            setRejectReason('');
-          }}
-          onConfirm={confirmRejectTicket}
-        >
-          <label className="block">
-            <span className="text-sm font-semibold text-slate-700">Reason</span>
-            <textarea
-              value={rejectReason}
-              onChange={(event) => setRejectReason(event.target.value)}
-              rows={3}
-              maxLength={240}
-              placeholder="Briefly explain why this request is being rejected."
-              className="mt-2 w-full resize-none rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
-            />
-          </label>
-        </ConfirmationDialog>
-      )}
     </Layout>
   );
 }
