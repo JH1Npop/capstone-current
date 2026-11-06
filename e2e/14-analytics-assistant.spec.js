@@ -50,4 +50,33 @@ test.describe('Analytics assistant - typed questions', () => {
     expect(asked).toEqual(TYPED_QUESTIONS); // neither the greeting nor the unrelated request reached the AI
     await page.screenshot({ path: 'test-results/screenshots/14-assistant-typed-questions.png' });
   });
+  test('14.2 - Without the AI service the same questions still get real built-in answers', async ({ page }) => {
+    await seedAuthState(page, loadAuthStateFromBackend('superadmin_test'));
+    await page.addInitScript(() => window.localStorage.setItem('afn:analytics-assistant-position', JSON.stringify({ x: 12, y: 12 })));
+    // The server answers the way it does when no Gemini key is set or the AI does not respond.
+    await page.route('**/api/admin/analytics/ai-summary/**', (route) => route.fulfill({ json: { summary: 'local', source: 'local', configured: false, analytics: {} } }));
+    await page.goto('/admin/analytics');
+    await page.getByRole('button', { name: 'Open analytics assistant' }).click();
+    const panel = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Analytics Assistant' }) });
+    await expect(panel.getByRole('button', { name: 'Refresh assistant data' })).toBeEnabled({ timeout: 60000 });
+    const input = panel.getByPlaceholder('Ask about analytics or forecasts...');
+    const expected = [
+      ['How many requests did we get this month?', /service requests? in the selected period/],
+      ['How many tickets are pending?', /active tickets? right now/],
+      ['Which service is requested the most?', /requests?/],
+      ['Who is the best technician?', /top performer|technician/i],
+      ['What is our total revenue?', /confirmed sales?|No confirmed sales/],
+      ['How many clients do we have?', /new clients? in the selected period/],
+    ];
+    for (const [question, answer] of expected) {
+      await input.fill(question);
+      await panel.getByRole('button', { name: 'Ask analytics assistant' }).click();
+      await expect(panel.getByText('Reading the latest analytics and generating an answer...')).toHaveCount(0, { timeout: 30000 });
+      const last = panel.locator('.bg-slate-50 > div').last();
+      await expect(last).toContainText(answer);
+      await expect(last).not.toContainText('I only answer from loaded analytics');
+      await expect(last).not.toContainText('I do not have a prepared answer');
+    }
+    await page.screenshot({ path: 'test-results/screenshots/14-assistant-built-in-answers.png' });
+  });
 });

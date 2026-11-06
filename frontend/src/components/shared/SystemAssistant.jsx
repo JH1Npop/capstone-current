@@ -316,6 +316,14 @@ function includesAny(text, terms) {
   return terms.some((term) => text.includes(term));
 }
 
+// Whole-word check (a plain "s" plural also counts), so "client" matches "clients" but not "clientele".
+function hasWord(text, words) {
+  const tokens = new Set(String(text || '').split(/[^a-z0-9-]+/));
+  return words.some((word) => tokens.has(word) || tokens.has(`${word}s`));
+}
+
+const COUNT_WORDS = ['how many', 'number of', 'count', 'total', 'did we get', 'did we have', 'received', 'so far'];
+
 function plural(value, singular, pluralText = `${singular}s`) {
   return `${value} ${Number(value) === 1 ? singular : pluralText}`;
 }
@@ -658,6 +666,46 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
       'I need to load the latest analytics first. Open me again or tap refresh so I can read the dashboard, forecast, technician performance, SLA, inventory, and coverage data.',
       'assistant data availability check',
       'high'
+    );
+  }
+
+  // Built-in answers for the everyday questions people type, so they still get an answer when the AI service is
+  // not configured or does not respond. Figures follow the period and filters selected on the Analytics page.
+  const periodKpis = analytics?.kpis || {};
+  const asksForCount = includesAny(normalizedQuestion, COUNT_WORDS);
+  if (includesAny(normalizedQuestion, ['revenue', 'income', 'earning', 'earned', 'profit', 'money']) || hasWord(normalizedQuestion, ['sale'])) {
+    const salesKpis = analytics?.sales?.kpis || {};
+    const amount = salesKpis.confirmed_sales_amount?.current;
+    const count = getNumber(salesKpis.confirmed_sales_count?.current);
+    if (analytics?.sales?.kpis) {
+      return withSource(
+        count
+          ? `${plural(count, 'confirmed sale')} in the selected period, worth ${salesKpis.confirmed_sales_amount?.currency || 'PHP'} ${getNumber(amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} in total. Only confirmed, non-voided sales records count; quotations and drafts are not revenue.`
+          : 'No confirmed sales were recorded in the selected period, so there is no revenue to report yet. Quotations and draft sales records are not counted.',
+        'confirmed sales records',
+        'high'
+      );
+    }
+  }
+  if (hasWord(normalizedQuestion, ['request']) && asksForCount) {
+    return withSource(
+      `${plural(getNumber(overview.totalRequests, analytics?.totalRequests), 'service request')} in the selected period, and ${plural(getNumber(overview.completedRequests, analytics?.completedRequests), 'completed job')}. Change the dates on the Analytics page to count a different period.`,
+      'analytics overview',
+      'high'
+    );
+  }
+  if (hasWord(normalizedQuestion, ['ticket', 'job']) && (asksForCount || hasWord(normalizedQuestion, ['pending', 'open', 'active']))) {
+    return withSource(
+      `${plural(getNumber(dashboardOverview.active_tickets), 'active ticket')} right now, of which ${plural(getNumber(overview.pendingRequests, analytics?.pendingRequests), 'ticket')} ${getNumber(overview.pendingRequests, analytics?.pendingRequests) === 1 ? 'has' : 'have'} not started yet. ${plural(getNumber(dashboardOverview.pending_approvals), 'client request')} ${getNumber(dashboardOverview.pending_approvals) === 1 ? 'is' : 'are'} waiting for approval. In the selected period: ${plural(getNumber(periodKpis.total_tickets), 'ticket')}, ${getNumber(periodKpis.completed_tickets)} completed.`,
+      'live dashboard and analytics data',
+      'high'
+    );
+  }
+  if (hasWord(normalizedQuestion, ['client', 'customer']) && asksForCount) {
+    return withSource(
+      `${plural(getNumber(periodKpis.new_clients), 'new client')} in the selected period. The analytics do not keep a separate all-time client total; User Management lists every client account.`,
+      'analytics overview',
+      'medium'
     );
   }
 
@@ -1046,7 +1094,7 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
     return `After-sales status: ${plural(openCases, 'open case')} and ${plural(overdueCases, 'overdue case')}. ${afterSalesCases[0] ? `Recent case: ${afterSalesCases[0].summary || `#${afterSalesCases[0].id}`}.` : 'Use After-Sales Cases to review follow-ups.'}`;
   }
 
-  if (includesAny(normalizedQuestion, ['gps', 'map', 'maps', 'location', 'tracking', 'route'])) {
+  if (includesAny(normalizedQuestion, ['gps', 'tracking', 'route'])) {
     return withSource(OUT_OF_SCOPE_RESPONSE, 'analytics assistant scope', 'high');
   }
 
@@ -1054,23 +1102,23 @@ function buildAssistantAnswer(question, analytics, technicianPerformance = [], d
     return withSource(OUT_OF_SCOPE_RESPONSE, 'analytics assistant scope', 'high');
   }
 
-  if (includesAny(normalizedQuestion, ['pwa', 'install', 'offline', 'app', 'phone', 'mobile'])) {
+  if (includesAny(normalizedQuestion, ['pwa', 'install the app', 'offline mode', 'mobile app', 'phone app'])) {
     return withSource(OUT_OF_SCOPE_RESPONSE, 'analytics assistant scope', 'high');
   }
 
-  if (includesAny(normalizedQuestion, ['checklist', 'inspection', 'step', 'proof', 'finish', 'finished', 'completed job'])) {
+  if (includesAny(normalizedQuestion, ['checklist', 'proof photo', 'completion proof'])) {
     return withSource(OUT_OF_SCOPE_RESPONSE, 'analytics assistant scope', 'high');
   }
 
-  if (includesAny(normalizedQuestion, ['report', 'reports', 'analytics', 'chart', 'paper', 'chapter'])) {
+  if (includesAny(normalizedQuestion, ['paper', 'chapter'])) {
     return withSource(OUT_OF_SCOPE_RESPONSE, 'analytics assistant scope', 'high');
   }
 
-  if (includesAny(normalizedQuestion, ['user', 'account', 'role', 'permission', 'capability', 'client', 'admin', 'superadmin'])) {
+  if (includesAny(normalizedQuestion, ['password', 'role', 'permission', 'capability', 'superadmin'])) {
     return withSource(OUT_OF_SCOPE_RESPONSE, 'analytics assistant scope', 'high');
   }
 
-  if (includesAny(normalizedQuestion, ['client flow', 'customer', 'service request', 'request flow', 'process'])) {
+  if (includesAny(normalizedQuestion, ['client flow', 'request flow', 'process'])) {
     return withSource(OUT_OF_SCOPE_RESPONSE, 'analytics assistant scope', 'high');
   }
 
@@ -1139,7 +1187,17 @@ export default function SystemAssistant() {
         activeWorkspace: activeWorkspaceData || {},
         activeWorkspaceName: selectedWorkspace,
         forecasting: forecastingData || {},
+        sales: selectedWorkspace === 'sales' ? (activeWorkspaceData || null) : null,
       });
+      // Sales figures (for revenue questions) load afterwards so they never delay the assistant becoming ready.
+      if (selectedWorkspace !== 'sales') {
+        fetchAdminAnalytics({ ...selectedFilters, workspace: 'sales' })
+          .then((salesData) => {
+            if (loadId !== loadRequestRef.current || !salesData) return;
+            setAnalytics((current) => (current ? { ...current, sales: salesData } : current));
+          })
+          .catch(() => {});
+      }
       setDashboardStats(dashboardData || {});
       setTechnicianPerformance(Array.isArray(performanceResponse?.data) ? performanceResponse.data : []);
       setTechnicianPerformanceAllTime(Array.isArray(allTimePerformanceResponse?.data) ? allTimePerformanceResponse.data : []);
