@@ -325,12 +325,14 @@ test.describe('Admin Workspace - All Pages', () => {
     const configuration = page.getByRole('dialog', { name: /Configure availability for/ });
     await expect(configuration).toBeVisible();
     await expect(configuration.getByText('3 jobs maximum per date')).toBeVisible();
+    // The detailed form (part of day, limited, date range) is folded under More options.
+    await configuration.getByText(/^More options/).click();
     await configuration.getByRole('button', { name: 'Bulk Edit' }).click();
     await expect(configuration.getByLabel('Start date')).toBeVisible();
     await expect(configuration.getByLabel('End date')).toBeVisible();
     await configuration.getByRole('button', { name: 'Bulk Edit' }).click();
     await configuration.getByLabel('Affected time').selectOption('afternoon');
-    await configuration.getByLabel('Reason').fill('E2E team safety training');
+    await configuration.getByLabel('Reason', { exact: true }).fill('E2E team safety training');
 
     const closeResponse = page.waitForResponse((response) => (
       response.url().includes('/api/admin/calendar/closures/')
@@ -352,7 +354,7 @@ test.describe('Admin Workspace - All Pages', () => {
     expect((await reopenResponse).status()).toBe(200);
     await expect(restrictions.getByText('No manual restrictions for this date.')).toBeVisible();
 
-    await configuration.getByLabel('Reason').fill('Unsaved availability note');
+    await configuration.getByLabel('Reason', { exact: true }).fill('Unsaved availability note');
     await configuration.getByRole('button', { name: 'Close availability configuration' }).click();
     const discardDialog = page.getByRole('dialog', { name: 'Discard availability changes?' });
     await expect(discardDialog).toBeVisible();

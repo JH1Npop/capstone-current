@@ -112,3 +112,9 @@ Read-only addition: every version response now carries a plain-language `checkli
 | --- | --- | --- | --- |
 | `/api/users/register/` | POST | public (unchanged) | New write-only field `accept_policies`. A **self-registering client** (no signed-in user) must send `true`, or the request is refused with 400 `{accept_policies: ...}` and no account is created. When accepted, the user's `policy_accepted_at` (time) and `policy_version` (`users/policies.py` `POLICY_VERSION`) are stored. Accounts created by a signed-in superadmin are not asked. |
 | `/privacy`, `/terms` | GET (SPA) | public | Privacy Policy and Terms of Service pages; linked from the landing footer and the register form. |
+
+## Calendar availability: separate days and whole-day reopen, added 2026-11-06
+
+| Route | Method | Capability (server) | Notes |
+| --- | --- | --- | --- |
+| `/api/admin/calendar/closures/` | POST | supervisor dispatch capabilities (unchanged) | New optional `dates` list (1 to 93 `YYYY-MM-DD` dates, any spacing) instead of `start_date`/`end_date`; all dates are changed in one transaction. Same rules: no past dates, a reason of at least 3 characters to close or limit, at most 255 characters. New `time_slot: "any"`, allowed only with `action: "reopen"`, reopens every closed or limited part of the chosen dates. Used by the calendar's **Quick change** card and **Select days** mode. |

@@ -29,6 +29,9 @@ const statusMeta = {
   closed: { label: 'Closed', tone: 'bg-slate-100 text-slate-800 ring-slate-300' },
 };
 
+// One-click reasons for closing a date. "Other" asks for a short typed reason (the server needs at least 3 characters).
+export const QUICK_CLOSE_REASONS = ['Holiday', 'Fully booked', 'Company event', 'Other'];
+
 const formatDate = (dateKey) => {
   const date = new Date(`${dateKey}T00:00:00`);
   return Number.isNaN(date.getTime())
@@ -59,6 +62,8 @@ export default function CalendarAvailabilityConfigurationPanel({
   onApplyOverride,
   onReopen,
   onReopenClosure,
+  onQuickClose,
+  onQuickReopen,
   onRequestClose,
   onDirtyChange,
 }) {
@@ -75,6 +80,9 @@ export default function CalendarAvailabilityConfigurationPanel({
   const [rangeEnd, setRangeEnd] = useState(selectedDateKey);
   const [overrideDirty, setOverrideDirty] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
+  const [quickReason, setQuickReason] = useState(QUICK_CLOSE_REASONS[0]);
+  const [quickOtherReason, setQuickOtherReason] = useState('');
+  const [quickError, setQuickError] = useState('');
   const today = useMemo(() => {
     const now = new Date();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -136,6 +144,9 @@ export default function CalendarAvailabilityConfigurationPanel({
     setReasonError('');
     setBulkEdit(false);
     setOverrideDirty(false);
+    setQuickReason(QUICK_CLOSE_REASONS[0]);
+    setQuickOtherReason('');
+    setQuickError('');
   }, [open, selectedDateKey]);
 
   const dirty = overrideDirty;
@@ -153,6 +164,17 @@ export default function CalendarAvailabilityConfigurationPanel({
   const isPast = selectedDateKey < today;
 
   if (!open) return null;
+
+  const dayHasRestriction = closures.length > 0;
+  const quickClose = async () => {
+    const chosenReason = quickReason === 'Other' ? quickOtherReason.trim() : quickReason;
+    if (chosenReason.length < 3) {
+      setQuickError('Type a reason of at least 3 characters.');
+      return;
+    }
+    setQuickError('');
+    await onQuickClose?.({ reason: chosenReason });
+  };
 
   const performOverrideAction = async (kind) => {
     const startDate = bulkEdit ? rangeStart : selectedDateKey;
@@ -238,6 +260,49 @@ export default function CalendarAvailabilityConfigurationPanel({
             </div>
           )}
 
+          <section aria-labelledby="quick-availability-title" className="mb-5 rounded-xl border border-brand-200 bg-brand-50/60 p-4">
+            <h3 id="quick-availability-title" className="text-sm font-semibold text-slate-900">Quick change</h3>
+            {isPast ? (
+              <p className="mt-2 text-xs text-slate-500">Past dates cannot be changed.</p>
+            ) : dayHasRestriction ? (
+              <>
+                <p className="mt-1 text-xs text-slate-600">This date has a closure or limit. Reopen it to take new bookings again.</p>
+                <button type="button" onClick={() => onQuickReopen?.()} disabled={saving || dataUnavailable} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+                  <FiUnlock /> {saving ? 'Saving...' : 'Reopen this day'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-xs text-slate-600">
+                  Close the whole day to new bookings.{availability?.booked ? ` ${availability.booked} booked visit${availability.booked === 1 ? '' : 's'} will stay scheduled.` : ''}
+                </p>
+                <div role="radiogroup" aria-label="Reason for closing" className="mt-3 flex flex-wrap gap-2">
+                  {QUICK_CLOSE_REASONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={quickReason === option}
+                      onClick={() => { setQuickReason(option); setQuickError(''); }}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${quickReason === option ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-brand-300'}`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+                {quickReason === 'Other' ? (
+                  <label className="mt-2 block text-xs font-semibold text-slate-600">Reason
+                    <input value={quickOtherReason} maxLength={255} onChange={(event) => { setQuickOtherReason(event.target.value); setQuickError(''); }} placeholder="Why is this date closed?" className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal" />
+                  </label>
+                ) : null}
+                {quickError ? <p className="mt-1 text-xs font-medium text-rose-700">{quickError}</p> : null}
+                <button type="button" onClick={quickClose} disabled={saving || dataUnavailable} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
+                  <FiLock /> {saving ? 'Saving...' : 'Close this day'}
+                </button>
+              </>
+            )}
+          </section>
+
           <section aria-labelledby="slot-availability-title">
             <div className="flex items-center justify-between gap-3">
               <h3 id="slot-availability-title" className="text-sm font-semibold text-slate-900">Current booking position</h3>
@@ -270,7 +335,9 @@ export default function CalendarAvailabilityConfigurationPanel({
             </div>
           </section>
 
-          <section className="mt-5 border-t border-slate-200 pt-5" aria-labelledby="override-title">
+          <details className="mt-5 rounded-xl border border-slate-200 bg-white px-3 py-2">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-800">More options: part of the day, limited, or a date range</summary>
+          <section className="mt-3 border-t border-slate-200 pt-4" aria-labelledby="override-title">
             <div className="flex items-center justify-between gap-3">
               <div><h3 id="override-title" className="text-sm font-semibold text-slate-900">Manual availability override</h3><p className="mt-1 text-xs text-slate-500">Limited is advisory. Closed blocks new booking.</p></div>
               <button type="button" aria-pressed={bulkEdit} onClick={() => { setBulkEdit((value) => !value); setOverrideDirty(true); }} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${bulkEdit ? 'border-brand-300 bg-brand-50 text-brand-700' : 'border-slate-300 bg-white text-slate-700'}`}>Bulk Edit</button>
@@ -318,6 +385,7 @@ export default function CalendarAvailabilityConfigurationPanel({
             {rangeLength > 93 && <p className="mt-2 text-xs font-medium text-rose-700">A bulk change can cover at most 93 dates.</p>}
             {isPast && <p className="mt-2 text-xs text-slate-500">Past availability cannot be changed.</p>}
           </section>
+          </details>
 
           <section className="mt-5 border-t border-slate-200 pt-5" aria-labelledby="restrictions-title">
             <h3 id="restrictions-title" className="text-sm font-semibold text-slate-900">Existing manual restrictions</h3>

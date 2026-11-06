@@ -237,6 +237,7 @@ export const fetchAdminCalendarClosures = async ({ start, end } = {}) => {
 export const updateAdminCalendarClosure = async ({
   action = 'set',
   date,
+  dates,
   startDate,
   endDate,
   timeSlot = 'all_day',
@@ -247,6 +248,7 @@ export const updateAdminCalendarClosure = async ({
     const { data } = await api.post('/admin/calendar/closures/', {
       action,
       date,
+      ...(Array.isArray(dates) ? { dates } : {}),
       start_date: startDate,
       end_date: endDate,
       time_slot: timeSlot,
