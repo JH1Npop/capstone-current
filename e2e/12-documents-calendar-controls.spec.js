@@ -599,6 +599,7 @@ test.describe('Admin Documents and Calendar - controls', () => {
       .click({ position: { x: 12, y: 12 } });
     const panel = page.getByRole('dialog', { name: /Configure availability for/ });
     await expect(panel).toBeVisible();
+    await panel.getByText(/^More options/).click();
     await panel.getByRole('button', { name: 'Bulk Edit' }).click();
     await expect(panel.getByRole('button', { name: 'Bulk Edit' })).toHaveAttribute('aria-pressed', 'true');
     await panel.getByRole('button', { name: 'Close availability configuration' }).click();

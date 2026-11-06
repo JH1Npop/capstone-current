@@ -320,3 +320,56 @@ class ClientAppointmentAvailabilityTests(TestCase):
         slots = response.data['days'][0]['availability']['slots']
         self.assertEqual(slots['morning']['status'], 'closed')
         self.assertEqual(slots['midday']['status'], 'limited')
+
+
+class CalendarClosureSeparateDatesTests(TestCase):
+    """Closing or reopening several separate days in one change, and reopening every part of a day."""
+
+    url = '/api/admin/calendar/closures/'
+
+    def setUp(self):
+        self.superadmin = User.objects.create_user(username='dates-superadmin', password='pass', role='superadmin', is_staff=True, is_superuser=True)
+        self.api_client = APIClient()
+        self.api_client.force_authenticate(user=self.superadmin)
+        today = timezone.localdate()
+        self.days = [today + timedelta(days=offset) for offset in (3, 5, 9)]
+
+    def active_dates(self):
+        return sorted(CalendarClosure.objects.filter(is_active=True).values_list('date', flat=True))
+
+    def test_separate_days_are_closed_together_and_days_between_stay_open(self):
+        response = self.api_client.post(self.url, {
+            'action': 'set', 'dates': [day.isoformat() for day in self.days],
+            'time_slot': 'all_day', 'availability_status': 'closed', 'reason': 'Holiday',
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(self.active_dates(), self.days)  # day 4, 6, 7, 8 untouched
+
+        reopen = self.api_client.post(self.url, {'action': 'reopen', 'dates': [self.days[0].isoformat(), self.days[2].isoformat()], 'time_slot': 'all_day'}, format='json')
+        self.assertEqual(reopen.status_code, 200, reopen.data)
+        self.assertEqual(self.active_dates(), [self.days[1]])
+
+    def test_reopen_any_slot_clears_every_restriction_on_the_day(self):
+        day = self.days[0].isoformat()
+        for slot in ('morning', 'afternoon'):
+            self.api_client.post(self.url, {'action': 'set', 'date': day, 'time_slot': slot, 'availability_status': 'closed', 'reason': 'Fully booked'}, format='json')
+        self.assertEqual(CalendarClosure.objects.filter(is_active=True).count(), 2)
+        response = self.api_client.post(self.url, {'action': 'reopen', 'dates': [day], 'time_slot': 'any'}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(CalendarClosure.objects.filter(is_active=True).count(), 0)
+
+    def test_invalid_past_and_too_many_dates_are_refused_and_nothing_changes(self):
+        yesterday = timezone.localdate() - timedelta(days=1)
+        bad_requests = [
+            {'dates': []},
+            {'dates': ['not-a-date']},
+            {'dates': [yesterday.isoformat(), self.days[0].isoformat()]},
+            {'dates': [(timezone.localdate() + timedelta(days=offset)).isoformat() for offset in range(1, 95)]},
+        ]
+        for extra in bad_requests:
+            payload = {'action': 'set', 'time_slot': 'all_day', 'availability_status': 'closed', 'reason': 'Holiday', **extra}
+            self.assertEqual(self.api_client.post(self.url, payload, format='json').status_code, 400, extra)
+        # "any" is only for reopening, and closing still needs a reason.
+        self.assertEqual(self.api_client.post(self.url, {'action': 'set', 'dates': [self.days[0].isoformat()], 'time_slot': 'any', 'availability_status': 'closed', 'reason': 'Holiday'}, format='json').status_code, 400)
+        self.assertEqual(self.api_client.post(self.url, {'action': 'set', 'dates': [self.days[0].isoformat()], 'time_slot': 'all_day', 'availability_status': 'closed', 'reason': ''}, format='json').status_code, 400)
+        self.assertEqual(CalendarClosure.objects.count(), 0)

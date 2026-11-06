@@ -16,7 +16,7 @@ import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
 import RescheduleTicketModal from '../../components/shared/RescheduleTicketModal';
 import CalendarEventDetailsModal from '../../components/shared/CalendarEventDetailsModal';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
-import CalendarAvailabilityConfigurationPanel from '../../components/admin/CalendarAvailabilityConfigurationPanel';
+import CalendarAvailabilityConfigurationPanel, { QUICK_CLOSE_REASONS } from '../../components/admin/CalendarAvailabilityConfigurationPanel';
 import { formatRequestId, formatTicketId } from '../../utils/roleIds';
 import {
   fetchAdminCalendarClosures,
@@ -321,6 +321,13 @@ export default function AdminCalendar() {
   const [configurationDirty, setConfigurationDirty] = useState(false);
   const [configurationConfirmAction, setConfigurationConfirmAction] = useState(null);
   const [closureSaving, setClosureSaving] = useState(false);
+  // "Select days" mode: click several dates, then close or reopen them together.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedDates, setSelectedDates] = useState([]);
+  const [bulkReason, setBulkReason] = useState(QUICK_CLOSE_REASONS[0]);
+  const [bulkOtherReason, setBulkOtherReason] = useState('');
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkError, setBulkError] = useState('');
   const [dailyCapacity, setDailyCapacity] = useState(3);
   const activeFilterCount = Object.values(filters).filter((value) => value !== 'all').length;
 
@@ -478,6 +485,15 @@ export default function AdminCalendar() {
   };
 
   const selectCalendarDate = (dateKey, { openConfiguration = true } = {}) => {
+    if (configurationMode && selectMode) {
+      if (dateKey < getLocalDateKey(new Date())) return; // past dates cannot be changed
+      setBulkError('');
+      setSuccessMessage('');
+      setSelectedDates((current) => (current.includes(dateKey)
+        ? current.filter((key) => key !== dateKey)
+        : [...current, dateKey].sort()));
+      return;
+    }
     setSelectedDateKey(dateKey);
     if (configurationMode && openConfiguration) {
       setSelectedDayAgendaOpen(false);
@@ -509,6 +525,8 @@ export default function AdminCalendar() {
 
   const toggleConfigurationMode = () => {
     if (configurationMode) {
+      setSelectMode(false);
+      setSelectedDates([]);
       closeConfigurationPanel({ exitMode: true });
       return;
     }
@@ -552,6 +570,48 @@ export default function AdminCalendar() {
       return false;
     } finally {
       setClosureSaving(false);
+    }
+  };
+
+  // Shared by the quick card and "Select days": one request for all chosen dates, so it fully applies or not at all.
+  const applyToDates = async ({ dates, action, reason = '' }) => {
+    setClosureSaving(true);
+    setConfigurationError('');
+    try {
+      await updateAdminCalendarClosure(action === 'reopen'
+        ? { action: 'reopen', dates, timeSlot: 'any' }
+        : { action: 'set', dates, timeSlot: 'all_day', availabilityStatus: 'closed', reason });
+      const label = dates.length === 1
+        ? new Date(`${dates[0]}T00:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+        : `${dates.length} days`;
+      setSuccessMessage(action === 'reopen' ? `${label} reopened for new bookings.` : `${label} closed to new bookings (${reason}).`);
+      await loadCalendar();
+      return true;
+    } catch (err) {
+      const message = err.message || 'Unable to update calendar availability.';
+      setConfigurationError(message);
+      return message;
+    } finally {
+      setClosureSaving(false);
+    }
+  };
+
+  const handleQuickClose = ({ reason }) => applyToDates({ dates: [selectedDateKey], action: 'close', reason });
+  const handleQuickReopen = () => applyToDates({ dates: [selectedDateKey], action: 'reopen' });
+
+  const bulkReasonText = bulkReason === 'Other' ? bulkOtherReason.trim() : bulkReason;
+  const runBulk = async (action) => {
+    if (!selectedDates.length) return;
+    if (action === 'close' && bulkReasonText.length < 3) {
+      setBulkError('Type a reason of at least 3 characters.');
+      return;
+    }
+    const result = await applyToDates({ dates: selectedDates, action, reason: bulkReasonText });
+    if (result === true) {
+      setSelectedDates([]);
+      setBulkError('');
+    } else {
+      setBulkError(result);
     }
   };
 
@@ -666,9 +726,44 @@ export default function AdminCalendar() {
         </div>
 
         {configurationMode && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-200 bg-brand-50 px-4 py-2 text-xs text-brand-800" role="status">
-            <span><strong>Configuration Mode:</strong> select an empty area of a date to manage booking availability. Appointment cards still open normally.</span>
-            {!configurationPanelOpen && <span className="font-semibold">No date configuration open</span>}
+          <div className="border-b border-brand-200 bg-brand-50 px-4 py-2 text-xs text-brand-800">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span role="status">
+                <strong>Configuration Mode:</strong>{' '}
+                {selectMode
+                  ? 'click each date you want to change, then choose Close or Reopen below.'
+                  : 'click a date to close or reopen it. Appointment cards still open normally.'}
+              </span>
+              <button
+                type="button"
+                onClick={() => { setSelectMode((value) => !value); setSelectedDates([]); setBulkError(''); setSuccessMessage(''); }}
+                aria-pressed={selectMode}
+                className={`inline-flex h-8 items-center gap-2 rounded-lg border px-3 text-xs font-semibold ${selectMode ? 'border-brand-600 bg-brand-600 text-white' : 'border-brand-300 bg-white text-brand-800 hover:bg-brand-100'}`}
+              >
+                {selectMode ? 'Done selecting' : 'Select days'}
+              </button>
+            </div>
+            {selectMode ? (
+              // Floats at the bottom of the screen so it stays in view while scrolling the month to pick days.
+              <section aria-label="Selected days" className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-xl border border-brand-300 bg-white px-4 py-3 text-slate-700 shadow-2xl shadow-slate-900/20">
+                <span className="text-sm font-semibold text-slate-900">{selectedDates.length} {selectedDates.length === 1 ? 'day' : 'days'} selected</span>
+                <label className="flex items-center gap-1 text-xs font-semibold text-slate-600">Reason
+                  <select value={bulkReason} onChange={(event) => { setBulkReason(event.target.value); setBulkError(''); }} className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs font-normal">
+                    {QUICK_CLOSE_REASONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </label>
+                {bulkReason === 'Other' ? (
+                  <input value={bulkOtherReason} maxLength={255} onChange={(event) => { setBulkOtherReason(event.target.value); setBulkError(''); }} placeholder="Why are these dates closed?" aria-label="Other reason" className="h-8 min-w-[12rem] rounded-lg border border-slate-300 px-2 text-xs" />
+                ) : null}
+                <button type="button" disabled={!selectedDates.length || closureSaving} onClick={() => { if (bulkReason === 'Other' && bulkReasonText.length < 3) { setBulkError('Type a reason of at least 3 characters.'); return; } setBulkConfirmOpen(true); }} className="h-8 rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white disabled:opacity-50">Close selected days</button>
+                <button type="button" disabled={!selectedDates.length || closureSaving} onClick={() => runBulk('reopen')} className="h-8 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 disabled:opacity-50">Reopen selected days</button>
+                <button type="button" disabled={!selectedDates.length || closureSaving} onClick={() => { setSelectedDates([]); setBulkError(''); }} className="h-8 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 disabled:opacity-50">Clear selection</button>
+                {bulkError ? <p role="alert" className="w-full text-xs font-medium text-rose-700">{bulkError}</p> : null}
+                {successMessage && !configurationPanelOpen ? <p role="status" className="w-full text-xs font-medium text-emerald-700">{successMessage}</p> : null}
+              </section>
+            ) : (
+              !configurationPanelOpen && <p className="mt-1 font-semibold">No date configuration open</p>
+            )}
           </div>
         )}
 
@@ -744,16 +839,20 @@ export default function AdminCalendar() {
                 const closedRestrictionLabel = getClosedRestrictionLabel(closedRestrictions);
                 const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
                 const isToday = sameDay(day, today);
-                const isSelected = key === selectedDateKey;
+                const isSelected = key === selectedDateKey && !selectMode;
+                const isPicked = selectMode && selectedDates.includes(key);
 
                 return (
                   <button
                     key={`mobile-${key}`}
                     type="button"
                     onClick={() => selectCalendarDate(key)}
-                    aria-label={`${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${dayEvents.length} visible scheduled item${dayEvents.length === 1 ? '' : 's'}, ${availabilityMeta?.label || 'availability unknown'}${closedRestrictionLabel ? `, ${closedRestrictionLabel}` : ''}${configurationMode ? ', open availability configuration' : ''}`}
+                    aria-label={`${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${dayEvents.length} visible scheduled item${dayEvents.length === 1 ? '' : 's'}, ${availabilityMeta?.label || 'availability unknown'}${closedRestrictionLabel ? `, ${closedRestrictionLabel}` : ''}${configurationMode ? (selectMode ? (isPicked ? ', selected for a bulk change' : ', select this day') : ', open availability configuration') : ''}`}
+                    aria-pressed={selectMode ? isPicked : undefined}
                     className={`relative flex min-h-14 flex-col items-center justify-center border-b border-r border-slate-200 p-1 text-xs transition ${
-                      isSelected
+                      isPicked
+                        ? 'bg-brand-100 text-brand-900 outline outline-2 -outline-offset-2 outline-brand-600'
+                        : isSelected
                         ? 'bg-blue-100 text-blue-800 ring-2 ring-inset ring-blue-400'
                         : isCurrentMonth
                           ? 'bg-white text-slate-700'
@@ -801,7 +900,8 @@ export default function AdminCalendar() {
                     const visibleEvents = dayEvents.slice(0, 2);
                     const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
                     const isToday = sameDay(day, today);
-                    const isSelected = key === selectedDateKey;
+                    const isSelected = key === selectedDateKey && !selectMode;
+                const isPicked = selectMode && selectedDates.includes(key);
 
                     return (
                       <div
@@ -814,7 +914,9 @@ export default function AdminCalendar() {
                           selectCalendarDate(key);
                         }}
                         className={`relative min-h-28 cursor-pointer border-b border-r border-slate-200 p-1.5 transition sm:min-h-32 xl:min-h-36 ${
-                          isSelected
+                          isPicked
+                            ? 'bg-brand-50 outline outline-2 -outline-offset-2 outline-brand-600'
+                            : isSelected
                             ? 'bg-blue-50 ring-2 ring-inset ring-blue-300'
                             : isCurrentMonth
                               ? 'bg-white hover:bg-slate-50'
@@ -828,13 +930,15 @@ export default function AdminCalendar() {
                         selectCalendarDate(key);
                       }}
                       className="absolute inset-x-0 top-0 z-0 h-[1.875rem] rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
-                      aria-label={`${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${dayEvents.length} visible scheduled item${dayEvents.length === 1 ? '' : 's'}, ${availabilityMeta?.label || 'availability unknown'}${closedRestrictionLabel ? `, ${closedRestrictionLabel}` : ''}${configurationMode ? ', open availability configuration' : ''}`}
+                      aria-label={`${day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}, ${dayEvents.length} visible scheduled item${dayEvents.length === 1 ? '' : 's'}, ${availabilityMeta?.label || 'availability unknown'}${closedRestrictionLabel ? `, ${closedRestrictionLabel}` : ''}${configurationMode ? (selectMode ? (isPicked ? ', selected for a bulk change' : ', select this day') : ', open availability configuration') : ''}`}
+                    aria-pressed={selectMode ? isPicked : undefined}
                     />
                     <div className="pointer-events-none relative z-[1] mb-1.5 flex items-center justify-between gap-1">
                       <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>
                         {day.getDate()}
                       </span>
                       <div className="flex items-center gap-1">
+                        {isPicked ? <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Selected</span> : null}
                         {availabilityMeta && <span className={`h-2.5 w-2.5 rounded-full ${availabilityMeta.dot}`} title={availabilityMeta.label} />}
                         {dayEvents.length > 0 && (
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
@@ -920,6 +1024,9 @@ export default function AdminCalendar() {
         )}
       </section>
 
+      {/* Room for the floating "Selected days" bar so it never covers the last row of dates. */}
+      {configurationMode && selectMode ? <div aria-hidden="true" className="h-28" /> : null}
+
       <CalendarAvailabilityConfigurationPanel
         open={configurationMode && configurationPanelOpen}
         selectedDateKey={selectedDateKey}
@@ -936,6 +1043,8 @@ export default function AdminCalendar() {
         onApplyOverride={handleApplyAvailability}
         onReopen={handleReopenRange}
         onReopenClosure={handleReopenAvailability}
+        onQuickClose={handleQuickClose}
+        onQuickReopen={handleQuickReopen}
         onRequestClose={() => closeConfigurationPanel()}
         onDirtyChange={setConfigurationDirty}
       />
@@ -950,6 +1059,20 @@ export default function AdminCalendar() {
         onClose={closeSelectedDayAgenda}
         onOpenEvent={openEvent}
       />
+
+      {bulkConfirmOpen && (
+        <ConfirmationDialog
+          title={`Close ${selectedDates.length} ${selectedDates.length === 1 ? 'day' : 'days'}?`}
+          message={`${selectedDates.map((key) => new Date(`${key}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })).join(', ')} will be closed to new bookings (${bulkReasonText}). Visits already booked stay scheduled.`}
+          tone="warning"
+          icon="warning"
+          confirmLabel="Close days"
+          cancelLabel="Go back"
+          loading={closureSaving}
+          onCancel={() => setBulkConfirmOpen(false)}
+          onConfirm={async () => { setBulkConfirmOpen(false); await runBulk('close'); }}
+        />
+      )}
 
       {configurationConfirmAction && (
         <ConfirmationDialog

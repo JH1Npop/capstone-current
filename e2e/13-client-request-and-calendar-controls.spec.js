@@ -289,6 +289,8 @@ test.describe('Client New Request - every control', () => {
     await fillAddress(page);
     await page.getByRole('button', { name: 'Use My Location' }).click();
     await expect(pinText(page)).toContainText('Pin selected:');
+    // Wait for the location's address to arrive before typing over it, or it can overwrite the typed one.
+    await expect(address(page)).toHaveValue('Test Road, Pulo');
     await fillAddress(page);
     await pickDate(page, 4);
     await page.locator('#request-time-slot').selectOption('morning');
@@ -584,6 +586,8 @@ for (const account of ['admin_test', 'superadmin_test']) {
       await cell.click({ position: { x: 12, y: 12 } });
       const panel = page.getByRole('dialog', { name: /Configure availability for/ });
       await expect(panel).toBeVisible();
+      await expect(panel.getByRole('heading', { name: 'Quick change' })).toBeVisible();
+      await panel.getByText(/^More options/).click();
       for (const heading of ['Current booking position', 'Daily booking limit', 'Manual availability override', 'Existing manual restrictions']) {
         await expect(panel.getByRole('heading', { name: heading })).toBeVisible();
       }
@@ -635,6 +639,83 @@ for (const account of ['admin_test', 'superadmin_test']) {
       await expect(panel).toBeHidden();
       await page.getByRole('button', { name: 'Done Configuring' }).click();
       await expect(page.getByRole('button', { name: 'Configure Availability' })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    test(`13.${account === 'admin_test' ? 'A' : 'S'}7 - Quick close and reopen a day, and close or reopen several clicked days at once`, async ({ page }) => {
+      await visitWorkspacePage(page, '/admin/calendar');
+      const dayButton = (date, suffix) => page.getByRole('button', {
+        name: new RegExp(`^${date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })},.*${suffix}$`),
+      }).last();
+      const closureMark = (date) => page.getByLabel(new RegExp(`Closure for ${localKey(date)}`)).first();
+      await page.getByRole('button', { name: 'Configure Availability' }).click();
+
+      // Past days cannot be picked in Select days mode (checked in the current month when it has a past day).
+      const now = new Date();
+      await page.getByRole('button', { name: 'Select days' }).click();
+      const bar = page.getByRole('region', { name: 'Selected days' });
+      if (now.getDate() > 1) {
+        const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        await dayButton(firstOfMonth, 'select this day').click({ position: { x: 12, y: 12 } });
+        await expect(bar).toContainText('0 days selected');
+      }
+      await page.getByRole('button', { name: 'Done selecting' }).click();
+
+      // All test days are in next month, so they are always in the future.
+      await page.getByRole('button', { name: 'Next month' }).click();
+      const day = (n) => new Date(now.getFullYear(), now.getMonth() + 1, n);
+
+      // Quick close with a one-click reason, then reopen.
+      await dayButton(day((account === 'admin_test' ? 6 : 7)), 'open availability configuration').click({ position: { x: 12, y: 12 } });
+      const panel = page.getByRole('dialog', { name: /Configure availability for/ });
+      const quick = panel.getByRole('region', { name: 'Quick change' });
+      await page.screenshot({ path: `test-results/screenshots/13-${account}-quick-change.png` });
+      await quick.getByRole('radio', { name: 'Other' }).click();
+      await quick.getByRole('button', { name: 'Close this day' }).click();
+      await expect(quick.getByText('Type a reason of at least 3 characters.')).toBeVisible();
+      await quick.getByRole('radio', { name: 'Company event' }).click();
+      await expect(quick.getByRole('radio', { name: 'Company event' })).toHaveAttribute('aria-checked', 'true');
+      await quick.getByRole('button', { name: 'Close this day' }).click();
+      await expect(quick.getByRole('button', { name: 'Reopen this day' })).toBeVisible({ timeout: 15000 });
+      await expect(panel).toContainText('Company event');
+      await expect(closureMark(day((account === 'admin_test' ? 6 : 7)))).toBeVisible();
+      await quick.getByRole('button', { name: 'Reopen this day' }).click();
+      await expect(quick.getByRole('button', { name: 'Close this day' })).toBeVisible({ timeout: 15000 });
+      await expect(closureMark(day((account === 'admin_test' ? 6 : 7)))).toHaveCount(0);
+      await panel.getByRole('button', { name: 'Close availability configuration' }).click();
+      await expect(panel).toBeHidden();
+
+      // Select days: pick three, clear, then close two separate days together.
+      await page.getByRole('button', { name: 'Select days' }).click();
+      for (const n of [(account === 'admin_test' ? 10 : 11), (account === 'admin_test' ? 12 : 13), (account === 'admin_test' ? 14 : 15)]) await dayButton(day(n), 'select this day').click({ position: { x: 12, y: 12 } });
+      await expect(bar).toContainText('3 days selected');
+      await expect(dayButton(day((account === 'admin_test' ? 10 : 11)), 'selected for a bulk change')).toHaveAttribute('aria-pressed', 'true');
+      await bar.getByRole('button', { name: 'Clear selection' }).click();
+      await expect(bar).toContainText('0 days selected');
+
+      await dayButton(day((account === 'admin_test' ? 10 : 11)), 'select this day').click({ position: { x: 12, y: 12 } });
+      await dayButton(day((account === 'admin_test' ? 14 : 15)), 'select this day').click({ position: { x: 12, y: 12 } });
+      await expect(bar).toContainText('2 days selected');
+      await page.screenshot({ path: `test-results/screenshots/13-${account}-select-days.png` });
+      await bar.getByLabel('Reason').selectOption('Holiday');
+      await bar.getByRole('button', { name: 'Close selected days' }).click();
+      const confirm = page.getByRole('dialog', { name: 'Close 2 days?' });
+      await expect(confirm).toContainText('Holiday');
+      await confirm.getByRole('button', { name: 'Close days' }).click();
+      await expect(bar).toContainText('2 days closed to new bookings (Holiday).', { timeout: 15000 });
+      await expect(bar).toContainText('0 days selected');
+      await expect(closureMark(day((account === 'admin_test' ? 10 : 11)))).toBeVisible();
+      await expect(closureMark(day((account === 'admin_test' ? 14 : 15)))).toBeVisible();
+      await expect(closureMark(day((account === 'admin_test' ? 12 : 13)))).toHaveCount(0); // the day between stays open
+
+      // Reopen both together.
+      await dayButton(day((account === 'admin_test' ? 10 : 11)), 'select this day').click({ position: { x: 12, y: 12 } });
+      await dayButton(day((account === 'admin_test' ? 14 : 15)), 'select this day').click({ position: { x: 12, y: 12 } });
+      await bar.getByRole('button', { name: 'Reopen selected days' }).click();
+      await expect(bar).toContainText('2 days reopened for new bookings.', { timeout: 15000 });
+      await expect(closureMark(day((account === 'admin_test' ? 10 : 11)))).toHaveCount(0);
+      await expect(closureMark(day((account === 'admin_test' ? 14 : 15)))).toHaveCount(0);
+      await page.getByRole('button', { name: 'Done selecting' }).click();
+      await page.getByRole('button', { name: 'Done Configuring' }).click();
     });
 
     test(`13.${account === 'admin_test' ? 'A' : 'S'}6 - On a phone the filters fold away, the date box works and a day opens its list`, async ({ page }) => {

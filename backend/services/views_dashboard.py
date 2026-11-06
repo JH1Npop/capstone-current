@@ -1143,15 +1143,30 @@ class AdminCalendarClosureView(APIView):
 
         if action_name not in {'close', 'set', 'reopen'}:
             return Response({'action': 'Choose set, close, or reopen.'}, status=status.HTTP_400_BAD_REQUEST)
-        if start_date is None or end_date is None:
-            return Response({'date': 'Choose a valid start and end date.'}, status=status.HTTP_400_BAD_REQUEST)
-        if end_date < start_date:
-            return Response({'end_date': 'End date must be on or after start date.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Either a list of separate dates (days clicked on the calendar) or one start-end range.
+        raw_dates = request.data.get('dates')
+        if raw_dates is not None:
+            if not isinstance(raw_dates, list) or not raw_dates or len(raw_dates) > 93:
+                return Response({'dates': 'Choose between 1 and 93 dates.'}, status=status.HTTP_400_BAD_REQUEST)
+            parsed_dates = [parse_date(str(value or '')) for value in raw_dates]
+            if any(value is None for value in parsed_dates):
+                return Response({'dates': 'Every date must be a valid YYYY-MM-DD date.'}, status=status.HTTP_400_BAD_REQUEST)
+            dates = sorted(set(parsed_dates))
+            start_date, end_date = dates[0], dates[-1]
+        else:
+            if start_date is None or end_date is None:
+                return Response({'date': 'Choose a valid start and end date.'}, status=status.HTTP_400_BAD_REQUEST)
+            if end_date < start_date:
+                return Response({'end_date': 'End date must be on or after start date.'}, status=status.HTTP_400_BAD_REQUEST)
+            if (end_date - start_date).days > 92:
+                return Response({'end_date': 'A single availability change can cover at most 93 days.'}, status=status.HTTP_400_BAD_REQUEST)
+            dates = [start_date + timedelta(days=offset) for offset in range((end_date - start_date).days + 1)]
         if start_date < timezone.localdate():
             return Response({'date': 'Past dates cannot be changed.'}, status=status.HTTP_400_BAD_REQUEST)
-        if (end_date - start_date).days > 92:
-            return Response({'end_date': 'A single availability change can cover at most 93 days.'}, status=status.HTTP_400_BAD_REQUEST)
-        if time_slot not in self.ALLOWED_SLOTS:
+        # "any" reopens every closed or limited part of the chosen days (used by "Reopen this day").
+        reopen_any_slot = action_name == 'reopen' and time_slot == 'any'
+        if time_slot not in self.ALLOWED_SLOTS and not reopen_any_slot:
             return Response({'time_slot': 'Choose all day, morning, midday, or afternoon.'}, status=status.HTTP_400_BAD_REQUEST)
         if availability_status not in self.ALLOWED_AVAILABILITY_STATUSES:
             return Response({'availability_status': 'Choose limited or closed.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1160,19 +1175,16 @@ class AdminCalendarClosureView(APIView):
         if len(reason) > 255:
             return Response({'reason': 'Availability reason must be 255 characters or fewer.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        dates = [start_date + timedelta(days=offset) for offset in range((end_date - start_date).days + 1)]
         with transaction.atomic():
             lock_appointment_capacity_policy()
-            existing_by_date = {
-                closure.date: closure
-                for closure in CalendarClosure.objects.select_for_update().filter(
-                    date__range=(start_date, end_date),
-                    time_slot=time_slot,
-                )
-            }
+            matching = CalendarClosure.objects.select_for_update().filter(date__in=dates)
+            if not reopen_any_slot:
+                matching = matching.filter(time_slot=time_slot)
+            matching = list(matching)
+            existing_by_date = {closure.date: closure for closure in matching}
             if action_name == 'reopen':
                 reopened = []
-                for closure in existing_by_date.values():
+                for closure in matching:
                     if not closure.is_active:
                         continue
                     closure.is_active = False
