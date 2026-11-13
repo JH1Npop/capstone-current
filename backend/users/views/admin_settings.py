@@ -114,14 +114,17 @@ class AdminSettingsViewSet(viewsets.ViewSet):
             )
         serializer = AdminSettingsSerializer(settings_obj, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        updated_settings = serializer.save(updated_by=request.user)
-
-        workflow_fields = {
+        workflow_fields = (
             'location_validation_enabled',
             'arrival_radius_meters',
             'location_validation_disabled_reason',
-        }
-        if workflow_fields.intersection(serializer.validated_data.keys()):
+        )
+        before = {field: getattr(settings_obj, field) for field in workflow_fields}
+        updated_settings = serializer.save(updated_by=request.user)
+
+        # Saving another setting (a holiday, say) must not record this person as having changed
+        # arrival validation.
+        if any(getattr(updated_settings, field) != value for field, value in before.items()):
             updated_settings.location_validation_updated_by = request.user
             updated_settings.location_validation_updated_at = timezone.now()
             updated_settings.save(update_fields=['location_validation_updated_by', 'location_validation_updated_at'])

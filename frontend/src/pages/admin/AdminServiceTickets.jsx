@@ -19,6 +19,8 @@ import TicketTimelineModal from '../../components/shared/TicketTimelineModal';
 import QuotationProposalModal from '../../components/shared/QuotationProposalModal';
 import TurnoverAcceptanceModal from '../../components/shared/TurnoverAcceptanceModal';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
+import CancelledJobDeposit from '../../components/sales/CancelledJobDeposit';
+import { fetchTicketQuotation, settleQuotationDeposit } from '../../api/services';
 import WalkInRequestDialog from '../../components/shared/WalkInRequestDialog';
 import { EmptyState, ErrorState, LoadingSkeleton } from '../../components/ui/StateDisplay';
 import StatusBadge, { formatStatusLabel } from '../../components/ui/StatusBadge';
@@ -185,6 +187,9 @@ export default function AdminServiceTickets() {
   const [terminationReason, setTerminationReason] = useState('');
   const [terminatingTicket, setTerminatingTicket] = useState(false);
   const [terminationError, setTerminationError] = useState('');
+  // A job that already holds deposit money: the office says what happens to it while dismissing.
+  const [terminationQuotation, setTerminationQuotation] = useState(null);
+  const [terminationDeposit, setTerminationDeposit] = useState({ outcome: '', note: '' });
   const [documentDownloadId, setDocumentDownloadId] = useState(null);
   const [linkedTicketLoading, setLinkedTicketLoading] = useState(false);
   const [linkedTicketError, setLinkedTicketError] = useState('');
@@ -475,7 +480,13 @@ export default function AdminServiceTickets() {
     setTerminationTarget(ticket);
     setTerminationReason('');
     setTerminationError('');
+    setTerminationQuotation(null);
+    setTerminationDeposit({ outcome: '', note: '' });
+    fetchTicketQuotation(ticket.id)
+      .then((quotation) => setTerminationQuotation(quotation || null))
+      .catch(() => setTerminationQuotation(null));
   };
+  const terminationDepositReceived = Number(terminationQuotation?.deposit_paid_amount || 0);
 
   const closeTerminationDialog = () => {
     if (terminatingTicket) return;
@@ -492,15 +503,30 @@ export default function AdminServiceTickets() {
       return;
     }
 
+    const depositNote = terminationDeposit.note.trim();
+    if (terminationDepositReceived > 0 && (!terminationDeposit.outcome || depositNote.length < 3)) {
+      setTerminationError('Say whether the deposit was refunded or kept, with a short note.');
+      return;
+    }
+
     setTerminatingTicket(true);
     setTerminationError('');
     try {
       await terminateServiceTicketForClientWithdrawal(terminationTarget.id, details);
       const dismissedTicketId = terminationTarget.id;
+      let depositMessage = '';
+      if (terminationDepositReceived > 0 && terminationQuotation) {
+        try {
+          await settleQuotationDeposit(terminationQuotation.id, terminationDeposit.outcome, depositNote);
+          depositMessage = terminationDeposit.outcome === 'refunded' ? ' Deposit recorded as refunded.' : ' Deposit recorded as kept.';
+        } catch (settleError) {
+          depositMessage = ` The deposit decision was not saved (${settleError.message}); record it from the ticket's actions.`;
+        }
+      }
       setTerminationTarget(null);
       setTerminationReason('');
       await loadData();
-      setRescheduleMessage(`${formatTicketId(dismissedTicketId)} dismissed because the client withdrew.`);
+      setRescheduleMessage(`${formatTicketId(dismissedTicketId)} dismissed because the client withdrew.${depositMessage}`);
       setError('');
     } catch (terminationRequestError) {
       setTerminationError(terminationRequestError.message || 'Unable to dismiss the service ticket.');
@@ -1083,7 +1109,8 @@ export default function AdminServiceTickets() {
               </button>
             </div>
 
-            <div className="p-4">
+            <div className="max-h-[75vh] overflow-y-auto p-4">
+              {normalizeStatus(actionModalTicket.status) === 'cancelled' ? <CancelledJobDeposit ticketId={actionModalTicket.id} /> : null}
               <div className="grid gap-3 rounded-2xl border border-surface-200 bg-surface-50 p-4 text-sm text-slate-600">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-semibold text-slate-900">Queue status</span>
@@ -1223,7 +1250,7 @@ export default function AdminServiceTickets() {
           confirmLabel="Dismiss ticket"
           cancelLabel="Keep ticket active"
           loading={terminatingTicket}
-          disabled={terminationReason.trim().length < 5}
+          disabled={terminationReason.trim().length < 5 || (terminationDepositReceived > 0 && (!terminationDeposit.outcome || terminationDeposit.note.trim().length < 3))}
           onCancel={closeTerminationDialog}
           onConfirm={confirmTicketTermination}
         >
@@ -1241,6 +1268,25 @@ export default function AdminServiceTickets() {
               className="mt-2 w-full resize-none rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
             />
           </label>
+          {terminationDepositReceived > 0 ? (
+            <fieldset className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <legend className="px-1 text-sm font-semibold text-amber-900">
+                Deposit received: {terminationDepositReceived.toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })}
+              </legend>
+              <p className="text-xs text-amber-900">What happens to this money?</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {[['refunded', 'Refunded to the client'], ['kept', 'Kept (for example a cancellation fee)']].map(([value, label]) => (
+                  <label key={value} className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm ${terminationDeposit.outcome === value ? 'border-amber-500 font-semibold text-amber-900' : 'border-slate-200 text-slate-700'}`}>
+                    <input type="radio" name="dismiss-deposit-outcome" value={value} checked={terminationDeposit.outcome === value} onChange={() => setTerminationDeposit((current) => ({ ...current, outcome: value }))} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <label className="mt-2 block text-xs font-semibold text-slate-700">Deposit note
+                <textarea value={terminationDeposit.note} onChange={(event) => setTerminationDeposit((current) => ({ ...current, note: event.target.value }))} rows={2} maxLength={500} placeholder="Example: Refunded by GCash, reference 1234." className="mt-1 w-full resize-none rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-base text-slate-900 outline-none sm:text-sm" />
+              </label>
+            </fieldset>
+          ) : null}
           {terminationError && <p className="mt-2 text-sm font-medium text-rose-600">{terminationError}</p>}
         </ConfirmationDialog>
       )}

@@ -721,6 +721,33 @@ class AutoInventoryWorkflowTests(APITestCase):
             ).exists()
         )
 
+    def test_dismissing_the_ticket_releases_reserved_inventory_and_the_technician(self):
+        """The office's "Dismiss ticket" (client backed out) does what its dialog promises."""
+        self.assertEqual(self.assign_ticket().status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.post(
+            f'/api/services/service-tickets/{self.ticket.id}/update_status/',
+            {'status': 'Cancelled', 'reason': 'Client backed out: confirmed by phone.'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        reservation = InventoryReservation.objects.get(service_ticket=self.ticket)
+        self.inventory_item.refresh_from_db()
+        self.ticket.refresh_from_db()
+        self.request_obj.refresh_from_db()
+        self.assertEqual(reservation.status, 'cancelled')
+        self.assertEqual(self.inventory_item.reserved_quantity, 0)
+        self.assertEqual(self.ticket.status, 'Cancelled')
+        self.assertEqual(self.request_obj.status, 'Cancelled')
+        self.assertFalse(
+            ServiceTicket.objects.filter(
+                technician=self.technician_user,
+                status__in=['Navigating', 'Arrived on Site', 'In Progress', 'On Hold'],
+            ).exists()
+        )
+
     def test_completing_ticket_issues_reserved_inventory(self):
         assign_response = self.assign_ticket()
         self.assertEqual(assign_response.status_code, status.HTTP_200_OK)

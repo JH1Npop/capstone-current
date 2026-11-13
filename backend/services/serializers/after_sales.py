@@ -2,6 +2,8 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.utils import timezone
 from rest_framework import serializers
+
+from services.business_time import business_today
 from ..models import (
     ServiceType, SLARule, ServiceRequest, ServiceRequestService, ServiceLocation, SolarEstimate, ServiceTicket,
     AfterSalesCase as FollowUpCase, AfterSalesCaseEvent,
@@ -163,7 +165,7 @@ class FollowUpCaseSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'status_change_note': 'A reason is required when reopening a case.',
                 })
-        if due_date and status_value in {'open', 'in_progress'} and due_date < timezone.localdate():
+        if due_date and status_value in {'open', 'in_progress'} and due_date < business_today():
             raise serializers.ValidationError({'due_date': 'Open case due date cannot be in the past.'})
 
         resolution_notes = str(
@@ -220,7 +222,7 @@ class MaintenanceScheduleSerializer(serializers.ModelSerializer):
             return obj.client.address or None
 
     def get_days_until_due(self, obj):
-        return (obj.next_due_date - timezone.localdate()).days
+        return (obj.next_due_date - business_today()).days
 
     class Meta:
         model = MaintenanceSchedule

@@ -1,6 +1,7 @@
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.utils import timezone
+from services.business_time import business_today
 from rest_framework import serializers
 from ..models import (
     ServiceType, SLARule, ServiceRequest, ServiceRequestService, ServiceLocation, SolarEstimate, ServiceTicket,
@@ -232,7 +233,7 @@ class InspectionChecklistSerializer(serializers.ModelSerializer):
                 'follow_up_case_type': 'Warranty follow-up requires warranty coverage to be enabled first.',
             })
 
-        if follow_up_due_date and follow_up_due_date < timezone.localdate():
+        if follow_up_due_date and follow_up_due_date < business_today():
             raise serializers.ValidationError({
                 'follow_up_due_date': 'Follow-up due date cannot be in the past.',
             })

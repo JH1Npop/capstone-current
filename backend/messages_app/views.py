@@ -3,13 +3,14 @@ from django.utils import timezone
 from rest_framework import status, viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from .models import CustomerSupportCase, Message
 from .serializers import CustomerSupportCaseSerializer, MessageSerializer
 from notifications.models import Notification
-from notifications.notification_utils import notifications_enabled
+from notifications.notification_utils import in_app_notifications_enabled
 from users.models import User
 from users.permissions import CanAccessClientSupport, CanAccessMessages
 from users.rbac import (
@@ -35,7 +36,7 @@ def active_admins_with_capability(capability_codes):
 
 def _create_notification(user, *, title, message, notification_type, ticket=None, unless_unread=False):
     """Every messaging alert honours the global notification switch and skips inactive accounts."""
-    if not notifications_enabled() or not user.is_active or getattr(user, 'status', 'active') != 'active':
+    if not in_app_notifications_enabled() or not user.is_active or getattr(user, 'status', 'active') != 'active':
         return None
     # One unread alert per conversation is enough; a burst of replies must not flood the bell.
     if unless_unread and Notification.objects.filter(user=user, title=title, status='unread').exists():
@@ -182,8 +183,17 @@ def notify_admins_of_customer_support_resolution(case, actor):
             notification_type='success',
         )
 
+class MessagePagination(PageNumberPagination):
+    """The message pages build every room from one list, so they ask for large pages (page_size)."""
+
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 500
+
+
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
+    pagination_class = MessagePagination
     permission_classes = [CanAccessMessages]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
@@ -235,9 +245,14 @@ class MessageViewSet(viewsets.ModelViewSet):
         role = getattr(user, 'role', None)
 
         if role == 'client':
+            # The client's own support threads: "customer_support_client_<id>_<suffix>" (or the bare
+            # key of an early thread). A plain prefix match on "<id>" would also match client 10, 11,
+            # 100... for client 1 and show them other clients' messages.
+            own_support_key = f'{CUSTOMER_SUPPORT_PREFIX}{user.id}'
             base_q = (
                 Q(ticket__request__client=user) |
-                Q(room_type='group', group_key__startswith=f'{CUSTOMER_SUPPORT_PREFIX}{user.id}')
+                Q(room_type='group', group_key=own_support_key) |
+                Q(room_type='group', group_key__startswith=f'{own_support_key}_')
             )
         elif role in ADMIN_MESSAGE_ROLES:
             base_q = Q(pk__in=[])
@@ -276,6 +291,9 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         message = serializer.save(sender=self.request.user)
+        if not message.ticket_id and str(message.group_key or '').startswith(CUSTOMER_SUPPORT_PREFIX):
+            # The case list is ordered by last activity: a new message moves its case to the top.
+            CustomerSupportCase.objects.filter(group_key=message.group_key).update(updated_at=timezone.now())
         notify_admins_of_client_ticket_message(message)
         notify_admins_of_customer_support_message(message)
         notify_client_of_customer_support_reply(message)

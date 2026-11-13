@@ -788,6 +788,52 @@ class SelfServiceProfileTests(APITestCase):
         self.assertEqual(self.client_user.status, 'active')
         self.assertTrue(self.client_user.is_available)
 
+    def test_me_endpoint_keeps_name_and_phone_filled(self):
+        self.client_user.first_name, self.client_user.last_name = 'Jamie', 'Cruz'
+        self.client_user.save(update_fields=['first_name', 'last_name'])
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.client_token.key}')
+
+        response = self.client.patch('/api/users/me/', {
+            'first_name': '  ', 'last_name': '', 'phone': '', 'address': 'Kept?',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(str(response.data['first_name'][0]), 'Enter your first name.')
+        self.assertEqual(str(response.data['last_name'][0]), 'Enter your last name.')
+        self.assertEqual(str(response.data['phone'][0]), 'Enter your mobile number.')
+        self.client_user.refresh_from_db()
+        self.assertEqual((self.client_user.first_name, self.client_user.phone, self.client_user.address), ('Jamie', '09111111111', 'Old Address'))
+
+        # A value that was never set may stay empty (older accounts registered without one).
+        self.assertEqual(self.client.patch('/api/users/me/', {'middle_name': '', 'landline': ''}, format='json').status_code, status.HTTP_200_OK)
+
+    def test_unsent_email_verification_keeps_other_changes_and_old_email(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.client_token.key}')
+        with patch('users.views.auth.send_pending_email_verification_email', side_effect=RuntimeError('smtp down')):
+            response = self.client.patch('/api/users/me/', {
+                'email': 'new-address@example.com', 'current_password': 'Password123!', 'address': 'Saved Address',
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('could not be sent', response.data['email_change_error'])
+        self.assertIsNone(response.data['pending_email'])
+        self.assertEqual(response.data['email'], 'self-service-client@example.com')
+        self.client_user.refresh_from_db()
+        self.assertEqual(self.client_user.address, 'Saved Address')
+        self.assertIsNone(self.client_user.pending_email)
+
+    def test_saving_the_current_email_cancels_a_pending_change(self):
+        self.client_user.pending_email = 'waiting@example.com'
+        self.client_user.save(update_fields=['pending_email'])
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.client_token.key}')
+
+        response = self.client.patch('/api/users/me/', {'email': 'self-service-client@example.com'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data['pending_email'])
+        self.client_user.refresh_from_db()
+        self.assertIsNone(self.client_user.pending_email)
+
     def test_technician_profile_update_allows_safe_fields(self):
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.technician_token.key}')
 
@@ -1995,6 +2041,33 @@ class AdminActivityLogTests(APITestCase):
         self.assertEqual(ids('update'), {plain_update.id, no_metadata.id})
         summary = self.client.get('/api/admin/activity-logs/summary/', {'action': 'assign'})
         self.assertEqual(summary.data['total'], 2)
+
+    def test_user_id_columns_show_the_name_and_role_id(self):
+        ActivityLog.objects.all().delete()
+        reopened = ActivityLog.objects.create(
+            actor=self.superadmin_user, actor_role='superadmin', category='system', action='update',
+            target_model='calendarclosure', target_id=1, message='reopened',
+            metadata={'field_name': 'reopened_by_id', 'new_value': str(self.superadmin_user.pk)},
+        )
+        assigned = ActivityLog.objects.create(
+            actor=self.superadmin_user, actor_role='superadmin', category='tickets', action='update',
+            target_model='serviceticket', target_id=1, message='assigned',
+            metadata={'field_name': 'technician_id', 'old_value': '', 'new_value': str(self.technician_user.pk), 'new_display_value': 'Old Name'},
+        )
+        missing = ActivityLog.objects.create(
+            actor=self.superadmin_user, actor_role='superadmin', category='tickets', action='update',
+            target_model='serviceticket', target_id=1, message='gone',
+            metadata={'field_name': 'assigned_admin_id', 'new_value': '999999', 'new_display_value': 'Former Admin'},
+        )
+        self.authenticate(self.superadmin_user)
+
+        rows = {row['id']: row for row in self.results(self.client.get('/api/admin/activity-logs/'))}
+
+        # The owner is SA-, a technician is TECH-, and the current name replaces a stored one.
+        self.assertEqual(rows[reopened.id]['new_value'], f'activity_owner (SA-{self.superadmin_user.pk:04d})')
+        self.assertEqual(rows[assigned.id]['new_value'], f'activity_tech (TECH-{self.technician_user.pk:04d})')
+        # A user that no longer exists keeps what was stored.
+        self.assertEqual(rows[missing.id]['new_value'], 'Former Admin')
 
     def test_facets_list_every_recorded_category_and_action(self):
         ActivityLog.objects.all().delete()

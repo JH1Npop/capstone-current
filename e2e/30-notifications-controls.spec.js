@@ -53,9 +53,17 @@ for (const [username, path] of accounts) {
       await page.goto(path);
       await expect(page.getByRole('button', { name: /^All/ })).toBeVisible({ timeout: 30000 });
 
+      // Earlier full-suite journeys can leave hundreds of notices for this account.
+      // Start from an empty inbox so the notice created below is on the UI's first page.
+      const clearResponse = await request.delete('/api/notifications/delete_all/', { headers });
+      expect(clearResponse.ok()).toBeTruthy();
+      await page.reload();
+      await expect(page.getByRole('button', { name: /^All/ })).toBeVisible({ timeout: 30000 });
+
       // ── A new notification appears while the page is open ──
       const firstId = await newRequest();
-      const card = (id) => page.locator('div.rounded-lg').filter({ hasText: new RegExp(`#${id}\\b`) }).first();
+      // A notification card (not the "Deleted …" notice, which also quotes the title).
+      const card = (id) => page.locator('div.rounded-lg:not([role])').filter({ hasText: new RegExp(`#${id}\\b`) }).first();
       await expect(card(firstId)).toBeVisible({ timeout: 30000 });
       const firstNotice = (await mine()).find((n) => String(n.message).includes(`#${firstId}`));
 
@@ -63,7 +71,7 @@ for (const [username, path] of accounts) {
       await page.getByRole('button', { name: /^Unread/ }).click();
       await expect(page.getByRole('button', { name: /^Unread/ })).toHaveAttribute('aria-pressed', 'true');
       await expect(card(firstId)).toBeVisible();
-      await page.getByRole('button', { name: 'Info', exact: true }).click();
+      await page.getByRole('button', { name: 'Updates', exact: true }).click();
       await expect(card(firstId)).toBeVisible();
       await page.getByRole('button', { name: 'Success', exact: true }).click();
       await expect(card(firstId)).toHaveCount(0);
@@ -73,6 +81,14 @@ for (const [username, path] of accounts) {
       await card(firstId).getByRole('button', { name: /^Mark as read: / }).click();
       await expect.poll(async () => (await mine()).find((n) => n.id === firstNotice.id)?.status).toBe('read');
       await expect(card(firstId).getByRole('button', { name: /^Mark as read: / })).toHaveCount(0);
+
+      // ── "Open …" goes to the record (a client's request, the office's ticket list), then back ──
+      await card(firstId).getByRole('button', { name: /^Open / }).click();
+      await expect(page).toHaveURL(username === 'client_test'
+        ? new RegExp(`/client/requests/${firstId}\\?entity=request`)
+        : /\/admin\/service-tickets/);
+      await page.goto(path);
+      await expect(card(firstId)).toBeVisible({ timeout: 30000 });
 
       // ── Delete one ──
       await card(firstId).getByRole('button', { name: /^Delete notification: / }).click();

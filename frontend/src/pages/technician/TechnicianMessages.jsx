@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
@@ -45,6 +45,54 @@ const formatTime = (value) => {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 };
 
+const toDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+const dayKey = (value) => {
+  const date = toDate(value);
+  return date ? `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` : '';
+};
+const daysAgo = (date) => {
+  const today = new Date();
+  const startOf = (day) => new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+  return Math.round((startOf(today) - startOf(date)) / 86400000);
+};
+
+// The divider between days in a conversation: "Today", "Yesterday", "Mon, Nov 3", "Jun 18, 2025".
+const formatDayLabel = (value) => {
+  const date = toDate(value);
+  if (!date) return '';
+  const ago = daysAgo(date);
+  if (ago === 0) return 'Today';
+  if (ago === 1) return 'Yesterday';
+  return date.getFullYear() === new Date().getFullYear()
+    ? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+// The room list: the time for today, otherwise "Yesterday" or the date.
+const formatRoomStamp = (value) => {
+  const date = toDate(value);
+  if (!date) return '';
+  const ago = daysAgo(date);
+  if (ago === 0) return formatTime(value);
+  if (ago === 1) return 'Yesterday';
+  return date.getFullYear() === new Date().getFullYear()
+    ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+// The full date and time, for hover text and screen-reader labels.
+const formatFullDateTime = (value) => {
+  const date = toDate(value);
+  if (!date) return '';
+  return date.toLocaleString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+};
+
 // Same limits as the server (messages_app/serializers.py): checked when picking, not after upload.
 const MAX_MESSAGE_LENGTH = 5000;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -76,12 +124,22 @@ export default function TechnicianMessages() {
   const [sending, setSending] = useState(false);
   const [imagePreview, setImagePreview] = useState('');
   const [previewAttachment, setPreviewAttachment] = useState(null);
+  // Attachment links that did not load (for example a file missing from storage): shown as a placeholder.
+  const [failedImageUrls, setFailedImageUrls] = useState(() => new Set());
+  const markImageFailed = (url) => setFailedImageUrls((current) => (current.has(url) ? current : new Set(current).add(url)));
   const [editingMessage, setEditingMessage] = useState(null);
   const [editText, setEditText] = useState('');
   const [confirmUnsendMessage, setConfirmUnsendMessage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  // One timer for the notice: a new notice restarts it, so an older timer cannot clear a newer notice.
+  const statusTimerRef = useRef(null);
+  const clearStatusSoon = () => {
+    window.clearTimeout(statusTimerRef.current);
+    statusTimerRef.current = window.setTimeout(() => setStatusMessage(''), 4000);
+  };
+  useEffect(() => () => window.clearTimeout(statusTimerRef.current), []);
   // Errors from the edit and unsend dialogs are shown inside them, not behind them.
   const [dialogError, setDialogError] = useState('');
   const [attachmentError, setAttachmentError] = useState('');
@@ -243,7 +301,7 @@ export default function TechnicianMessages() {
       setError('');
       setAttachmentError('');
       setStatusMessage(`Message sent to ${targetRoom.name}.`);
-      window.setTimeout(() => setStatusMessage(''), 2500);
+      clearStatusSoon();
     } catch (sendError) {
       setError(sendError.message || 'Unable to send message.');
     } finally {
@@ -304,7 +362,7 @@ export default function TechnicianMessages() {
       setEditingMessage(null);
       setEditText('');
       setStatusMessage('Message updated.');
-      window.setTimeout(() => setStatusMessage(''), 2500);
+      clearStatusSoon();
     } catch (editError) {
       setDialogError(editError.message || 'Unable to edit message.');
     }
@@ -319,7 +377,7 @@ export default function TechnicianMessages() {
       )));
       setConfirmUnsendMessage(null);
       setStatusMessage('Message unsent.');
-      window.setTimeout(() => setStatusMessage(''), 2500);
+      clearStatusSoon();
     } catch (deleteError) {
       setDialogError(deleteError.message || 'Unable to unsend message.');
     }
@@ -394,7 +452,7 @@ export default function TechnicianMessages() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="truncate text-sm font-semibold text-slate-950">{room.name}</div>
-                          {room.timestamp ? <div className="text-xs text-slate-400">{formatTime(room.timestamp)}</div> : null}
+                          {room.timestamp ? <time dateTime={room.timestamp} title={formatFullDateTime(room.timestamp)} className="block text-xs text-slate-400">{formatRoomStamp(room.timestamp)}</time> : null}
                         </div>
                         <div className="mt-0.5 truncate text-xs text-slate-500">{room.subtitle}</div>
                         <div className="mt-1 truncate text-sm text-slate-500">{room.lastMessage}</div>
@@ -437,9 +495,19 @@ export default function TechnicianMessages() {
                 selectedMessages.map((message, index) => {
                   const sentByCurrentUser = message.senderId === user?.id;
                   const previousMessage = selectedMessages[index - 1];
-                  const sameSender = previousMessage?.senderId === message.senderId;
+                  // A new day starts with a date divider, and the sender's name is shown again after it.
+                  const newDay = !previousMessage || dayKey(previousMessage.timestamp) !== dayKey(message.timestamp);
+                  const sameSender = !newDay && previousMessage?.senderId === message.senderId;
                   return (
-                    <div key={message.id} className={`flex ${sentByCurrentUser ? 'justify-end' : 'justify-start'} ${sameSender ? 'mt-1' : 'mt-4'}`}>
+                    <Fragment key={message.id}>
+                    {newDay && formatDayLabel(message.timestamp) ? (
+                      <div role="separator" aria-label={formatDayLabel(message.timestamp)} className="my-4 flex items-center gap-3 text-xs font-semibold text-slate-500">
+                        <span className="h-px flex-1 bg-slate-200" aria-hidden="true" />
+                        <span className="rounded-full bg-white px-3 py-1 shadow-sm ring-1 ring-slate-200">{formatDayLabel(message.timestamp)}</span>
+                        <span className="h-px flex-1 bg-slate-200" aria-hidden="true" />
+                      </div>
+                    ) : null}
+                    <div className={`flex ${sentByCurrentUser ? 'justify-end' : 'justify-start'} ${sameSender ? 'mt-1' : 'mt-4'}`}>
                       <div className={`flex max-w-[88%] items-end gap-2 sm:max-w-lg ${sentByCurrentUser ? 'flex-row-reverse' : ''}`}>
                         {!sentByCurrentUser && !sameSender ? (
                           <div className="grid h-8 w-8 flex-none place-items-center rounded-full bg-slate-700 text-xs font-bold text-white">
@@ -462,7 +530,12 @@ export default function TechnicianMessages() {
                               <p className="text-sm italic leading-6">Message unsent</p>
                             ) : (
                               <>
-                                {message.imageUrl ? (
+                                {message.imageUrl && failedImageUrls.has(message.imageUrl) ? (
+                                  <div role="img" aria-label="Image unavailable" className="flex min-h-20 w-56 max-w-full items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                                    <FiImage size={18} aria-hidden="true" />
+                                    <span>Image unavailable</span>
+                                  </div>
+                                ) : message.imageUrl ? (
                                   <button
                                     type="button"
                                     onClick={() => setPreviewAttachment({
@@ -475,6 +548,7 @@ export default function TechnicianMessages() {
                                       src={message.imageUrl}
                                       alt="Message attachment"
                                       className="max-h-72 w-full max-w-xs object-cover"
+                                      onError={() => markImageFailed(message.imageUrl)}
                                     />
                                   </button>
                                 ) : null}
@@ -487,7 +561,7 @@ export default function TechnicianMessages() {
                             )}
                           </div>
                           <div className={`mt-1 flex items-center gap-2 text-xs ${sentByCurrentUser ? 'justify-end text-slate-400' : 'ml-1 text-slate-400'}`}>
-                            <span>{formatTime(message.timestamp)}</span>
+                            <time dateTime={message.timestamp} title={formatFullDateTime(message.timestamp)}>{formatTime(message.timestamp)}</time>
                             {message.editedAt && !message.isDeleted ? <span>Edited</span> : null}
                             {sentByCurrentUser && !message.isDeleted ? (
                               <span className="inline-flex overflow-hidden rounded-full border border-slate-200 bg-white">
@@ -495,7 +569,7 @@ export default function TechnicianMessages() {
                                   type="button"
                                   onClick={() => openEditMessage(message)}
                                   className="grid h-6 w-7 place-items-center text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                                  aria-label={`Edit message sent ${formatTime(message.timestamp)}`}
+                                  aria-label={`Edit message sent ${formatFullDateTime(message.timestamp)}`}
                                 >
                                   <FiEdit2 size={12} />
                                 </button>
@@ -503,7 +577,7 @@ export default function TechnicianMessages() {
                                   type="button"
                                   onClick={() => { setDialogError(''); setConfirmUnsendMessage(message); }}
                                   className="grid h-6 w-7 place-items-center border-l border-slate-200 text-slate-500 transition hover:bg-red-50 hover:text-red-600"
-                                  aria-label={`Unsend message sent ${formatTime(message.timestamp)}`}
+                                  aria-label={`Unsend message sent ${formatFullDateTime(message.timestamp)}`}
                                 >
                                   <FiTrash2 size={12} />
                                 </button>
@@ -513,6 +587,7 @@ export default function TechnicianMessages() {
                         </div>
                       </div>
                     </div>
+                    </Fragment>
                   );
                 })
               )}
@@ -666,13 +741,17 @@ export default function TechnicianMessages() {
                   <p className="text-sm text-slate-500">Preview attachment</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <a
-                    href={previewAttachment.url}
-                    download
-                    className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-700"
-                  >
-                    <FiDownload size={15} /> Download
-                  </a>
+                  {failedImageUrls.has(previewAttachment.url) ? null : (
+                    <a
+                      href={previewAttachment.url}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-700"
+                    >
+                      <FiDownload size={15} /> Download
+                    </a>
+                  )}
                   <button
                     type="button"
                     onClick={() => setPreviewAttachment(null)}
@@ -683,11 +762,18 @@ export default function TechnicianMessages() {
                 </div>
               </div>
               <div className="bg-slate-950 p-4">
-                <img
-                  src={previewAttachment.url}
-                  alt={previewAttachment.name || 'Message attachment'}
-                  className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain"
-                />
+                {failedImageUrls.has(previewAttachment.url) ? (
+                  <p role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-slate-300">
+                    <FiImage size={18} aria-hidden="true" /> This image is no longer available.
+                  </p>
+                ) : (
+                  <img
+                    src={previewAttachment.url}
+                    alt={previewAttachment.name || 'Message attachment'}
+                    className="mx-auto max-h-[72vh] w-auto max-w-full rounded-lg object-contain"
+                    onError={() => markImageFailed(previewAttachment.url)}
+                  />
+                )}
               </div>
             </div>
           </div>

@@ -1,8 +1,24 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-11-05 (diagram pack, data dictionary, bug sweep, client-friendly document templates steps 1-5 and 7) Asia/Singapore**
-Current objective (latest): **Replace the tracked academic context-diagram source with a current, editable Draw.io XML while preserving the professor-required single-system-process format and system database. The diagram now shows Client, Technician, Administrator, and Superadministrator; the AFN-SERVE system boundary; OpenStreetMap/Nominatim plus OpenRouteService/OSRM routing; Brevo email; Cloudinary private storage; and the PostgreSQL/development-SQLite data store. Sixteen directional, labeled flows cover the audited account, request, calendar, ticket, dispatch, field, inventory, document, financial, communication, after-sales, maintenance, analytics, file, provider, and persistence boundaries. React/Vite, Django/DRF/Daphne, Redis/Channels, and browser/PWA are explicitly identified as internal implementation components rather than external actors. PowerShell XML parsing passed with 13 vertices and 16 edges, and scoped diff checking passed aside from the existing Windows line-ending notice. No runtime code, schema, migration, dependency, database record, external service, commit, push, or deployment changed.**
+Last updated: **2026-11-13 (Technician Tracking readable update age) Asia/Singapore**
+Current objective (latest): **Replace Technician Tracking's unbounded minute-only GPS age label with readable elapsed units. Fresh updates retain `just now` and minute precision; older positions now progress through hours, days, weeks, months, and years, so the reported `Updated 1097 min ago` becomes `Updated 18 hours ago`. The complete administrator/superadmin Technician Tracking control journeys passed 2/2 with that exact injected age, and the Vite 8.3.5 production build passed with 2,571 modules. No backend, API, schema, migration, permission, dependency, persistent data, commit, push, or deployment changed.**
+Current objective (latest): **Preserve the Admin Documents solar-commissioning success confirmation when the successful save refreshes ticket prefill data. The checklist loader now preserves that specific confirmed-save message during its background reload while still clearing stale non-success feedback; ticket and document changes and the beginning of a later save retain their existing explicit resets. The focused all-document save/reload journey passed three post-fix times in fresh isolated E2E invocations, including the final narrowed rule, and the final Vite 8.3.5 production build passed with 2,571 modules. The full 370-scenario Playwright gate remains incomplete because an approximately 8.8-hour host suspension invalidated its later results. No backend, API, schema, migration, permission, dependency, persistent data, commit, push, or deployment changed.**
+Current objective (latest): **Align the Technician Tracking details modal with the system's established dialog hierarchy and remove the wide empty layout visible for technicians without jobs. The modal now uses the standard compact `max-w-3xl` shell, a status-led identity header with icon-only close, a full-width four-column live-location summary, explicit GPS and active-job badges, a dedicated current-jobs section with a concise no-assignment state, and a stable footer for Call, Email, and Open Service Tickets. Coordinates span the remaining summary width instead of leaving an orphan card. Desktop/mobile superadmin tracking journeys passed 2/2 with a new <=780px desktop-width assertion; exhaustive admin/superadmin tracking-control journeys passed 2/2; a final desktop screenshot run passed 1/1 and visual inspection confirmed balanced spacing, readable job cards, and stable actions. The Vite 8.3.5 production build passed with 2,571 modules. No backend, API, schema, migration, permission, dependency, data, commit, push, or deployment changed.**
+Current objective (latest): **Replace Technician Tracking's inline selected-technician panel with a true overlay modal so operators do not have to scroll below the map to inspect a person. Explicit View details actions in the technician list, technician marker popup, and selected-route popup open a viewport-bounded modal above the map; Center now only centers the map. The modal preserves GPS, movement, trail, coordinates, contacts, current jobs, ticket links, and permission boundaries, while adding background scroll lock, backdrop/Escape/Close dismissal, initial and trapped focus, trigger-focus restoration, and a mobile bottom-sheet treatment. Desktop/mobile superadmin journeys passed 2/2, the final focus-containment mobile rerun passed 1/1, and exhaustive admin/superadmin tracking-control journeys passed 2/2. The Vite 8.3.5 production build passed with 2,571 modules. No backend, API, schema, migration, permission, dependency, persistent data, commit, push, or deployment changed.**
+Current objective (latest): **Modernize the User Management Access column without changing authorization or account behavior. Stacked legacy pills are replaced by a compact single-row segmented control: a dot-led plain-language summary (`All areas`, `1 area`, `N areas`, `Read only`, or `Technician only`) opens the existing accessible-areas viewer, while an adjacent settings action opens the existing capability editor for authorized targets. Read-only rows use the same modern summary treatment, the column reserves enough width to prevent wrapping, loading has an icon state, and accessible labels remain explicit. The complete superadmin User Management browser journey passed 1/1 after asserting same-row/equal-height geometry and both dialogs, and the Vite 8.3.5 production build passed with 2,571 modules. No backend, API, schema, migration, permission, dependency, data, commit, push, or deployment changed.**
+Current objective (latest): **Allow localhost authentication when the computer has no public-internet connection. The frontend API layer no longer rejects every write solely because `navigator.onLine` is false; it attempts the actual API request so a reachable local/LAN backend can respond, while genuinely unreachable requests still fail through the existing Axios error path. The online-status hook treats loopback hosts (`localhost`, `127.0.0.1`, IPv6 loopback, and `0.0.0.0`) as locally available, preventing a false offline banner when Django is reachable. New browser scenario 2.9 forced `navigator.onLine=false` and passed the complete local health-check, login POST, admin redirect, and no-false-banner journey 1/1. The Vite 8.3.5 production build passed with 2,571 modules. No backend, API payload, schema, migration, permission, dependency, data, commit, push, or deployment changed. External email, Cloudinary, maps, routing, and third-party data still require their own network availability.**
+Current objective (latest): **Fix local profile-image 404s caused by extensionless Cloudinary public IDs being routed as raw files. `AFNMediaCloudinaryStorage` now treats files inside the image-validated `profiles/` path as Cloudinary image resources even when the stored public ID has no extension, while unrelated extensionless files remain raw. The restored `iman` record now serializes as `https://res.cloudinary.com/drkmsxdct/image/upload/media/profiles/ITPS415-Aviles-Emmanuel_mx3pnk` instead of the broken `/raw/upload/` URL. Nine focused storage/profile serialization tests pass. A live provider GET could not be completed because the local machine could not connect to Cloudinary, so remote asset existence is not claimed. No database record, schema, migration, dependency, API shape, permission, commit, push, or deployment changed.**
+Current objective (latest): **Fix clipped and cramped role badges in the User Management table. The Role column now reserves a 144px minimum width, row badges are non-wrapping inline-flex elements, and row values use singular labels (`Administrator`, `Technician`, `Client`) while category filters retain their plural labels. The complete superadmin User Management browser journey passed 1/1 with an explicit assertion that the Administrator badge remains fully inside its Role cell, and the Vite 8.3.5 production build passed with 2,571 transformed modules. No backend, API, schema, migration, permission, dependency, data, commit, push, or deployment changed.**
+Current objective (latest): **Remove the decorative shield icon from the Create User modal's Secure access section while preserving its heading, guidance, password visibility behavior, layout, and accessibility relationship. The unused icon import was removed and the Vite 8.3.5 production build passed with 2,571 transformed modules. No backend, API, test contract, schema, migration, permission, dependency, data, commit, push, or deployment changed.**
+Current objective (latest): **Improve the User Management Create User modal without changing account-creation rules. The modal now has a clearer responsive header, Account details and Secure access sections, a two-column desktop/single-column mobile layout, explicit optional-field labels, internal scrolling, reachable Cancel/Create actions, and an icon close control. Only the Password field has an accessible Show/Hide password control; Confirm password remains masked at all times. The complete superadmin User Management browser journey passed 1/1 after explicit visibility-toggle, confirm-mask, 390x844 containment, no-horizontal-overflow, validation, create/edit/access/deactivate/reactivate, and cleanup assertions. The Vite 8.3.5 production build passed with 2,571 modules. No backend, API, schema, migration, permission, dependency, development/staging/production record, commit, push, or deployment changed.**
+Current objective (latest): **Reset only local development data so the owner can create records manually through the current workflows, while preserving the existing `iman` superadmin account. A transaction-consistent pre-reset snapshot is stored at `backend/local_backups/db-consistent-before-fresh-current-flow-20261112.sqlite3` and passed SQLite integrity and foreign-key checks. An initial current-flow seed completed before a stop request could take effect, but it was fully superseded by a second flush; the final database contains exactly one active superadmin (`iman`) and its management profile, with zero service types, requests, tickets, inventory items, support cases, document definitions/templates, or SLA rules. Django check and final SQLite integrity/foreign-key checks pass. The ignored local database and ignored backup changed; no source schema, migration, dependency, E2E database, staging/production data, uploaded file, commit, push, or deployment changed. `progress.0005_ticketprogress_long_job_reports` remains unapplied because the reset did not authorize schema migration.**
+Current objective (latest): **Match the Client Support Assistant's open-panel dimensions and responsive positioning exactly to the Analytics Assistant while retaining client-specific content and behavior. Both assistants now use the same 31rem (496px) desktop width, 540px maximum height, mobile viewport bounds, and bottom/right breakpoint offsets. Focused client-assistant E2E passed 1/1 with explicit desktop size and mobile-containment assertions, and the Vite 8.3.5 production build passed with 2,571 transformed modules. No backend, API, schema, migration, route, permission, dependency, persistent record, commit, push, or deployment changed.**
+Current objective (latest): **Improve the client-side assistant across data accuracy, coverage, safety, navigation, accessibility, responsiveness, and failure behavior. The assistant now reads the same unified request/request-ticket model as My Requests, so pending requests without tickets are no longer invisible; it selects the next future confirmed appointment, reports technician assignments and support-case counts, understands explicit REQ/TKT references, and gives accurate guidance for rescheduling, dismissal, feedback, warranties, maintenance, solar assessments, purchase/payment records, notifications, profile security, installation, and offline limits. Suggestions follow the active client page, answers can offer multiple direct actions, freshness/partial-failure state is visible, static guidance remains available during API failure, and the dialog supports reset, Escape, input focus, bounded history, long-text wrapping, and a no-overflow mobile layout. The final live-data and forced-failure browser journeys passed 2/2, and the Vite 8.3.5 production build passed with 2,571 modules. No backend, API, schema, migration, route, permission, dependency, persistent record, commit, push, or deployment changed.**
+Current objective (latest): **Make the editable manual contract value in Sales Records readable at a glance without changing its numeric API/database contract. The office input now inserts three-digit grouping separators while typing (for example `1,000`, `10,000`, `100,000`, and `200,000.50`), retains an ungrouped numeric state for save/confirm, supports at most two decimal places and the model's 12 whole-number digits, rejects negative/non-numeric input, and keeps confirmation disabled for incomplete decimals. Administrator and superadministrator end-to-end journeys passed 2/2, including formatted entry, numeric persistence, confirmation, totals, payments, void/replacement, CSV export, and client display; 16 focused backend sales-record tests and the 2,571-module production build also passed. No API, schema, migration, route, permission, dependency, persistent database record, commit, push, or deployment changed.**
+Current objective (latest): **Compact the Technician Tracking controls and hide secondary filters until requested. The page now uses the shared SearchFilterBar: technician/job search, Refresh, and focus controls remain immediate, while Technician Status, GPS Health, and Ticket Display start collapsed behind an accessible Filters disclosure. Active choices appear as removable chips, Clear all resets search and all three filters, and live sync status plus the four operational counters remain in a separate compact summary card. Desktop screenshot review confirms the oversized always-expanded form is gone; administrator/superadministrator control journeys and desktop/mobile tracking workflows passed 4/4 total, and the Vite 8.3.5 production build passed with 2,571 modules. No API, schema, migration, route, permission, dependency, persistent database record, commit, push, or deployment changed.**
+Current objective (latest): **Validate the entire intentionally dirty candidate release before any commit, preserving every existing change and using only local SQLite or the isolated E2E database. Static checks, migration drift, the 2,571-module frontend build, all 930 backend tests, and the exact daily automation entry point pass. A full 367-test sequential Playwright run completed with 361 passes and six failures; Windows/network suspension contaminated two, one expected copy that was intentionally removed, and three exposed long-run test-state/timing assumptions. Every failed product journey passed from a fresh isolated database, the stale copy assertion was removed, and notification/user-directory E2E setup was hardened for accumulated records. No development, staging, or production database, secret, commit, push, or deployment was changed. A second uninterrupted 367-test run after the final E2E-only hardening has not been completed.**
+Current objective (latest): **Prepare a fail-closed, free GitHub Actions scheduler for the existing daily operational automation. The workflow runs at 8:17 AM Asia/Manila or by manual dispatch, validates every required deployed secret, writes the Aiven CA certificate only to the ephemeral runner, checks Django configuration, and then runs `run_operational_automations --mode daily`. It remains inert until reviewed, committed, pushed to the repository's default branch, and configured with staging secrets; no secret, live database, migration, commit, push, or deployed service is changed in this work session. The free workflow deliberately does not claim the separate 30-minute SLA/auto-dispatch cadence.**
 Current objective (latest): **Audit the complete `Copy of AFN-SERVE: REVISION CAPSTONE 2` Chapters 1–5 against the current repository end to end without changing application behavior or data. `docs/quality/PAPER_SYSTEM_E2E_ALIGNMENT_AUDIT.md` now records chapter-level alignment, the actual React/Vite + Django/DRF/Daphne + PostgreSQL/Redis/Cloudinary/Brevo/ORS architecture, the measured 60-model boundary, current capability/workflow maps, Chapter III corrections, the 151-versus-150 sample inconsistency, Chapter IV's unsupported perfect 5.00 results and future-tense language, and the absence of substantive Chapter V content. Django check, migration drift, and the 2,564-module build passed. The backend gate ran 693 tests with 685 passed, 7 skipped, and one reproduced 403-versus-401 authentication-contract failure. The isolated browser gate ran all 230 scenarios with 224 passed and six failures bounded to Calendar layering/collisions, commissioning-save confirmation, obsolete location selectors in two major journeys after the request redesign, and a rejection journey page-state mismatch. No runtime code, schema, migration, dependency, database record, stored object, external document, commit, push, or deployment changed.**
 Current objective (latest): **Make active custom Smart Documents discoverable from the main Admin Documents row. `AdminDocuments.jsx` now loads active definitions through the existing protected API, retains the six workflow-bound editors as items 1-6, appends active custom definitions as subsequent numbered items, and opens a selected custom item directly in the existing generic Fill template workspace. The installed local `preventive-maintenance-report` therefore appears as item 7 for document managers without becoming a hardcoded core editor or gaining workflow authority. Desktop navigation uses a responsive four-to-seven-column wrapping grid so item 7 is visible rather than hidden beyond the old horizontal strip; narrow screens retain bounded horizontal scrolling. The list refreshes after the Fill template, replacement, or library dialogs close. The Vite production build passed with 2,564 modules, and a read-only Django query confirmed the six core definitions plus active custom definition ID 9. The repository has no lint script, so the attempted lint command did not run; no lint result is claimed. No model, migration, dependency, document record, stored file, commit, push, or deployment changed.**
 Current objective (latest): **Create and prove a seventh AFN document using only the Smart Documents system just implemented. Local development now has active custom definition `preventive-maintenance-report` (ID 9), ten typed administrator-defined fields, default design `AFN Standard` (ID 13), valid/ready-auto/active private DOCX version 10, generated ticket-630 instance 1, and ready archived output 1. The branded US-Letter DOCX uses approved ticket placeholders plus registered maintenance fields for date/type, equipment condition, safety checks, work performed, findings, recommendations, next service, and acknowledgments. The real APIs created the definition/fields/design/version, validated and test-rendered it, activated/enabled it, filled/previewed/generated it, and archived it. Structural inspection found six tables, expected AFN/ticket/work/recommendation text, and zero unresolved placeholders. Authorized private output download returned HTTP 200, a valid 38,609-byte DOCX, and an exact stored SHA-256 match. A transaction-consistent pre-change SQLite backup passed integrity. A desktop Word PDF-export attempt hung; it was stopped, its exact hidden process and all temporary local artifacts were removed, and no PDF evidence is claimed. The registered Cloudinary sources/output and local development records intentionally remain. No new entity, model, migration, dependency, hardcoded core editor, staging/production record, commit, push, or deployment was added.**
@@ -5618,3 +5634,1272 @@ Validation: `manage.py test` 752 OK (7 skipped); `makemigrations --check` no cha
 - Verified live: the staging frontend bundle now includes the new `AdminUserManagement` (contains "Reactivate") and `AdminActivityLogs` (contains the per-event details panel) chunks, and has no `AdminOperationsReport` chunk; backend `/health/ready/` and `/api/health/database/` return 200; `/api/admin/activity-logs/facets/` returns 401 without a login (the route exists; old code would return 404).
 - Not exercised on staging (needs a login): the new validation on landing-page links and promotions, the activity-log action filter, and the User Management actions. Check these through the UI.
 - Operations Report route `/admin/operations-report` now redirects to the dashboard on staging.
+
+### 2026-11-07 Activity Logs: readable wording for calendar and other record names
+
+- **Problem.** An event could read "Calendarclosure was updated" / "updated the Reopened At for 2026-11-11 - All day (Closed)": model names arrive lower-cased (so camelCase splitting cannot work) and unknown fields were shown as raw column names.
+- **Page (`AdminActivityLogs.jsx`).** Names for every tracked model (Calendar availability, After-sales case, SLA rule, System settings, Quotation, Sales record, and so on, including the Record ID line in Change Details); a field-name fallback that drops `_id`, turns `…_at` into "… time" and lowercases (so no more "Reopened At"); calendar events read as sentences ("… reopened 2026-11-11 - All day (Closed).", "… closed …", "… changed the availability for … to Limited."), with the title "Calendar availability was changed". This applies to events already recorded, because the sentence is built in the browser.
+- **Server (`users/signals.py`).** Labels for the same models and fields, and a `CalendarClosure` sentence, so newly stored messages (used by search, export and the fallback) read the same way. No schema change; stored rows are not rewritten.
+- **Tests.** `e2e/34-admin-activity-logs-controls.spec.js` closes then reopens a day through the API and checks the Activity Logs sentence, the absence of "Calendarclosure" / "Reopened At", and the "Calendar availability #id" detail. 2 passed. Backend `users.tests.AdminActivityLogTests` and `services` 515 OK (7 skipped).
+- **Follow-up, same day (values, not only names).** Activity Logs also formats stored values: JSON and Python-style lists and objects ("mon, tue, wed", "3 entries", "N settings changed or set"), ISO timestamps and dates (readable local date/time), `…_id` values (`#7` instead of a bare 7) and "Ticket 3" (now `TKT-0003`, as everywhere else). `e2e/34` opens every calendar event and checks there is no raw `…+00:00` timestamp or "Ticket N". Not changed: ids are still shown as `#N` rather than names, because the page cannot look up names; resolving them needs the server to store the name when the event is recorded (done today only for ticket technician/admin owner), and events already recorded keep what was stored.
+- **Ids in the app's own style.** Activity Logs now shows id columns as `TECH-0004`, `ADM-0002`, `CL-0005`, `TKT-0003` (technician, admin owner, client, ticket) and `USR-0007` for "some user" columns (last editor, confirmed/voided by, assigned owner), using `formatRoleId`; other id columns stay `#N`. The Technical Context "Actor account ID" uses the same `USR-0007` form (it was unpadded `USR-7`). The `…by` columns cannot show ADM-/SA- because the log does not record that user's role.
+- **Ids say which kind of account (owner or admin).** `ActivityLogSerializer` (`users/serializers.py`) now resolves user-id columns (technician, admin owner, client, assigned owner, last editor, confirmed/voided/performed/generated/finalized/prepared/reviewed by) at read time to `Name (CODE)` with the app's role prefix: `SA-0001` owner, `ADM-0002` admin, `TECH-0004` technician, `CL-0005` client. A user that no longer exists keeps the stored value. This uses the user's current name and role, and also works for events already recorded (nothing stored is rewritten). The Technical Context "Actor account ID" now uses the actor's role (`SA-0001`, not `USR-0001`); `USR-` remains only as a fallback when the role is unknown. One user lookup per distinct id per request. Test: `users.tests.AdminActivityLogTests.test_user_id_columns_show_the_name_and_role_id`; `e2e/34` checks `SA-`/`ADM-` and no `USR-`.
+
+## Technician pages audit (started 2026-11-07)
+
+### Technician Dashboard: every control checked, eight defects fixed
+
+- **"Today" was the UTC date, not the business day.** `TechnicianDashboardView.dashboard` (`services/views/technician.py`) used `timezone.now().date()`, so between midnight and 08:00 local time yesterday's jobs still counted as upcoming, "Completed Today" counted yesterday's completions and "last 7 days" was off by a day. It now uses `business_today()` and the business-day bounds (`business_timezone()`), the same helpers as elsewhere. Test: `services.tests.test_technician_dashboard_business_day` (04:00 local time on the 7th: yesterday's job excluded, a completion at 04:30 counted, one at 18:00 the day before not).
+- **A failed background refresh blanked the whole dashboard.** Any error on the 20-second auto-refresh replaced the data with the empty state. It now keeps what is on screen and shows "… Showing the last information we received." with Try again and Dismiss (`role="alert"`). A failed first load still shows the empty state, with the error.
+- **The dashboard loaded twice on every visit.** The fetch depended on the technician's display name, which changes from the username to the full name after the first load. It now depends on the signed-in user.
+- **The four cards were not clickable and showed zeros while loading.** They now open the page they count (Schedule, Jobs, Job History, Notifications; only when the technician has that capability) and show "–" while loading. The current job panel says "Loading your jobs…" instead of "No active field job right now" during the first load.
+- **The "waiting for location" notice never went away.** Starting location sharing showed "Waiting for the phone location…" forever. It now becomes "Location sharing is on. Dispatch can see where you are." once a position arrives, and every notice can be dismissed (`role="status"`).
+- **Buttons opened the list, not the job.** "Open Jobs/Continue Job" and "Request Equipment" now open that ticket (`?ticketId=`); the first is now "Open Job". "Navigate to Job" with no map coordinates was a link that looked disabled but still worked from the keyboard; it is now a real disabled button that says why.
+- **Date-only values were parsed as UTC** (the day before in some timezones); they are now local. The availability line no longer says "Currently on a job" when no job is in progress ("Not available for dispatch").
+- **Notifications panel.** Added a "View all" link, and a failed Delete all is shown inside the dialog instead of only in the console; success is confirmed. Added a Refresh button; recent-activity buttons are named per job.
+- **Tests.** New spec `e2e/35-technician-dashboard-controls.spec.js` (tech_test): the four cards open their pages, current-job links carry the ticket, Refresh, a failed refresh keeping the data and Try again, location sharing notice and dismissal, notifications panel (View all, a failed Delete all inside its dialog, then success). 1 passed. Existing 4.1 passes; `services.tests.test_staff_workspace_capability_access` and the new business-day test pass.
+
+### Technician Dashboard: second, full pass (every flow with real data)
+
+- **Why a second pass.** The first pass did not exercise Start Job, Open Checklist, Up Next, readiness, the equipment reminder, schedule and activity links, real notification deletion, location refusal, capability hiding or the phone layout. This pass does, with its own technicians and jobs.
+- **Three more defects fixed.**
+  - *Late replies overwrote newer ones.* An automatic refresh that answered after a newer refresh could clear its error or replace newer data (found by the test). `loadData` now ignores any reply that is not the newest request.
+  - *A job days away was shown as "Current Focus".* With nothing under way, the first upcoming job is now labelled "Next Job".
+  - *"Recent Activity" only listed recent assignments.* It now lists jobs that actually changed in the last 7 days (assignment, status change from `ServiceStatusHistory`, or completion), newest first, with a "Last update" time (`last_activity_at` on each row; `services/views/technician.py`). Backend test `test_recent_activity_is_what_changed_lately_newest_first`.
+- **Regression the pass caught in the first pass's change.** The new Unread Alerts card was named "… Open notifications", the same as the top bar's bell button (two controls with one name; broke `04` 4.6b). Its hint is now "Go to notifications".
+- **Tests.** `e2e/35-technician-dashboard-controls.spec.js` rewritten. It creates three technicians: one at the site, one limited to Dashboard and Jobs, and one on an inspection. It checks:
+  - **Data:** a single load per visit, Current Focus, High priority, the readiness rows, the equipment reminder (Clamp meter x2) and Up Next.
+  - **Start Job:** the API changes to In Progress, then Continue Job and Open Checklist appear, and the checklist link opens.
+  - **Links:** Upcoming Schedule and Recent Activity (newest first, with a last update) open the right job; the four cards and the page links go to the right pages.
+  - **Refresh:** a failed refresh keeps the data, with Try again.
+  - **Location:** allowed sharing reaches the server (the server's position updates); refused sharing shows a clear message.
+  - **Notifications:** the real ones from the assignments; Delete all fails inside its dialog, then really deletes (API count 0).
+  - **Layout and access:** no sideways scroll at phone width. The limited technician sees "Next Job" and no Schedule, History, Navigate or Checklist buttons, and the cards for those pages are not clickable.
+  - **Inspection:** Open Checklist opens the inspection checklist, and there is no Request Equipment.
+  - **Results:** 1 passed, twice. `04-technician-workspace` 12 passed (4.6 failed once in a combined run and passed twice after). Backend: the business-day and recent-activity tests, `test_staff_workspace_capability_access` and `test_technician_availability_reconciliation` pass (15).
+- **Not covered:**
+  - the 20-second auto-refresh timer itself (only its effect, through the late-reply guard);
+  - On Hold and crew-member (non-lead) jobs on the dashboard.
+
+### Technician Jobs: every control and flow checked with real jobs, eleven defects fixed
+
+- **Files.** `frontend/src/hooks/useTechnicianJobs.js` (logic) and `frontend/src/pages/technician/TechnicianJobs.jsx`.
+- **Errors appeared behind the dialogs.** Failures from Start Job, Put on Hold, Resume and Request Equipment inside the job details, and from Finish Job, were shown at the top of the page under the open dialog. The details dialog and the Finish Job dialog now show their own error (`role="alert"`).
+- **Finish Job failures were shown in green** (the success banner was reused for errors). They now appear in red inside the dialog.
+- **Errors disappeared on their own after 4–5 seconds**, and overlapping timers could clear a newer message. Errors now stay until dismissed; confirmations fade after 6 seconds and can be dismissed.
+- **Status messages used raw codes** ("Job status updated to in_progress."). They now read "TKT-0004 started. Work is now in progress.", "… resumed.", "… is on hold.", "… completed. It is now in Job History."
+- **An equipment request could go to the wrong job.** The equipment and hold forms kept their selections when the technician closed one job and opened another. Closing a job now clears them; closing with something entered asks "Discard what you entered?".
+- **Jobs beyond the fifth could not be opened.** Only five cards were shown with "+ N more active jobs" and no way to see them. A "Show N more active jobs" / "Show fewer" control now shows all.
+- **"No active jobs" flashed while the list was loading**, and a failed reload emptied the list. The page now says "Loading your jobs…", keeps the last list on a failed refresh ("Showing the last list we received."), ignores late replies, and has a Refresh button.
+- **Photos the server refuses were accepted.** The picker took any image; the server accepts only JPG, PNG or WebP up to 10 MB, 20 at most. Refused files are now left out with the reason ("Not added: animation.gif is not a JPG, PNG or WebP photo; huge.png is larger than 10 MB."), and the picker offers only those types. Closing Finish Job with photos or notes added asks first.
+- **Every Start/Resume button said "Starting…"** while any one job was updating. Only the job being updated says so now.
+- **The equipment quantity check never ran.** The browser's own validation blocked the form first. The page now checks it and says "Enter a quantity between 1 and N for <item>." inside the dialog (`noValidate`).
+- **Accessibility.**
+  - Job cards were `role="button"` while containing other buttons and links. They are no longer buttons; the per-job "Details for TKT-0004" button opens them.
+  - Escape closes the equipment list first, then the dialog (asking first if something was entered).
+  - The Finish Job dialog has dialog semantics.
+  - The note fields are labelled and length-limited.
+- **Tests.** New spec `e2e/36-technician-jobs-controls.spec.js` (own lead and crew technicians, seven real jobs). It checks:
+  - **Loading and the list:** the loading message, "Show more" and "Show fewer", and a deep link opening a job.
+  - **Start Job from a card:** the API changes to In Progress, and the other cards say "Hold or finish … first".
+  - **Hold and resume:** the hold-reason check appears inside the dialog, then the real hold and resume (API).
+  - **Equipment:** the quantity check inside the dialog, a real request (API reservation), the form cleared between jobs, and the discard prompt on Escape.
+  - **Timeline:** it opens.
+  - **Finish Job:**
+    - refused photos are named;
+    - Finish stays disabled without a valid photo;
+    - closing with a photo asks first;
+    - a server failure appears inside the dialog;
+    - the real completion works (API Completed) and the card goes away.
+  - **Refresh:** a failed refresh keeps the list.
+  - **Phone layout:** no sideways scroll.
+  - **Crew member:** cannot put the job on hold.
+  - **Result:** 1 passed. `04` 4.2 was updated for the per-job Details names.
+
+### Technician Schedule: every control checked, nine defects fixed
+
+- **Clients appeared by username.** `TechnicianScheduleView` (`services/views/technician.py`) returned `client.username` ("client_test"); it now returns `{id, full_name}` like the other technician endpoints. It also uses the business day for its default start and refuses ranges over 120 days (no open-ended queries). Tests in `services.tests.test_technician_dashboard_business_day` (`TechnicianScheduleTests`).
+- **"Upcoming Tasks" listed past and finished jobs.** It showed the first six jobs of the whole calendar grid from the start of the month. It now lists jobs from today on that are not finished.
+- **A failed load hid the whole calendar**, including the month buttons, with no way to retry. The calendar stays, with a "Try again" alert.
+- **Every month change or toggle replaced the calendar with a skeleton.** The skeleton is now only for the first load; later loads dim the calendar. Fast month changes can no longer show an older month's jobs (newest request wins).
+- **The month count included the neighbouring months' days** in the grid; it now counts this month ("N scheduled tasks this month").
+- **The legend was a fixed list** (including "Assigned", which jobs never show, and missing the statuses technicians do see). It now lists the statuses on the calendar.
+- **Navigate was offered for finished jobs and to technicians without navigation access** (the route then sends them away). It is hidden in both cases.
+- **Buttons were named the same for every job** ("Details", "Open") or by raw id ("Navigate to ticket 12"). They now say "Details for TKT-0012", "Open TKT-0012", "Navigate to TKT-0012".
+- **Tests.** New spec `e2e/37-technician-schedule-controls.spec.js`. It creates its own technicians and jobs, one of them completed for real. It checks:
+  - month navigation and the month count;
+  - the client name rather than the username;
+  - Details and Navigate opening the right pages;
+  - Upcoming Tasks containing the future job and not the finished one;
+  - Show Completed Jobs showing the finished job, with no Navigate button, and the legend;
+  - a failed load keeping the controls, with Try again;
+  - Today;
+  - the phone calendar (tap the day, open the job) with no sideways scroll;
+  - no Navigate buttons for a technician without navigation access.
+
+  1 passed, twice; `04` 4.3 passes.
+
+### Technician Schedule: rebuilt for phone use (follow-up, same day)
+
+- **Why.** Technicians mostly use the app on their phones, and the schedule was a month grid first. Compared with the admin calendar it also lacked closed days, holidays and a day panel on larger screens.
+- **List view, the default on phones.** It shows the chosen month day by day from today, and always includes today ("Today", "Tomorrow" headings that stay on screen while scrolling). Each job card shows:
+  - the time first, then the service, ticket, client and address;
+  - three large buttons (at least 44 px): Open, Navigate (only if allowed and not finished) and Call client (`tel:`).
+- **Switching views.** A List/Month switch (`aria-pressed`) keeps the month grid one tap away; it is the default on a computer. The choice is remembered on the device (`localStorage`, guarded).
+- **Days to know about.** The server (`TechnicianScheduleView._day_notes`) now returns `day_notes` per date:
+  - holidays (from `AdminSettings.holiday_dates`);
+  - days outside `business_days` (ISO weekday 1–7);
+  - active calendar closures ("Closed: All day", "Limited: Morning", with the reason).
+
+  The list and both calendars show them. Closed days and holidays are tinted on the phone calendar. A plain day off appears only when it has jobs.
+- **Day panel on every screen size.** On a computer, a day's number now selects it, and its jobs show in the same large cards below the calendar, with that day's notes.
+- **Response shape.** `GET /api/technician/schedule/` now returns `{jobs, day_notes}` (it was a bare list). Each job's client includes `phone`. Only the Schedule page uses this endpoint; `fetchTechnicianSchedule` accepts both shapes. Also added a Refresh button and larger touch targets for the month buttons.
+- **Tests.**
+  - Backend: `TechnicianScheduleTests.test_schedule_lists_days_off_holidays_and_closures`; schedule tests updated for the new shape (5 pass).
+  - `e2e/37` adds a phone context. It checks:
+    - List is the default;
+    - Open, Navigate and Call (`tel:`) work, and Open is at least 44 px tall;
+    - a closed day shows with its reason;
+    - Open goes to the job;
+    - switching to Month is remembered after a reload;
+    - there is no sideways scroll.
+
+    The closure and the client's phone are restored afterwards. 1 passed; `04` 4.3 passes. Phone screenshots of both views were checked by eye.
+- **Still not done.** A job longer than one work day appears only on its first day (the admin calendar has the same limitation).
+
+### Long jobs (days to months): overdue rule, capacity and calendars
+
+- **Problem.** Services can be weeks or months long (duration in 8-hour work days), but three parts of the system assumed a job finishes in a day or two:
+  - **Overdue rule:** the seeded Execution delay rule (90/120 minutes) overrode the per-service estimate, so every job In Progress for more than 2 hours was overdue. It was then auto-escalated to Urgent with "URGENT: … overdue" notifications. This hit a 3-month installation on its first afternoon and an ordinary 8-hour job after 2 hours, and it counted nights and weekends.
+  - **Capacity:** dispatch capacity spread a long job over consecutive calendar days, including weekends and holidays.
+  - **Calendars:** both calendars showed a job only on its start date, and dropped it entirely once its start date was before the visible range.
+- **New module `services/work_calendar.py`** (pure functions, Settings loaded once per request). It defines:
+  - **Working days:** business days in Settings (ISO 1–7) minus holiday dates. Empty business days fall back to Mon–Fri.
+  - **A job's days:** day 1 is always its scheduled date, even on a day off; later days are working days.
+  - **Working time:** business hours on working days, at most the daily work limit (8 h or the overtime limit) per day, in the business timezone.
+  - **Closures do not count as days off.** `CalendarClosure` days are not removed: closures control new client bookings (a day can be closed as "Fully booked") and do not mean the crew is off.
+  - **Helpers:** `work_day_allocations`, `working_minutes_between`, `add_working_minutes`, `on_hold_intervals`, `tickets_overlapping` and `work_days_in_range`.
+- **1. Overdue rule (`services/sla.py`).** A job In Progress is late only after its own estimated duration plus extra time, counted in working time.
+  - **What the Settings value means now.** The Execution delay rule's warning/overdue minutes are that extra time. Settings shows a note: "Extra time allowed after a job's own estimated duration, counted in working hours on working days. Time on hold does not count."
+  - **Without the rule,** the extra is half the estimate (warning) and the full estimate (overdue), as before.
+  - **Time on hold** (from `ServiceStatusHistory`; Resume keeps the original `start_time`) is added back.
+  - **Not undone automatically.** Jobs already auto-escalated to Urgent under the old rule stay Urgent; change their priority by hand if needed.
+- **2. Capacity (`services/views/helpers.py`).** `build_ticket_daily_duration_allocations` uses the working calendar, so a 2-day job starting Friday occupies Friday and Monday, not Saturday. `get_technician_scheduled_minutes_by_date` stops counting a completed job after the day it finished, so a job finished early frees the days after. Dispatch scoring is otherwise unchanged.
+- **3. Calendars.** `GET /api/technician/schedule/` and `GET /api/admin/calendar/`:
+  - Both include jobs that started before the range and are still running in it (`tickets_overlapping`: jobs longer than one work day, up to 400 days back).
+  - Both return `work_days` per job (`[{date, day, of}]` inside the range).
+  - A finished job's days stop at the day it finished.
+  - **Technician schedule:** shows the job on each work day, with a "Day 3 of 20" badge ("Continuing job" on later days). The month count, Upcoming Tasks and the legend count each job once.
+  - **Admin calendar:** places the event on each work day ("Day 2 of 3" in the time line; "9:00 AM · Day 1 of 3" on the first). Its Today count and the selected-day list use the same days.
+  - **Route matrix:** updated for both responses.
+- **Tests.**
+  - **New `services.tests.test_work_calendar` (14):**
+    - weekends and holidays are skipped;
+    - the scheduled day counts even on a day off;
+    - a 65-day job ends after 13 working weeks;
+    - empty business days fall back;
+    - working-time counting;
+    - on-hold spans;
+    - a 3-month job is healthy on its first afternoon and after six weeks;
+    - a 2-hour job is judged on its own length;
+    - on-hold time does not count;
+    - capacity skips the weekend and frees after an early completion;
+    - both calendars return the work days of a job that started the previous month;
+    - a finished job stops on its finish day.
+  - **Existing tests updated deliberately:**
+    - `test_sla_evaluation` and `test_sla_api_integration` used a Sunday-evening date and the old 2-hour rule; they now use a weekday in business hours with the new rule.
+    - `test_auto_dispatch_and_sla` uses a fixed Monday for multi-day capacity, and a start 10 days back for the escalation test, so results no longer depend on the day the suite runs.
+    - `test_scheduling_warranty_and_assignment`: the "completed work" job now finishes on its scheduled day (a job finished before its day no longer reserves that day).
+  - **Full backend:** 798 OK (7 skipped).
+  - **New spec `e2e/38-long-jobs-calendars.spec.js`:** a 3-work-day job booked on a Friday has `work_days` Friday, Monday, Tuesday. The phone schedule shows Day 1, 2 and 3 on those days and nothing on the weekend, and the admin calendar shows the same days. 1 passed.
+- **Still open.** Progress updates for long jobs (item 4) are not built yet. Exact-time overlap checks still compare only the start day.
+
+### Long jobs: progress updates (item 4)
+
+- **Problem.** A job that runs for weeks showed "70% · Work underway" from its first day until completion, and there was no way to report how far along it was. Admins and clients had no evidence of the work done along the way.
+- **Model (migration `progress/migrations/0005_ticketprogress_long_job_reports.py`).** It extends the existing append-only `TicketProgress` with three columns, which are nullable or defaulted: `percent_complete`, `work_date` and `photo_urls` (JSON list). **Not applied** to the local development database; the E2E and test databases apply it automatically, and Render applies it with `migrate` on deploy.
+- **API (`progress/views.py`, `progress/serializers.py`).** `POST /api/progress/ticket-progress/` (multipart) takes:
+  - an optional percent (0–100);
+  - a note (a note or a percent is required; at least 3 characters, at most 2000);
+  - up to 10 photos, validated and stored with the existing job-proof photo helpers, and removed again if the request fails.
+
+  Its behaviour:
+  - Ticket access (admin, or the assigned lead or crew) is checked before the form is validated, so someone without access always gets 403.
+  - Technicians can report only while the job is Arrived on Site, In Progress or On Hold; admins can add a note at any time (an existing capability test relies on this).
+  - `work_date` defaults to the business day.
+  - Each report sends the client a "Job progress update" notification ("A progress update was posted on TKT-… (40% done).").
+  - `GET` accepts `?ticket=`, and each record includes `updated_by_name`.
+- **Progress bar (`services/job_progress.py`).** While a job is In Progress, the bar moves within the In Progress stage by the latest reported percent (70% + percent × 29%, rounded half up; 40% shows as 82%), with the label "Work underway — 40% done" and basis `technician_report`. It never reaches 100 before completion. A paused job keeps its reported position.
+- **Screens.**
+  - **Technician (phone first):** a new "Progress updates" panel in the job details (`components/technician/JobProgressPanel.jsx`, used by `TechnicianJobs.jsx`). It has a percent field (pre-filled with the last report), a note, and Add photos (refused files are named and left out). The Post update button is at least 44 px tall. The list of earlier reports shows dates, percent, notes and photos. Leaving with a typed note asks "Discard what you entered?".
+  - **Ticket timeline:** admins, clients and technicians all see reports in the timeline (`fetchTicketTimeline` merges them in; `TicketTimelineModal` shows "Progress update · 40% done", the note and the photos). A failure to load the reports still shows the status history.
+- **Tests.**
+  - Backend `progress.tests` (+4): a report with percent and photo saved and the client notified; a note or percent required, ≤100, and a job under way; the per-ticket list; the progress bar following reports (70 → 85 at 50%; 99 at 100%; 100 only when completed).
+  - Existing progress tests and `test_role_capability_hardening` were updated deliberately: posts now include a note, and the technician test ticket is In Progress.
+  - Full backend: 802 OK (7 skipped). `makemigrations --check`: no changes.
+  - New spec `e2e/39-long-job-progress-updates.spec.js` (phone):
+    - the refusals (empty, 140%, a GIF);
+    - the discard prompt;
+    - a real post of 40% with a note and a photo, with the panel list and photo;
+    - no sideways scroll;
+    - the bar at 82% with its label;
+    - the client's notification;
+    - the update and photo in the client's timeline.
+
+    1 passed. Specs 17 and 36 still pass (3).
+
+## Checkpoint — 2026-11-07 (end of session, before a laptop restart)
+
+- **Uncommitted** on `feature/analytics-decision-workspace`; nothing here has been committed or deployed. The last commit is `94bec64` (admin page audit deployment record), and staging is at `2204de5`.
+  - **Activity Logs wording:** calendar sentences, readable values, IDs such as `SA-0001` and `ADM-0002`.
+  - **Technician pages:** the Dashboard (two passes), Jobs, and Schedule (phone-first List view, day notes).
+  - **Long jobs, items 1–4:** working-time overdue rule, working-day capacity, multi-day calendars, progress updates.
+- **Migration pending.** `progress/migrations/0005_ticketprogress_long_job_reports.py` is new and not applied to the local development database (`backend/db.sqlite3`); ask the owner before running `migrate` locally. Staging would apply it on deploy.
+- **Validation at the checkpoint:**
+  - backend `manage.py test`: 802 OK (7 skipped); `makemigrations --check` clean;
+  - browser specs 03, 04, 12, 13, 16, 17, 18, 31 and 35–39 all pass. Some passed only when re-run alone, after a long combined run was interrupted (the machine slept).
+- **Next:**
+  - **Technician audit:** Navigation (map), Checklist, Inspection Checklist, Job History, Profile. Messages and Notifications were already covered by specs 28 and 30.
+  - **Release:** when the owner asks, commit, run the full suite, merge into `origin/staging-deploy` from a temporary worktree, verify, and record the deployment.
+
+### Technician Navigation: every control checked, phone-first; six defects fixed (2026-11-08)
+
+- **Turning on location told the client the technician was coming.** The page started navigation as soon as location sharing produced a position. That marked the job "Navigating", sent the client "… is on the way to your service location" and notified every admin, even when the technician only wanted to preview a route (for example, the day before).
+  - Navigation now starts only from an explicit **Start trip** button (if location is off, it is switched on first and the trip starts with the first position). Text under the button explains that it tells the client and the office.
+  - Location sharing alone only previews the route.
+- **On-hold jobs were stuck.** My Jobs offers "View Route" for an On Hold job, but On Hold cannot move to Navigating (server transition table), so the automatic start failed with "Cannot move ticket from On Hold to Navigating" and Mark Arrived stayed disabled. On Hold is now preview only, with "This job is on hold. Resume it from My Jobs before you travel." Finished jobs say so and link to Job History.
+- **Turn-by-turn steps did not follow the technician.** The current step advanced whenever a step was shorter than 100 m, wherever the technician was, and the green "travelled" line used the step number as a map point.
+  - The route client now keeps each step's start point (`startIndex` from ORS `way_points`, in `fetchNavigationRoute`).
+  - A step completes when the technician is within 30 m of the next step's start.
+  - The travelled line ends at the current step's start.
+- **Opening Navigation from the sidebar was a dead end** ("Navigation needs a selected ticket"). It now lists the jobs that can be navigated to: under way first, then ready jobs with a map location, excluding on-hold and finished jobs.
+- **No way to use the phone's own navigation.** The page now has Google Maps and Waze buttons (voice turn-by-turn, `google.com/maps/dir/?api=1&destination=…` and `waze.com/ul?ll=…&navigate=yes`) and a Call client button when the client has a phone number.
+- **Smaller fixes.**
+  - Errors are shown as an alert, including the server's "Complete or hold ticket #… before navigating to another job".
+  - The duplicate GPS error line was removed.
+  - Action buttons are at least 44–48 px tall.
+  - The arrival button reads "Share location to mark arrival" when no position is available.
+- **Tests.**
+  - New spec `e2e/40-technician-navigation-controls.spec.js` (phone; its own technician; two ready jobs and one on hold). It checks:
+    - the picker (the on-hold job is not offered);
+    - opening the page and sharing location sends no start request, leaves the status unchanged and notifies nobody;
+    - the Google Maps and Waze links;
+    - Start trip: the API changes to Navigating, the client gets exactly one "on the way" notice (shown with the TKT code), and the button is at least 44 px tall;
+    - Mark Arrived (API Arrived on Site), then Proceed to Job;
+    - the on-hold job is preview only;
+    - a second trip is refused with the server's reason;
+    - with a mocked three-step route and the technician at step 2's start, the page shows "Next: Turn left onto Rizal Street (2/3)";
+    - no sideways scroll.
+
+    1 passed.
+  - `04` 4.4 and 4.6b and `10` (two journeys) were updated deliberately for Start trip: they used to rely on location sharing starting the trip. `04`: 12 passed. `10`: 2 passed. `09` technician page checks: 24 passed.
+- **Follow-up, same day: Google Maps / Waze buttons removed.** The owner wants technicians to use the in-app navigation. Handing off to another map app would also make the phone browser pause this page, stopping the live location that dispatch and tracking use. Only Call client remains. `e2e/40` now checks that no Google Maps or Waze link is shown.
+- **Follow-up, same day: Google Maps / Waze moved under a More (⋯) menu.** The owner wants in-app navigation to stay the main path, with external apps as a safety option. A ⋯ button in the Actions header opens "Open in Google Maps" and "Open in Waze". Both open at the job's saved coordinates, the pin the client set, routing from the phone's position. A note says live tracking pauses in the other app and to come back to mark arrival. The menu closes on an outside tap or Escape. `e2e/40` checks that the links are hidden until More is opened, the pinned-location links themselves, the note, and Escape closing the menu.
+- **Follow-up: the note in the More menu was removed** at the owner's request. The menu now holds only the two links.
+- **Follow-up: Call client checked.** The button (Navigation, plus Call on Jobs and Schedule) dials the client's profile phone (`client.phone` from the technician job and schedule endpoints) and shows only when a number is saved. Numbers saved with spaces or dashes ("0917 123 4567") were passed to the dialer as typed. All three links now use the shared `toTelHref` helper (`utils/landingSettings.js`) → `tel:09171234567`. `e2e/40` sets a spaced number for client_test, checks the link, and restores the original. Specs 36, 37 and 40: 3 passed.
+
+### Technician Checklist: every control checked, ten defects fixed (2026-11-08)
+
+- **The checklist could be filled and submitted before the job started.** The server accepted a checklist for any job that was not closed. Follow-up (agreed with the owner, 2026-11-08): `api/views.py checklist_view` now accepts it only while the ticket is `In Progress` and otherwise returns 400 "Start the job before you submit its checklist.". Eight backend tests that submitted on Not Started / Arrived on Site now start the job first; the spoofed-proof test now starts the job so it still reaches the file check. New `api.tests ... test_technician_checklist_is_refused_until_the_job_is_started` covers Not Started, Navigating, Arrived on Site and On Hold. `docs/security/WORKFLOW_STATE_MACHINES.md` records the rule. Every E2E spec that posts `/api/checklist/` already starts the job first. The page now:
+  - shows "This job has not started yet. You can read through the steps now; submit the checklist after you tap Start Job." with a link to the job;
+  - disables Submit until the job is In Progress;
+  - says so in a message if Submit is attempted.
+- **Errors could show in green and "Submitting…" in red.** The message colour was guessed from the words ("success"/"submitted"). The tone is now stated: error (alert), info or success (status).
+- **Refused photos and videos were not named,** and the pickers offered any image or video. Messages now name the file ("clip.gif was not added: photos must be JPEG, PNG, or WebP."), and the pickers offer only the accepted types.
+- **Attached photos showed only file names** (for example "IMG_2034.jpg"). They now show thumbnails, on the work step and in Proof & Notes.
+- **Selected photos were lost silently when leaving the page** (the draft keeps answers but not files). The browser now warns before leaving while photos or videos are selected.
+- **A past follow-up due date was accepted until the final submit**, then refused by the server. The date field now has `min` = today and the step refuses a past date. The server's own check now uses the business day (`business_today()`) instead of the UTC date (`api/views.py checklist_view`).
+- **After submitting, the page went to the job list.** It now opens that job (`/technician/my-jobs?ticketId=…`), where Finish Job is next. Step photos are cleared too.
+- **Opening an already submitted checklist gave no sign of it.** It now says "This checklist was already submitted. Submitting again replaces it." with a link to Finish Job.
+- **The After-Sales step was a greyed form with no explanation** when no follow-up was chosen. It now says which choice on the previous step made it unnecessary.
+- **Smaller fixes.**
+  - Progress counts only steps that exist (an older draft could push it past 100%).
+  - Nine field labels are linked to their fields.
+  - Tab buttons expose `aria-pressed`.
+  - Remove buttons are named per file, and the photo and video buttons are larger.
+- **Tests.** New spec `e2e/41-technician-checklist-controls.spec.js` (phone; its own technician; a two-step service with a required photo). It checks:
+  - the not-started note, then the job started through the API;
+  - each step's refusal: work steps, required photo, maintenance answer and profile, after-sales result, follow-up summary, and a past due date (with `min` = today);
+  - the draft surviving a reload, with the photo reminder;
+  - a refused GIF named, and a PNG thumbnail on the step and in Proof & Notes;
+  - Submit at least 44 px tall, and no sideways scroll;
+  - submitting opens the job with Finish Job (API `checklist_completed`), and reopening shows the "already submitted" note.
+
+  1 passed. `04` and `10`: 14 passed. `11`: 8 passed. The backend tests affected by checklist rules pass (138).
+
+### Technician Inspection Checklist: every control checked, nine defects fixed (2026-11-08)
+
+Page: `frontend/src/pages/technician/TechnicianInspectionChecklist.jsx`. No server change: `services/views/inspection.py` already refuses a technician report unless the ticket is Arrived on Site or In Progress.
+
+- **"Review and complete inspection" sent the report at once,** with no review, although sending it ends the visit (ticket → Inspection Completed). It now checks the form first, then opens a review dialog. The dialog shows:
+  - the recommendation;
+  - the number of checks answered "No" (out of the total);
+  - the number of site photos.
+
+  The dialog's buttons are "Keep editing" and "Complete inspection".
+- **The message colour was guessed from the words** (`includes('successfully')`), and success was announced as an alert. The tone is now stated: error (alert), info or success (status). The success text is now "Inspection submitted. The office will review it and plan the work."
+- **Validation scrolled to the top of the page** instead of to the problem. It now scrolls to the first highlighted item (`data-has-error`). A failed submit scrolls up to its message.
+- **Attached photos showed only file names.** They now show thumbnails (object URLs, released on change).
+- **Selected photos were lost without warning** (the draft keeps answers, not files). The browser now warns before leaving while photos are selected. The "Dismiss" link is now a "Back" button that asks "Leave the inspection?" (Stay / Leave) when photos are selected.
+- **An on-hold inspection said "Arrive on site first".** That was misleading. It now says "This inspection is on hold. Resume the job from My Jobs before you file the inspection report."
+- **A service job opened the inspection form.** A report filed there would not move the ticket. The page now says "This is a service job" and links to the work checklist.
+- **The "Required explanation" box for the three general checks had no label link.** It is now linked (`htmlFor`/`id`). The Site Inspection / TDS tabs now expose `aria-pressed`.
+- **Submit could be pressed again after success,** during the 1.5 s before the page moves to the dashboard. The button is now disabled once the report is sent.
+- **A retry after a failed last step uploaded the photos twice.** The submit runs three requests: save/patch the checklist, upload photos, then mark complete. If the last one failed, a retry patched the same open checklist but uploaded the photos again. The page now remembers which photo files are already on the ticket (`uploadedPhotosRef`) and sends only the others; `submitInspectionChecklist` calls `onPhotosUploaded` after a successful upload. Still possible: the page is reloaded between the failure and the retry, because photos are not kept after a reload and must be attached again. Avoiding that would need one server request that does all three steps.
+- **Tests.** New spec `e2e/42-technician-inspection-checklist-controls.spec.js`. It runs on a phone with its own technician, an inspection service with one service check, a held inspection and a plain service job. It checks:
+  - "Arrive on site first" before arrival;
+  - the service-job notice and its link;
+  - the on-hold notice;
+  - tab `aria-pressed`;
+  - Submit with gaps: an alert, four "Choose Yes or No.", the first question scrolled into view, and no dialog;
+  - a "No" that needs its labelled explanation;
+  - a refused GIF named, and a PNG thumbnail;
+  - answers kept after a reload, with photos gone;
+  - Back with photos asks first, and Stay keeps the page;
+  - the review dialog's summary (Proceed after setup, 1 of 4 "No", 1 photo);
+  - Keep editing sends nothing;
+  - Complete inspection: a success status, the dashboard, then the ticket Inspection Completed, `site_accessible=false` and `recommendation=Conditional`;
+  - the first "mark complete" request failing (503): an error alert, the ticket still In Progress, and on retry the photos are not uploaded again (one `upload_photos` request in total);
+  - reopening shows "Inspection Already Completed";
+  - Submit at least 44 px tall, and no sideways scroll.
+
+  `e2e/04` 4.6 and `e2e/10` now confirm the review dialog. Spec 42: 1 passed. Specs 04, 10 and 41: 15 passed. Frontend build: OK.
+
+### Technician Job History: every control checked, ten defects fixed (2026-11-08)
+
+Page: `frontend/src/pages/technician/TechnicianJobHistory.jsx`. Server: `TechnicianHistoryView` in `services/views/technician.py`.
+
+- **The bottom "Performance Summary" and "Total Jobs" cards were filler.** They said "Completed N jobs. Use the filters above…", and "Total Jobs" changed with the search, so a filtered list showed a wrong total. Both are replaced by a summary strip at the top: Jobs completed, This month, and Client rating (average with the number of ratings). The server computes it (new `summary` in `GET /api/technician/history/`):
+  - all-time, over the technician's completed tickets;
+  - not affected by search or dates;
+  - one row per ticket (a crew join cannot skew the average);
+  - "this month" by the business month (UTC+8).
+- **Escape closed every layer at once.** With a proof preview open over job details, Escape closed the preview, the gallery and the details together. It now closes only the top layer. The timeline and the return dialog handle their own Escape.
+- **A slow timeline reply could fill a timeline opened later** for another job. A request guard now ignores replies for a job that is no longer open.
+- **Site inspection answers showed as "Missing".** Inspection checklist items are Yes/No answers, not done/missing steps. They now show Yes/No, with the technician's note. The "Not completed" badge was green; it is now amber.
+- **The downloaded work summary:**
+  - had a stray indent on "Next Maintenance";
+  - was named `ticket-4-report.txt`, and is now `TKT-0004-work-summary.txt`;
+  - now includes the client rating.
+- **Filters had no way back.** A "Clear filters" button now appears while a filter is set, and in the "no match" message. A From date later than the To date shows the reason (alert) without a useless "Try again". The date fields are named "From/To completed date" for screen readers.
+- **"Showing 10 of 25" on page 2** now reads "Showing 11–20 of 25 completed jobs". It is unchanged when everything fits on one page.
+- **Phone touch targets.** The actions button grew from 36 px to 44 px. Previous/Next, Rows and Clear filters are now 44 px. "View job details" is named per ticket.
+- **The proof "Download" link left the app on a phone** (cross-origin files ignore `download`, so the browser navigated away). It now opens in a new tab. Proof thumbnails are named per file ("Preview Completion proof 1").
+- **The load error box was not announced.** It is now `role="alert"`.
+- **Open question (not changed).** History lists only Completed / Turned Over tickets. An inspection visit the technician made appears only when that ticket's service is finished, and only if they are still on it.
+- **Tests:**
+  - Backend: `TechnicianHistorySummaryTests` in `services/tests/test_technician_dashboard_business_day.py`. A search with no match still returns the all-time summary; 01:00 on 1 November local counts in November; one In Progress job is excluded; the average is 4.5 over 2 ratings. With `test_job_history_contract`: 16 passed.
+  - New spec `e2e/43-technician-job-history-controls.spec.js`. It runs on a phone with its own technician and two jobs completed through the API with a photo, one rated 4/5 by the client. It checks:
+    - the summary (2 / 2 / 4 (1)), unchanged while filtering;
+    - search by ticket code, then "no match" with Clear filters;
+    - the refused date range with no Try again;
+    - the 44 px actions button and the details (checklist step Done, client feedback);
+    - Escape closing the proof preview, then the details;
+    - the timeline;
+    - the download name and content;
+    - the 44 px Rows control, and no sideways scroll.
+
+    1 passed.
+  - `04` (4.8 history and return), `11` (return from Job History) and `42`: 21 passed. `09` technician pages: 24 passed. Frontend build: OK.
+
+### Messages: missing attachment pictures show a placeholder (2026-11-08)
+
+- **Cause seen locally.** An old message picture (`message_attachments/User.PNG`, sent 2026-06-18) was saved to the local disk before local media moved to Cloudinary. Its link now points to Cloudinary, which answers 404, so the page showed a broken image with leftover alt text, and the preview had a Download button for a file that does not exist. The sidebar profile photo (`profiles/IMG_20251123_...jpg`) is broken for the same reason. Not moved: copying the two local files to Cloudinary needs the owner's approval.
+- **Fix.** `TechnicianMessages.jsx` (shared by `/admin/messages` and `/technician/messages`) records attachment URLs that fail to load (`failedImageUrls`):
+  - the bubble shows "Image unavailable" (`role="img"`) instead of a broken image and cannot be opened;
+  - the preview says "This image is no longer available." and hides Download.
+
+  Download now opens in a new tab (`target="_blank"`, `rel="noopener noreferrer"`) and is 44 px tall. `Sidebar.jsx` falls back to `/user-icon.png` when the profile photo cannot load.
+- **Tests.** `e2e/28-messages-controls.spec.js` now ends by answering 404 for the sent picture, reloading, and expecting "Image unavailable". `28` (admin, superadmin, technician) and `41`: 4 passed. Frontend build: OK.
+
+### Messages: dates on messages, and notices no longer cut short (2026-11-08)
+
+- **Messages showed only the time** ("08:24 PM"), so a message from June looked like one from today. `TechnicianMessages.jsx` now shows:
+  - a date divider (`role="separator"`) wherever the day changes: "Today", "Yesterday", "Mon, Nov 3" (this year) or "Jun 18, 2025" (other years). The sender's name shows again after a divider;
+  - in the room list, the time for today, otherwise "Yesterday" or the date;
+  - the time as `<time dateTime>`, with the full date and time on hover (`title`). The Edit/Unsend button labels name the full date ("Edit message sent Sunday, November 8, 2026 at 12:00 PM").
+- **A notice could vanish at once.** Each notice ("Message sent", "Message updated", "Message unsent") started its own 2.5 s timer, so an earlier timer cleared a newer notice (edit, then unsend quickly). One timer now restarts with each notice, and notices stay 4 s. This is what made spec 28 fail once for admin.
+- **Tests.** Spec 28 now checks the "Today" divider and the `title`/`datetime` on a sent message's time. Spec 28 (admin, superadmin, technician): 3 passed. Frontend build: OK.
+
+### Messages: private messages checked; older messages no longer drop out of view (2026-11-08)
+
+- **Checked.** Private (direct) staff messages are visible only to their sender and receiver (`MessageViewSet.get_queryset`); another technician gets 404 even by id. The page groups them per person (`direct:<partner id>`).
+- **Defect: the page loaded only the 10 newest messages across all rooms.** `/api/messages/` used the global `PageNumberPagination` (`PAGE_SIZE` 10), and `fetchMessages` read only page 1. Once more than ten newer messages existed anywhere (for example in the staff group chat), older private messages, older group messages and older support messages disappeared from staff Messages, Admin Client Support and Client Support. Fix:
+  - `messages_app/views.py` `MessagePagination`: default 10, `page_size` query up to 500;
+  - `api/communications.js` `fetchMessages` asks for `page_size=500` and follows `next` (at most 20 pages).
+- **Tests.**
+  - New backend test `test_direct_message_reaches_receiver_only_and_is_not_lost_behind_newer_messages`: the default page leaves the private message out; `page_size=500` returns all 13; another technician sees 12 and gets 404 on the private message. `messages_app`: 33 OK.
+  - New `e2e/44-private-messages.spec.js` (phone): an admin writes privately to `tech_test` from the page; twelve newer group messages follow. The technician finds the message in the room with the admin (preview, bubble, "Today" divider, no group messages there) and replies; the reply reaches the admin. A new technician sees the group messages but neither private message (page and API). 1 passed.
+  - `28`, `29`, `05`: 19 passed. Frontend build: OK.
+
+### Notifications: every control checked, including the technician (2026-11-08)
+
+Page: `frontend/src/pages/client/ClientNotifications.jsx` (shared by `/admin`, `/technician` and `/client/notifications`). Spec 30 covered admin, superadmin and client; the technician had no test.
+
+- **Most technician notifications fitted no filter tab.** Tabs matched only the types `success`, `warning/urgent/error` and `info`. The server also writes `ticket_assigned` (61 of 76 technician notifications locally), `status_update`, `reminder`, `message`, `task_completed` and `customer_inquiry`. Those appeared only under All/Unread. Now `categoryOf` places every type:
+  - `success` and `task_completed` → Success;
+  - `warning`, `urgent` and `error` → Warnings;
+  - all others → **Updates** (renamed from "Info").
+
+  The icon and border follow the same category.
+- **Two server notifications had no title and no ticket link,** so they showed as "Notification" and opened the general list:
+  - `services/views/inspection.py`: "New inspection checklist created for ticket #N". It also went to the technician who filed it. It now goes to the rest of the team only, titled "Inspection Report Started for Ticket #N", with `ticket`.
+  - `inventory/automation.py` equipment shortages (two places): now through `_notify_shortage`, titled "Equipment Shortage for Ticket #N", with `ticket`, for the office and the technician. `_notify_roles` now skips inactive accounts and accepts `title`/`ticket`.
+- **The time was a raw `toLocaleString()`.** It now reads "Today, 12:01 PM" / "Yesterday, …" / "Mon, Nov 3, …" (other years with the year), as `<time dateTime>` with the full date on hover.
+- **Touch targets.** Tabs, Mark all as read, Delete all, Dismiss, per-card Delete (now 44 × 44), Mark as read, the "Open …" button and Previous/Next are at least 44 px. Long messages wrap.
+- **Checked, no change.**
+  - Live refresh: socket plus polling fallback.
+  - Mark as read, Mark all as read, delete one, and Delete all (error kept in the dialog).
+  - Pagination, and errors shown as readable text.
+  - Destinations per role: a technician's assignment opens `/technician/my-jobs?ticketId=`.
+  - Repeated notifications in local data are repeated events (for example work started again after a hold), not double sends.
+- **Tests.**
+  - New backend tests:
+    - `test_inspection_report_notifies_the_rest_of_the_team_with_a_ticket_link`: the crew gets it with title and ticket; the filer does not.
+    - `test_equipment_shortage_notifications_name_and_link_the_ticket`: technician, admin and superadmin get it; an inactive admin does not.
+
+    `api`, `inventory`, `notifications` and the end-to-end journeys: 120 OK.
+  - New `e2e/45-technician-notifications-controls.spec.js` (phone). A real assignment notification:
+    - is under Updates, not Success or Warnings;
+    - reads "Today, h:mm AM/PM" with the year in the hover text;
+    - six controls are at least 44 px, with no sideways scroll;
+    - "Open job" opens `/technician/my-jobs?ticketId=` and marks it read.
+  - Spec 30 now clicks "Updates". `45` and `30` (admin, superadmin, client): 4 passed. Frontend build: OK.
+
+#### Notifications follow-up: every remaining button clicked, plus the top-bar bell (2026-11-08)
+
+- **Bell panel (`components/layout/Topbar.jsx`, every role).**
+  - Escape now closes it and returns focus to the bell.
+  - The bell has `aria-expanded`/`aria-controls`, and the panel is `role="dialog"` "Recent notifications".
+  - The bell and the sidebar toggle are 44 px on phones. "Mark all read" is 44 px; it now tells the page list to refresh and shows an alert if it fails (it failed silently).
+  - The footer button was also named "Open notifications", like the bell. It is now "View all notifications".
+- **Client and office request notifications did not open the request.** "Your service request #N has been submitted…" had no title and no request link, so "Open request" went to the list. `create_notification` now accepts `service_request`. The submit notifications are titled "Service Request #N Submitted" (client) and "New Service Request #N" (office, active accounts only), with `request`. The approval notification is titled "Service Request #N Approved" with `ticket`.
+- **Tests.**
+  - Spec 45 now also clicks:
+    - "View all notifications" (empty tab);
+    - the bell (44 px, `aria-expanded`, panel, Escape and focus);
+    - "Try Again" after a failed load (the unread count is held so only the button can recover);
+    - Mark all as read, then Dismiss;
+    - Delete all → Keep notifications;
+    - the bell's Mark all read (clears the page list too);
+    - Previous/Next with 12 notifications.
+  - Spec 30 now clicks "Open …" (client → `/client/requests/<id>?entity=request`, office → `/admin/service-tickets`). Its card locator skips the "Deleted …" notice, which now quotes the real title.
+  - Results: `45`, `04` and `35` passed 14; `30` (admin, superadmin, client) passed 3. Full backend suite: 807 OK (7 skipped).
+
+### Technician Profile: every control checked, seven defects fixed (2026-11-08)
+
+Page: `frontend/src/pages/technician/TechnicianProfile.jsx`, with the shared `ProfileIdentityCard` and `ProfileSecuritySection` (also used by the admin and client profiles).
+
+- **Performance disagreed with Job History.** `TechnicianProfileView.list` counted only `Completed` (Job History also counts `Turned Over / Accepted`), through the crew join, so a crew job could be counted twice and skew the rating. It now counts `COMPLETED_TICKET_STATUSES` once per ticket and returns `ratedCount`. The page shows:
+  - Jobs completed;
+  - Last 30 days;
+  - Client rating with "from N rated jobs";
+  - a "View job history" link.
+
+  "Avg Time" was removed: the server always sent an empty value, so it always read "N/A".
+- **A profile photo that cannot load showed a broken image** (seen locally: a file from before Cloudinary). `ProfileIdentityCard` now falls back to the initials (every role).
+- **Messages appeared only at the top of the page.** On a phone, a refused Save or password change was off-screen. The message now scrolls into view, and errors are `role="alert"` (success stays `status`). Save shows "Saving…", and Dismiss is disabled while saving.
+- **The photo picker could not be reached with the keyboard** (`hidden` input). It is now `sr-only`, with a focus ring.
+- **Each skill showed "Service #<id>",** an internal ID. Removed.
+- **The status chip was always green.** It is green only for "Available".
+- **Touch targets.**
+  - Edit Profile, Save, Dismiss, Clear selected photo and the photo picker are 44 px.
+  - Every Password & Security button (and the MFA buttons for admins) is 44 px.
+  - Inputs are 44 px with 16 px text on phones (no zoom on focus).
+- **Checked, no change.**
+  - An email change asks for the current password (popped and checked in `users/views/auth.py`).
+  - The phone is validated by the server.
+  - Password mismatch is caught before sending.
+  - Show/hide passwords works.
+  - A password change signs out to `/login?reason=password_changed`.
+- **Tests.**
+  - New backend test `test_profile_counts_the_same_finished_jobs_as_job_history_once_each`: Completed + Turned Over, a crew job counted once, rating 4.0 from 2 ratings, and the same total as the Job History summary. Related suites: 129 OK.
+  - New `e2e/46-technician-profile-controls.spec.js` (phone; its own technician with a skill and a finished job rated 4). It checks:
+    - identity, Performance and skills;
+    - a refused phone shown in view, then a save that survives a reload;
+    - the photo: refused type, preview, clear, keyboard-reachable picker, upload, and a missing file falling back to the initials;
+    - an email change with a wrong password refused;
+    - Change Password: mismatch alert in view, show/hide, wrong current password, Dismiss;
+    - View job history (same count);
+    - no sideways scroll;
+    - a real password change signing out.
+
+    1 passed. The profile tests in `03`, `04`, `05` and `09`: 10 passed. Frontend build: OK.
+
+## Client pages audit
+
+### Client Dashboard: every control checked, eight defects fixed (2026-11-08)
+
+Page: `frontend/src/pages/client/ClientDashboard.jsx`; server: `services/views_dashboard.py` `DashboardView.get_client_dashboard` (rewritten).
+
+- **Accepted work disappeared.** "Completed", Recent History and the rating counted only `Completed`. A job the client had accepted (`Turned Over / Accepted`) was in no number at all. They now use `COMPLETED_TICKET_STATUSES`.
+- **"Active requests" double-counted and then dropped work.** It counted `Pending` + `Approved` requests. An approved job is also an open ticket, so it showed twice; once work started, the request became `In Progress` and left the count. Now each job is in exactly one stage:
+  - stat cards: All requests, **Waiting for approval** (`Pending` requests), **Open jobs** (`ACTIVE_TICKET_STATUSES`), Completed;
+  - the pipeline: Waiting for approval / Waiting to start / Work in progress (Navigating, Arrived on Site, In Progress) / On hold. It adds up to waiting + open.
+
+  New `overview.awaiting_approval`; `overview.active_requests` is kept with the same value for compatibility. The "Active Requests" table is now **Waiting for Approval** (sent date, preferred date), so an approved job appears only under **Open Jobs**.
+- **"Next Appointment" could be a past or held job.** The page took the first ticket by date, which could be an on-hold job from weeks ago. The server now returns `next_appointment`: the soonest open visit from today (business date), or none. It shows the time slot. Open Jobs lists up to 5: upcoming first, then past-dated.
+- **A fake suggestion.** "Consider a service plan for better coverage / Learn More" (more than 10 requests) pointed to a feature that does not exist. Removed. "Create Request" shows only with nothing open.
+- **Errors.** On any failure the server returned 200 with the Python exception text in `error`, which the page ignored, so it showed zeros. It now logs the exception and returns 500 with a plain message. The page shows it as an alert with "Try again".
+- **Dead ends.**
+  - Alerts are now buttons to My Requests, with pluralised wording ("1 request…", "2 requests…").
+  - "View all" was hidden on phones. It is now always shown, and Open Jobs has one too; each has its own label.
+  - Recent History rows open the job, and unrated jobs show "Rate" (opens the detail at "Rate This Service").
+- **Wording.** "Live Tickets" → "Open Jobs"; "Tech:" → "Technician:"; "1 rated service(s)" pluralised.
+- **Touch targets.** Header buttons, table links, View all, alerts, suggestions and Try again are 44 px.
+- **Tests.**
+  - New `services/tests/test_client_dashboard.py` (2 tests):
+    - each job counted once;
+    - stages add up;
+    - accepted work counted and rated;
+    - the next appointment is today's visit, not the past held one;
+    - Open Jobs order;
+    - pending-only waiting list;
+    - alert wording;
+    - the suggestion only when nothing is open.
+
+    With `test_dashboard_role` and `test_dashboard_changes`: 27 OK.
+  - New `e2e/47-client-dashboard-controls.spec.js` (phone; its own client, created through `/api/admin/users/`). It checks:
+    - the empty state and the suggestion link;
+    - three jobs (waiting, booked ahead, finished): exact stat cards and pipeline;
+    - the next appointment opening its ticket;
+    - the alert and both View all links;
+    - the waiting request opening as a request;
+    - "Rate" opening "Rate This Service";
+    - a failed load with Try again;
+    - 44 px buttons, and no sideways scroll.
+
+    1 passed.
+  - Spec 05 5.1 now looks for "Waiting for approval". The client checks in `05`, `08`, `09` and `10`: 41 passed. Frontend build: OK.
+
+#### Client Dashboard follow-up: laptop layout reworked (2026-11-08)
+
+The owner found the dashboard misaligned on a laptop. Screenshots at 1366 px showed:
+- unbalanced columns: the left ended halfway down beside a long right column, leaving a large gap;
+- "Request Pipeline" repeating the four cards;
+- squeezed tables: names and "Not Started" wrapping, and dates top-aligned against two-line cells;
+- a whole "Suggestions" card for "You are up to date."
+
+`ClientDashboard.jsx` layout now:
+- **Stat cards** (2 per row on phones, 4 on wide screens), each with a short helper line: "All time", "Not reviewed yet", "1 to start · 0 in progress · 0 on hold" (kept together with non-breaking spaces), and "Your rating x/5" or "Finished work". The separate pipeline card was removed.
+- **Alerts and the suggestion** as slim banners, shown only when there is one.
+- **Two equal columns** (`lg:grid-cols-2`): **Open Jobs** (name, date and technician, colour-coded status pill) and **Waiting for Approval** (name, sent date and details, preferred date on the right). Both are list rows with one aligned layout, and each has its own labelled View all.
+- **Recent History** full width, with the average rating in its header ("4.0/5 from 2 rated services" or "No ratings yet"), aligned columns on wide screens, a stacked row on phones, and ★ rating or "Rate".
+- **Next Appointment** as a two-column grid, with the technician icon and a truncated address chip.
+
+Spec 47 now checks the Open jobs helper line instead of the pipeline card. Spec 05 5.1 checks the "Open Jobs" heading. Results: `47`, `05` and the client checks in `08`/`09`: 40 passed. Frontend build: OK.
+
+### Client New Request: every control checked, nine defects fixed (2026-11-08)
+
+Page: `frontend/src/pages/client/ClientServiceRequests.jsx`. Spec 13 (13.1–13.11) already clicked every control and still passes unchanged (13 passed).
+
+- **"Today" was the server's UTC date.** `TIME_ZONE` defaults to UTC, so between 00:00 and 08:00 Philippine time:
+  - the serializer accepted a preferred date of yesterday;
+  - the appointment calendar started from yesterday.
+
+  Both now use `business_today()` (`services/serializers/requests.py`, `services/views/service_requests.py appointment_availability`).
+- **A client could book anywhere in the world.** Only the page kept the pin inside CALABARZON; the API accepted any coordinates. Client-created requests must now be inside the configured region (`TRACKING_REGION_*` settings, the same bounds the map uses). Otherwise: 400 `latitude: "Choose a location inside our service area (CALABARZON)."`. Two older backend tests that posted client requests from Davao and from (10, 20) now use service-area coordinates.
+- **The map came after the Submit button** on phones and on laptops under 1280 px (it was a side panel). It is now inside the "Service location" step: search, map, pin status and Use My Location, with the address fields beside it on wide screens and below it on phones. Enter in the search box picks the first place instead of submitting the form; Escape closes the list.
+- **Errors appeared at the bottom of the form.** A validation error is now shown inside its own step (Service, Location or Schedule) as an alert and scrolled into view. Search and address-lookup failures appear next to the search box, not in the submit area. "Current location selected" is shown next to the map.
+- **An empty search showed nothing.** It now says "No places found in the service area. Try a nearby landmark, or tap the map."
+- **Review date** "2026-11-20" now reads "Fri, Nov 20, 2026".
+- **Success box.** It is now a real dialog (`role="dialog"`, labelled, OK focused, Escape closes it) with **View request** (`/client/requests/<id>?entity=request`).
+- **A half-filled form was lost silently.** The browser now warns before the page is closed.
+- **Step bar and phones.**
+  - The step bar shows ✓ for finished steps and each step jumps to its section.
+  - Service cards show the service description.
+  - Inputs, buttons, search results and service cards are 44 px, with 16 px text on phones.
+- **Tests.**
+  - New `services/tests/test_client_request_rules.py`:
+    - at 23:30 UTC (07:30 PH), yesterday is refused, today is accepted and the calendar starts today;
+    - a Cebu pin is refused.
+
+    Full backend suite: 812 tests. The 2 failures were the out-of-area tests named above; after updating them, those suites plus the new one: 34 OK.
+  - New `e2e/48-client-new-request-layout.spec.js`: at 1366 px and 390 px the map is between the Location and Schedule headings and above Submit, with 44 px controls and no sideways scroll. On a phone it checks:
+    - the step bar's ✓ and jump;
+    - the pin error inside the Location step, in view;
+    - no-results text, Escape, and Enter picking a place without submitting;
+    - the location notice next to the map;
+    - the readable review date;
+    - Escape closing the success box;
+    - View request opening the new request;
+    - the leave warning.
+
+    3 passed. Spec 13 New Request: 13 passed. Frontend build: OK.
+
+#### Client New Request follow-up: location step re-laid out (2026-11-08)
+
+The owner found the Location step awkward on a laptop. The left column (search, map, pin status, Use My Location, message) was far taller than the right column (three address fields), leaving a large empty area. The step is now full width:
+- the search box and **Use My Location** share one row;
+- the map is full width;
+- pin status and the location message (or error) sit side by side;
+- Address (wide), City and Province are in one row (on phones, Address on its own row with City and Province side by side).
+
+The search results list now uses `z-[1000]` so it opens above the map's layers, which now sit directly under it. Specs `48` and `13` New Request: 16 passed. Frontend build: OK.
+
+### Client Solar Estimates: every control checked, nine defects fixed (2026-11-08)
+
+Page: `frontend/src/pages/client/ClientSolarEstimates.jsx` with the shared `components/SolarCalculator.jsx` (also on the public landing page). Server checked, no change: `SolarEstimateViewSet` limits clients to their own estimates, lets only the owner change or delete a draft, recalculates results on the server, and `convert` is idempotent (a second call returns the existing request).
+
+- **Saving the same calculation twice made duplicate estimates.** The calculator now remembers the saved inputs. "Save estimate" becomes a disabled "Saved ✓" until a value changes; the saved message adds "Change a value to save another estimate."
+- **Cards did not say when an estimate was saved.** Each card now shows "Saved Nov 8, 2026" and, as a small table, Monthly use ("900 kWh", was "900.0 kWh/month") and Estimated savings with "/month" (was "… estimated savings").
+- **Status was a system word** ("draft", "converted"). It is now "Saved", "Submitted", "Reviewed", "Assessment requested" or "Expired", each with its own colour.
+- **"New calculation" could not close the calculator.** It now toggles to "Close calculator" (`aria-expanded`, `aria-controls`). The empty state has a "Start a calculation" button.
+- **Delete gave no confirmation that it worked**, and errors appeared unannounced. A deleted draft now shows "Deleted EST-…" (status, with Dismiss); errors are `role="alert"`.
+- **The calculator's input card stretched** to the results card's height, leaving a large empty white block on laptops (`items-start`). Inside the app the heading uses section size (`text-2xl/3xl`) instead of the landing-page headline.
+- **The remove-appliance button had no accessible name** (title only) and was about 36 px. It is now "Remove <appliance name>" ("Remove this row" when unnamed) and 44 × 44. The name avoids the word "appliance" so it does not collide with the "Appliance" field label (spec 01).
+- **Mode buttons** expose `aria-pressed`. Save, Request site assessment, Add appliance and every card button are 44 px. The save message and error are `status`/`alert`.
+- **View request** now opens `?entity=request`.
+- **Tests.** New `e2e/49-client-solar-estimates-controls.spec.js` (phone; its own client). It checks:
+  - the empty state and "Start a calculation";
+  - open and close with `aria-expanded`;
+  - mode `aria-pressed`;
+  - add and remove an appliance (44 px);
+  - save once → "Saved ✓" disabled, still one estimate on the server, a change enables Save, the same values disable it again;
+  - the card: saved date, kWh, "/month", "Saved";
+  - Request assessment → New Request with "EST-… is linked.";
+  - a converted estimate: "Assessment requested", no Delete, View request → `?entity=request`;
+  - delete: an error alert keeps the card, then success, a notice and the card gone;
+  - 44 px, and no sideways scroll.
+
+  1 passed. Specs `01` (public pages) and `05`/`09` calculator checks pass: 14 and 39. Frontend build: OK.
+
+### Client My Requests: every control checked, eight defects fixed (2026-11-08)
+
+Page: `frontend/src/pages/client/ClientRequestTracking.jsx`; loader `api/client.js fetchClientRequests`. Server checked, no change: `cancel` requires a reason, refuses Completed/Cancelled requests, and refuses a client once the technician is navigating, on site or working (409, "contact our office").
+
+- **The dismiss reason was optional on the page but required by the server.** Dismissing without one closed nothing and showed the server's error as a full-page error behind the still-open dialog. The reason is now marked required, checked in the dialog ("Please give a short reason so the office knows why."), and has a 0/240 counter. Any server refusal stays inside the dialog as an alert.
+- **No confirmation after dismissing.** The page now shows "REQ-0012 was dismissed. The office has been told." (status, with Dismiss).
+- **Dismiss was hidden for jobs on hold or awaiting materials** (the page used the simplified client status). It now follows the server's rule: any open request until the ticket is Navigating, Arrived on Site, In Progress, Completed or Turned Over.
+- **A dismissed or finished request said "Waiting for office review".** `formatWorkflowLabel` ignored the status. It now gives "Closed, no further work" (cancelled), "Work finished" (completed), "Waiting for office review" (no ticket), or "Being handled by our team".
+- **Searching "REQ-0012" found nothing.** Search matched only the bare id. The REQ code is now searchable.
+- **Wording.** Filter options use the Dashboard's words: "Waiting for approval", "Approved, waiting to start", "Dismissed or not accepted". The empty state no longer reads "No in_progress requests" ("No requests: Completed"), and with a search it says "Nothing matches …". A failed load shows the server's message instead of "Failed to load requests".
+- **Noise and useful dates.** Every client request showed "Normal" and "Client Portal" chips. Priority now shows only when not Normal ("High priority"), and the source only when not the portal. Before a visit is booked, Schedule shows "Preferred <date>" instead of "Not scheduled". An empty ticket reads "No ticket".
+- **Touch targets.** Create, View details, Dismiss, the REQ link and Previous/Next are 44 px (desktop icon buttons 40 px). The filter is labelled "Show requests".
+- **Tests.** New `e2e/50-client-my-requests-controls.spec.js` (phone; its own client and technician; requests waiting, approved, on hold via the technician API, and dismissed). It checks:
+  - the filter wording, "Preferred <date>", and no noise chips;
+  - the dismissed request's closed step with no Dismiss;
+  - Dismiss offered for the job on hold;
+  - search by REQ code, no-match text, and the empty-filter title;
+  - the dismiss dialog: reason required (nothing sent), a 409 kept in the dialog, then success with a notice and the server status Cancelled;
+  - View details;
+  - 44 px, and no sideways scroll.
+
+  1 passed. Spec 11 (includes dismissing from this page): 8 passed. `05` 5.3, `13` 13.9 and `09` request tracking: 4 passed. Frontend build: OK. (`13.A1` once failed only inside a large mixed run, on an event count changed by other tests' data; it passes alone.)
+
+### Client Service History: every control checked, nine defects fixed, including an API serialization bug (2026-11-08)
+
+Page: `frontend/src/pages/client/ClientServiceHistory.jsx`.
+
+- **Clients never saw completion photos: API contract fix.** `StructuredTextField` (`afn_service_management/fields.py`) keeps lists and dicts in a TEXT column. DRF's `ModelSerializer` mapped it to `CharField`, so `'__all__'` serializers sent Python text such as `"['https://…/done.png']"` instead of JSON. On tickets this hit `completion_proof_images`, `project_details` and `route_geometry`. The client loader checks `Array.isArray`, so every job showed "0 proofs" and no "View proof files". Document prefill could not read `ticket.project_details.*` either. `services/apps.py ready()` now maps `StructuredTextField` → `serializers.JSONField` for every ModelSerializer. Serializers that declare their own field are unchanged. Technician pages were not affected because their views build dicts by hand. New test `test_ticket_api_returns_structured_fields_as_json_not_python_text`. Full backend suite: 812 OK. Specs `10` (major journeys, documents and turnover), `21` and `43`: 5 passed.
+- **The three windows were not dialogs** (Service Actions, Proof Files, photo preview) and Escape did nothing. Each is now `role="dialog"`, labelled, and closes on a backdrop click. Escape closes only the top layer (preview → proof list → actions).
+- **Phone cards were a clickable box around a button** (role="button" div containing "Actions"). They are now an `article` with two 44 px buttons: "View details" (or "View and rate" when unrated) and "More". Desktop rows offer "Rate" in the Rating column.
+- **No overview.** A summary of all completed services: count, your average rating (★ x.x/5 or "No ratings yet"), and "Waiting for your rating" with "Show them" (sets the Needs-your-rating filter).
+- **Desktop header said "Showing 25 services"** while 10 were shown. It now says "Showing 1–10 of 25 services" when paged.
+- **Search by REQ code** now works.
+- **"Highest rated first"** puts unrated services last; "Not Rated" vs "Not rated" unified.
+- **Timeline race.** A slow earlier timeline can no longer fill a later one (sequence guard; closing cancels it).
+- **Touch targets.** More/Close/Previous/Next are 44 px; desktop actions 40 px with names ("More actions for <service>").
+- **Tests.** New `e2e/51-client-service-history-controls.spec.js` (its own client and technician; two finished jobs with photos, one rated 5). It checks:
+  - the summary, "Show them" and Clear;
+  - search by REQ code, and the highest-rated sort;
+  - "View and rate" → Rate This Service;
+  - More → named dialog → Escape;
+  - View proof files → preview, with Escape closing one layer at a time;
+  - the timeline;
+  - no sideways scroll, plus a saved laptop screenshot.
+
+  1 passed. `05` 5.4, `09` service history and `51`: 4 passed. Frontend build: OK.
+
+#### Client My Requests follow-up: quick view on PC and laptop (2026-11-08)
+
+At the owner's request, the eye button in the desktop table (md and up) now opens a quick-view dialog instead of leaving the list. The dialog (`role="dialog"`, named by the REQ code) shows:
+- the service and status;
+- the current step (or the office's rejection reason);
+- schedule (or "Preferred <date>"), technician, ticket, requested date, address and the client's notes.
+
+Buttons:
+- **Open full details** (focused) goes to the Request Detail page;
+- **Dismiss request** appears when allowed (it closes the quick view and opens the dismiss dialog for that request).
+
+Escape, ✕ or a backdrop click closes it. The REQ link in the table still opens the full page directly, and phones keep "View details" to the full page. REQ codes no longer wrap in the narrow first column. Spec 50 now also runs at 1366 px: quick-view content and focus, Escape, Dismiss handing over to the dismiss dialog, a dismissed request's quick view without Dismiss, Open full details, and the REQ link (screenshot saved). `50` and `11`: 9 passed. Frontend build: OK.
+
+#### Client Purchase Records audit (2026-11-08)
+
+`/client/purchase-records` uses the shared `frontend/src/pages/shared/SalesRecords.jsx` (also `/admin/sales-records`). Client changes are gated on `!isAdmin`; the admin page is unchanged except for one note under its draft form and the selection fix below.
+
+Server (`services/views/sales_records.py`, `services/serializers/commercial_records.py`):
+- **Payment details leaked to clients.** The serializer hid payments from clients, but `GET /sales-records/{id}/payments/` returned the full payment list (amount, receipt reference, office notes, staff name) for the client's own record. It now returns 403 for non-office roles.
+- **Record date could be a day early.** `confirm` set `sale_date` from the UTC date of `completed_date` (or `timezone.localdate()`, which is UTC). Work finished before 08:00 Philippine time was dated the day before. It now uses the business (UTC+8) day (`business_timezone()` / `business_today()`).
+- **`request_id`** added to the record response so the client can open the request.
+
+Notifications (`frontend/src/utils/notificationNavigation.js`): "Purchase record available" and "Payment complete" went to My Requests (button "Open request", badge on My Requests). They now go to `/client/purchase-records?ticketId=<id>` with "Open purchase record", and the sidebar badge sits on Purchase Records. The page opens the record for that ticket.
+
+Page (client view):
+- **Tapping a record found by search did not stick.** With a search showing one record, that record was shown only as the fallback; tapping it did nothing, so clearing the search jumped back to the earlier record. Tapping now always selects it (both roles).
+- On phones, tapping a record scrolls the details into view; the list no longer has its own inner scroll below `lg`.
+- Client wording: no own name on rows and in the header; the REQ code is shown (and searchable); "View service request" link; value source reads "From your accepted quotation" / "From your signed installation contract" / "Agreed with the office"; Quotation "None"; the empty state explains when records appear; client error text.
+- Warranty shows "Active until <date>", "Expired on <date>" (an active warranty whose end date has passed), "Not recorded", etc., instead of raw `active` / `not_applicable`.
+- Installed equipment is listed (type, model, capacity, serial, warranty end) instead of a count; "Inventory issues: N connected transaction(s)" is admin-only.
+- Delivered items are a list on phones (the 620 px table shows from `sm`), for both roles.
+- Search and Refresh are 44 px; search uses 16 px text on phones. Regions and search are named "Purchase record list/details" and "Search purchase records" for clients.
+- Admin draft form: "Reason for manual value" and "Record notes" now say the client sees them once confirmed.
+
+**Payment status for clients (owner approved, same day).** Clients got a "Payment complete" notification but could not see whether a record was paid. The serializer now gives clients `amount_paid`, `balance_due` and `payment_status` for their own confirmed records; the `payments` entries (staff names, receipt references, office notes) stay hidden and the payments list stays office-only. The client page shows the payment badge (Unpaid / Partly paid / Paid) and "₱X due" on each row, plus a Payment box in the details: "Paid so far", "Still due" (or "Nothing, paid in full"), and "Payments are made directly with the office and appear here once staff record them. Ask the office for an official receipt." The client footer now reads "This record lists what was delivered to you. It is not an official receipt." Spec 52 checks partly paid, unpaid, and paid in full after the office records the rest on the admin Sales Records page (in the browser, not the API), with the "Payment complete" notification opening that record. Passed.
+
+Tests: `services/test_sales_records.py` adds two tests (client refused on payments, prepare, patch, confirm, void and record payment; `request_id`; business-day `sale_date` with and without a completion time). New `e2e/52-client-purchase-records-controls.spec.js` (its own client, technician and two confirmed sales, one with an office payment): server refusals and no payment data, another client sees nothing, notification → the right record, client wording, warranty, phone item list, REQ search and selection after clearing, details scrolled into view, 44 px targets, no sideways scroll, "View service request", plus a laptop screenshot. `e2e/25` updated for the client names. Backend: 815 OK (7 skipped). `52`: passed; `25`, `05`, `30`, `45`: 19 passed; `10` 10.2: passed. Frontend build: OK.
+
+#### Client Request Detail audit (2026-11-08)
+
+`/client/requests/:id` (`frontend/src/pages/client/ClientRequestDetail.jsx`, with `components/client/ClientJobDecisions.jsx`). It is not in the sidebar; it opens from My Requests, Service History, Purchase Records and notifications.
+
+Fixed:
+- **"Edit Rating" did nothing.** The form only rendered while no rating existed. It now opens with the saved stars and feedback; "Save Rating" updates it ("Your rating was updated."), and Cancel restores the saved rating (it used to reset the stars to 0).
+- **Accepting or declining a quotation, or confirming the handover, flashed the page and lost the message.** The reload after an action showed the loading skeleton, which unmounted the quotation panel and its "Thank you…" message. Reloads after actions are now silent (also after rating and reschedule).
+- **Calendar dates showed an invented time** ("April 19, 2027 at 08:00 AM") for the visit, preferred date and warranty end. They now show the date only ("Mon, April 19, 2027"), read as a local date. Started/Ended now show date and time instead of only a time.
+- **Reschedule date rule used UTC** (`request_reschedule` compared with `timezone.localdate()`): before 08:00 Philippine time yesterday was accepted. It now uses `business_today()`; the admin notification goes to active admins only.
+- **Reschedule problems were reported at the top of the page**, out of sight on a phone. Missing fields and server errors now show inside the form (`role="alert"`). The reason field no longer starts filled with the client's original booking notes. A pending request shows the date and window that were asked for.
+- **No way to dismiss from the detail page.** "Dismiss request" (same rule as My Requests, moved to the shared `canClientDismissRequest` in `api/client.js`) opens the same dialog with a required reason.
+- **Two "View Timeline" buttons**: the duplicate at the bottom was replaced by useful actions: the review message for requests still waiting, "View purchase record SAL-…" when a confirmed purchase record exists (opens Purchase Records at that record), and Dismiss.
+- Noise removed: the "NORMAL PRIORITY" chip (shown only for low/high/urgent) and the "Client Portal" chip in the header (still listed under Request Source).
+- Proof preview is a named dialog (`aria-modal`), closes with Escape, ✕ or a backdrop click; thumbnails are named "Preview proof file N"; Download opens in a new tab.
+- 44 px controls (back button "Back to My Requests", timeline, stars, rating/reschedule buttons, quotation and handover buttons); 16 px inputs on phones; notices use `role="status"`/`"alert"`; form labels are linked to their fields.
+
+**Quotation validity is now enforced (owner request, same day).** A quotation said "Valid for 30 days" but could be accepted months later at the old price, which then fed the deposit and the purchase record value. New `services/quotation_validity.py`:
+- `quotation_valid_until(q)`: for a `Sent` quotation, the business (UTC+8) date it was last sent plus `validity_days`; accept through that day inclusive. "Last sent" is `updated_at`: while a quotation is `Sent`, only the office sending or updating it writes the row, so "Send updated quotation" restarts the period. No migration (a real `sent_at` column would need one).
+- `quotation_is_expired(q)`: business today is after that date.
+- The serializer adds `valid_until` and `is_expired`. `respond` refuses `accept` with 409 "This quotation expired on <date>. Ask our office for an updated quotation."; decline still works so the office hears why.
+- Client panel (`ClientJobDecisions.jsx`): "Valid until <date>" instead of "Valid for N days from <created>"; when expired, an "Expired" badge, the explanation, no Accept button, Decline kept. Admin Documents: the quotation status reads "Expired, send an update".
+- **The Admin Settings "Quotation Validity (days)" field was not used** (only on generated documents); every quotation record kept the model default of 30. Each send ("Send quotation", "Send updated quotation", "Send revised quotation") now takes the current setting (`default_validity_days()`), unless the request gives `validity_days` itself. The printed "Validity" wording on the quotation document is still the office's own editable text ("Within Thirty (30) days…"); keep it in line with the setting.
+- Tests: `services/tests/test_quotation_revision.py` (shared fixture `QuotationFixture`; also: the setting applies on each send): valid until the last business day, refused the next day, resend gives a fresh period and accept works; an expired quotation can still be declined. Spec 53 backdates a sent quotation 40 days in the E2E database, checks the expired panel and the 409, then resends and accepts. Backend: 818 OK (7 skipped). `53`: passed; `11`: 8 passed.
+
+Tests: `test_client_request_rules.py` adds the business-day reschedule test. New `e2e/53-client-request-detail-controls.spec.js` (its own client and technician; waiting, scheduled with a sent quotation, and finished with a photo and a confirmed purchase record): review message, no Normal chip, Dismiss with required reason, date without a time, quotation accept message survives the reload, reschedule error in view then success with the requested date, proof preview Escape/backdrop, rate, Edit/Cancel/Save rating (server shows 5), purchase-record link, 44 px, no sideways scroll, laptop screenshot. `53`, `50`, `51`: 3 passed; `11`: 8 passed; `10`: 10.1 and 10.2 passed (run separately; combined runs hit page-load timeouts on a busy machine).
+
+#### Client Support audit (2026-11-08)
+
+`/client/support` (`frontend/src/pages/client/ClientSupport.jsx`), server in `messages_app`.
+
+Server:
+- **Opening two cases in the same second crashed (500).** The case `group_key` ended with the Unix time in seconds, and the column is unique. It now ends with a random 16-hex suffix (`get_customer_support_client_id` still reads the client id before the first `_`).
+- **Client messages could go where the office never sees them.** A client could post to any `customer_support_client_<own id>_…` key with no case (the admin page lists messages by case), and into resolved or closed cases. Client messages now need an existing case of theirs that is open or in review: "Start a support case before sending a message." / "This support case is closed. Start a new case if you still need help." Staff replies are unchanged. Three older message tests now open a case first, as the page always does.
+- **A new message did not move its case to the top** (cases are ordered by `updated_at`). Posting a support message now bumps the case.
+- `request_id` added to the case response (REQ link on the client page).
+
+Notifications (`notificationNavigation.js`): "Customer support replied to case #N" and "Support case #N resolved/closed" now open `/client/support?case=N` ("Open support case"); the page opens that case, including a past one.
+
+Page:
+- **Past (resolved/closed) cases were hidden**, so the client could never read the office's answer again. "Show past cases (N)" lists them; a past case opens read-only with "This case is resolved. Start a new case if you still need help." and a Start new case button.
+- Only the first 5 open cases were shown; all are listed now, with clear status chips (Open / In review / Resolved / Closed) instead of `in_review`.
+- **"Start new case" was undone by the background refresh** (it switched back to the newest open case, also when a refresh started just before the click finished). The form now stays until the client sends or picks a case.
+- Related ticket is now "Related request" with REQ codes and the service; the case header links to the request.
+- Status changes by the office (resolved) show without a manual refresh; the conversation scrolls to the newest message; times read "Today, 2:30 PM" or "Nov 8, 2026, 2:30 PM"; line breaks are kept.
+- One "Start new case" button (the "New case" chip is gone), intro text, 44 px controls, 16 px inputs on phones, named message box, errors as `role="alert"`.
+
+Tests: `messages_app/tests.py` adds `ClientSupportCaseRulesTests` (related ticket saved and must be the client's own, `request_id`; messages only into an open case of the client; a message moves its case to the top). New `e2e/54-client-support-controls.spec.js`: first-visit form, case with related request opened by the first message, header code and REQ link, Start new case survives a background refresh, two cases in the same second (both 201), office reply → notification → `?case=` with the reply, office resolves → past case, read-only, server 400, 44 px, no sideways scroll, laptop screenshot. `07` updated for "Related request". Backend: 822 OK (7 skipped). `54`: passed; `07`, `29`, `30`: 19 passed in one run, and `30` passed again alone (its one failure in the combined run matched another test's notification).
+
+#### Client Notifications audit (2026-11-08)
+
+`/client/notifications` (`frontend/src/pages/client/ClientNotifications.jsx`, shared with the admin and technician notification pages), routing in `frontend/src/utils/notificationNavigation.js`, server in `notifications/`.
+
+Server rules checked, unchanged: each user lists, reads, marks and deletes only their own notifications; mark-all and delete-all touch only the caller's list and push the new unread count.
+
+**Several client notifications had no title and no job link**, so they showed as "Notification" and opened the general My Requests list. Two of them ask the client to act. Now titled and linked to the ticket (and so the request), with no migration:
+- `technician.py`: "Technician on the way", "Technician arrived", "Work Started for Ticket #N", "Ticket #N Completed" (technician-app paths);
+- `inspection.py` turnover finalize: "Please confirm the handover";
+- `tickets.py`: "Quotation <number> ready" (on send) and "Deposit payment recorded";
+- `maintenance.py`: the client's after-sales case notice, "New after-sales case" / "Updated after-sales case".
+
+Routing: a quotation notice's button reads "Review quotation" and the handover notice "Confirm handover" (both open the request); a notice with no linked request now says "Open My Requests" instead of "Open request". "Completed" notices still open Service History (no per-job link there).
+
+Page: the list and "No notifications" are hidden while the load error is shown; a delete can't be sent twice (double tap used to fail with "not found"); an error clears the last success message; the Unread count badge fits two digits and caps at 99+.
+
+Tests: `test_end_to_end_journeys.py` (the direct-service journey: every client notification has a title and a request; on the way / arrived / work started / handover are linked to the ticket); `test_quotation_revision.py` (the sent quotation's notice is titled and linked). New `e2e/55-client-notifications-controls.spec.js` (its own client, technician and job): every notice from the job flow has a title and request, none reads "Notification", tabs filter, Unread count matches the server, Mark as read, "Review quotation" opens the request and marks the notice read, a support resolution appears without reloading with "Open support case", pages of 10, "Open My Requests" for unlinked notices, Delete one, Mark all as read (server count 0), Delete all asks first (Keep / Delete), 44 px, no sideways scroll, laptop screenshot. Backend: 822 OK (7 skipped). `55`, `53`: passed; `30`: 3 passed.
+
+#### Client Profile audit (2026-11-08)
+
+`/client/profile` (`frontend/src/pages/client/ClientProfile.jsx`, with the shared `ProfileIdentityCard` and `ProfileSecuritySection`), server `PATCH /api/users/me/` (`SelfUserUpdateSerializer`, `users/views/auth.py`).
+
+Server (applies to every role's own profile):
+- **A name or phone already on the account could be saved blank**; names print on quotations and purchase records, and technicians call the phone. `first_name`, `last_name` and `phone` that are set cannot be cleared: "Enter your first name." / "Enter your last name." / "Enter your mobile number." A value never set may stay empty (older accounts).
+- **When the verification email for a new address could not be sent, the response was a 500**, so the page said "server error" although the other changes were saved. It now returns 200 with the saved user (email unchanged, no `pending_email`) and `email_change_error`; the shared helper `profileSaveOutcome` (`utils/profile.js`, used by the client, technician and admin profile pages) shows "Your other changes were saved. The verification email … could not be sent, so your email is unchanged."
+- Saving the current email again clears a pending change (already true; now tested and used by the page).
+
+Page:
+- Pending email banner has "Keep <current email>" to cancel the change.
+- Save and error messages scroll into view (on a phone they were at the top, far above the buttons); errors are `role="alert"`.
+- 44 px inputs and buttons, 16 px inputs on phones (no iOS zoom), "Saving…", Dismiss disabled while saving; the photo picker is keyboard-reachable (`sr-only`, named, focus ring) instead of `hidden`; email required; Contact Information explains where the details are used.
+- Password & Security (shared): errors show inside the form; a new password equal to the current one is refused before sending; the text now says the change "signs you out on every device" (the server deletes all tokens).
+- Sign-in page: `/login?reason=password_changed` and `?reason=mfa_changed` now explain why the person was signed out.
+
+Tests: `users/tests.py` `SelfServiceProfileTests` adds three tests (blank name/phone refused, never-set fields may stay empty; unsent verification keeps other changes and the old email with `email_change_error`; saving the current email cancels a pending change). New `e2e/56-client-profile-controls.spec.js` (its own client): identity (CL code, Verified), blank name/phone refused and bad phone refused with the message in view, save survives reload, keyboard-reachable photo picker, refused type, upload, email change needs the password (wrong refused), pending banner and "Keep <email>" (server pending null), password errors in the form, same password refused, real change → sign-in notice, new password works, 44 px, no sideways scroll, laptop screenshot. `05` profile tests updated (errors are alerts now). Backend: 825 OK (7 skipped). `56`, `46`: passed; `05` profile: 2 passed; `01`: 13 passed.
+
+All client pages are now audited (specs 47–56); none of it is committed.
+
+#### Settings effects audit (2026-11-08)
+
+New living checklist: `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md` (part 1, Settings, filled in; parts 2-5 to do). Each Admin Setting was traced to the code that reads it and tested by changing it and checking the effect.
+
+Fixed (server):
+- **Notification switches were only partly obeyed.** New `in_app_notifications_enabled()` / `email_notifications_enabled()` (`notifications/notification_utils.py`, both include the master switch). In-app: `helpers.create_notification`, `messages_app._create_notification`, sales records (purchase record available, payment complete), maintenance (warranty activated, maintenance scheduled, after-sales case, maintenance alerts and reminders), inventory shortage notices and admin security alerts now check it; before, most ignored In-app Alerts and several ignored the master switch. Email: `helpers.send_notification_email` (request submitted/approved emails) and the maintenance reminder email now check Email Alerts. Account emails (verification, reset) are unchanged.
+- **Daily maintenance job** (`process_maintenance_alerts`): business date (UTC+8) by default; the client gets the in-app reminder even without an email address or when the email fails (before: no reminder at all); admin alerts name the real days ("due in 12 days", was always "7 days") and skip inactive admins.
+- **SLA rule changes waited up to 5 minutes** (rule lookup cache, never cleared). `services/signals.py` clears the rule's cache on save/delete (single Daphne process, so it applies at once).
+- **Arrival validation "Last updated by/at"** was stamped by every settings save; now only when one of its values changed.
+- **Document prefill** `document_defaults` used fixed company details; now Settings' Company Name and Address. Phone typo 09171480224 corrected to 09171460224 (used everywhere else).
+
+Fixed (page, `AdminSettings.jsx`):
+- **Save sent every field back.** An admin allowed to view but not publish the public site got 403 on every save; public-site edits made meanwhile could be overwritten. Save now sends only changed fields.
+- **The page failed to load for an admin without service-catalog access** (SLA rules refused, the whole load failed) and then showed built-in defaults, such as Notifications off. Settings and SLA rules now load separately; the SLA table says why it is empty; the form stays locked if settings cannot load.
+- 44 px controls (Refresh, weekday buttons, Save, SLA toggles), 16 px inputs on phones; the overtime select shows a stored value outside 9-12 hours; switch descriptions say what each switch stops.
+- Admin Documents header and the contract form's company name/address now come from Settings (via the prefill), with the old text as fallback.
+
+Decisions for the owner (recorded in the checklist): working days and holidays do not block client booking (only Calendar closures do); System Name and Support Email are saved but used nowhere; Document Footer and External Payment Notice are not printed by any template; SLA rule "Off" falls back to built-in default times instead of switching the rule off; Default Time Zone and Max Technician Assignments are saved but not shown or used; the staging scheduler for timed jobs is still missing.
+
+Tests: new `services/tests/test_settings_effects.py` (11: each switch on every sender and back on, master off, email off; reminder days window, one reminder per stage, in-app off waits, failed email keeps the in-app reminder, email off; SLA change applies at once; arrival stamp; view-but-not-publish save; document defaults from Settings); `test_sales_records.py` (in-app off: no purchase-record notice); `test_maintenance_workflow.py` updated (client without email now reminded in the app; real day count; business date). New `e2e/57-settings-effects.spec.js`: on the real Settings page, GPS validation off (reason required) lets a far arrival through and on refuses it; In-app Alerts off means no client notice, on brings them back, and the arrival stamp is unchanged; Company Name/Address reach the Documents header and contract form; a stored 8-hour overtime limit shows as "8 hours"; a scoped admin (manage settings, view-only public site, no SLA access) loads real values and saves; 44 px; every value restored in `finally`. Backend: 837 OK (7 skipped). `57`: passed; `31`: 2 passed; `12`: 21 passed; `30` + `55`: 4 passed.
+
+Settings effects follow-up checks (2026-11-08): the changed-fields-only save was checked against the server's cross-field rules, which fall back to the saved row (`TSE::test_single_field_saves_are_checked_against_the_saved_values`: lone closing time before opening refused, lone opening time accepted, validation off without a saved reason refused and with one accepted, overtime below 8 h refused). Arrival validation now has server tests (`TSE::test_radius_decides_how_close_the_technician_must_be`, `TSE::test_validation_off_lets_a_far_arrival_through_and_on_refuses_it`); `test_settings_effects.py` has 14 tests. Spec 57's restore asserts the PUT succeeded and compares every changed field. Specs 31 and 57 locate the Maintenance Reminder field by role (the Email Alerts description also says "maintenance reminders"). The checklist names a test for every Covered row and marks unread ones Unverified. `57`, `31` (2), `26` + `27` (4): passed. Note: turning In-app Alerts off now also silences admin security alerts and chat notices.
+
+#### Requests and job tickets: every step and every refused step (2026-11-09)
+
+Part 2a of `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md`. Every pair of the 12 ticket statuses was tried through the office's manual status change (`update_status`) for service tickets and inspection visits; every request and job action was tried by 8 kinds of user.
+
+Confirmed working: all 99 forbidden moves are refused with the ticket and history unchanged; the 33 allowed moves work and record the reason (completion needs the checklist; an inspection visit never ends as Completed); the deposit gate; a reason is required; cancelling a ticket closes the request, releases held stock and frees the technician; approve/reject only from Pending, approving twice makes one ticket; crew members cannot pause or finish; clients and technicians only reach their own work (others get 404).
+
+Fixed:
+- **A ticket with no technician could be moved into field work** ("On the way", "Arrived", "In progress") by the manual status change. `validate_ticket_transition` now refuses it.
+- **A required site inspection could be skipped** by the manual status change (Not Started → Ready for Service → On the way …), although the contract said it could not; the check existed only in the dispatch actions. `validate_ticket_transition` now refuses leaving Not Started / Ready for Service for service work before the inspection has reported. Tickets already past those states are not re-checked, so older records are never stuck (a read-only check of the local database found none affected).
+- **A client could cancel a paused job** (On Hold, request In Progress) although work had started; the contract says only the office may then. The server now answers 409 "contact our office" for On Hold too, and the client pages hide "Dismiss request" (`canClientDismissRequest`). This reverses the 2026-11-08 My Requests change that showed Dismiss for jobs on hold (that change had followed the server rule without checking it against the contract).
+- **Browser tests: random "The server encountered an error"** on busy pages came from Django's development server keeping only 10 waiting connections; on Windows the 11th is refused (`ECONNREFUSED` in the Vite proxy while the backend was still serving). `settings_e2e.py` raises the queue to 128 for the test server only (production runs Daphne). Spec 17 went from failing 3 runs in a row to passing with 0 refused connections. Local development (`runserver`) has the same 10-connection limit.
+
+Not reachable from any screen: the only manual status control the office has is "Dismiss ticket" (cancel with a reason), shown for exactly the 9 open statuses; the two guard holes were reachable through the API only.
+
+Tests: new `services/tests/test_ticket_and_request_state_rules.py` (14: both 132-pair matrices, completion, reason/unknown status, cancel closes the request, no technician, inspection skip, deposit gate, the 8 × 10 role matrix, request decision states, approve twice, client cancel by ticket state including On Hold (409), office cancels a paused job, only the lead finishes); `inventory/tests.py::test_dismissing_the_ticket_releases_reserved_inventory_and_the_technician`. New `e2e/58-request-ticket-state-buttons.spec.js` (crew has no Put on Hold / Finish Job, the lead does; client Dismiss shown for a waiting job and hidden for a paused one, server 409; office Dismiss ticket for open and paused jobs, not for a finished one). `e2e/50` updated (no Dismiss for the paused job; quick-view Dismiss checked on the approved request). `58`, `50`, `53`, `17` (2), `11` (8): passed. Spec 50's "Open full details → Back" step was once timing-sensitive (passed on rerun).
+Also: test_client_dashboard.py uses the business date for 'today' (the test failed between 00:00 and 08:00 local time; the dashboard itself was right).
+
+#### Quotations and deposits: every step and every refused step (2026-11-09)
+
+Part 2b of `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md`. Every office status move between the four quotation statuses, creation in each status, deletion in each status, cancelled and finished jobs, deposit amounts and voids, and 7 kinds of user on 8 actions were tried through the API.
+
+Confirmed working: Accepted is locked; a declined quotation is revised as `-R2` and resent; the client answers only a Sent quotation and must give a reason to decline; an expired quotation cannot be accepted; deposits only on an accepted quotation that needs one, never more than what remains, zero or future-dated; voids need a reason and happen once; only the office creates, changes, takes payments and voids; only the owning client answers (others 404).
+
+Fixed (no screen offered these; the API allowed them):
+- the office could set a quotation to **declined** (only the client declines, with a reason);
+- a quotation could be **created already accepted or declined**;
+- a **sent quotation could be turned back into a draft** after the client was notified;
+- **any quotation could be deleted**, including an accepted one; now only drafts;
+- for a **cancelled job**, a quotation could be sent, the client could accept it, and new deposits could be recorded. All refused now; voiding an earlier payment still works. The client's request page shows "This job was cancelled, so this quotation no longer needs an answer." instead of Accept / Decline (`ClientJobDecisions` `jobCancelled`).
+
+Recorded in the contract: the office's "Client accepted offline" also works on a Draft quotation (a printed quotation signed on paper), as the inspection review screen offers.
+
+Owner decision: a job cancelled after a deposit was paid records nothing about the money (refunded or kept); only a void with a reason exists today.
+
+Tests: new `services/tests/test_quotation_and_deposit_rules.py` (9: the 12-move status matrix, creation, deletion, client answers, cancelled job, deposit amounts and dates, deposits only when needed, voids, the 7 × 8 role matrix). New `e2e/59-quotation-state-buttons.spec.js` ("Client accepted offline" records the acceptance, not as the client's answer, and opens the deposit panel; a cancelled job's quotation offers no Accept or Decline and the server refuses an answer). Backend: 864 OK (7 skipped). `59`, `53`, `11` (8), `10` (2): passed.
+
+#### Deposit after a cancelled job (2026-11-09, owner request)
+
+The owner approved recording what happens to a deposit when a job is cancelled. No migration: the decision is an activity-log entry on the quotation.
+- Server: `services/deposits.py` (`received_deposit_amount`, `deposit_outcome`, `deposit_decision_needed`, `notify_deposit_decision_needed`); both cancellation paths (`apply_ticket_status_change` and `service_requests.cancel`) tell active admins "Deposit decision needed for Ticket #N" when money was received; `POST /api/services/quotations/{id}/settle-deposit/` (documents.manage) records Refunded (voids the payments with "Refunded after the job was cancelled: <note>") or Kept (adds the note to each payment), once, and notifies the client ("Deposit refunded" / "Deposit kept after cancellation"). Quotation responses add `ticket_status`, `deposit_outcome`, `deposit_decision_needed`.
+- Privacy: clients and technicians now get only each deposit payment's date, method and amount (no staff name, reference, notes or void reason) and the outcome without who recorded it, matching Purchase Records.
+- Screens: the Dismiss ticket dialog shows "Deposit received" and needs Refunded or Kept with a note before dismissing; a cancelled ticket's actions dialog shows the deposit panel (`CancelledJobDeposit`) with the decision form or the recorded outcome; the deposit panel says "Job cancelled" instead of "Partially paid / Remaining" and hides Record and Void; the admin notice opens the ticket (`notificationNavigation` "deposit decision"); the client's request page says "Your deposit of ₱X was refunded / kept after the job was cancelled: <note>". Also fixed: a dismissed or handed-over ticket's "Next step" said "Dispatch technician" (`queueActionLabel`).
+- Tests: `DepositAfterCancellationTests` (5) in `test_quotation_and_deposit_rules.py`; new `e2e/60-deposit-after-cancellation.spec.js`. Backend 869 OK (7 skipped); `60`, `17` (2), `58`, `59`: passed. Kept deposits are not counted as sales (a cancelled job makes no sales record); analytics do not show them yet.
+
+Kept deposits in Sales analytics (2026-11-09, owner request): `services.deposits.kept_deposit_totals(ranges, client_type=None)` reads the "kept" decisions (one query for the current and previous periods) and the sales workspace returns `kpis.kept_deposits` ({current, previous, change, count, currency 'PHP'}), filtered by client type and excluded when another currency is selected. Analytics > Sales shows a fourth collections card, "Kept deposits" ("N cancelled jobs, kept in this period (not counted as sales)"). Kept money is deliberately not added to confirmed sales or payments collected. The sales query ceiling in `test_analytics_workspace.py` went from 25 to 26 for this one fixed query. Tests: `TQD::test_kept_deposits_show_in_sales_analytics_and_refunds_do_not`; spec 60 checks the card. Backend 870 OK (7 skipped); `60` passed.
+
+#### Sales records: every step and every refused step (2026-11-09)
+
+Part 2c of `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md`. Every action was tried on each status (draft, confirmed, voided) and by 7 kinds of user.
+
+Confirmed working: only drafts are edited and confirmed; only confirmed sales are voided (with a reason, and only once no live payment remains) and take payments; voided sales are replaced by a new draft linked through `replaces`; prepare refuses open or cancelled work and returns the active record; clients see only their own confirmed records, technicians none; only the office changes sales; payment lists are office-only.
+
+Fixed: a payment on a **voided** (read-only) sale could still be voided; `void_payment` now answers 409 "This sales record is voided and read-only." (No screen offered it: the payments panel shows only for confirmed sales.)
+
+Tests: new `services/tests/test_sales_record_rules.py` (6: the 5 × 3 action/status matrix, prepare rules, replacement, no void with live payments, client and technician visibility, the 7 × 8 role matrix). `e2e/25` now also checks that voiding a sale with a live payment shows "This sale has recorded payments. Void those payments first (for example after a refund)." and keeps the record. Backend 876 OK (7 skipped); `25` (2), `52`: passed.
+
+#### Inventory: every step and every refused step (2026-11-09)
+
+Part 2d of `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md`. Every ledger rule, equipment requests in all 12 job statuses, the office decision, returns and 8 kinds of user on 6 actions were tried. **No defect found**; the code matches `INVENTORY_LEDGER_CONTRACT.md`. Recorded behaviour: an item whose only history is its opening balance can be deleted (created by mistake); only the lead technician submits an equipment return. The Inventory page matches the server (Delete only when allowed, Retire disabled while stock is reserved).
+
+Tests: new `inventory/test_inventory_rules.py` (9: movement amounts and reasons, quantity only through movements and kept history, reserved stock protection, retired items, requests in every job status, who may request, the office decision, the 8 × 6 role matrix, technicians see only their own rows). Backend all OK.
+
+#### Maintenance and after-sales: every step and every refused step (2026-11-09)
+
+Part 2e of `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md`. Every case status change, every maintenance action on every schedule status, the case-to-schedule link and 6 kinds of user on 5 actions were tried.
+
+Fixed:
+- **Closing a maintenance case recorded the maintenance as done.** Any resolved *or closed* maintenance case set its schedule to `completed` (final), ending its reminders even when the case was closed without the work (for example the client could not be reached). Now only `resolved` completes the schedule; `closed` leaves it running (`views_follow_up.perform_update`).
+- **Reopening a case revived a completed schedule** (it was re-derived from dates back to due), and resolving a case completed a **stopped** schedule, which the schedule's own Complete action refuses. A completed or stopped schedule is no longer changed from a case.
+- **Business date**: every "today" in after-sales (`views_follow_up.py`, `serializers/after_sales.py`) used the UTC date, so before 08:00 local maintenance could be rescheduled to yesterday, the overdue filter and default due dates were a day off, and a warranty case could be opened on a warranty that ended yesterday. They now use `business_today()`. Two existing tests built their dates from the UTC date and were updated to the business date.
+
+Confirmed working: allowed case transitions, notes to close and a reason to reopen, cases only on finished jobs and starting open, warranty cases only while active, no deletion, every schedule action allowed only from the right statuses with a reason, stopping closes the open maintenance case, office-only access.
+
+Tests: new `services/tests/test_after_sales_rules.py` (10). New `e2e/61-maintenance-case-schedule.spec.js` (Mark as Done on the After-Sales page completes the schedule; Reopen keeps it completed). `26`, `27` (4), `61`: passed. Backend all OK.
+
+#### Support and messages: every step and every refused step (2026-11-09)
+
+Part 2f of `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md`.
+
+**Privacy fix: a client could read other clients' support messages.** The client message list matched support threads with `group_key__startswith='customer_support_client_<id>'`, so client 1 also received the threads of clients 10, 11, 100… (any id starting with theirs). Proven with a probe (client 1 read client 10's "My account number is 12345."). `MessageViewSet.get_queryset` now matches `customer_support_client_<id>` exactly or `customer_support_client_<id>_…`. Sending was already checked (`get_customer_support_client_id` parses the exact id) and live updates (`messages_app/realtime.py`) already parse the exact id; no other id-prefix match exists in the server. Production data could have been exposed this way before the fix; there is no log of who listed which messages.
+
+Confirmed working: job threads (owning client, lead, crew and office write and read; other clients and technicians cannot), no staff or direct messages for clients, only the sender edits (text or image only) or unsends, support cases visible only to their client and the office, only support managers change cases, a case links only the client's own job.
+
+Tests: new `messages_app/test_message_rules.py` (8, including the look-alike-id leak). Backend 903 OK (7 skipped); `54`, `28`, `29`: 6 passed.
+
+#### Job documents: every step and every refused step (2026-11-09)
+
+Part 2g of `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md`.
+
+Fixed:
+- **Technicians got a server error (500) on field service reports.** `FieldServiceReportViewSet.get_permissions` used `CanViewTechnicianChecklist`, which `services/views/tickets.py` never imported. The technician checklist's "Field Service Report" tab therefore never loaded or saved. Imported. A scan of every server module for names that are used but not defined now finds none.
+- **The field service report form could not work even with the server fixed:** it read the paged list as an array (`response.data.length`), so it never loaded the saved report and would have created a new report on every save; and it sent an empty `client_signature_date`, which the server rejects ("Date has wrong format"), so every save failed. Fixed (`FieldServiceReportForm.jsx`, `api/services.js`): the latest report is loaded, empty dates are sent as null, errors from the server are shown next to the Save button, fields are labelled, 44 px and 16 px on phones.
+- **A technician could mark a field service report as acknowledged by the client** (which locks it). Technicians' `client_acknowledged` / `client_signature_date` are ignored; the office records it.
+- **Finished documents could be deleted** (finalized or client-confirmed turnover, signed contract, reviewed data sheet, finalized commissioning checklist, acknowledged field service report). `services/views/document_locks.KeepFinishedDocumentsMixin` answers 409 "Only a draft document can be deleted…"; drafts can still be deleted by the office. No screen deleted these.
+
+Confirmed working: clients see only their own job's documents, technicians only their assigned jobs' (contracts not at all), the scoped admin is refused, only the office (and the lead for field forms) changes them, every document type locks once final, the template-based document system is office-only.
+
+Tests: new `services/tests/test_document_rules.py` (5). New `e2e/62-technician-field-service-report.spec.js` (fill, save, reload, update the same report on a phone). Backend 908 OK (7 skipped); `62`, `41`, `12`, `10`: 25 passed.
+
+#### Job types × every cancel or "no" point (2026-11-09)
+
+Part 3 of `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md`. Four job types (direct, direct with deposit, inspection first, inspection first with deposit) were driven through the real API to every stage, and five cancel paths were tried at each (270 combinations). The cancel rules themselves were right: every cancel closes request and ticket, releases the technicians, tells the client, asks for a deposit decision only when money was received, and stops all further actions.
+
+Fixed:
+- **An office dismissal told the client only "Service Ticket #N Status Updated"** and told the lead but not crew members. It now sends "Ticket #N Cancelled" to the client and to every team member (`tickets.update_status`). The request-cancel notice to technicians no longer says "before work started" (it can happen mid-job).
+- **Technicians could still change a cancelled job**: proof photos and a new field service report were accepted, and travel, arrival and status changes gave misleading answers ("Start navigation before marking arrival", "You must mark arrival..."). `TechniciansLeaveCancelledJobsMixin` (on the ticket, inspection, commissioning, data sheet and field service report viewsets) and the technician job actions now answer 409 "The office cancelled ticket #N, so it is no longer on your job list." Reading still works; other technicians learn nothing.
+- **The technician's map called a cancelled job "finished"** and linked to Job History; it now says the office cancelled it and links to My Jobs. A technician's "Cancelled" notice stays in the bell (the job is no longer in My Jobs).
+- Test only: spec 10's journeys depended on the internet street lookup behind "Use My Location" (a working lookup replaced the typed address); the lookup is now answered as unavailable inside that spec.
+
+Open (owner decision): the office cannot say "no" to a client's reschedule request without setting a date.
+
+Tests: new `services/tests/test_job_type_cancel_matrix.py` (6, 25 s; a planted rule change was caught). `inventory/test_inventory_rules.py` now expects 409 for an equipment request on a cancelled job. New `e2e/63-job-cancelled-mid-trip.spec.js`. Backend 914 OK (7 skipped); `63`, `40`, `45`, `58`, `60`, `10` (2), `11` (8), `17` (2): passed.
+
+#### Time cases with the clock moved (2026-11-09)
+
+Part 4 of `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md`. `TIME_ZONE` stays UTC (earlier decision; analytics and report day buckets unchanged). This supersedes the earlier note that other "not in the past" checks stay on the UTC date: rules that show or block something by date, and every comparison of a local appointment time with "now", now use the business day and time (`services.business_time`, new `business_day_start`).
+
+Fixed:
+- **SLA late-start alerts and missed dispatch were 8 hours late at every hour of the day.** `sla._resolve_scheduled_start` read a 09:00 appointment as 09:00 UTC (17:00 local). It now uses the business timezone, as does `get_ticket_dispatch_state`.
+- **Inspection decision**: a same-day installation time was compared with the UTC clock (at 14:00 a 10:00 installation was accepted), and before 08:00 an installation could be dated yesterday and "today" did not ask for a time.
+- **Before 08:00** (UTC date still yesterday): the office could reschedule to yesterday; maintenance due today showed "due soon"; the after-sales overdue count, the admin calendar's default month and "past dates", the default visit date, equipment reservation dates and landing-page promotion start/end dates were a day off.
+- **A job finished before 08:00 started its warranty and maintenance cycle the day before** (`maintenance._normalize_to_date` took the UTC date of the moment).
+- **Date filters on stored moments used UTC dates**: the technician's Job History filter and the activity log's date filter and "today" count (now ranges from `business_day_start`).
+- **The activity log showed raw UTC timestamps** in change values ("2026-11-09 02:17:59+00:00"); they now read as local time ("Nov 9, 2026, 10:17 AM"), and the on-screen metadata shows only the readable copies.
+- Frontend: the installation contract's default date and three CSV file names used the UTC date (`toISOString`); they use `getLocalDateInputValue`.
+- Tests that built "today" from the UTC date (and so failed before 08:00, or pinned the 8-hour SLA error) now use the business day: `test_business_flow_controls`, `test_end_to_end_journeys`, `test_scheduling_warranty_and_assignment`, `test_maintenance_workflow`, `test_sla_evaluation`, `test_sla_api_integration`, `api/test_landing_page`.
+
+Open (owner decisions): staging has no scheduler, so maintenance reminders and statuses, SLA escalations, auto-dispatch and the daily jobs never run (a maintenance schedule stays "scheduled" after its date); "Mark as Done" on a maintenance schedule ends the plan rather than starting the next cycle.
+
+Tests: new `services/tests/test_time_cases.py` (16; a planted return of the three main bugs was caught). New `e2e/64-local-day-boundaries.spec.js`. Backend 930 OK (7 skipped); `64`, `12`, `13`, `27` (2), `34` (2), `10` (2), `11` (8; 11.6 passed on rerun), `17` (2), `18`, `15` (2), `03` (3.14 needed a locator fix left from part 1): passed. Existing activity-log entries keep their raw UTC change values; only new entries are stored readable.
+
+#### Large data (2026-11-13)
+
+Part 5a of `docs/quality/SYSTEM_POSSIBILITY_COVERAGE.md` (full before/after table there). A scratch SQLite copy (outside the repo; dev and e2e databases untouched) was filled with a few years of business (25,000 jobs, 3,042 users, 150,000 activity rows, 82,000 notifications, 200,000 location points) and every screen address was timed as the office, a technician and a client.
+
+Fixed (no change to results, API shape, schema or permissions):
+- **Screens made one database query per row.** Dashboard 3,662 → 55 queries (14.5 s → 7.1 s); Tickets summary 1,637 → 5 (47.7 s → 3.0 s; counts now come from the database and only open jobs are checked for SLA); Calendar 6,311 → 7 (19.4 s → 3.3 s); Users and Clients lists 3,045 → 3 (6.4 s → 1.5 s; role profiles loaded with the users); Technician performance 1,121 → 7 (7.7 s → 2.9 s; one grouped query per figure, answers byte-identical to the old code in seven period/role cases).
+- SLA checks read the work calendar (Settings) once per list instead of once per job (`sla.sla_batch_calendar`, `evaluate_service_ticket_sla(..., calendar=)`), and reuse status history loaded with the list (`sla.ticket_status_history`); `job_progress._latest_reported_percent` reuses `progress_updates` loaded with the list. The dashboard built its 20 active jobs and 10 recent tickets twice (for `operations` and the older `supervisor` alias); now once.
+- **The Notifications page read every notice, ten per request** (an office account with 15,000 notices made 1,500 requests, and again on every new notice). The list now accepts `?status=unread` and `?category=success|warning|info` (the page's tabs; same grouping as its `categoryOf`), and the page asks for one page of ten per tab, with the server's count, unread count and Previous/Next. Texts unchanged.
+
+Open (owner decisions): seven screens (Service Tickets, Dispatch Board, Reports, Follow-up Cases, Sales Records, Support, the support assistant) still load every job ten at a time through `fetchAllPages('/services/service-tickets/')` (about 2,500 requests at 25,000 jobs), as do the client request, admin user, maintenance, sales and inventory lists; each needs server paging, search and filters, screen by screen. Still slow: ticket report 51 s / 19 MB, coverage heatmaps 16-20 s, activity-log filter lists 7.4 s (an index would need a migration), dashboards 5-7 s (SLA in Python over 5,660 open jobs), tracking 4.3 s / 3.8 MB, technician My Jobs 3.6 s / 2.6 MB unpaged. Part 5b (staging hand check: real email, Cloudinary, live updates between phones, PostgreSQL) needs a deploy; the staging start command runs `migrate`, so a deploy applies the pending `progress.0005`.
+
+Tests: new `services/tests/test_query_ceilings.py` (7: dashboard, tickets summary, calendar, users, clients, technician performance, a notification tab; each goes from 3 to 30 jobs and checks the query count stays the same; putting the old code back failed it for the dashboard, calendar, tickets summary, users and clients). New `notifications/tests.py::test_list_pages_by_tab_on_the_server`. `e2e/45` paging mock now answers ten per page like the server. Backend 942 OK (7 skipped); frontend build passed; `55`, `45`, `30` (3), `15` (2), `46`, `17` (2), `13` and `33` (31), `18` (2), `16` (2): all passed (45 passed after its mock fix). No migration, dependency, commit or deploy.
+
+### 2026-11-09 release-plan stabilization checkpoint
+
+- Scope is frozen at 174 uncommitted paths before this checkpoint: 123 tracked modifications and 51 untracked paths; nothing was staged. The candidate release spans backend business rules and tests, the pending long-job progress migration, frontend role workspaces, Playwright scenarios 35-64, and the matching security/quality contracts.
+- Created ignored safety archive `backend/local_backups/worktree-before-release-plan-20261109-121849.zip` containing all 174 paths. The archive is 1,303,575 bytes with SHA-256 `062F3B0FDE07748E339B9B008E90EABFF59A5848A2FDABCF8C6CD7892D122DEB`; `git status` confirmed the archive itself is not tracked.
+- `git branch --show-current` returned `feature/analytics-decision-workspace`; HEAD is `94bec64` (`Record admin page audit staging deployment`).
+- `manage.py showmigrations progress` confirmed `progress.0005_ticketprogress_long_job_reports` is pending locally. It was not applied. `manage.py makemigrations --check --dry-run` returned `No changes detected`.
+- The pre-cleanup `git diff --check` identified only two trailing blank-line errors, in `backend/services/business_time.py` and this handoff. This checkpoint removes those two blank lines; the post-change result belongs in the next validation entry after it is run.
+- Known release gates remain: review and explicitly authorize any local migration, run static checks and the complete backend/frontend/browser gates, complete the large-data/staging hand check, decide whether the missing staging scheduler blocks release, review the final diff, and obtain separate authorization before commit, push, staging migration, or deployment.
+
+Change ledger: updated `backend/services/business_time.py` only to remove an extra EOF blank line and updated this living handoff to make the current stabilization objective, backup evidence, migration state, validation evidence, and remaining release gates explicit. No runtime behavior, schema definition, database record, dependency, external service, commit, push, or deployment changed.
+
+Validation ledger follow-up:
+- `git diff --check` passed after the two EOF blank lines were removed; existing CRLF-to-LF notices remain warnings and no broad line-ending rewrite was performed.
+- `frontend/npm.cmd run build` passed with Vite 8.3.5 and 2,571 transformed modules.
+- The first combined static invocation tried `./venv/Scripts/python.exe` while its working directory was `frontend/`; both backend commands therefore did not start. The corrected root invocation supersedes that runner-path error.
+- Corrected root `manage.py check` passed with no issues, and `manage.py makemigrations --check --dry-run` again returned `No changes detected`.
+- The focused backend gate covering all newly added rule suites plus progress reports passed 140/140 in 65.462 seconds on `settings_e2e`.
+- The first complete backend gate ran 930 tests in 146.378 seconds: 929 passed, 7 skipped, and `AnalyticsWorkspaceTests.test_unified_endpoint_stays_within_query_budget` failed because the unified endpoint used 22 queries against its former ceiling of 20. Investigation found the new batch work-calendar path could fetch the same `AdminSettings` row twice. `get_daily_capacity_limit_minutes` now accepts the row already loaded by `load_work_calendar`; the first provisional ceiling was 21 before the absent-settings path was isolated in the next run. This result is superseded by the final focused and complete reruns below.
+- The first focused regression attempt combined the analytics assertion with work-calendar/scheduling suites and failed 1/77: a cold isolated run used 23 queries against the provisional ceiling of 21. A temporary SQL stack trace proved that an absent `AdminSettings` row caused `load_work_calendar` to query once, receive `None`, and then make the helper query again. The diagnostic code was removed. The absent-row path now directly uses the documented eight-hour default, and the cold-run ceiling is 22 for one live settings read plus one bounded status-history prefetch. This result is not yet superseded until rerun.
+- The final single analytics query-budget regression passed 1/1. The broader analytics, work-calendar, and scheduling regression gate then passed 77/77 in 8.706 seconds.
+- The second complete backend gate passed all 930 tests in 146.278 seconds with 7 expected skips. This supersedes the earlier complete-suite failure and confirms the query-budget repair across the full backend suite.
+- The first scenarios 35-64 browser invocation did not start because Windows `cmd` interpreted regex alternation characters before Playwright received them. The second invocation safely initialized the isolated E2E database but passed absolute Windows paths that did not match Playwright's configured relative test directory, so it reported `No tests found`; no scenario result is claimed for either runner error.
+- The corrected scenarios 35-64 browser gate ran 32 tests in 17.9 minutes: 31 passed and scenario 48's 390-pixel geometry assertion failed. The test read the map box while the service catalog still showed its short initial empty state, then read the headings after the asynchronous catalog state update expanded the page (`map y=700`, location heading `y=1523`). The screenshot showed the loaded catalog and no contradictory product layout. Scenario 48 now waits for the first real service checkbox before measuring any geometry; this timing repair is not yet superseded until its focused rerun.
+- The focused scenario 48 rerun passed all 3 tests in 1.3 minutes, including both desktop/mobile geometry assertions and the complete interaction journey. This supersedes its earlier timing failure.
+- The modified legacy-spec gate (03, 04, 05, 07, 10, 25, 28, 30, 31, and 34) ran 95 tests in 21.3 minutes: 94 passed and the superadmin notification deletion flow failed because a deleted notification card reappeared. The API-side poll identified the deleted row as absent, while the screenshot showed its card restored by the page. `ClientNotifications` could apply an older silent list request after a mutation and replace the locally updated state with the pre-mutation snapshot. Local notification loads now carry a monotonically increasing request version, and successful mark/delete mutations invalidate every older in-flight load before updating state. This result is not yet superseded until the focused three-account notification rerun.
+- The focused notification control rerun passed 3/3 in 2.3 minutes for administrator, superadministrator, and client accounts. This supersedes the stale-card failure and verifies individual delete, mark-read, delete-all, live refresh, filters, and navigation with the request-version guard active.
+
+Change ledger follow-up: optimized the existing work-calendar/capacity connection in `backend/services/work_calendar.py` and `backend/services/views/helpers.py`, updated the unified analytics query-budget assertion in `backend/services/tests/test_analytics_workspace.py`, stabilized scenario 48's pre-measurement catalog wait in `e2e/48-client-new-request-layout.spec.js`, and guarded `frontend/src/pages/client/ClientNotifications.jsx` against stale list responses overwriting successful notification mutations. No business policy, schema, database record, dependency, external service, commit, push, or deployment changed.
+
+Validation ledger final local follow-up:
+- A complete Playwright invocation discovered 367 sequential tests but did not complete validly. Scenario 3.9 timed out after its Fill a document dialog opened while the page reported that the backend was unreachable. The run was allowed to continue long enough to establish that its managed environment was no longer trustworthy, then its exact E2E frontend/backend and parent runner processes were stopped. It had reached approximately test 98; failures emitted after the servers were deliberately stopped are invalid infrastructure noise and are not product evidence. No complete-suite pass is claimed.
+- The first focused scenario 3.9 command initialized the isolated database but included `e2e/` before the filename even though Playwright's configured test directory is already `e2e`, so it reported `No tests found`. The corrected command, `playwright.cmd test 03-admin-workspace.spec.js --grep "3[.]9 - Document draft saves and reloads end to end"`, passed 1/1: 27.9 seconds for the test and 1.5 minutes including fresh isolated migration/seed/server startup. This verifies the document workflow itself and bounds the complete-run failure to the long-lived test environment, but it does not replace a complete 367-test pass.
+- Final `git diff --check` passed with existing CRLF-to-LF warnings only. No broad line-ending rewrite was performed.
+- The final Vite 8.3.5 production build passed with 2,571 transformed modules after the notification request-version guard.
+- A final backend static command was first issued from `backend/` with a repository-root-relative virtual-environment path and therefore did not start. The corrected repository-root command passed `manage.py check` with no issues and `manage.py makemigrations --check --dry-run` with `No changes detected`.
+- The worktree manifest remains the same 174 candidate paths (123 tracked modifications and 51 untracked paths); this checkpoint added or removed no candidate path. The ignored safety archive remains outside that manifest.
+- The first post-validation archive command did not create a file because PowerShell had not loaded the assembly containing `ZipArchiveMode`; its null-archive follow-on errors therefore produced no artifact to trust. The corrected command loaded both compression assemblies and created ignored archive `backend/local_backups/worktree-validated-release-plan-20261109-141928.zip` from all 174 current modified/untracked files. It is 1,313,616 bytes with SHA-256 `75AE2904E9739DDD211BA1EF35BBD5A0F230E00B3E2E1514EE6DF562730871D3`; `git check-ignore` confirmed the archive is excluded by `backend/local_backups/*.zip`.
+
+Known risks and pending decisions at this checkpoint: the complete 367-test Playwright gate still needs one uninterrupted run on a stable managed environment; the large-data/staging hand check is outstanding; staging has no scheduler for recurring maintenance/SLA/auto-dispatch/daily work; and `progress.0005_ticketprogress_long_job_reports` remains pending and requires review plus explicit authorization before application. No migration, development/staging/production database mutation, commit, push, or deployment was performed.
+
+Change ledger final follow-up: recorded the interrupted complete-browser evidence, the passing fresh scenario 3.9 reproduction, the final static/build evidence, and a verified ignored post-fix safety archive in this living handoff. No application code, test code, schema, route, dependency, database record, external service, commit, push, or deployment changed in this documentation/archive-only follow-up.
+
+### 2026-11-09 client/technician page-description cleanup
+
+- Removed the requested helper copy from Technician Jobs, Client Solar Estimates, My Requests, client Purchase Records, Client Support, and the client Profile top bar. The corresponding empty wrappers were removed, and action-only header rows now use explicit right alignment so the controls do not move to the left after the text disappears.
+- Validation: an exact fixed-string search across `frontend/src` found none of the six removed sentences; the Vite 8.3.5 production build passed with 2,571 transformed modules; and `git diff --check` passed with the repository's existing CRLF-to-LF warnings only.
+- Change ledger: changed `frontend/src/pages/technician/TechnicianJobs.jsx`, `frontend/src/pages/client/{ClientSolarEstimates.jsx,ClientRequestTracking.jsx,ClientSupport.jsx}`, `frontend/src/pages/shared/SalesRecords.jsx`, `frontend/src/components/layout/Topbar.jsx`, and this living handoff. No workflow, API, route, permission, schema, migration, dependency, database record, commit, push, or deployment changed.
+
+### 2026-11-10 free daily reminder scheduler preparation
+
+- Added `.github/workflows/daily-operational-automations.yml`. It schedules the existing `daily` automation group for 8:17 AM Asia/Manila, supports manual dispatch, grants only `contents: read`, prevents overlapping daily runs, caches pip downloads, validates a complete set of prefixed deployment secrets, writes the Aiven CA PEM only under the ephemeral runner's temporary directory, runs `manage.py check`, and then invokes `run_operational_automations --mode daily`. The workflow contains no secret value and fails before database access when its explicit stage or required secrets are absent.
+- Added `docs/deployment/GITHUB_ACTIONS_AUTOMATION_SETUP.md` with the exact GitHub secret names, staging-first activation and proof steps, free-tier limitations, default-branch requirement, database-network caveat, and the boundary that this free once-daily job does not provide the separate 30-minute SLA/auto-dispatch production cadence. Linked that guide from `automation/README.md`.
+- Current worktree manifest is now 177 status entries: 124 tracked modifications and 53 untracked entries. The three paths added to the prior 174-entry candidate manifest are modified `automation/README.md` plus new `.github/workflows/daily-operational-automations.yml` and `docs/deployment/GITHUB_ACTIONS_AUTOMATION_SETUP.md`. Nothing is staged.
+- Validation: the exact `run_operational_automations --mode daily` entry point completed successfully against the isolated E2E SQLite database, processing maintenance alerts (zero eligible reminders), daily analytics, technician performance, location retention, and validated demand forecasts before printing the completion marker. This validation changed only the ignored isolated E2E database; no development, staging, or production data was accessed. `git diff --check` passed with existing CRLF-to-LF warnings only. GitHub cron schedules are UTC, so the workflow now uses `17 0 * * *` (00:17 UTC = 08:17 Asia/Manila, UTC+8) rather than an unsupported child `timezone` key. Local token checks confirmed the workflow name, UTC schedule, manual trigger, and daily command. Ruby, PyYAML, `actionlint`, `yamllint`, and PowerShell `ConvertFrom-Yaml` were unavailable, so no independent local GitHub-schema/YAML-parser result is claimed; GitHub acceptance remains an activation check after push.
+- Change ledger: added the free daily workflow and its setup contract, updated the existing automation README, and updated this living handoff. No Python runtime, model, migration, dependency, route, permission, development/staging/production database record, GitHub secret, commit, push, or deployed service changed.
+
+### 2026-11-10 complete dirty-worktree validation and E2E triage
+
+Architecture/deployment impact:
+- The workflow cron was corrected to GitHub's supported UTC form, `17 0 * * *`, which is 08:17 in Asia/Manila (UTC+8). The unsupported `timezone` child was removed. Activation still requires a commit/push plus repository secrets and a successful manual Actions run.
+- The activity-log business-day regression now requests `page_size=100`; setup/signals can legitimately create more than ten same-day audit rows, so the test must not assume its target is on the default first page.
+- The Purchase Records E2E assertion no longer expects the payment helper sentence that the owner explicitly removed from the page.
+- Notifications control coverage clears only the authenticated E2E account's isolated inbox before creating its own records. User-management coverage searches for the exact account under test, clears that search before category checks, and uses the visible Close control for the separate offline-description check. These are test-isolation/selector changes, not permission or business-policy changes.
+
+Current worktree manifest:
+- `git status --porcelain=v1` reports 178 entries: 125 tracked modifications and 53 untracked entries. Nothing is staged. This checkpoint added no new untracked path.
+
+Validation ledger (commands actually run):
+- `npm run env:check` confirmed development mode with local SQLite. No development, staging, or production migration was applied.
+- `git diff --check` passed before and after the validation edits, with only the repository's existing CRLF-to-LF warnings.
+- `manage.py check` passed with no issues. `manage.py makemigrations --check --dry-run` returned `No changes detected`.
+- The first complete backend run executed 930 tests: 929 passed, 7 were skipped, and the local-day activity-log case failed because its expected row fell beyond the default ten-row page. After adding `page_size=100`, the focused case passed 1/1 and the complete backend rerun passed all 930 tests with 7 expected skips in about 151 seconds.
+- `npm run build:frontend` passed under Vite 8.3.5 with 2,571 transformed modules.
+- `DJANGO_SETTINGS_MODULE=afn_service_management.settings_e2e manage.py run_operational_automations --mode daily` completed against the isolated E2E SQLite database and printed `Completed daily operational automations`.
+- The full sequential Playwright run discovered and completed all 367 tests: 361 passed and six were reported failed. The machine slept for about 3.6 hours during the run. Scenario 11.1 failed with `ERR_NETWORK_IO_SUSPENDED`, and admin Settings exceeded its timeout across that same suspension. Both passed 1/1 from fresh isolated databases. Scenario 3.9b (document stages), client Notifications, and superadmin User Management also passed 1/1 independently. Purchase Records failed only because it still expected owner-removed copy; after removing that assertion it passed 1/1.
+- Long-run hardening followed the reproductions: client Notifications passed after its isolated-inbox setup; superadmin User Management passed after exact-user search/state cleanup and deterministic dialog closure. One combined rerun was itself paused for hours and showed the browser's explicit offline guard; no product result is claimed from that contaminated attempt.
+- A second uninterrupted complete 367-test run was not performed after the final E2E-only hardening. Therefore the evidence is: one complete 361/367 run plus clean focused passes for every reported failure, not a claimed complete 367/367 run.
+
+Known risks and pending decisions:
+- `progress.0005_ticketprogress_long_job_reports` remains pending locally. It must be reviewed and applied in the intended deployment sequence with explicit database authorization; it was not applied here.
+- GitHub has not parsed or run the new workflow. The scheduler remains inactive until the workflow is committed/pushed, all documented `AUTOMATION_*` secrets are configured, and a manual run succeeds.
+- Once-daily GitHub automation covers the daily reminder group only. It does not provide the separate 30-minute SLA/auto-dispatch cadence.
+- A fully uninterrupted post-hardening 367/367 Playwright run and the previously identified large-data/staging hand check remain the highest-confidence optional release gates.
+
+Change ledger:
+- Corrected `.github/workflows/daily-operational-automations.yml`; stabilized `backend/services/tests/test_time_cases.py`, `e2e/05-client-workspace.spec.js`, `e2e/30-notifications-controls.spec.js`, and `e2e/33-admin-user-management-controls.spec.js`; and updated this handoff. No application business rule, schema definition, route, permission, dependency, secret, development/staging/production record, commit, push, or deployment changed in this validation checkpoint.
+
+### 2026-11-11 Upcoming Schedule past-date exclusion
+
+- Screenshot/E2E review found a real semantic defect: on November 10 the administrator dashboard labelled unfinished October visits as `Upcoming Schedule`. The API selected every active ticket with any scheduled date and ordered the oldest first; the frontend removed only completed/cancelled statuses. Old unfinished work could therefore fill the card and inflate both `Showing X of Y` and `Unassigned visits`.
+- `backend/services/views_dashboard.py` now applies `scheduled_date__gte=get_business_today()` to the schedule queryset before calculating its rows, total, and unassigned count. Past active work is not deleted or reclassified and remains in the operational/SLA workspaces.
+- `frontend/src/pages/admin/AdminDashboard.jsx` applies the same ISO-date boundary defensively so a stale cached or older payload cannot present a past row as upcoming. The schedule card now has a stable E2E test identifier; its visible layout is otherwise unchanged.
+- `backend/services/tests/test_dashboard_role.py` proves yesterday is excluded from rows/counts while today is included, and its shared ticket fixture now uses `business_today()` rather than the UTC date so the suite is valid during the local 00:00-07:59 window.
+- `e2e/15-admin-dashboard-controls.spec.js` plants one past active visit beside one future visit, verifies the future row remains, the past row is absent, the card has no horizontal overflow, and Dispatch navigation still works.
+- Validation ledger: the new focused backend regression passed 1/1. The first 22-test dashboard-role run failed two old assertions because its shared fixture used `timezone.now().date()` just after local midnight; after correcting that fixture to the business date, all 22/22 passed in 2.967 seconds. Both administrator and superadministrator dashboard E2E journeys passed in 4.9 minutes. Vite 8.3.5 built 2,571 modules successfully. The first build command used blocked `npm.ps1` and did not start; the corrected `npm.cmd` command passed. Final `git diff --check` passed with existing CRLF-to-LF warnings only.
+- Current worktree manifest: 180 entries, comprising 127 tracked modifications and 53 untracked entries; nothing is staged. The newly dirty tracked paths are `frontend/src/pages/admin/AdminDashboard.jsx` and `e2e/15-admin-dashboard-controls.spec.js`; the backend/dashboard test and handoff paths were already in the candidate manifest.
+- Change ledger: changed `backend/services/views_dashboard.py`, `backend/services/tests/test_dashboard_role.py`, `frontend/src/pages/admin/AdminDashboard.jsx`, `e2e/15-admin-dashboard-controls.spec.js`, and this handoff. No schema, migration, API shape, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-11 Documents shell-resize regression
+
+- Root cause: `AdminDocuments.jsx` mounted its print stylesheet into the live React page, where unscoped `html`, `body`, universal, and generic table selectors changed the authenticated shell's font metrics and layout when Documents opened.
+- `buildPrintCss()` now applies base typography, document variables, box sizing, and table/page-break rules only inside `.document-paper`. The standalone print window still receives the document paper markup and stylesheet, while its `@media print` page/body behavior remains unchanged.
+- `e2e/12-documents-calendar-controls.spec.js` adds a Dashboard-to-Documents navigation regression at a 1366x768 desktop viewport. It asserts unchanged computed body font family/font size, unchanged sidebar width, and no document-level horizontal overflow after the route transition.
+- Validation ledger: `npx playwright test e2e/12-documents-calendar-controls.spec.js --grep '12[.]0'` passed 1/1. `npx playwright test e2e/12-documents-calendar-controls.spec.js --grep '12[.]1'` matched scenarios 12.1 and 12.10-12.19 and passed all 10/10 in 3.0 minutes. Expected Vite notification WebSocket proxy-abort messages occurred during managed navigation/teardown and did not fail a scenario. `npm run build:frontend` passed under Vite 8.3.5 with 2,571 transformed modules. Scoped `git diff --check` passed with only the existing AdminDocuments CRLF-to-LF warning. An initial combined grep containing an unescaped shell pipe did not start the intended tests; the two corrected commands above supersede it.
+- Current worktree manifest: 181 entries, comprising 128 tracked modifications and 53 untracked entries; nothing is staged. `e2e/12-documents-calendar-controls.spec.js` is the newly dirty tracked path; `AdminDocuments.jsx` and this handoff were already present in the candidate manifest.
+- Known risks and pending decisions: no additional product risk was found in this boundary. This was validated on Chromium desktop in the isolated E2E database; no deployed environment was mutated or inspected.
+- Change ledger: changed `frontend/src/pages/admin/AdminDocuments.jsx`, `e2e/12-documents-calendar-controls.spec.js`, and this handoff. No schema, migration, API, workflow, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-11 Dynamic Documents selector
+
+- The seven wide navigation cards are replaced by an accessible `Document` select beside ticket search. Its options are derived from `documentNavigationSteps`: the six workflow-bound editors followed by every active custom definition returned by the existing API. Option numbering uses the runtime array index and has no fixed seven-document assumption.
+- The selected option preserves the existing behavior: core choices activate their current editor, custom choices open the generic custom-document workspace, and choosing a custom definition before a ticket focuses ticket search until a ticket is selected. A compact description below the selector preserves the context that the removed cards previously supplied.
+- E2E selectors in the administrator workspace, responsive/accessibility, major journey, minor journey, Documents/Calendar, and unsaved-change suites now use the exact accessible `Document` combobox. Scenario 12.0 injects an additional active custom definition and proves the option count grows beyond the six core documents while the selector remains beside ticket search and the authenticated shell remains stable. Scenario 12.16 proves a custom definition created during the test is appended and selectable dynamically; scenario 12.21 retains ticket-first custom-document coverage.
+- Validation ledger (commands actually run): focused scenario 12.0 passed 1/1; focused scenario 12.1 passed 1/1; focused scenario 12.21 passed 1/1; administrator scenario 3.9 passed 3/3; the Documents unsaved-change suite passed 8/8; the responsive Documents-actions check passed 1/1; major journey 10.2 passed 1/1; and minor journey 11.2 passed 1/1. Total final browser evidence is 17/17. Expected Vite notification WebSocket proxy-abort messages appeared during managed navigation/teardown and did not fail tests. The first injected-definition attempt omitted the API category required by the existing filter, and two intermediate layout/selector assertions measured the wrong element or matched help text; corrected fixtures and exact accessible selectors produced the passing results above. `npm run build:frontend` passed under Vite 8.3.5 with 2,571 transformed modules. A repository selector scan found no old core-document navigation-button selector or fixed-seven assertion in the Documents boundary; its only `toHaveCount(7)` result belongs to an unrelated technician-jobs fixture. Repository-wide `git diff --check` passed with existing CRLF-to-LF warnings only.
+- Current worktree manifest: 184 entries, comprising 131 tracked modifications and 53 untracked entries; nothing is staged. The paths newly dirty after the preceding checkpoint are `e2e/03-admin-workspace.spec.js`, `e2e/08-responsive-accessibility.spec.js`, `e2e/10-major-flow-journey.spec.js`, `e2e/11-minor-flow-journeys.spec.js`, and `e2e/24-admin-documents-unsaved-guard.spec.js`; `AdminDocuments.jsx`, `e2e/12-documents-calendar-controls.spec.js`, and this handoff were already in the candidate manifest.
+- Known risks and pending decisions: no additional product risk was found in this boundary. Validation used Chromium with the isolated E2E database; no deployed environment was mutated or inspected. The selector intentionally lists only active definitions, matching the prior navigation behavior.
+- Change ledger: changed `frontend/src/pages/admin/AdminDocuments.jsx`, `e2e/03-admin-workspace.spec.js`, `e2e/08-responsive-accessibility.spec.js`, `e2e/10-major-flow-journey.spec.js`, `e2e/11-minor-flow-journeys.spec.js`, `e2e/12-documents-calendar-controls.spec.js`, `e2e/24-admin-documents-unsaved-guard.spec.js`, and this handoff. No schema, migration, API shape, workflow, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-11 Coverage Heatmap mapped-area design
+
+- The service-density layer retains the requested green-to-yellow/orange-to-red scale. The initially considered blue/purple scale was rejected during the work session and is not present in the final source.
+- Hotspot radius now uses bounded square-root scaling against the current maximum density. This makes visual area track relative job volume without allowing a high-count point's diameter to grow linearly and obscure nearby locations. The existing roughly one-kilometre maximum footprint and API grouping remain unchanged.
+- A compact lower-to-higher density key is overlaid on the map and follows the Service density layer toggle. On desktop, the top-ten Busiest hotspots region is a bounded, independently scrollable panel beside the map; on narrower screens it remains below the map. The old disconnected five-item density legend below the hotspot list was removed. Technician coverage retains its separate dashed outlines and per-technician key, with slightly lighter fill so density areas remain readable when both layers are active.
+- `e2e/20-admin-coverage-heatmap-controls.spec.js` now verifies that the density scale is visible on the map, the hotspot region is beside it at the desktop viewport, and the scale disappears and returns with the density layer. Its real seeded API/filter/layer/load-failure journey passed for both `admin_test` and `superadmin_test` (2/2 in 3.1 minutes). Expected Vite notification WebSocket proxy-abort messages occurred during managed page transitions and did not fail either test. The final-palette `npm run build:frontend` passed under Vite 8.3.5 with 2,571 transformed modules. Repository-wide `git diff --check` passed with existing CRLF-to-LF warnings only.
+- Current worktree manifest: 186 entries, comprising 133 tracked modifications and 53 untracked entries; nothing is staged. `frontend/src/pages/admin/CoverageHeatmap.jsx` and `e2e/20-admin-coverage-heatmap-controls.spec.js` are the two paths newly dirty after the preceding checkpoint; this handoff was already present in the candidate manifest.
+- Known risks and pending decisions: the service-density display remains a set of meaningful approximately one-kilometre hotspot areas generated by the existing backend grouping, not an interpolated continuous weather-style surface. Creating irregular blended zones would require a separate visualization/data-model decision and should not be implied by this presentation-only adjustment. No deployed environment was inspected or changed.
+- Change ledger: changed `frontend/src/pages/admin/CoverageHeatmap.jsx`, `e2e/20-admin-coverage-heatmap-controls.spec.js`, and this handoff. No API, schema, migration, route, workflow, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-11 Coverage Heatmap geographic levels
+
+- `service_density` retains `heatmap_data` and now also returns `geographic_levels` for barangay, city, and province. Every level is built from the already permission-scoped and client/technician/service-filtered completed requests, carries completed-job and service counts plus unique clients and lead/crew technicians, and uses the average coordinates of its member locations as its map centroid.
+- Barangay is derived conservatively from common `Brgy.` and `Barangay` fragments in the saved free-text address. Missing/unrecognized fragments are grouped as `Unspecified barangay`; no unreliable guess is made. City/municipality and province use the existing structured `ServiceLocation.city` and `.province` fields. No model or migration was added.
+- Coverage Heatmap adds an always-visible `Geographic level` selector with Hotspot areas, Barangay, City / municipality, and Province. Switching level updates the mapped circles, mapped-area and busiest-area cards, header grammar, service mix, popups, density maximum, and ranked list. Hotspot areas remain the default. These are centroid summary markers, not administrative boundary polygons; the route capability matrix records that payload contract explicitly.
+- Rapid sequential level changes initially exposed Leaflet reading `_leaflet_pos` from a stale pane during overlapping animated `fitBounds` transitions. `MapResizeController` now stops the current motion and uses non-animated size/view/bounds updates. The E2E journey records Leaflet page errors and requires none after switching all four levels.
+- Validation ledger (commands actually run): `services.tests.test_coverage_heatmap` passed 9/9, including the new barangay/city/province grouping and centroid contract. The production frontend build passed with 2,571 modules before and after the final map-race fix. The first two-role browser run failed 2/2 only because the new assertion expected plural `barangays` when the correct UI rendered singular `barangay`; after correcting the assertion, the complete administrator/superadministrator journey passed 2/2 in 4.5 minutes. That run revealed the non-fatal Leaflet transition race described above. After the fix and explicit no-Leaflet-error assertion, the focused administrator journey passed 1/1. Expected notification WebSocket proxy-abort messages during managed navigation/teardown remained non-failing and unrelated.
+- Current worktree manifest: 188 entries, comprising 135 tracked modifications and 53 untracked entries; nothing is staged. The newly dirty tracked paths after the mapped-area checkpoint are `backend/services/views/reports.py`, `backend/services/tests/test_coverage_heatmap.py`, and `docs/security/ROUTE_API_CAPABILITY_MATRIX.md`; `frontend/src/pages/admin/CoverageHeatmap.jsx`, `e2e/20-admin-coverage-heatmap-controls.spec.js`, and this handoff were already dirty.
+- Known risks and pending decisions: barangay quality depends on the saved address containing a recognizable `Brgy.` or `Barangay` fragment. Exact administrative shapes and official boundary containment still require a reviewed GIS boundary dataset and are intentionally not claimed. Existing historical addresses are not rewritten, and no development/staging/production data was changed.
+- Change ledger: changed `backend/services/views/reports.py`, `backend/services/tests/test_coverage_heatmap.py`, `frontend/src/pages/admin/CoverageHeatmap.jsx`, `e2e/20-admin-coverage-heatmap-controls.spec.js`, `docs/security/ROUTE_API_CAPABILITY_MATRIX.md`, and this handoff. Extended an existing protected response payload only; no route, permission, workflow state, model, migration, dependency, persistent record, commit, push, or deployment changed.
+
+### 2026-11-11 Technician Tracking progressive filters
+
+- Replaced the page-specific always-expanded search/filter form with the existing shared `SearchFilterBar`. Search remains visible and keeps its original technician/client/service/ticket matching behavior; Refresh and focused-marker controls remain immediate toolbar actions.
+- Technician Status, GPS Health, and Ticket Display are hidden by default behind the accessible Filters button. Opening the disclosure exposes the same options and filtering behavior. Non-default selections produce removable active-filter chips, the button shows the active count, and Clear all resets search plus all three filters before collapsing the panel.
+- Live/Delayed connection state, last synchronization, auto-refresh cadence, shown count, and the four operational counters remain visible in a separate compact summary card. No tracking API, polling interval, map layer, marker, route, detail, or location-history behavior changed.
+- `e2e/19-admin-technician-tracking-controls.spec.js` now proves Technician Status is absent initially, Filters reports `aria-expanded=false`, opening it reveals all controls, and every existing status/GPS/ticket behavior still works. The administrator and superadministrator journeys passed 2/2. Scenario 3.5 passed the live map, detail, filter, refresh-failure, and retained-state flow; scenario 3.5b passed at 390x844 with no horizontal overflow. Total focused browser evidence is 4/4. Expected notification WebSocket proxy-abort messages during managed navigation/teardown remained non-failing and unrelated.
+- The Vite 8.3.5 production build passed with 2,571 transformed modules. The generated desktop screenshot was visually inspected: search, Filters, and Refresh occupy one compact row, the three filter selects are absent while collapsed, summary information remains readable, and the map begins substantially higher than in the prior layout.
+- Current worktree manifest: 190 entries, comprising 137 tracked modifications and 53 untracked entries; nothing is staged. The two paths newly dirty after the geographic-level checkpoint are `frontend/src/pages/admin/AdminTechnicianTracking.jsx` and `e2e/19-admin-technician-tracking-controls.spec.js`; `e2e/03-admin-workspace.spec.js` and this handoff were already dirty.
+- Known risks and pending decisions: no additional product risk was found in this frontend-only boundary. Filter expansion state is intentionally per page mount rather than persisted, so every new visit starts compact.
+- Change ledger: changed `frontend/src/pages/admin/AdminTechnicianTracking.jsx`, `e2e/03-admin-workspace.spec.js`, `e2e/19-admin-technician-tracking-controls.spec.js`, and this handoff. No API, schema, migration, route, workflow, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-11 Sales Records grouped manual value input
+
+- Root cause: the editable manual contract value used native `type="number"`. Browsers do not allow presentation commas in number inputs, so values such as `200000` remained visually ungrouped even though confirmed and read-only money displays already used localized currency formatting.
+- The draft editor now uses a decimal-keyboard text control with separate normalization and display formatting. React state and the existing PATCH payload remain ungrouped numeric strings, while the control adds a comma every three whole-number digits. It accepts non-negative values through 12 whole-number digits and two decimal places, matching `SalesRecord.agreed_total`; a trailing decimal is treated as an incomplete value and cannot be confirmed. No serializer, endpoint, payload shape, model, or migration changed.
+- The existing comprehensive Sales Records E2E journey now proves `200000.50` renders as `200,000.50`, `25000` as `25,000`, and `12000` as `12,000`, then continues through numeric persistence, confirmation without a separate save, summary totals, payment/void/replacement controls, CSV export, and the client's localized purchase-record display.
+- Validation ledger (commands actually run): `npm run build` from `frontend` passed under Vite 8.3.5 with 2,571 transformed modules. `services.test_sales_records` plus `services.tests.test_sales_record_rules` passed 16/16 against the isolated E2E settings. Focused scenario 25 passed 1/1 for `admin_test` and 1/1 for `superadmin_test` (2/2 total). Expected notification WebSocket proxy-abort messages occurred during managed browser navigation/teardown and did not fail either journey. Scoped `git diff --check` passed with only existing CRLF-to-LF warnings.
+- Current worktree manifest: still 190 entries, comprising 137 tracked modifications and 53 untracked entries; nothing is staged. `frontend/src/pages/shared/SalesRecords.jsx`, `e2e/25-admin-sales-records-controls.spec.js`, and this handoff were already dirty in the candidate manifest, so no path was added or removed.
+- Known risks and pending decisions: none added for this frontend-only boundary. The grouping is presentation-only; saved values continue to be validated by the existing backend decimal and non-negative rules.
+- Change ledger: changed `frontend/src/pages/shared/SalesRecords.jsx`, `e2e/25-admin-sales-records-controls.spec.js`, and this handoff. No API, schema, migration, route, workflow, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-11 Client Support Assistant comprehensive improvement
+
+- Data correctness: replaced the assistant's ticket-only read with existing `fetchClientRequests()`, the unified client model used by My Requests. Pending requests without a ticket are now included, client-facing workflow labels are retained, and request data continues to be scoped by existing backend client permissions. The assistant picks the earliest active scheduled date from today onward instead of the first ticket with any schedule, recognizes typed `REQ-####` and `TKT-####` references, and uses normalized request fields for technician, warranty, and maintenance answers.
+- Coverage and honesty: added specific guidance for request creation/tracking, technician assignment, reschedule requests, dismissal boundaries, completed-work feedback, support-case counts, warranty/maintenance records, preliminary solar estimates versus site assessment/final quotation, purchase records and office-recorded payments, notifications, contact/profile security, PWA installation, and offline limits. Emergency electrical/fire wording is handled before ordinary intents. Privacy-sensitive questions refuse secrets and other clients' records. The assistant explicitly says it is guidance-only, cannot change records, does not replace the office, and does not treat missing portal warranty data as a denial of coverage.
+- Interaction and presentation: suggestions now follow Dashboard, Request Service, Solar Estimates, My Requests/details, Service History, Purchase Records, Client Support, Notifications, and Profile. Answers support up to two direct navigation actions. The header shows active-page context plus refresh/freshness/partial-failure state; a failed endpoint disables only answers that need that source while static portal guidance remains usable. The non-modal accessible dialog adds automatic input focus, Escape close, conversation reset, a bounded 20-message history, 500-character input limit, long-word wrapping, 44-pixel primary input/send targets, and a full-width bounded mobile panel.
+- E2E coverage: scenario 5.7 uses the real isolated client records to prove request-service and purchase/payment guidance, unified latest-request status, direct request navigation, technician assignment, next confirmed appointment, open support-case count, offline limitations, conversation reset, Escape close, Service History context/suggestions, correct profile intent routing, and no horizontal overflow at 390x844. Scenario 5.7b forces request, ticket, and support-case APIs to HTTP 503 and proves partial-failure disclosure, continued static guidance, source-aware refusal to invent request state, and emergency safety guidance.
+- Validation ledger (commands actually run): the Vite 8.3.5 production build passed with 2,571 transformed modules. The first focused live-data scenario 5.7 passed 1/1 before the failure-path scenario and added intent assertions. The final expanded `--grep '5[.]7'` run passed scenario 5.7 and 5.7b (2/2). Expected notification WebSocket proxy-abort messages occurred during managed navigation/teardown and did not fail either scenario. Scoped `git diff --check` passed.
+- Current worktree manifest: 191 entries, comprising 138 tracked modifications and 53 untracked entries; nothing is staged. `frontend/src/components/shared/ClientSupportAssistant.jsx` is the one path newly dirty after the Sales Records checkpoint; `e2e/05-client-workspace.spec.js` and this handoff were already dirty in the candidate manifest.
+- Known risks and pending decisions: this is a deterministic portal assistant, not a generative model or human support agent. It summarizes already authorized client records and provides navigation; it does not read support-message bodies, make business decisions, mutate records, guarantee appointments/warranty coverage, or operate live workflows offline. Those boundaries are now stated in the UI rather than implied.
+- Change ledger: changed `frontend/src/components/shared/ClientSupportAssistant.jsx`, `e2e/05-client-workspace.spec.js`, and this handoff. No backend, API shape, schema, migration, route, workflow, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-11 Compact Client Support Assistant panel
+
+- Superseded later on 2026-11-11 by the exact Client/Analytics Assistant size-parity change below; the temporary 27rem-by-32rem dimensions described in this checkpoint are no longer current.
+- Replaced the open panel's full inset positioning and 32rem width/650px height with bottom/right anchoring, a `27rem` (432px) maximum width, and a `32rem` (512px) maximum height. Narrow screens still receive `calc(100vw - 1rem)` width and a viewport-bounded height, so the composer and controls remain usable without covering nearly the entire desktop dashboard.
+- Suggested questions now occupy a single horizontal scroll row with non-wrapping chips. This preserves all seven page-aware suggestions while preventing them from expanding the panel vertically or dictating its width.
+- Validation ledger (commands actually run): focused live-data scenario 5.7 passed 1/1 with exact assertions that the desktop assistant is at most 440px wide and 520px tall; the same journey retained all request/status/appointment/support/profile/offline behaviors and verified the 390x844 panel stays within both horizontal viewport edges with no document overflow. Expected notification WebSocket proxy-abort messages during managed navigation did not fail the scenario. The Vite 8.3.5 production build passed with 2,571 transformed modules. Scoped `git diff --check` passed before the handoff-only update.
+- Current worktree manifest remains 191 entries, comprising 138 tracked modifications and 53 untracked entries; nothing is staged. No path was added or removed.
+- Known risks and pending decisions: none added. On very short screens the panel intentionally uses available viewport height so the input remains reachable; message content continues to scroll inside the panel.
+- Change ledger: changed `frontend/src/components/shared/ClientSupportAssistant.jsx`, `e2e/05-client-workspace.spec.js`, and this handoff. No backend, API shape, schema, migration, route, workflow, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-11 Client/Analytics Assistant size parity
+
+- Presentation: replaced the temporary compact Client Support Assistant shell with the exact sizing and responsive positioning used by `SystemAssistant.jsx` for the Analytics Assistant: `31rem` (496px) desktop width, `540px` maximum height, `calc(100vw - 1.5rem)` mobile width, viewport-bounded mobile height, and identical bottom/right offsets at base, `sm`, and `lg` breakpoints. Client-specific questions, data, answers, and actions are unchanged.
+- E2E coverage: scenario 5.7 now asserts the parity shell on desktop (488-504px wide and 532-548px high, allowing browser rounding around 496x540) and confirms the 390x844 responsive panel remains within both viewport edges without horizontal document overflow.
+- Validation ledger (commands actually run): `npx playwright test e2e/05-client-workspace.spec.js --grep '5[.]7 - Client'` passed 1/1 in 3.1 minutes. Expected notification WebSocket proxy-abort messages during managed navigation did not fail the scenario. `npm run build` from `frontend` passed under Vite 8.3.5 with 2,571 transformed modules.
+- Current worktree manifest remains 191 entries, comprising 138 tracked modifications and 53 untracked entries; nothing is staged. No path was added or removed.
+- Known risks and pending decisions: none added. The two assistants now share dimensions by matching their shell classes; a future shared shell component could remove class duplication but is not necessary for current behavior.
+- Change ledger: changed `frontend/src/components/shared/ClientSupportAssistant.jsx`, `e2e/05-client-workspace.spec.js`, and this handoff. No backend, API shape, schema, migration, route, workflow, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-12 Fresh local data baseline with preserved superadmin
+
+- Scope and recovery: confirmed through `show_environment` that Django targeted local development SQLite at `backend/db.sqlite3`. Created transaction-consistent ignored snapshot `backend/local_backups/db-consistent-before-fresh-current-flow-20261112.sqlite3` before deletion; it is 20,545,536 bytes with SHA-256 `63ac8a94e77befa312a3d13a06f3905b2428285ba508ce81fdcba234a7dfaf49`, SQLite integrity `ok`, and zero foreign-key violations. E2E, staging, production, configured storage, and uploaded files were not touched.
+- Final data state: the first flush was followed by the repository's current E2E workflow seed, which finished before the user's stop request reached the process. That intermediate seed was then completely removed by a second `flush --noinput`. The original `iman` user fixture was copied from the verified snapshot; the normal user-creation signal recreated its one management profile with the same `general` scope. Final counts are one user, one management profile, and zero service types, service requests, service tickets, inventory items, customer-support cases, document definitions, document templates, and SLA rules. `iman` is active, status `active`, role `superadmin`, Django superuser-enabled, and retains a usable restored password hash.
+- Validation ledger (commands actually run): `manage.py show_environment` confirmed safe local development SQLite. Pre-reset snapshot integrity and foreign-key checks passed. `manage.py flush --noinput` completed for both the initial reset and the final seed removal. The attempted second profile fixture load failed safely on the expected unique user/profile constraint because the signal had already created that row; a read-only comparison showed both old and new profiles use `admin_scope='general'`, so no additional profile write was needed. Final `manage.py check` reported no issues; final SQLite `PRAGMA integrity_check` returned `ok`; final `PRAGMA foreign_key_check` returned zero rows. `showmigrations --plan` still lists only `progress.0005_ticketprogress_long_job_reports` as unapplied.
+- Current worktree manifest remains 191 entries, comprising 138 tracked modifications and 53 untracked entries; nothing is staged. The development database and new snapshot are ignored, so no manifest path was added or removed.
+- Known risks and pending decisions: this is intentionally an almost-empty database. The owner must create service catalog and workflow records manually before client requests can be submitted. Core document definitions/templates and default SLA rules are also empty because Django `flush` removes migration-seeded rows without replaying data migrations. They can be restored separately later if requested, without restoring legacy business records. The pending progress migration was deliberately not applied because this authorization covered data reset only.
+- Change ledger: reset ignored `backend/db.sqlite3`, created ignored recovery snapshot `backend/local_backups/db-consistent-before-fresh-current-flow-20261112.sqlite3`, and updated this handoff. No runtime source, schema, migration, dependency, route, permission, E2E/staging/production data, configured-storage object, uploaded file, commit, push, or deployment changed.
+
+### 2026-11-12 Create User modal UI and password visibility
+
+- Presentation: replaced the wide flat three-column form with a bounded `max-w-3xl` dialog that separates Account details from Secure access, uses two columns on larger screens and one column on narrow screens, labels optional contact fields, keeps the header/footer visible around an internally scrolling body, and provides consistent icon, close, Cancel, and primary Create User actions. Client address still appears only for the client role, and all existing create payloads and validation rules remain unchanged.
+- Password behavior and accessibility: added an accessible Show password / Hide password toggle only inside the Password field. The control reports its pressed state, uses a 44px-wide target, and resets to hidden when the modal resets. Confirm password intentionally has no visibility control and always remains `type='password'`. Explicit labels/IDs, autocomplete hints, mobile numeric phone input, section headings, and the dialog title relationship were added without weakening server authorization or validation.
+- E2E coverage: scenario 33.S now proves Password starts masked, toggles to text and back, Confirm password remains masked throughout, and exactly one password-visibility button exists. At 390x844 it also proves the dialog remains within both viewport edges, Cancel/Create remain visible, and the document has no horizontal overflow. The same journey retains all existing empty/phone/short-password/mismatch validation, discard, successful verification-email account creation, profile edit, access failure, deactivate/reactivate, and cleanup coverage.
+- Validation ledger (commands actually run): `npm run build` from `frontend` passed under Vite 8.3.5 with 2,571 transformed modules. The first focused `33.S` run passed 1/1 after the visibility assertions. After adding mobile containment assertions, the final focused `33.S` run passed 1/1 in 1.5 minutes. Expected notification WebSocket proxy-abort messages during managed navigation did not fail either run. Scoped `git diff --check` passed before this handoff update.
+- Current worktree manifest: 192 entries, comprising 139 tracked modifications and 53 untracked entries; nothing is staged. `frontend/src/pages/admin/AdminUserManagement.jsx` is newly dirty; `e2e/33-admin-user-management-controls.spec.js` and this handoff were already dirty.
+- Known risks and pending decisions: none added. Password reveal affects only temporary browser presentation and does not change transmission, hashing, persistence, password policy, or the permanently masked confirmation input.
+- Change ledger: changed `frontend/src/pages/admin/AdminUserManagement.jsx`, `e2e/33-admin-user-management-controls.spec.js`, and this handoff. No backend, API shape, schema, migration, route, workflow, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-12 Secure access icon removal
+
+- Presentation: removed the decorative shield icon and its reserved flex spacing from the Create User modal's Secure access section. The heading and password guidance now align directly with the section content; the Password-only visibility toggle and permanently masked Confirm password behavior are unchanged.
+- Validation ledger (commands actually run): `npm run build` from `frontend` passed under Vite 8.3.5 with 2,571 transformed modules.
+- Current worktree manifest remains 192 entries, comprising 139 tracked modifications and 53 untracked entries; nothing is staged. No path was added or removed.
+- Known risks and pending decisions: none added.
+- Change ledger: changed `frontend/src/pages/admin/AdminUserManagement.jsx` and this handoff. No backend, API, test behavior, schema, migration, route, workflow, permission, dependency, data, commit, push, or deployment changed.
+
+### 2026-11-12 User Management role-column alignment
+
+- Presentation: increased the Role column to a 144px minimum width and made its badges non-wrapping inline-flex elements, preventing the Administrator label from being clipped against the Address column. Table rows now use singular role names (`Administrator`, `Technician`, and `Client`); the existing plural category-filter labels remain unchanged.
+- E2E coverage: scenario 33.S now locates the complete `Administrator` badge and compares its rendered bounds with its Role cell, proving the badge starts and ends inside the reserved column. The rest of the account creation, responsive modal, password visibility, edit, access, activation, and cleanup journey remains covered.
+- Validation ledger (commands actually run): `npm run build` from `frontend` passed under Vite 8.3.5 with 2,571 transformed modules. Focused `npx playwright test 33-admin-user-management-controls.spec.js --grep '33[.]S'` passed 1/1 in 2.2 minutes. Expected notification WebSocket proxy-abort messages during managed navigation did not fail the journey. Scoped `git diff --check` passed before this handoff update.
+- Current worktree manifest remains 192 entries, comprising 139 tracked modifications and 53 untracked entries; nothing is staged. No path was added or removed.
+- Known risks and pending decisions: none added. Narrow viewports continue to use the table's intentional horizontal scrolling rather than compressing or truncating operational columns.
+- Change ledger: changed `frontend/src/pages/admin/AdminUserManagement.jsx`, `e2e/33-admin-user-management-controls.spec.js`, and this handoff. No backend, API, schema, migration, route, workflow, permission, dependency, data, commit, push, or deployment changed.
+
+### 2026-11-12 Extensionless Cloudinary profile-image routing
+
+- Root cause: the restored local `iman` account stores profile public ID `media/profiles/ITPS415-Aviles-Emmanuel_mx3pnk`, which intentionally has no filename extension. `AFNMediaCloudinaryStorage` previously inferred all resource types only from extensions and therefore generated `https://res.cloudinary.com/drkmsxdct/raw/upload/media/profiles/ITPS415-Aviles-Emmanuel_mx3pnk`; Cloudinary returned 404 because the upload is an image asset, not raw media. Localhost was not the source of the URL: local SQLite retained a durable Cloudinary public ID and the configured default media storage resolved it.
+- Fix: `_get_resource_type()` now normalizes path separators and treats assets in the dedicated `profiles/` path as images when no recognized extension is present. Profile uploads are already image-validated, so the path is authoritative for this bounded case. Recognized image/video extensions behave as before, protected documents remain raw/authenticated, and an unrelated extensionless path remains raw.
+- Validation ledger (commands actually run): `manage.py test afn_service_management.test_storage users.tests.ProfileImageSerializationTests --settings=afn_service_management.settings_e2e --verbosity 2` passed 9/9, including new extensionless-profile resource routing and generated-URL assertions plus existing document delivery and local serializer fallbacks. A read-only serialization of the current local `iman` record now returns `https://res.cloudinary.com/drkmsxdct/image/upload/media/profiles/ITPS415-Aviles-Emmanuel_mx3pnk`. Scoped `git diff --check` passed. Direct HEAD and GET attempts against the corrected Cloudinary URL could not connect from the current machine; no remote asset-existence result is claimed.
+- Current worktree manifest: 194 entries, comprising 141 tracked modifications and 53 untracked entries; nothing is staged. `backend/afn_service_management/storage.py` and `backend/afn_service_management/test_storage.py` are newly dirty.
+- Known risks and pending decisions: the corrected URL still requires Cloudinary/network availability and the referenced provider asset to exist. If it still returns 404 after backend restart and connectivity returns, the database reference is stale and the owner should upload a new profile image; the code must not silently invent or restore a deleted provider asset.
+- Change ledger: changed `backend/afn_service_management/storage.py`, `backend/afn_service_management/test_storage.py`, and this handoff. No database record, model, schema, migration, dependency, endpoint, API payload shape, permission, configured-storage object, commit, push, or deployment changed.
+
+### 2026-11-12 Offline localhost login
+
+- Root cause: `frontend/src/api/core.js` rejected every POST/PUT/PATCH/DELETE before sending whenever the browser reported `navigator.onLine === false`. That browser flag represents public-network state, not reachability of Django on localhost, so the liveness GET could succeed locally and the following login POST would still be blocked as "offline." `OnlineStatusBanner` used the same flag and falsely warned that the app was offline on a healthy loopback runtime.
+- Fix: removed the speculative write rejection from the shared Axios request interceptor. Requests now reach the configured API whenever it is actually reachable; failed remote or local requests continue through the existing response/error handling, and no offline write is queued or reported as saved. `useOnlineStatus` treats only explicit loopback hostnames as locally available regardless of public-internet state, while deployed/non-loopback pages retain browser online/offline event behavior.
+- E2E coverage: new authentication scenario 2.9 overrides `Navigator.prototype.onLine` to `false` before the app loads, then performs the real localhost liveness request and UI login for `superadmin_test`. It proves HTTP 200 from `/api/health/liveness/`, HTTP 200 from `POST /api/users/login/`, redirect to the admin dashboard, and absence of the false offline banner.
+- Validation ledger (commands actually run): before the change, read-only probes confirmed both local frontend `http://127.0.0.1:5174/login` and backend `http://127.0.0.1:8000/api/health/liveness/` returned HTTP 200, bounding the issue to the frontend offline gate. `npm run build` passed under Vite 8.3.5 with 2,571 transformed modules. `npx playwright test 02-authentication.spec.js --grep '2[.]9'` passed 1/1 in 2.1 minutes. Expected notification WebSocket proxy-abort messages during managed teardown did not fail the journey. Scoped `git diff --check` passed before this handoff update.
+- Current worktree manifest: 197 entries, comprising 144 tracked modifications and 53 untracked entries; nothing is staged. `frontend/src/api/core.js`, `frontend/src/hooks/useOnlineStatus.js`, and `e2e/02-authentication.spec.js` are newly dirty.
+- Known risks and pending decisions: local core authentication and database-backed workflows can now operate without public internet while both local servers run. Brevo email, Cloudinary media, external map tiles/geocoding/routing, and PSGC location data remain internet-dependent and may independently fail or be unavailable offline. This change does not add an offline mutation queue.
+- Change ledger: changed `frontend/src/api/core.js`, `frontend/src/hooks/useOnlineStatus.js`, `e2e/02-authentication.spec.js`, and this handoff. No backend, API payload, schema, migration, route, workflow, permission, dependency, database/configured-storage record, commit, push, or deployment changed.
+
+### 2026-11-12 User Management access-control presentation
+
+- Presentation: replaced the Access column's separate wrapping `Areas (N)` and `Manage` pills with one 32px-high segmented control. Its primary segment uses a status dot and plain-language summary (`All areas`, singular/plural area count, `Read only`, or `Technician only`) and retains the existing accessible-areas viewer. Authorized rows receive an adjacent settings segment for the existing capability editor; unauthorized rows retain a single view-only summary control. The Access header and cells now reserve a 132px minimum width, summaries do not wrap, and capability loading uses a spinner without changing the button's size.
+- Accessibility and behavior: retained the explicit `Accessible areas for ...` and `Manage access for ...` accessible names, added a visible-on-hover title for the icon-only settings action, kept both controls as native buttons, and left all backend-derived capability checks, dialogs, save behavior, and permission boundaries unchanged.
+- E2E coverage: scenario 33.S now confirms the real seeded summary (`Read only` or a singular/plural count), proves the summary and settings segments have equal height and the same vertical position, opens and closes the accessible-areas dialog, and then exercises the capability editor's existing discard and failure path. The remainder of the create, responsive password modal, edit, deactivate/reactivate, and cleanup journey remains covered.
+- Validation ledger (commands actually run): `npm run build` from `frontend` passed under Vite 8.3.5 with 2,571 transformed modules. Scoped `git diff --check` passed before the browser run. The first focused `33.S` run reached the new UI but failed only because its assertion assumed the seeded inventory viewer had a numeric area count; the rendered and correct state was `Read only`. After widening the test to that valid zero-area state, the final focused `npx playwright test e2e/33-admin-user-management-controls.spec.js --grep '33[.]S'` run passed 1/1 in 1.8 minutes. Expected non-ASGI Vite WebSocket `ECONNABORTED` messages remained non-failing harness noise.
+- Current worktree manifest remains 197 entries, comprising 144 tracked modifications and 53 untracked entries; nothing is staged. No path was added or removed because both implementation/test paths and this handoff were already dirty.
+- Known risks and pending decisions: none added. The icon-only settings segment intentionally relies on a standard gear symbol plus `title` and accessible name; the area-summary segment remains textual and is the larger click target.
+- Change ledger: changed `frontend/src/pages/admin/AdminUserManagement.jsx`, `e2e/33-admin-user-management-controls.spec.js`, and this handoff. No backend, API shape, schema, migration, route, workflow, permission, dependency, development/E2E/staging/production business record, commit, push, or deployment changed.
+
+### 2026-11-12 Technician Tracking details modal
+
+- Presentation and navigation: replaced the large inline Selected Technician section below the map with a fixed, dimmed overlay dialog. It remains centered and bounded on larger screens and becomes a viewport-bounded bottom sheet on phones, with only its content area scrolling when necessary. Operators can open it explicitly from the technician list, the technician marker's quick popup, or a selected-route popup without losing their place on the map. Center and route-selection actions no longer open details as a side effect; Center now only changes map focus.
+- Preserved content and behavior: the modal retains technician identity/status, GPS health, last update, accuracy, movement, workload, recent trail, coordinates, Call/Email actions, current jobs, direct distance, per-ticket links, and the Open Service Tickets action. Existing admin-workspace route and backend tracking capability enforcement are unchanged.
+- Accessibility: the overlay uses native dialog semantics (`role=dialog`, `aria-modal`, and a technician-name heading), locks background scrolling, focuses Close details on open, traps Tab/Shift+Tab within its actionable content, closes from Close details, Escape, or the backdrop, and restores focus to the originating View details button. The modal is capped at 92 dynamic viewport height and its body scrolls independently.
+- E2E coverage: scenarios 3.5/3.5b now locate a dialog rather than an inline region, close it before using page-level Refresh, reopen it against retained last-known data, assert 390x844 containment and no document overflow, confirm initial focus and focus containment, close with Escape, and prove trigger-focus restoration. Scenario 19 now runs the modal content/contact/job/ticket journey for both `admin_test` and `superadmin_test`, and proves Center does not open the modal.
+- Validation ledger (commands actually run): the Vite 8.3.5 production build passed twice during implementation and the final run transformed 2,571 modules. Focused `npx playwright test e2e/03-admin-workspace.spec.js --grep '3[.]5'` passed desktop/mobile scenarios 2/2 in 2.9 minutes. `npx playwright test e2e/19-admin-technician-tracking-controls.spec.js` passed the complete admin and superadmin journeys 2/2 in 3.2 minutes. After adding explicit focus containment, final `--grep '3[.]5b'` passed 1/1 in 1.7 minutes. Scoped `git diff --check` passed before and after the final change. Expected non-ASGI Vite WebSocket `ECONNABORTED` messages remained non-failing harness noise. A later screenshot-file lookup found no prior artifact because the next Playwright command had cleaned `test-results`; no post-run visual-inspection claim is made.
+- Current worktree manifest remains 197 entries, comprising 144 tracked modifications and 53 untracked entries; nothing is staged. No path was added or removed because the implementation, both E2E specs, and this handoff were already dirty.
+- Known risks and pending decisions: none added. Large job lists intentionally scroll inside the modal rather than expanding the page or moving the operator away from the map.
+- Change ledger: changed `frontend/src/pages/admin/AdminTechnicianTracking.jsx`, `e2e/03-admin-workspace.spec.js`, `e2e/19-admin-technician-tracking-controls.spec.js`, and this handoff. No backend, API shape, schema, migration, route, workflow, permission, dependency, persistent development/E2E/staging/production business record, commit, push, or deployment changed.
+
+### 2026-11-12 Technician Tracking modal UI refinement
+
+- Presentation: reduced the desktop shell from `max-w-5xl` to the system-standard `max-w-3xl`, replaced the crowded header action row with technician identity, a role-state badge, canonical TECH ID, and an icon-only close control, and moved operational actions into a bordered footer. The footer keeps optional Call/Email actions grouped left and the primary Open Service Tickets action right, stacking cleanly on phones.
+- Information hierarchy: replaced the asymmetric facts-versus-jobs split with two full-width sections. Live location summary uses a four-column desktop/two-column phone grid with bordered system cards, an explicit GPS freshness badge, and a two-column Coordinates card that completes the grid. Current jobs has an active-count badge, retains ticket/status/schedule/distance actions, and uses a compact two-line no-assignment state rather than leaving a large empty column.
+- E2E coverage: scenario 3.5 now asserts the Live location summary and Current jobs headings and proves the desktop modal is at most 780px wide. Existing desktop/mobile containment, focus, Escape, last-known-data, contact, jobs, ticket navigation, Center separation, and admin/superadmin permission journeys remain covered.
+- Validation ledger (commands actually run): the final direct Vite 8.3.5 production build passed with 2,571 transformed modules; an earlier concurrent build invocation reached bundle-size generation but its wrapper did not return a final status, so it is not used as evidence. Focused `npx playwright test e2e/03-admin-workspace.spec.js --grep '3[.]5'` passed desktop/mobile 2/2 in 2.4 minutes. `npx playwright test e2e/19-admin-technician-tracking-controls.spec.js` passed admin and superadmin 2/2 in 2.7 minutes. A final exact desktop screenshot run (`--grep '3[.]5 - Technician'`) passed 1/1 in 1.9 minutes; visual inspection of `test-results/screenshots/03-admin-technician-tracking-details.png` confirmed balanced summary spacing, readable job cards, clear status badges, and stable footer actions. Scoped `git diff --check` passed before this handoff update. Expected non-ASGI Vite WebSocket `ECONNABORTED` messages remained non-failing harness noise.
+- Current worktree manifest remains 197 entries, comprising 144 tracked modifications and 53 untracked entries; nothing is staged. No path was added or removed.
+- Known risks and pending decisions: none added. Technicians with many current jobs intentionally scroll within the viewport-bounded body while the identity header and action footer remain stable; technicians with no jobs receive a compact empty state.
+- Change ledger: changed `frontend/src/pages/admin/AdminTechnicianTracking.jsx`, `e2e/03-admin-workspace.spec.js`, and this handoff. `e2e/19-admin-technician-tracking-controls.spec.js` was rerun but not changed during this refinement. No backend, API shape, schema, migration, route, workflow, permission, dependency, data, commit, push, or deployment changed.
+
+### 2026-11-13 Commissioning save-confirmation race
+
+- Root cause and fix: after a solar commissioning checklist save succeeded, `handleSaveCommissioning` set `Solar commissioning checklist saved.` and refreshed `documentPrefill`. Because `documentPrefill` is a checklist-loader dependency, that successful refresh immediately started a background checklist reload whose unconditional message reset could erase the confirmation before the operator or E2E assertion observed it. The loader now preserves only that specific confirmed-save message while clearing older non-success feedback. Existing explicit resets remain at ticket changes, document changes, and the start of the next save, while load errors can still replace the message with an actionable failure.
+- Validation ledger (commands actually run): `npm run env:check` passed for the safe development/SQLite target. `npm run test:backend` passed all 934 tests with 7 skipped and zero Django system-check issues in 188.811 seconds. The pre-fix `npm run build:frontend` passed under Vite 8.3.5 with 2,571 transformed modules in 23.07 seconds. A full sequential `npm run test:e2e` reached 94 passes and one intermittent failure in scenario 3.9b, where the save API and persisted payload succeeded but the success text was not observable; the host then suspended for approximately 8.8 hours during scenario 101, invalidating that and all remaining timing evidence, so the run was stopped and is not claimed as a completed gate. A fresh exact pre-fix rerun of scenario 3.9b passed 1/1 in 3.1 minutes, confirming an intermittent presentation race rather than a deterministic save failure. After the initial fix, scenario 3.9b passed once in the first iteration of a repeated run and passed again in a separate fresh invocation in 1.9 minutes. The repeated run's second iteration reached and passed commissioning, then failed later because the same E2E database already contained the iteration-one unique turnover record; that state-reuse failure is not counted as a product pass. After narrowing the loader to preserve only the confirmed-save message, a final fresh scenario 3.9b invocation passed 1/1 in 2.5 minutes. Expected Vite WebSocket proxy-abort noise during managed navigation remained non-failing. The first post-fix build attempt did not start because Windows blocked the `npm.ps1` shim; rerunning the repository script through `npm.cmd` passed under Vite 8.3.5 with 2,571 transformed modules in 30.56 seconds, and the final narrowed-rule build passed again with 2,571 modules in 12.82 seconds. Scoped `git diff --check` passed with the existing CRLF-to-LF warning only.
+- Current worktree manifest remains 197 entries, comprising 144 tracked modifications and 53 untracked entries; nothing is staged. No path was added or removed because the implementation, E2E specification, and this handoff were already dirty.
+- Known risks and pending decisions: the complete 370-scenario Playwright gate has not completed uninterrupted after the current accumulated changes. The host-suspended run cannot establish a release-wide browser result. Scenario 3.9b is not repeat-safe inside one shared database because its turnover step creates a unique per-ticket record; fresh isolated invocations pass and remain the valid evidence for this frontend fix.
+- Change ledger: changed `frontend/src/pages/admin/AdminDocuments.jsx` and this handoff. The existing scenario 3.9b caught the regression and was not changed. No backend, API shape, schema, migration, route, workflow, permission, dependency, development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-13 Technician Tracking readable update age
+
+- Presentation: `formatLastSeen` retains `Updated just now`, singular minute, and minute precision below one hour, then selects the largest useful elapsed unit across hours, days, weeks, months, and years with singular/plural wording. This keeps list, map-popup, detail, and synchronization labels compact without changing GPS freshness calculations or timestamps.
+- E2E coverage: the complete role-paired Technician Tracking controls journey now intercepts one refresh response, assigns the newly created technician a last-location age of exactly 1,097 minutes, and asserts the visible technician row says `Updated 18 hours ago` rather than exposing a four-digit minute count.
+- Validation ledger (commands actually run): `npx playwright test e2e/19-admin-technician-tracking-controls.spec.js` passed the complete administrator and superadmin journeys 2/2 in 4.0 minutes, including the injected 1,097-minute response and visible `Updated 18 hours ago` assertion. Expected Vite notification WebSocket proxy-abort messages during managed navigation remained non-failing. `npm.cmd run build:frontend` passed under Vite 8.3.5 with 2,571 transformed modules in 18.90 seconds.
+- Current worktree manifest remains 197 entries, comprising 144 tracked modifications and 53 untracked entries; nothing is staged. No path was added or removed because the implementation, E2E specification, and this handoff were already dirty.
+- Known risks and pending decisions: elapsed labels intentionally use floor rounding, matching the prior minute behavior, and prioritize scanability over exact timestamps in list summaries. The details modal continues to show the exact localized Last GPS update timestamp.
+- Change ledger: changed `frontend/src/pages/admin/AdminTechnicianTracking.jsx`, `e2e/19-admin-technician-tracking-controls.spec.js`, and this handoff. No backend, API shape, schema, migration, route, workflow, permission, dependency, persistent development/staging/production record, commit, push, or deployment changed.
+
+### 2026-11-13 Pre-staging check of the whole uncommitted worktree
+
+- Inventory: 199 uncommitted paths (145 changed, 54 new; nothing staged): 1 migration (`progress.0005`), 3 scheduler files, 5 docs, 45 backend code, 39 backend tests, 57 frontend files, 30 new specs (35-64), 19 updated specs. Every path traces to a ledger entry in this handoff (technician and client page audits, possibility-coverage parts 1-5, the 2026-11-09 to 11-13 entries). 40 of them were edited by both working sessions, so the worktree is one release, not separable per session. No dependency file, `render.yaml` or `.env` changed.
+- Static review: `npm run env:check` reported local SQLite. `git diff --check` was clean, and `manage.py check` reported no issues. `makemigrations --check --dry-run` said "No changes detected", and only `progress.0005` is pending: three AddField operations, all nullable or `default=list`, with no data step. A scan of every added line and new file found no focused or skipped tests, debugger or print calls, conflict markers, secrets, VITE secret names, or `DATABASE_URL` values; the scheduler workflow references `secrets.*` only. Hand review covered the migration, `settings_e2e.py` (raises the request queue for the browser-test server only), `storage.py`, the offline-login change in `api/core.js` and `useOnlineStatus.js` (offline saves now fail with "Unable to reach the server..."; no spec expects the removed message), `auth.py` and `admin_users.py`.
+- Fixed: **client My Requests quick view stayed open after "Open full details".** Pages load on demand and the router keeps the old screen up while the detail page loads, so the quick view stayed visible and Back returned to it still open (reproduced twice by spec 50). The button now closes the quick view before opening the page. Changed `frontend/src/pages/client/ClientRequestTracking.jsx`.
+- Validation (commands actually run): the full backend suite passed, 942 tests with 7 skipped (8.7 min, run alongside the browser suite). The frontend build passed (2,571 modules) before and after the fix. The **complete Playwright run** covered 370 tests in 1.9 h: 365 passed and 5 failed late in the run (tests 330-363). Specs 30 and 55 failed with `ECONNRESET` from the test server, spec 57 with a 10 s API timeout, and specs 56 and 50 with UI timeouts. A fresh rerun of those five passed 30 (3 accounts), 55, 56 and 57, and failed 50 again; after the fix above, spec 50 passed 1/1.
+- Known risks and pending decisions: commit and deploy need the owner's go-ahead. The staging start command runs `migrate`, so a deploy applies `progress.0005`. The scheduler workflow only runs from the default branch once its `AUTOMATION_*` secrets exist. The PostgreSQL-only backend test and the 5b hand check (email, Cloudinary, live updates between phones, PWA) need staging.
+- Change ledger: changed `frontend/src/pages/client/ClientRequestTracking.jsx` and this handoff. No backend, API, schema, migration, permission, dependency, data, commit, push or deployment changed.

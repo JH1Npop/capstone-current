@@ -1,4 +1,5 @@
 # Auto-split from services/views.py
+from services.views.document_locks import KeepFinishedDocumentsMixin, TechniciansLeaveCancelledJobsMixin
 from decimal import Decimal, InvalidOperation
 
 from rest_framework import serializers, viewsets, permissions
@@ -74,7 +75,7 @@ class ServiceStatusHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset.order_by('-timestamp', '-id')
 
 
-class InspectionChecklistViewSet(viewsets.ModelViewSet):
+class InspectionChecklistViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelViewSet):
     queryset = InspectionChecklist.objects.select_related(
         'ticket__request__client',
         'ticket__request__service_type',
@@ -120,12 +121,16 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
         checklist = serializer.save(submitted_by=self.request.user, submitted_at=timezone.now())
         self._sync_inspection_completion_status(checklist)
         sync_ticket_maintenance_schedule(checklist.ticket)
-        # Create notification for technician
+        # Tell the rest of the team (not the person who filed it) and link the ticket.
         for assigned_technician in get_ticket_team_members(checklist.ticket):
+            if assigned_technician.id == self.request.user.id:
+                continue
             create_notification(
                 assigned_technician,
-                f"New inspection checklist created for ticket #{checklist.ticket.id}",
-                'info'
+                f"An inspection report was started for ticket #{checklist.ticket.id}.",
+                'info',
+                title=f'Inspection Report Started for Ticket #{checklist.ticket.id}',
+                ticket=checklist.ticket,
             )
 
     def perform_update(self, serializer):
@@ -253,7 +258,7 @@ class InspectionChecklistViewSet(viewsets.ModelViewSet):
         })
 
 
-class SolarCommissioningChecklistViewSet(viewsets.ModelViewSet):
+class SolarCommissioningChecklistViewSet(TechniciansLeaveCancelledJobsMixin, KeepFinishedDocumentsMixin, viewsets.ModelViewSet):
     queryset = SolarCommissioningChecklist.objects.select_related(
         'ticket__request__client',
         'ticket__request__location',
@@ -314,7 +319,7 @@ class SolarCommissioningChecklistViewSet(viewsets.ModelViewSet):
         return Response({'status': 'completed'})
 
 
-class TurnoverAcceptanceViewSet(viewsets.ModelViewSet):
+class TurnoverAcceptanceViewSet(KeepFinishedDocumentsMixin, viewsets.ModelViewSet):
     queryset = TurnoverAcceptance.objects.select_related(
         'ticket__request__client',
         'ticket__request__location',
@@ -422,6 +427,8 @@ class TurnoverAcceptanceViewSet(viewsets.ModelViewSet):
             ticket.request.client,
             f"Your job for ticket #{ticket.id} has been handed over. Please confirm the handover in your request details.",
             'info',
+            title='Please confirm the handover',
+            ticket=ticket,
         )
 
         return Response({'status': 'finalized', 'ticket_status': ticket.status})
@@ -457,7 +464,7 @@ class TurnoverAcceptanceViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(turnover).data)
 
 
-class TechnicalDataSheetViewSet(viewsets.ModelViewSet):
+class TechnicalDataSheetViewSet(TechniciansLeaveCancelledJobsMixin, KeepFinishedDocumentsMixin, viewsets.ModelViewSet):
     queryset = TechnicalDataSheet.objects.select_related(
         'ticket__request__client',
         'ticket__request__location',
@@ -689,7 +696,7 @@ class TechnicianLocationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(result)
 
 
-class InstallationContractViewSet(viewsets.ModelViewSet):
+class InstallationContractViewSet(KeepFinishedDocumentsMixin, viewsets.ModelViewSet):
     queryset = InstallationContract.objects.all()
     serializer_class = InstallationContractSerializer
     permission_classes = [permissions.IsAuthenticated]

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
@@ -10,7 +10,7 @@ import SearchFilterBar from '../../components/shared/SearchFilterBar';
 import { fetchClientRequests, fetchTicketTimeline } from '../../api/api';
 import { clientTechnicianDisplayOrDash } from '../../utils/clientTechnicianDisplay';
 import { API_BASE_URL } from '../../api/core';
-import { formatTicketId } from '../../utils/roleIds';
+import { formatRequestId, formatTicketId } from '../../utils/roleIds';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -80,6 +80,21 @@ export default function ClientServiceHistory() {
   const [imageViewer, setImageViewer] = useState(null);
   const [selectedProof, setSelectedProof] = useState(null);
   const navigate = useNavigate();
+  // Only the newest timeline request may fill the timeline (a slow earlier one is ignored).
+  const timelineSequence = useRef(0);
+
+  // Escape closes only the top window: the photo, then the proof list, then the actions.
+  useEffect(() => {
+    if (!actionService && !imageViewer && !selectedProof) return undefined;
+    const onKey = (event) => {
+      if (event.key !== 'Escape') return;
+      if (selectedProof) setSelectedProof(null);
+      else if (imageViewer) setImageViewer(null);
+      else setActionService(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [actionService, imageViewer, selectedProof]);
 
   useEffect(() => {
     loadServiceHistory();
@@ -116,6 +131,7 @@ export default function ClientServiceHistory() {
     if (query) {
       filtered = filtered.filter((service) => [
         service.ticket_id ? formatTicketId(service.ticket_id) : '',
+        formatRequestId(service.id),
         service.service_type_name,
         service.service_type,
         service.description,
@@ -138,7 +154,8 @@ export default function ClientServiceHistory() {
     } else if (sortBy === 'recent') {
       filtered.sort((a, b) => new Date(b.completed_date || 0) - new Date(a.completed_date || 0));
     } else if (sortBy === 'highest_rating') {
-      filtered.sort((a, b) => (b.client_rating || 0) - (a.client_rating || 0));
+      // Unrated services go last, not mixed in with low ratings.
+      filtered.sort((a, b) => (b.client_rating ?? -1) - (a.client_rating ?? -1));
     }
 
     setFilteredHistory(filtered);
@@ -177,19 +194,27 @@ export default function ClientServiceHistory() {
       return;
     }
 
+    const sequence = ++timelineSequence.current;
     setTimelineService(service);
     setTimelineEvents([]);
     setTimelineError('');
     setTimelineLoading(true);
     try {
       const events = await fetchTicketTimeline(service.ticket_id);
-      setTimelineEvents(events);
+      if (sequence === timelineSequence.current) setTimelineEvents(events);
     } catch (loadError) {
-      setTimelineError(loadError.message || 'Unable to load ticket timeline.');
+      if (sequence === timelineSequence.current) setTimelineError(loadError.message || 'Unable to load ticket timeline.');
     } finally {
-      setTimelineLoading(false);
+      if (sequence === timelineSequence.current) setTimelineLoading(false);
     }
   };
+
+  const ratedServices = history.filter((service) => service.client_rating != null);
+  const averageRating = ratedServices.length
+    ? (ratedServices.reduce((total, service) => total + Number(service.client_rating), 0) / ratedServices.length).toFixed(1)
+    : null;
+  const needRating = history.length - ratedServices.length;
+  const openDetails = (service) => navigate(`/client/requests/${service.id}?entity=request`);
 
   if (loading) {
     return (
@@ -204,7 +229,31 @@ export default function ClientServiceHistory() {
   return (
     <Layout>
       <div className="space-y-6">
-        
+        {history.length > 0 ? (
+          <dl aria-label="Your service summary" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Completed services</dt>
+              <dd className="mt-1 text-2xl font-bold text-slate-900">{history.length}</dd>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your average rating</dt>
+              <dd className="mt-1 flex items-baseline gap-1.5 text-2xl font-bold text-slate-900">
+                {averageRating ? <><FiStar className="h-5 w-5 self-center fill-amber-400 text-amber-400" aria-hidden="true" />{averageRating}<span className="text-sm font-medium text-slate-500">/5</span></> : <span className="text-base font-semibold text-slate-500">No ratings yet</span>}
+              </dd>
+            </div>
+            <div className="col-span-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:col-span-1">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Waiting for your rating</dt>
+              <dd className="mt-1 flex items-center justify-between gap-2">
+                <span className="text-2xl font-bold text-slate-900">{needRating}</span>
+                {needRating > 0 ? (
+                  <button type="button" onClick={() => setFilterType('pending_rating')} className="min-h-11 rounded-lg bg-brand-50 px-3 text-sm font-semibold text-brand-700 hover:bg-brand-100">
+                    Show them
+                  </button>
+                ) : null}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
 
         {error && (
           <ErrorState
@@ -245,18 +294,10 @@ export default function ClientServiceHistory() {
   <>
     <div className="grid gap-3 md:hidden">
       {paginatedHistory.map((service) => (
-        <div
+        <article
           key={service.id}
-          role="button"
-          tabIndex={0}
-          onClick={() => navigate(`/client/requests/${service.id}?entity=request`)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              navigate(`/client/requests/${service.id}?entity=request`);
-            }
-          }}
-          className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-100"
+          aria-label={service.service_type_name || service.service_type || 'Completed service'}
+          className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -289,32 +330,42 @@ export default function ClientServiceHistory() {
             <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
               Proof: {getProofCount(service)}
             </span>
-            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-              {service.client_rating ? `${service.client_rating}/5` : 'Not Rated'}
+            <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+              {service.client_rating ? <><FiStar size={12} className="fill-amber-400 text-amber-400" aria-hidden="true" />{service.client_rating}/5</> : 'Not rated'}
             </span>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4 grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setActionService(service);
-              }}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={() => openDetails(service)}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-3 text-sm font-semibold text-white hover:bg-brand-600"
+            >
+              <FiEye size={15} />
+              {service.client_rating ? 'View details' : 'View and rate'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActionService(service)}
+              aria-label={`More actions for ${service.service_type_name || service.service_type || 'this service'}`}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               <FiMoreHorizontal size={15} />
-              Actions
+              More
             </button>
           </div>
-        </div>
+        </article>
       ))}
     </div>
 
     <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm md:block">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
         <h3 className="text-base font-semibold text-slate-900">Completed Services</h3>
-        <p className="text-sm text-slate-500">Showing {filteredHistory.length} service{filteredHistory.length === 1 ? '' : 's'}</p>
+        <p className="text-sm text-slate-500">
+          {filteredHistory.length > ITEMS_PER_PAGE
+            ? `Showing ${pageStartIndex + 1}–${Math.min(pageStartIndex + ITEMS_PER_PAGE, filteredHistory.length)} of ${filteredHistory.length} services`
+            : `Showing ${filteredHistory.length} service${filteredHistory.length === 1 ? '' : 's'}`}
+        </p>
       </div>
       <table className="w-full table-fixed text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -358,7 +409,9 @@ export default function ClientServiceHistory() {
                     {service.client_rating}/5
                   </span>
                 ) : (
-                  <span className="text-sm text-slate-500">Not rated</span>
+                  <button type="button" onClick={() => openDetails(service)} className="-my-2.5 inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-brand-700 hover:underline" aria-label={`Rate ${service.service_type_name || service.service_type || 'this service'}`}>
+                    <FiStar size={14} aria-hidden="true" /> Rate
+                  </button>
                 )}
               </td>
               <td className="px-4 py-4">
@@ -370,9 +423,9 @@ export default function ClientServiceHistory() {
                 <button
                   type="button"
                   onClick={() => setActionService(service)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                   title="Open actions"
-                  aria-label="Open service actions"
+                  aria-label={`More actions for ${service.service_type_name || service.service_type || 'this service'}`}
                 >
                   <FiMoreHorizontal size={16} />
                 </button>
@@ -390,19 +443,19 @@ export default function ClientServiceHistory() {
               Showing {pageStartIndex + 1}-{Math.min(pageStartIndex + ITEMS_PER_PAGE, filteredHistory.length)} of {filteredHistory.length} services
             </span>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage === 1} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Previous</button>
+              <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage === 1} className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Previous</button>
               <span className="text-slate-500">Page {safeCurrentPage} of {totalPages}</span>
-              <button type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={safeCurrentPage === totalPages} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Next</button>
+              <button type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={safeCurrentPage === totalPages} className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Next</button>
             </div>
           </div>
         )}
       </div>
       {actionService && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onMouseDown={(event) => event.target === event.currentTarget && setActionService(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="service-actions-title" className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-slate-900">Service Actions</h3>
+                <h3 id="service-actions-title" className="text-lg font-semibold text-slate-900">Service Actions</h3>
                 <p className="mt-1 truncate text-sm text-slate-500">
                   {actionService.service_type_name || actionService.service_type || 'Completed service'}
                 </p>
@@ -410,7 +463,7 @@ export default function ClientServiceHistory() {
               <button
                 type="button"
                 onClick={() => setActionService(null)}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                className="grid h-11 w-11 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Close actions"
               >
                 <FiX size={18} />
@@ -423,7 +476,7 @@ export default function ClientServiceHistory() {
                   navigate(`/client/requests/${actionService.id}?entity=request`);
                   setActionService(null);
                 }}
-                className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
                 <FiEye className="text-brand-500" size={17} />
                 View service details
@@ -435,7 +488,7 @@ export default function ClientServiceHistory() {
                     openTimeline(actionService);
                     setActionService(null);
                   }}
-                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   <FiMessageSquare className="text-blue-500" size={17} />
                   View timeline
@@ -448,7 +501,7 @@ export default function ClientServiceHistory() {
                     setImageViewer(actionService);
                     setActionService(null);
                   }}
-                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   <FiImage className="text-emerald-500" size={17} />
                   View proof files
@@ -473,11 +526,11 @@ export default function ClientServiceHistory() {
       )}
 
       {imageViewer && getProofMedia(imageViewer).length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onMouseDown={(event) => event.target === event.currentTarget && setImageViewer(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="proof-files-title" className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h3 className="text-2xl font-bold text-slate-900">Proof Files</h3>
+                <h3 id="proof-files-title" className="text-2xl font-bold text-slate-900">Proof Files</h3>
                 <p className="truncate text-slate-600">
                   {imageViewer.service_type_name || imageViewer.service_type || 'Completed service'}
                 </p>
@@ -488,7 +541,7 @@ export default function ClientServiceHistory() {
                   setImageViewer(null);
                   setSelectedProof(null);
                 }}
-                className="rounded-lg bg-slate-100 px-3 py-2 text-slate-600 hover:bg-slate-200"
+                className="min-h-11 rounded-lg bg-slate-100 px-4 py-2 text-slate-600 hover:bg-slate-200"
               >
                 Close
               </button>
@@ -499,6 +552,7 @@ export default function ClientServiceHistory() {
                   key={image.id || index}
                   type="button"
                   onClick={() => setSelectedProof(image)}
+                  aria-label={`Preview ${image.name || `proof ${index + 1}`}`}
                   className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
                 >
                   {isVideoProof(image) ? (
@@ -519,17 +573,17 @@ export default function ClientServiceHistory() {
       )}
 
       {selectedProof && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/75 p-4">
-          <div className="max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/75 p-4" onMouseDown={(event) => event.target === event.currentTarget && setSelectedProof(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="proof-preview-title" className="max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div className="min-w-0">
-                <h3 className="truncate text-lg font-semibold text-slate-900">{selectedProof.name || 'Proof image'}</h3>
+                <h3 id="proof-preview-title" className="truncate text-lg font-semibold text-slate-900">{selectedProof.name || 'Proof image'}</h3>
                 <p className="text-sm text-slate-500">Service proof preview</p>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedProof(null)}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                className="grid h-11 w-11 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Close proof preview"
               >
                 <FiX size={20} />
@@ -555,7 +609,10 @@ export default function ClientServiceHistory() {
         events={timelineEvents}
         loading={timelineLoading}
         error={timelineError}
-        onClose={() => setTimelineService(null)}
+        onClose={() => {
+          timelineSequence.current += 1;
+          setTimelineService(null);
+        }}
       />
     </Layout>
   );

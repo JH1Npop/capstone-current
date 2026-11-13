@@ -3,6 +3,7 @@
 from ._imports import *  # noqa: F403,F405
 from .proof_fixtures import completion_photo
 from services.maintenance import process_maintenance_alerts
+from services.business_time import business_timezone, business_today
 
 
 class MaintenanceWorkflowTests(APITestCase):
@@ -51,8 +52,8 @@ class MaintenanceWorkflowTests(APITestCase):
         self.ticket = ServiceTicket.objects.create(
             request=self.request_obj,
             technician=self.technician_user,
-            scheduled_date=timezone.localdate(),
-            status='Not Started',
+            scheduled_date=business_today(),
+            status='In Progress',  # checklists are filed after Start Job
             priority='Normal',
         )
 
@@ -106,7 +107,7 @@ class MaintenanceWorkflowTests(APITestCase):
         self.assertEqual(schedule.interval_days, 90)
         self.assertEqual(
             schedule.next_due_date,
-            self.ticket.completed_date.date() + timedelta(days=90),
+            self.ticket.completed_date.astimezone(business_timezone()).date() + timedelta(days=90),
         )
         self.assertEqual(schedule.notify_on_date, schedule.next_due_date - timedelta(days=7))
         self.assertEqual(schedule.status, 'scheduled')
@@ -198,9 +199,9 @@ class MaintenanceWorkflowTests(APITestCase):
             maintenance_profile='commercial_area',
             interval_days=90,
             follow_up_window_days=14,
-            last_service_date=(timezone.localdate() - timedelta(days=85)),
-            next_due_date=timezone.localdate() + timedelta(days=5),
-            notify_on_date=timezone.localdate(),
+            last_service_date=(business_today() - timedelta(days=85)),
+            next_due_date=business_today() + timedelta(days=5),
+            notify_on_date=business_today(),
             status='scheduled',
             maintenance_notes='Commercial site maintenance plan.',
         )
@@ -219,7 +220,11 @@ class MaintenanceWorkflowTests(APITestCase):
         ).exists())
 
         recipients = Notification.objects.filter(ticket=self.ticket, type='reminder')
-        self.assertEqual(recipients.count(), 2)
+        # Both admins, plus the client in the app: a client with no email address still gets reminded.
+        self.assertEqual(recipients.filter(title='Maintenance alert').count(), 2)
+        self.assertEqual(recipients.get(user=self.client_user).title, 'Maintenance Reminder')
+        # The alert names the real number of days (5), not a fixed "7 days".
+        self.assertIn('due in 5 days', recipients.filter(title='Maintenance alert').first().message)
 
         self.client.force_authenticate(user=self.follow_up_user)
         response = self.client.get('/api/services/dashboard/')
@@ -238,9 +243,9 @@ class MaintenanceWorkflowTests(APITestCase):
             maintenance_profile='commercial_area',
             interval_days=90,
             follow_up_window_days=14,
-            last_service_date=timezone.localdate() - timedelta(days=88),
-            next_due_date=timezone.localdate() + timedelta(days=2),
-            notify_on_date=timezone.localdate() - timedelta(days=5),
+            last_service_date=business_today() - timedelta(days=88),
+            next_due_date=business_today() + timedelta(days=2),
+            notify_on_date=business_today() - timedelta(days=5),
             status='scheduled',
         )
 
@@ -259,9 +264,9 @@ class MaintenanceWorkflowTests(APITestCase):
             service_type=self.service_type,
             maintenance_profile='commercial_area',
             interval_days=90,
-            last_service_date=timezone.localdate() - timedelta(days=90),
-            next_due_date=timezone.localdate(),
-            notify_on_date=timezone.localdate() - timedelta(days=7),
+            last_service_date=business_today() - timedelta(days=90),
+            next_due_date=business_today(),
+            notify_on_date=business_today() - timedelta(days=7),
             status='due_soon',
             client_notified_at=previous_stage,
             client_three_day_notified_at=previous_stage,
@@ -284,9 +289,9 @@ class MaintenanceWorkflowTests(APITestCase):
             service_type=self.service_type,
             maintenance_profile='commercial_area',
             interval_days=90,
-            last_service_date=timezone.localdate() - timedelta(days=90),
-            next_due_date=timezone.localdate(),
-            notify_on_date=timezone.localdate() - timedelta(days=7),
+            last_service_date=business_today() - timedelta(days=90),
+            next_due_date=business_today(),
+            notify_on_date=business_today() - timedelta(days=7),
             status='due',
         )
         self.client.force_authenticate(user=self.follow_up_user)
@@ -311,9 +316,9 @@ class MaintenanceWorkflowTests(APITestCase):
             service_type=self.service_type,
             maintenance_profile='commercial_area',
             interval_days=90,
-            last_service_date=timezone.localdate() - timedelta(days=90),
-            next_due_date=timezone.localdate(),
-            notify_on_date=timezone.localdate() - timedelta(days=7),
+            last_service_date=business_today() - timedelta(days=90),
+            next_due_date=business_today(),
+            notify_on_date=business_today() - timedelta(days=7),
             status='due',
         )
         case = FollowUpCase.objects.create(
@@ -323,7 +328,7 @@ class MaintenanceWorkflowTests(APITestCase):
             status='open',
             priority='high',
             summary='Maintenance due',
-            due_date=timezone.localdate(),
+            due_date=business_today(),
             creation_source='maintenance_alert',
         )
         self.client.force_authenticate(user=self.admin_user)
@@ -374,9 +379,9 @@ class MaintenanceWorkflowTests(APITestCase):
             maintenance_profile='commercial_area',
             interval_days=90,
             follow_up_window_days=7,
-            last_service_date=timezone.localdate() - timedelta(days=30),
-            next_due_date=timezone.localdate() + timedelta(days=5),
-            notify_on_date=timezone.localdate() - timedelta(days=2),
+            last_service_date=business_today() - timedelta(days=30),
+            next_due_date=business_today() + timedelta(days=5),
+            notify_on_date=business_today() - timedelta(days=2),
             status='dismissed',
             due_soon_notified_at=sent_at,
             client_notified_at=sent_at,
@@ -388,7 +393,7 @@ class MaintenanceWorkflowTests(APITestCase):
             {'reason': 'Client opted back in.'},
             format='json',
         )
-        new_due_date = timezone.localdate() + timedelta(days=30)
+        new_due_date = business_today() + timedelta(days=30)
         rescheduled = self.client.post(
             f'/api/services/maintenance-schedules/{schedule.id}/reschedule/',
             {'next_due_date': new_due_date.isoformat(), 'reason': 'Client requested a later visit.'},
@@ -412,9 +417,9 @@ class MaintenanceWorkflowTests(APITestCase):
             service_type=self.service_type,
             maintenance_profile='commercial_area',
             interval_days=90,
-            last_service_date=timezone.localdate() - timedelta(days=90),
-            next_due_date=timezone.localdate(),
-            notify_on_date=timezone.localdate() - timedelta(days=7),
+            last_service_date=business_today() - timedelta(days=90),
+            next_due_date=business_today(),
+            notify_on_date=business_today() - timedelta(days=7),
             status='due',
         )
         case = FollowUpCase.objects.create(
@@ -424,7 +429,7 @@ class MaintenanceWorkflowTests(APITestCase):
             status='in_progress',
             priority='high',
             summary='Maintenance underway',
-            due_date=timezone.localdate(),
+            due_date=business_today(),
             creation_source='maintenance_alert',
         )
         self.client.force_authenticate(user=self.admin_user)

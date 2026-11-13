@@ -51,7 +51,7 @@ const routeMeta = [
   { prefix: '/client/purchase-records', section: 'Service', title: 'Purchase Records', subtitle: '' },
   { prefix: '/client/support', section: 'Service', title: 'Client Support', subtitle: '' },
   { prefix: '/client/notifications', section: 'Account', title: 'Notifications', subtitle: '' },
-  { prefix: '/client/profile', section: 'Account', title: 'Profile', subtitle: 'Manage your contact details and account.' }
+  { prefix: '/client/profile', section: 'Account', title: 'Profile', subtitle: '' }
 ];
 
 const getRoleMeta = (workspaceRole) => {
@@ -102,7 +102,9 @@ export default function Topbar({
   const location = useLocation();
   const navigate = useNavigate();
   const notificationPanelRef = useRef(null);
+  const bellRef = useRef(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [markAllError, setMarkAllError] = useState('');
   const { canInstall, install } = usePwaInstallPrompt();
 
   const activeRoute = useMemo(
@@ -126,6 +128,20 @@ export default function Topbar({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
+  // Escape closes the panel and returns focus to the bell.
+  useEffect(() => {
+    if (!notificationsOpen) return undefined;
+    const handleKey = (event) => {
+      if (event.key !== 'Escape') return;
+      setNotificationsOpen(false);
+      bellRef.current?.focus();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [notificationsOpen]);
+
+  useEffect(() => { if (!notificationsOpen) setMarkAllError(''); }, [notificationsOpen]);
+
   const handleNotificationClick = async (notification) => {
     if (notification?.status === 'unread') {
       try {
@@ -141,7 +157,11 @@ export default function Topbar({
   const handleMarkAllRead = async () => {
     try {
       await markAllNotificationsRead();
-    } catch { /* ignore */ }
+      setMarkAllError('');
+      window.dispatchEvent(new Event('afn:notifications-updated'));
+    } catch {
+      setMarkAllError('Could not mark notifications as read. Try again.');
+    }
   };
 
   return (
@@ -158,7 +178,7 @@ export default function Topbar({
               }
               toggleSidebar?.();
             }}
-            className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-brand-50 hover:text-brand-700"
+            className="inline-grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 sm:h-10 sm:w-10"
             title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
@@ -197,9 +217,12 @@ export default function Topbar({
           {/* Notification bell */}
           <div className="relative" ref={notificationPanelRef}>
             <button
+              ref={bellRef}
               type="button"
               onClick={() => setNotificationsOpen((c) => !c)}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-[12px] border border-slate-200 bg-white text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 sm:h-auto sm:w-auto sm:px-3 sm:py-2.5"
+              aria-expanded={notificationsOpen}
+              aria-controls="notifications-panel"
+              className="relative inline-flex h-11 w-11 items-center justify-center rounded-[12px] border border-slate-200 bg-white text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 sm:h-auto sm:w-auto sm:px-3 sm:py-2.5"
               aria-label="Open notifications"
             >
               <FiBell size={17} />
@@ -215,19 +238,20 @@ export default function Topbar({
 
             {/* Notification dropdown */}
             {notificationsOpen && (
-              <div className="fixed left-3 right-3 top-20 z-30 overflow-hidden rounded-2xl border border-surface-200 bg-white shadow-elevated animate-fade-in sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+0.5rem)] sm:w-[min(22rem,calc(100vw-2rem))]">
+              <div id="notifications-panel" role="dialog" aria-label="Recent notifications" className="fixed left-3 right-3 top-20 z-30 overflow-hidden rounded-2xl border border-surface-200 bg-white shadow-elevated animate-fade-in sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+0.5rem)] sm:w-[min(22rem,calc(100vw-2rem))]">
                 <div className="flex items-center justify-between border-b border-surface-200 px-4 py-3">
                   <div>
                     <h3 className="text-sm font-semibold text-slate-900">Notifications</h3>
                     <p className="text-[12px] text-slate-500">{unreadCount > 0 ? `${unreadCount} unread` : 'You are all caught up'}</p>
                   </div>
                   {unreadCount > 0 && (
-                    <button type="button" onClick={handleMarkAllRead} className="text-[12px] font-medium text-red-600 hover:text-red-700">
+                    <button type="button" onClick={handleMarkAllRead} className="-my-2 -mr-2 min-h-11 rounded-lg px-2 text-[13px] font-medium text-red-600 hover:bg-red-50 hover:text-red-700">
                       Mark all read
                     </button>
                   )}
                 </div>
 
+                {markAllError ? <p role="alert" className="border-b border-red-100 bg-red-50 px-4 py-2 text-[13px] text-red-700">{markAllError}</p> : null}
                 <div className="max-h-[22rem] overflow-y-auto">
                   {notifications.length === 0 ? (
                     <div className="px-4 py-8 text-center text-sm text-slate-400">No recent notifications.</div>
@@ -266,7 +290,7 @@ export default function Topbar({
                       onClick={() => { navigate(notificationsTarget.path); setNotificationsOpen(false); }}
                       className="w-full rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600"
                     >
-                      {notificationsTarget.label}
+                      View all notifications
                     </button>
                   </div>
                 )}

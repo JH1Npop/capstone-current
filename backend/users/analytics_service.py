@@ -625,8 +625,11 @@ def build_admin_analytics(params):
     now = timezone.now()
     current_tickets = _apply_ticket_dimensions(
         ServiceTicket.objects.filter(status__in=ACTIVE_TICKET_STATUSES), filters
-    ).select_related('request', 'request__service_type')
-    overdue_count = sum(1 for ticket in current_tickets if evaluate_service_ticket_sla(ticket, now=now)['state'] == 'overdue')
+    ).select_related('request', 'request__service_type').prefetch_related('status_history')
+    from services.sla import sla_batch_calendar
+
+    sla_calendar = sla_batch_calendar()
+    overdue_count = sum(1 for ticket in current_tickets if evaluate_service_ticket_sla(ticket, now=now, calendar=sla_calendar)['state'] == 'overdue')
     today = now.astimezone(filters['timezone']).date()
     current_ticket_counts = _apply_ticket_dimensions(ServiceTicket.objects.all(), filters).aggregate(
         unassigned=Count('id', filter=Q(status__in=ACTIVE_TICKET_STATUSES, technician__isnull=True)),

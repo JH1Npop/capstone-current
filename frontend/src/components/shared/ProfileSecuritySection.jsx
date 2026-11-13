@@ -15,7 +15,7 @@ const emptyPassword = {
   confirmPassword: '',
 };
 
-const inputClass = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
+const inputClass = 'mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-base outline-none sm:text-sm transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
 
 export default function ProfileSecuritySection({ onMessage }) {
   const { logout, updateCurrentUser, user } = useAuth();
@@ -23,6 +23,8 @@ export default function ProfileSecuritySection({ onMessage }) {
   const [showPasswords, setShowPasswords] = useState(false);
   const [passwordData, setPasswordData] = useState(emptyPassword);
   const [loading, setLoading] = useState(false);
+  // Password errors show inside the form, next to the button that was pressed.
+  const [passwordError, setPasswordError] = useState('');
   const [mfaStatus, setMfaStatus] = useState(null);
   const [mfaMode, setMfaMode] = useState('idle');
   const [mfaPassword, setMfaPassword] = useState('');
@@ -56,14 +58,20 @@ export default function ProfileSecuritySection({ onMessage }) {
     setExpanded(false);
     setShowPasswords(false);
     setPasswordData(emptyPassword);
+    setPasswordError('');
   };
 
   const submitPassword = async (event) => {
     event.preventDefault();
     onMessage({ type: '', text: '' });
+    setPasswordError('');
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      onMessage({ type: 'error', text: 'New password and confirmation do not match.' });
+      setPasswordError('New password and confirmation do not match.');
+      return;
+    }
+    if (passwordData.newPassword === passwordData.currentPassword) {
+      setPasswordError('Choose a new password that is different from your current one.');
       return;
     }
 
@@ -74,7 +82,7 @@ export default function ProfileSecuritySection({ onMessage }) {
       await logout();
       window.location.assign('/login?reason=password_changed');
     } catch (error) {
-      onMessage({ type: 'error', text: error.message || 'Unable to change password.' });
+      setPasswordError(error.message || 'Unable to change password.');
     } finally {
       setLoading(false);
     }
@@ -154,10 +162,10 @@ export default function ProfileSecuritySection({ onMessage }) {
             <FiLock size={20} />
             Password & Security
           </h3>
-          <p className="mt-1 text-sm text-slate-500">Changing your password signs you out of this device.</p>
+          <p className="mt-1 text-sm text-slate-500">Changing your password signs you out on every device. Sign in again with the new password.</p>
         </div>
         {!expanded ? (
-          <button type="button" onClick={() => setExpanded(true)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+          <button type="button" onClick={() => setExpanded(true)} className="min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
             Change Password
           </button>
         ) : null}
@@ -178,15 +186,18 @@ export default function ProfileSecuritySection({ onMessage }) {
             <input type={passwordType} name="confirmPassword" value={passwordData.confirmPassword} onChange={handleChange} autoComplete="new-password" minLength={8} className={inputClass} required />
           </label>
           <p className="text-xs text-slate-500">Use at least 8 characters. Avoid common or entirely numeric passwords.</p>
-          <button type="button" onClick={() => setShowPasswords((current) => !current)} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900" aria-pressed={showPasswords}>
+          <button type="button" onClick={() => setShowPasswords((current) => !current)} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900" aria-pressed={showPasswords}>
             {showPasswords ? <FiEyeOff size={16} /> : <FiEye size={16} />}
             {showPasswords ? 'Hide passwords' : 'Show passwords'}
           </button>
+          {passwordError ? (
+            <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{passwordError}</p>
+          ) : null}
           <div className="flex flex-col gap-3 pt-1 sm:flex-row">
-            <button type="submit" disabled={loading} className="flex-1 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
+            <button type="submit" disabled={loading} className="min-h-11 flex-1 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
               {loading ? 'Changing Password…' : 'Change Password'}
             </button>
-            <button type="button" onClick={closeForm} disabled={loading} className="flex-1 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300 disabled:opacity-60">
+            <button type="button" onClick={closeForm} disabled={loading} className="min-h-11 flex-1 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300 disabled:opacity-60">
               Dismiss
             </button>
           </div>
@@ -211,7 +222,7 @@ export default function ProfileSecuritySection({ onMessage }) {
               <button
                 type="button"
                 onClick={() => setMfaMode(mfaStatus?.enabled ? 'disable' : 'setup')}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                className="min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 {mfaStatus?.enabled ? 'Disable MFA' : 'Enable MFA'}
               </button>
@@ -225,8 +236,8 @@ export default function ProfileSecuritySection({ onMessage }) {
                 <input type="password" value={mfaPassword} onChange={(event) => setMfaPassword(event.target.value)} autoComplete="current-password" className={inputClass} required />
               </label>
               <div className="flex gap-3">
-                <button type="submit" disabled={loading} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">Continue</button>
-                <button type="button" onClick={resetMfaForm} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Dismiss</button>
+                <button type="submit" disabled={loading} className="min-h-11 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">Continue</button>
+                <button type="button" onClick={resetMfaForm} className="min-h-11 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Dismiss</button>
               </div>
             </form>
           ) : null}
@@ -240,8 +251,8 @@ export default function ProfileSecuritySection({ onMessage }) {
                 <input value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} autoComplete="one-time-code" className={inputClass} required />
               </label>
               <div className="flex gap-3">
-                <button type="submit" disabled={loading} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">Verify and enable</button>
-                <button type="button" onClick={resetMfaForm} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Dismiss</button>
+                <button type="submit" disabled={loading} className="min-h-11 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">Verify and enable</button>
+                <button type="button" onClick={resetMfaForm} className="min-h-11 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Dismiss</button>
               </div>
             </form>
           ) : null}
@@ -252,7 +263,7 @@ export default function ProfileSecuritySection({ onMessage }) {
               <div className="mt-3 grid gap-2 font-mono text-sm text-amber-950 sm:grid-cols-2">
                 {recoveryCodes.map((code) => <span key={code}>{code}</span>)}
               </div>
-              <button type="button" onClick={resetMfaForm} className="mt-4 rounded-lg bg-amber-900 px-4 py-2 text-sm font-semibold text-white">I saved them</button>
+              <button type="button" onClick={resetMfaForm} className="min-h-11 mt-4 rounded-lg bg-amber-900 px-4 py-2 text-sm font-semibold text-white">I saved them</button>
             </div>
           ) : null}
 
@@ -268,8 +279,8 @@ export default function ProfileSecuritySection({ onMessage }) {
                 <input value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} autoComplete="one-time-code" className={inputClass} required />
               </label>
               <div className="flex gap-3">
-                <button type="submit" disabled={loading} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">Disable MFA</button>
-                <button type="button" onClick={resetMfaForm} className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Dismiss</button>
+                <button type="submit" disabled={loading} className="min-h-11 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">Disable MFA</button>
+                <button type="button" onClick={resetMfaForm} className="min-h-11 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800">Dismiss</button>
               </div>
             </form>
           ) : null}

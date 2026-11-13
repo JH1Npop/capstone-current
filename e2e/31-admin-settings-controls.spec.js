@@ -70,14 +70,14 @@ for (const username of ['admin_test', 'superadmin_test']) {
         await expect(opening).not.toHaveValue('');
 
         // ── Refresh asks before discarding edits ──
-        await page.getByLabel('Maintenance Reminder').fill('12');
+        await page.getByRole('spinbutton', { name: /^Maintenance Reminder/ }).fill('12');
         await page.getByRole('button', { name: 'Refresh', exact: true }).click();
         const refreshDialog = page.getByRole('dialog', { name: 'Discard unsaved settings?' });
         await refreshDialog.getByRole('button', { name: 'Keep editing' }).click();
-        await expect(page.getByLabel('Maintenance Reminder')).toHaveValue('12');
+        await expect(page.getByRole('spinbutton', { name: /^Maintenance Reminder/ })).toHaveValue('12');
         await page.getByRole('button', { name: 'Refresh', exact: true }).click();
         await refreshDialog.getByRole('button', { name: 'Discard and refresh' }).click();
-        await expect(page.getByLabel('Maintenance Reminder')).toHaveValue(String(originalSettings.maintenanceReminderDays));
+        await expect(page.getByRole('spinbutton', { name: /^Maintenance Reminder/ })).toHaveValue(String(originalSettings.maintenanceReminderDays));
         await expect(saveState).toHaveText('All changes are saved.');
 
         // ── SLA durations in days, hours and minutes (up to a year) ──

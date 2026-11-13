@@ -2,6 +2,7 @@
 
 from ._imports import *  # noqa: F403,F405
 from .proof_fixtures import completion_photo
+from services.business_time import business_timezone  # completion moments count on the business day (UTC+8)
 from inventory.models import InventoryCategory, InventoryItem, InventoryReservation
 from services.models import QuotationRecord
 from services.models import CalendarClosure
@@ -833,7 +834,7 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             request=request_obj,
             technician=self.technician_user,
             scheduled_date=timezone.localdate(),
-            status='Not Started',
+            status='In Progress',
             priority='Normal',
         )
 
@@ -887,7 +888,7 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         ticket.refresh_from_db()
         self.assertEqual(ticket.warranty_status, 'active')
         self.assertEqual(ticket.warranty_period_days, 60)
-        self.assertEqual(ticket.warranty_end_date, ticket.completed_date.date() + timedelta(days=60))
+        self.assertEqual(ticket.warranty_end_date, ticket.completed_date.astimezone(business_timezone()).date() + timedelta(days=60))
         warranty_case = FollowUpCase.objects.get(
             service_ticket=ticket,
             case_type='warranty',
@@ -897,7 +898,7 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         self.assertEqual(warranty_case.created_by, self.technician_user)
         self.assertEqual(
             warranty_case.due_date,
-            ticket.completed_date.date() + timedelta(days=3),
+            ticket.completed_date.astimezone(business_timezone()).date() + timedelta(days=3),
         )
 
     def test_assignment_rejects_technician_over_daily_duration_limit(self):
@@ -1115,7 +1116,9 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             scheduled_date=scheduled_date,
             status='Completed',
             priority='Normal',
-            completed_date=timezone.now(),
+            # Finished on its scheduled day, so it still counts as that day's work. (A job finished
+            # before its scheduled day no longer reserves that later day; see services/work_calendar.py.)
+            completed_date=timezone.make_aware(datetime.combine(scheduled_date, time(12, 0))),
         )
 
         request_obj = ServiceRequest.objects.create(
@@ -1225,7 +1228,7 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             request=request_obj,
             technician=self.technician_user,
             scheduled_date=timezone.localdate(),
-            status='Not Started',
+            status='In Progress',
             priority='Normal',
         )
         due_date = timezone.localdate() + timedelta(days=4)
@@ -1279,7 +1282,7 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         )
         self.assertEqual(
             warranty_case.due_date,
-            ticket.completed_date.date() + timedelta(days=3),
+            ticket.completed_date.astimezone(business_timezone()).date() + timedelta(days=3),
         )
 
         follow_up_case = FollowUpCase.objects.get(
@@ -2033,7 +2036,7 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
         )
 
         self.client.force_authenticate(user=self.technician_user)
-        ticket.status = 'Arrived on Site'
+        ticket.status = 'In Progress'
         ticket.save(update_fields=['status'])
         response = self.client.post(
             '/api/checklist/',
@@ -2100,7 +2103,7 @@ class SchedulingWarrantyAndAssignmentTests(APITestCase):
             request=request_obj,
             technician=self.technician_user,
             scheduled_date=timezone.localdate(),
-            status='Arrived on Site',
+            status='In Progress',
         )
         spoofed_photo = SimpleUploadedFile(
             'not-really-an-image.jpg',

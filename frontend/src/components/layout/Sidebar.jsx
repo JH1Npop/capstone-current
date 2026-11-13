@@ -562,6 +562,11 @@ export default function Sidebar({ user, isOpen, onClose, collapsed = false, anim
         <img
           src={user.profile_image_url}
           alt=""
+          // A photo that cannot load falls back to the default icon instead of a broken image.
+          onError={(event) => {
+            event.currentTarget.onerror = null;
+            event.currentTarget.src = '/user-icon.png';
+          }}
           className={`shrink-0 rounded-full object-cover ${collapsed ? 'h-7 w-7' : 'h-8 w-8'}`}
         />
       ) : (

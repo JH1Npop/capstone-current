@@ -21,6 +21,7 @@ from services.models import (
     TurnoverAcceptance,
 )
 from users.models import User
+from services.business_time import business_today  # "today" is the business day (UTC+8)
 from .proof_fixtures import completion_photo
 
 SITE = {'latitude': '14.576400', 'longitude': '121.085100'}
@@ -58,7 +59,7 @@ class EndToEndJourneyTests(APITestCase):
         response = self.ok(self.as_user(self.client_user).post('/api/services/service-requests/', {
             'service_type': service.id, 'description': description, 'priority': 'Normal',
             'location_address': '456 Journey Avenue', 'location_city': 'Pasig', 'location_province': 'Metro Manila',
-            'preferred_date': (timezone.localdate() + timedelta(days=1)).isoformat(), **SITE,
+            'preferred_date': (business_today() + timedelta(days=1)).isoformat(), **SITE,
         }, format='json'), 201)
         return ServiceRequest.objects.get(pk=response.data['id'])
 
@@ -70,7 +71,7 @@ class EndToEndJourneyTests(APITestCase):
     def assign(self, ticket, stage):
         self.ok(self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/assign/', {
             'technician_id': self.tech.id, 'dispatch_stage': stage,
-            'scheduled_date': timezone.localdate().isoformat(),
+            'scheduled_date': business_today().isoformat(),
         }, format='json'))
         ticket.refresh_from_db()
         return ticket
@@ -136,7 +137,7 @@ class EndToEndJourneyTests(APITestCase):
         admin = self.as_user(self.admin)
         turnover = self.ok(admin.post('/api/services/turnover-acceptances/', {'ticket': ticket.id}, format='json'), 201)
         self.ok(admin.post(f"/api/services/turnover-acceptances/{turnover.data['id']}/finalize/", {
-            'warranty_start_date': timezone.localdate().isoformat(), 'accepted_by_client_name': 'Jamie Client',
+            'warranty_start_date': business_today().isoformat(), 'accepted_by_client_name': 'Jamie Client',
         }, format='json'))
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'Turned Over / Accepted')
@@ -155,12 +156,18 @@ class EndToEndJourneyTests(APITestCase):
 
         # The office records the client's payment; the sale is then fully paid.
         self.ok(admin.post(f'/api/services/sales-records/{record_id}/payments/', {
-            'amount': '1500.00', 'paid_on': timezone.localdate().isoformat(), 'method': 'gcash', 'reference': 'GC-123',
+            'amount': '1500.00', 'paid_on': business_today().isoformat(), 'method': 'gcash', 'reference': 'GC-123',
         }, format='json'), 201)
         self.assertEqual(self.ok(admin.get(f'/api/services/sales-records/{record_id}/')).data['payment_status'], 'paid')
 
         # The client was told about each stage, and maintenance follows up the job.
         self.assertTrue(Notification.objects.filter(user=self.client_user).count() >= 3)
+        # Every client notification has a title and opens its request (none falls back to "Notification").
+        client_notes = Notification.objects.filter(user=self.client_user)
+        self.assertEqual(list(client_notes.filter(title='').values_list('message', flat=True)), [])
+        self.assertEqual(list(client_notes.filter(request__isnull=True).values_list('title', flat=True)), [])
+        for title in ['Technician on the way', 'Technician arrived', f'Work Started for Ticket #{ticket.id}', 'Please confirm the handover']:
+            self.assertTrue(client_notes.filter(title=title, ticket=ticket).exists(), title)
         self.assertTrue(MaintenanceSchedule.objects.filter(service_ticket=ticket).exists())
 
         # Analytics counts the handed-over job as completed work.
@@ -198,7 +205,7 @@ class EndToEndJourneyTests(APITestCase):
         ticket.refresh_from_db()
         self.assertEqual(ticket.status, 'Inspection Completed')
 
-        decision = {'decision': 'approve_service', 'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat()}
+        decision = {'decision': 'approve_service', 'scheduled_date': (business_today() + timedelta(days=1)).isoformat()}
         # Service cannot be scheduled until the client accepts a quotation.
         blocked = self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/inspection_decision/', decision, format='json')
         self.assertEqual(blocked.status_code, 409)
@@ -282,7 +289,7 @@ class EndToEndJourneyTests(APITestCase):
         self.accept_quotation(ticket, 'QUO-EVIDENCE-01')
 
         self.ok(self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/inspection_decision/', {
-            'decision': 'approve_service', 'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
+            'decision': 'approve_service', 'scheduled_date': (business_today() + timedelta(days=1)).isoformat(),
         }, format='json'))
 
         self.assertTrue(Notification.objects.filter(
@@ -352,7 +359,7 @@ class EndToEndJourneyTests(APITestCase):
 
         self.accept_quotation(ticket, 'QUO-CHECKS-01')
         self.ok(self.as_user(self.admin).post(f'/api/services/service-tickets/{ticket.id}/inspection_decision/', {
-            'decision': 'approve_service', 'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
+            'decision': 'approve_service', 'scheduled_date': (business_today() + timedelta(days=1)).isoformat(),
         }, format='json'))
         findings = ServiceStatusHistory.objects.get(ticket=ticket, notes__startswith='Inspection findings:').notes
         self.assertIn('Roof can carry the array: No (Rusted purlins on the east side.)', findings)
@@ -476,7 +483,7 @@ class EndToEndJourneyTests(APITestCase):
         self.assertEqual((ticket.status, ticket.ticket_type), ('For Inspection', 'inspection'))
         refused = admin.post(f'/api/services/service-tickets/{ticket.id}/assign/', {
             'technician_id': self.tech.id, 'dispatch_stage': 'service',
-            'scheduled_date': timezone.localdate().isoformat(),
+            'scheduled_date': business_today().isoformat(),
         }, format='json')
         self.assertEqual(refused.status_code, 400, refused.data)
         self.assign(ticket, 'inspection')
@@ -491,7 +498,7 @@ class EndToEndJourneyTests(APITestCase):
 
     def test_minor_flow_reschedule_request_and_admin_reschedule(self):
         ticket = self.assign(self.approve(self.create_request(self.cleaning)), 'service')
-        new_day = (timezone.localdate() + timedelta(days=5)).isoformat()
+        new_day = (business_today() + timedelta(days=5)).isoformat()
         technician_attempt = self.as_user(self.tech).post(f'/api/services/service-tickets/{ticket.id}/request_reschedule/', {
             'preferred_date': new_day, 'reason': 'Trying on behalf of the client.',
         }, format='json')

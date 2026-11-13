@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { FiCheckCircle, FiExternalLink, FiFileText, FiInfo, FiMinus, FiPlus, FiPrinter, FiRefreshCw, FiSend, FiSettings, FiTrash2, FiChevronDown, FiX } from 'react-icons/fi';
 import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
@@ -126,10 +126,11 @@ const buildPrintCss = (paperSize) => {
       size: ${paper.cssSize};
       margin: 12mm;
     }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      min-height: 100%;
+    .document-paper,
+    .document-paper * {
+      box-sizing: border-box;
+    }
+    .document-paper {
       background: #fff;
       color: #111;
       font-family: Arial, sans-serif;
@@ -137,8 +138,6 @@ const buildPrintCss = (paperSize) => {
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       --document-padding: ${documentPadding};
-    }
-    :root {
       --doc-input-border: rgba(15, 23, 42, 0.18);
       --doc-input-border-strong: rgba(37, 99, 235, 0.42);
       --doc-input-bg: rgba(248, 250, 252, 0.96);
@@ -204,18 +203,19 @@ const buildPrintCss = (paperSize) => {
       margin: 0 0 3px;
       font-weight: 700;
     }
-    table {
+    .document-paper table {
       width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
     }
-    th, td {
+    .document-paper th,
+    .document-paper td {
       border: 1px solid #aaa;
       padding: 5px 7px;
       vertical-align: top;
       color: #111;
     }
-    th {
+    .document-paper th {
       font-size: 10px;
       font-weight: 700;
       text-align: left;
@@ -223,7 +223,7 @@ const buildPrintCss = (paperSize) => {
       white-space: normal;
       overflow-wrap: anywhere;
     }
-    td { font-size: 11px; }
+    .document-paper td { font-size: 11px; }
     .table-cell-input {
       width: 100%;
       border: 1px solid rgba(148, 163, 184, 0.9);
@@ -815,8 +815,9 @@ const buildPrintCss = (paperSize) => {
     .turnover-final-page {
       margin-top: 18px;
     }
-    thead { display: table-header-group; }
-    tr, .signatures { break-inside: avoid; page-break-inside: avoid; }
+    .document-paper thead { display: table-header-group; }
+    .document-paper tr,
+    .document-paper .signatures { break-inside: avoid; page-break-inside: avoid; }
     .document-paper {
       box-shadow: 0 16px 44px rgba(15, 23, 42, 0.10);
     }
@@ -898,16 +899,21 @@ const buildPrintCss = (paperSize) => {
   `;
 };
 
+// The company details printed on every document header come from Admin Settings
+// (Organization & Document Defaults), delivered with the ticket's document prefill.
+const CompanyDetailsContext = createContext(null);
+
 function Header() {
+  const company = useContext(CompanyDetailsContext) || {};
   return (
     <header className="afn-header">
       <img className="afn-logo" src="/logo.png" alt="AFN logo" />
       <div className="afn-company">
-        <p className="afn-company-name">AFN Solar Power Engineering Services</p>
+        <p className="afn-company-name">{company.company_name || 'AFN Solar Power Engineering Services'}</p>
         <p className="afn-company-meta">
-          Lot2a9, Brgy. Bigo, Pagbilao, Quezon
+          {company.company_address || 'Lot2a9, Brgy. Bigo, Pagbilao, Quezon'}
           <br />
-          09171460224 / (042)9111107 | afnsunenergyserv@gmail.com
+          {company.company_contact || '09171460224 / (042)9111107 | afnsunenergyserv@gmail.com'}
         </p>
       </div>
       <div />
@@ -2476,13 +2482,6 @@ const JOB_STEPS = [
   { id: 'field_service_report', short: 'Service Report', hint: 'Visits and repairs' },
 ];
 
-const STATUS_TONES = {
-  none: 'bg-slate-300',
-  progress: 'bg-amber-500',
-  done: 'bg-emerald-500',
-  alert: 'bg-rose-500',
-};
-
 const humanizeFieldName = (key) => String(key || '')
   .replace(/_/g, ' ')
   .replace(/^\w/, (letter) => letter.toUpperCase());
@@ -2722,6 +2721,40 @@ export default function AdminDocuments() {
       isCustom: true,
     })),
   ], [customDocumentDefinitions]);
+  const selectedDocumentNavigationId = pendingCustomCode
+    ? `custom:${pendingCustomCode}`
+    : (customDocumentsOpen && customWorkspaceDefinitionCode
+      ? `custom:${customWorkspaceDefinitionCode}`
+      : activeTemplate);
+  const selectedDocumentStep = documentNavigationSteps.find((step) => step.id === selectedDocumentNavigationId)
+    || documentNavigationSteps.find((step) => step.id === activeTemplate)
+    || documentNavigationSteps[0];
+
+  const selectDocument = (documentId) => {
+    const step = documentNavigationSteps.find((item) => item.id === documentId);
+    if (!step) return;
+    if (step.isCustom) {
+      setCustomWorkspaceDefinitionCode(step.definitionCode);
+      if (!selectedTicketId) {
+        setPendingCustomCode(step.definitionCode);
+        setIsDropdownOpen(true);
+        ticketInputRef.current?.focus();
+        ticketInputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      setPendingCustomCode('');
+      setCustomDocumentsOpen(true);
+      return;
+    }
+    setPendingCustomCode('');
+    setCustomWorkspaceDefinitionCode('');
+    setActiveTemplate(step.id);
+    setDocumentDraftLoading(Boolean(selectedTicketId && step.id !== 'commissioning_checklist'));
+    setCommissioningLoading(Boolean(selectedTicketId && step.id === 'commissioning_checklist'));
+    setDocumentDraftMessage('');
+    setCommissioningMessage('');
+    setTurnoverMessage('');
+  };
 
   const refreshTicketPrefill = async (ticketId, ticketList = tickets) => {
     const selectedTicketBase = ticketList.find((ticket) => String(ticket.id) === String(ticketId));
@@ -3021,7 +3054,9 @@ export default function AdminDocuments() {
       }
 
       setCommissioningLoading(true);
-      setCommissioningMessage('');
+      setCommissioningMessage((current) => (
+        current === 'Solar commissioning checklist saved.' ? current : ''
+      ));
 
       try {
         const existing = await fetchSolarCommissioningChecklist(selectedTicketId);
@@ -3736,6 +3771,7 @@ export default function AdminDocuments() {
       if (!status) return { tone: 'none', label: 'Not sent' };
       if (status === 'Accepted') return { tone: 'done', label: 'Accepted' };
       if (status === 'Rejected') return { tone: 'alert', label: 'Declined' };
+      if (status === 'Sent' && latestQuotation?.is_expired) return { tone: 'alert', label: 'Expired, send an update' };
       if (status === 'Sent') return { tone: 'progress', label: 'Waiting for client' };
       return { tone: 'progress', label: 'Draft' };
     }
@@ -3904,6 +3940,7 @@ export default function AdminDocuments() {
   );
 
   return (
+    <CompanyDetailsContext.Provider value={documentPrefill?.document_defaults || null}>
     <Layout title="Documents" subtitle="Create, fill, and manage company documents.">
       <style>{printCss}</style>
       <div className="space-y-4">
@@ -3952,7 +3989,7 @@ export default function AdminDocuments() {
 
         {/* Ticket bar: every document is filled from the selected service ticket. */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 md:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] md:items-start">
+          <div className="grid gap-3 md:grid-cols-2 md:items-start">
             <div className="grid gap-3">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Ticket</span>
@@ -4025,8 +4062,24 @@ export default function AdminDocuments() {
                   )}
                 </label>
             </div>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Document</span>
+              <select
+                aria-label="Document"
+                value={selectedDocumentNavigationId}
+                onChange={(event) => selectDocument(event.target.value)}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              >
+                {documentNavigationSteps.map((step, index) => (
+                  <option key={step.id} value={step.id}>{index + 1}. {step.short}</option>
+                ))}
+              </select>
+              <p className="mt-1 truncate text-xs text-slate-500" title={selectedDocumentStep?.hint || ''}>
+                {selectedDocumentStep?.hint || 'Choose the document to prepare.'}
+              </p>
+            </label>
             {selectedTicketSummary || documentPrefill?.ticket ? (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-slate-50 px-3 py-3 text-sm md:mt-6">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-slate-50 px-3 py-3 text-sm md:col-span-2">
                 <span className="font-semibold text-slate-900">{documentPrefill?.ticket?.service || selectedTicketSummary?.service || 'Service'}</span>
                 <StatusBadge status={documentPrefill?.ticket?.status || selectedTicketSummary?.status} size="sm" />
                 {selectedTicketSummary?.clientFullname ? <span className="text-slate-500">{selectedTicketSummary.clientFullname}</span> : null}
@@ -4035,71 +4088,12 @@ export default function AdminDocuments() {
                 </Link>
               </div>
             ) : (
-              <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500 md:mt-6">
+              <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500 md:col-span-2">
                 Choose a ticket to fill every document from its client, site, technician, and job records.
               </p>
             )}
           </div>
         </section>
-
-        {/* Documents in job order, each with its state for the selected ticket. */}
-        <nav aria-label="Document templates" className="-mx-1 grid grid-flow-col auto-cols-[10.5rem] gap-2 overflow-x-auto px-1 pb-1 lg:grid-flow-row lg:grid-cols-4 lg:overflow-visible xl:grid-cols-7">
-          {documentNavigationSteps.map((step, index) => {
-            const template = TEMPLATE_OPTIONS.find((option) => option.id === step.id);
-            const status = step.isCustom ? null : documentStatus(step.id);
-            const active = step.isCustom
-              ? (customDocumentsOpen || pendingCustomCode === step.definitionCode) && customWorkspaceDefinitionCode === step.definitionCode
-              : activeTemplate === step.id && !customWorkspaceDefinitionCode;
-            return (
-              <button
-                key={step.id}
-                type="button"
-                  onClick={() => {
-                    if (step.isCustom) {
-                      setCustomWorkspaceDefinitionCode(step.definitionCode);
-                      if (!selectedTicketId) {
-                        setPendingCustomCode(step.definitionCode);
-                        setIsDropdownOpen(true);
-                        ticketInputRef.current?.focus();
-                        ticketInputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-                        return;
-                      }
-                      setPendingCustomCode('');
-                      setCustomDocumentsOpen(true);
-                      return;
-                    }
-                    setPendingCustomCode('');
-                    setCustomWorkspaceDefinitionCode('');
-                    setActiveTemplate(step.id);
-                    setDocumentDraftLoading(Boolean(selectedTicketId && step.id !== 'commissioning_checklist'));
-                    setCommissioningLoading(Boolean(selectedTicketId && step.id === 'commissioning_checklist'));
-                    setDocumentDraftMessage('');
-                    setCommissioningMessage('');
-                    setTurnoverMessage('');
-                  }}
-                aria-pressed={active}
-                aria-label={`${template?.label || step.short}${status ? `: ${status.label}` : ''}`}
-                className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
-                  active ? 'border-brand-500 bg-brand-50 shadow-sm' : 'border-slate-200 bg-white hover:border-brand-200 hover:bg-slate-50'
-                }`}
-              >
-                <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ${active ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                  {index + 1}
-                </span>
-                <span className="min-w-0">
-                  <span className={`block text-sm font-semibold ${active ? 'text-brand-800' : 'text-slate-800'}`}>{step.short}</span>
-                  <span className="block text-xs text-slate-500">{step.hint}</span>
-                  {status ? (
-                    <span className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                      <span className={`h-2 w-2 rounded-full ${STATUS_TONES[status.tone]}`} aria-hidden="true" />
-                      {status.label}
-                    </span>
-                  ) : null}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
 
         {pendingCustomCode && !selectedTicketId ? (
           <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-900">
@@ -4385,5 +4379,6 @@ export default function AdminDocuments() {
         />
       ) : null}
     </Layout>
+    </CompanyDetailsContext.Provider>
   );
 }

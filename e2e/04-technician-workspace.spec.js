@@ -73,11 +73,11 @@ test.describe('Technician Workspace - All Pages', () => {
   test('4.2 - My Jobs list loads', async ({ page }) => {
     await visitWorkspacePage(page, '/technician/my-jobs', 'test-results/screenshots/04-tech-my-jobs.png');
     await expect(page.getByRole('heading', { name: /Active Jobs \(\d+\)/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Details', exact: true }).first()).toBeVisible();
-    const detailsCount = await page.getByRole('button', { name: 'Details', exact: true }).count();
+    await expect(page.getByRole('button', { name: /^Details for TKT-\d{4}$/ }).first()).toBeVisible();
+    const detailsCount = await page.getByRole('button', { name: /^Details for TKT-\d{4}$/ }).count();
     await expect(page.getByRole('link', { name: 'Start Navigation', exact: true })).toHaveCount(detailsCount);
     await expect(page.getByRole('button', { name: 'Mark Arrived', exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Details', exact: true }).first().click();
+    await page.getByRole('button', { name: /^Details for TKT-\d{4}$/ }).first().click();
     await expect(page.getByText('Scheduled Time', { exact: true })).toBeVisible();
     await expect(page.getByText('Estimated Duration', { exact: true })).toBeVisible();
     await expect(page.getByText('Job Scope', { exact: true })).toBeVisible();
@@ -137,7 +137,9 @@ test.describe('Technician Workspace - All Pages', () => {
     expect(routeRequests).toBe(0);
     expect(navigationStartRequests).toBe(0);
     await expect(page.getByText('Start location sharing to calculate directions.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Start Location Sharing First' })).toBeDisabled();
+    // Opening the page starts nothing: the trip (which notifies the client) starts only on Start trip.
+    await expect(page.getByRole('button', { name: 'Start trip' })).toBeEnabled();
+    expect(navigationStartRequests).toBe(0);
     await page.screenshot({ path: 'test-results/screenshots/04-tech-navigation-location-policy.png', fullPage: true });
   });
 
@@ -215,7 +217,8 @@ test.describe('Technician Workspace - All Pages', () => {
       buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
     });
     await page.getByRole('button', { name: 'Review and complete inspection' }).click();
-    await expect(page.getByText('Inspection submitted successfully.')).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: 'Complete inspection' }).click();
+    await expect(page.getByText('Inspection submitted. The office will review it and plan the work.')).toBeVisible();
 
     const saved = await page.evaluate(async (id) => {
       const token = sessionStorage.getItem('afn_token');
@@ -293,7 +296,7 @@ test.describe('Technician Workspace - All Pages', () => {
     });
 
     await page.goto(`/technician/map-navigation?ticketId=${ticketId}`);
-    await page.getByRole('button', { name: 'Start location sharing', exact: true }).click();
+    await page.getByRole('button', { name: 'Start trip' }).click();
     await expect(page.getByRole('button', { name: 'Mark Arrived' })).toBeEnabled();
     expect(navigationStarts).toBeGreaterThan(0);
     await expect(page.getByText(/You can still travel to the site and mark arrival/)).toBeVisible();

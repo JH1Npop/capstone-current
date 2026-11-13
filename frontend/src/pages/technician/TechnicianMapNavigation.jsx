@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toTelHref } from '../../utils/landingSettings';
 import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
 import { MapContainer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { FiNavigation, FiRefreshCw, FiFlag, FiChevronRight } from 'react-icons/fi';
-import { fetchNavigationRoute, fetchTechnicianJob, fetchTechnicianTrackingPolicy, markTechnicianArrival, startJobNavigation, updateTechnicianLocation } from '../../api/api';
+import { FiNavigation, FiRefreshCw, FiFlag, FiChevronRight, FiPhone, FiMoreHorizontal, FiExternalLink } from 'react-icons/fi';
+import { fetchNavigationRoute, fetchTechnicianJob, fetchTechnicianJobs, fetchTechnicianTrackingPolicy, markTechnicianArrival, startJobNavigation, updateTechnicianLocation } from '../../api/api';
 import { useAuth } from '../../context/AuthContext';
 import { useGPSTracking } from '../../hooks/useGPSTracking';
 import GPSStatusIndicator, { GPSNotice } from '../../components/ui/GPSStatusIndicator';
@@ -46,6 +47,79 @@ const DEFAULT_TRAVEL_SPEED_KPH = 35;
 const MIN_RELIABLE_SPEED_KPH = 3;
 const MAX_RELIABLE_SPEED_KPH = 120;
 const MAX_SPEED_SAMPLES = 5;
+
+// What the page offers depends on where the job is in its workflow.
+const READY_TO_TRAVEL = new Set(['not_started', 'for_inspection', 'inspection_completed', 'ready_for_service', 'awaiting_materials']);
+const ON_SITE = new Set(['arrived_on_site', 'in_progress']);
+const FINISHED = new Set(['completed', 'cancelled', 'turned_over_/_accepted', 'turned_over_accepted']);
+const PICKABLE = new Set([...READY_TO_TRAVEL, 'navigating', ...ON_SITE]);
+const STEP_REACHED_KM = 0.03;
+const normalizeStatusKey = (status) => String(status || '').toLowerCase().replace(/\s+/g, '_');
+
+// In-app navigation is the main path. Google Maps and Waze (voice directions) are an extra option
+// under "More": they open at the job's pinned location, but a phone browser pauses this page in the
+// background, so live tracking stops until the technician comes back.
+const googleMapsUrl = (lat, lng) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+const wazeUrl = (lat, lng) => `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+
+// Opened from the sidebar with no job chosen: list the jobs that can be navigated to.
+function NavigationJobPicker() {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let active = true;
+    fetchTechnicianJobs()
+      .then((data) => {
+        if (!active) return;
+        const usable = data
+          .filter((job) => PICKABLE.has(normalizeStatusKey(job.status)) && Number.isFinite(Number(job.latitude)) && Number.isFinite(Number(job.longitude)))
+          .sort((a, b) => {
+            const rank = (job) => (['navigating', 'arrived_on_site', 'in_progress'].includes(normalizeStatusKey(job.status)) ? 0 : 1);
+            return rank(a) - rank(b) || String(a.scheduledDate || '').localeCompare(String(b.scheduledDate || ''));
+          });
+        setJobs(usable);
+      })
+      .catch((loadError) => active && setError(loadError.message || 'Unable to load your jobs.'))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, []);
+
+  return (
+    <div className="card p-4 sm:p-5">
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900"><FiNavigation className="text-blue-500" /> Choose a job to navigate to</h2>
+      <p className="mt-1 text-sm text-slate-500">Jobs under way are listed first.</p>
+      {loading ? <p className="mt-4 text-sm text-slate-500">Loading your jobs…</p> : null}
+      {error ? <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+      {!loading && !error && jobs.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
+          No jobs with a map location to travel to right now.
+          <Link to="/technician/my-jobs" className="mt-3 block font-semibold text-brand-700">Open My Jobs</Link>
+        </div>
+      ) : null}
+      <div className="mt-4 space-y-2">
+        {jobs.map((job) => {
+          const code = formatTicketId(job.ticketId || job.id);
+          const underWay = ['navigating', 'arrived_on_site', 'in_progress'].includes(normalizeStatusKey(job.status));
+          return (
+            <Link
+              key={job.id}
+              to={`/technician/map-navigation?ticketId=${job.ticketId || job.id}`}
+              aria-label={`Navigate to ${code}`}
+              className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50"
+            >
+              <span className="min-w-0">
+                <span className="block truncate font-semibold text-slate-900">{code}: {job.service}</span>
+                <span className="block truncate text-sm text-slate-500">{job.client?.full_name || job.client} · {job.address || 'Location'}</span>
+              </span>
+              <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${underWay ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'}`}>{underWay ? 'Under way' : 'Ready'}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const calculateDistanceKm = (lat1, lng1, lat2, lng2) => {
   const earthRadiusKm = 6371;
@@ -140,7 +214,27 @@ export default function TechnicianMapNavigation() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [trackingConfig, setTrackingConfig] = useState(null);
   const [liveTravelSpeedKph, setLiveTravelSpeedKph] = useState(null);
-  const [error, setError] = useState(ticketId ? '' : 'Open a job from My Jobs before starting navigation.');
+  const [error, setError] = useState('');
+  const [pendingStart, setPendingStart] = useState(false);
+  const [startingTrip, setStartingTrip] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreMenuRef = useRef(null);
+
+  // The More menu closes on an outside tap or Escape.
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const close = (event) => {
+      if (event.type === 'keydown' ? event.key === 'Escape' : !moreMenuRef.current?.contains(event.target)) setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('touchstart', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('touchstart', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, [moreOpen]);
   const lastRouteRequestRef = useRef({ at: 0, lat: null, lng: null });
   const lastLocationUpdateRef = useRef({ at: 0, lat: null, lng: null });
   const routeRequestSeqRef = useRef(0);
@@ -288,22 +382,57 @@ export default function TechnicianMapNavigation() {
     startWatching();
   };
 
+  const statusKey = normalizeStatusKey(job?.status);
+  const readyToTravel = READY_TO_TRAVEL.has(statusKey) && !navigationStarted;
+  const isOnHold = statusKey === 'on_hold';
+  const isFinished = FINISHED.has(statusKey);
+  const clientPhone = job?.client?.phone;
+
   const stopLocationSharing = () => {
     stopWatching();
   };
 
-  // Starting navigation is a status change, not a routing result: begin as soon as GPS is shared so
-  // a slow or failed directions lookup can never block travel or arrival.
-  useEffect(() => {
-    if (!ticketId || !job || !gpsLocation || arrived || navigationStarted || navigationStartingRef.current) {
+  // Starting the trip is the technician's decision: it marks the job "Navigating" and tells the client
+  // and the office that they are on the way. Sharing location alone only previews the route.
+  // It never waits for the directions lookup, so a slow or failed route can't block travel or arrival.
+  const beginTrip = async () => {
+    if (!ticketId || navigationStartingRef.current) return;
+    navigationStartingRef.current = true;
+    setStartingTrip(true);
+    setError('');
+    try {
+      await startJobNavigation(ticketId);
+      setNavigationStarted(true);
+      setJob((current) => (current ? { ...current, status: 'navigating' } : current));
+      setArrivalMessage('Trip started. The client has been told you are on the way.');
+    } catch (navigationError) {
+      setError(navigationError.message || 'Unable to start navigation for this job.');
+    } finally {
+      navigationStartingRef.current = false;
+      setStartingTrip(false);
+    }
+  };
+
+  const requestStartTrip = () => {
+    setError('');
+    if (gpsLocation) {
+      beginTrip();
       return;
     }
-    navigationStartingRef.current = true;
-    startJobNavigation(ticketId)
-      .then(() => setNavigationStarted(true))
-      .catch((navigationError) => setError(navigationError.message || 'Unable to start navigation for this job.'))
-      .finally(() => { navigationStartingRef.current = false; });
-  }, [ticketId, job, gpsLocation, arrived, navigationStarted]);
+    // Location first; the trip starts as soon as the first position arrives.
+    setPendingStart(true);
+    startWatching();
+  };
+
+  useEffect(() => {
+    if (!pendingStart || !gpsLocation || !job) return;
+    setPendingStart(false);
+    beginTrip();
+  }, [pendingStart, gpsLocation, job]);
+
+  useEffect(() => {
+    if (pendingStart && gpsError) setPendingStart(false);
+  }, [pendingStart, gpsError]);
 
   useEffect(() => {
     if (!jobLoc || arrived || !gpsLocation) {
@@ -389,16 +518,12 @@ export default function TechnicianMapNavigation() {
       return;
     }
 
-    const userLatLng = [gpsLocation.latitude, gpsLocation.longitude];
-    const distanceToJob = calculateDistanceKm(userLatLng[0], userLatLng[1], jobLoc[0], jobLoc[1]);
-    // We intentionally do not auto-set `arrived = true` here because the technician
-    // needs to explicitly click the 'Mark Arrived' button to update the backend status.
-
-    if (currentStepIndex < route.directions.length) {
-      const nextStep = route.directions[currentStepIndex];
-      if (nextStep?.distance && nextStep.distance / 1000 < 0.1) {
-        setCurrentStepIndex(Math.min(currentStepIndex + 1, route.directions.length - 1));
-      }
+    // Arrival is never automatic: the technician confirms it with Mark Arrived.
+    // A step is done once you reach the point where the next step begins.
+    const nextStep = route.directions[currentStepIndex + 1];
+    const nextPoint = nextStep && Number.isInteger(nextStep.startIndex) ? route.routeCoords[nextStep.startIndex] : null;
+    if (nextPoint && calculateDistanceKm(gpsLocation.latitude, gpsLocation.longitude, nextPoint[0], nextPoint[1]) <= STEP_REACHED_KM) {
+      setCurrentStepIndex(currentStepIndex + 1);
     }
   }, [gpsLocation, route, currentStepIndex, job?.latitude, job?.longitude]);
 
@@ -428,22 +553,13 @@ export default function TechnicianMapNavigation() {
   };
 
   const currentStep = route.directions[currentStepIndex] || null;
+  // The part of the line already travelled: up to where the current step begins.
+  const travelledUntil = currentStep && Number.isInteger(currentStep.startIndex) ? currentStep.startIndex : 0;
 
   if (!ticketId) {
     return (
       <Layout>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
-          <h2 className="text-xl font-semibold">Navigation needs a selected ticket</h2>
-          <p className="mt-2 text-sm">
-            Open a job first so navigation can use the real customer address and coordinates.
-          </p>
-          <Link
-            to="/technician/my-jobs"
-            className="mt-4 inline-flex rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-          >
-            Go to My Jobs
-          </Link>
-        </div>
+        <NavigationJobPicker />
       </Layout>
     );
   }
@@ -507,13 +623,8 @@ export default function TechnicianMapNavigation() {
           onRequestAccess={startLocationSharing}
           className="mt-3"
         />
-        {gpsError && (
-          <p className="mt-2 text-sm text-red-600">
-            GPS error: Turn on Location/GPS and allow browser location access. {gpsError.message}
-          </p>
-        )}
         {error && !loading && (
-          <p className="mt-2 text-sm text-red-600">{error}</p>
+          <p role="alert" className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         )}
         {routeError && !loading && (
           <p role="status" className="mt-2 text-sm text-amber-700">{routeError}</p>
@@ -580,9 +691,9 @@ export default function TechnicianMapNavigation() {
                   {/* Full route in blue */}
                   <Polyline positions={route.routeCoords} color="#3b82f6" weight={5} opacity={0.8} />
                   {/* Completed portion in green */}
-                  {currentStepIndex > 0 && currentStepIndex < route.routeCoords.length && (
+                  {travelledUntil > 0 && travelledUntil < route.routeCoords.length && (
                     <Polyline
-                      positions={route.routeCoords.slice(0, currentStepIndex + 1)}
+                      positions={route.routeCoords.slice(0, travelledUntil + 1)}
                       color="#10b981"
                       weight={6}
                       opacity={0.95}
@@ -656,45 +767,100 @@ export default function TechnicianMapNavigation() {
           </div>
 
           <div className="order-2 rounded-xl border bg-white p-3 shadow-sm sm:p-5 xl:order-3">
-            <h4 className="mb-3 hidden items-center gap-2 font-semibold text-slate-900 sm:flex">Actions</h4>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h4 className="font-semibold text-slate-900">Actions</h4>
+              {jobLoc ? (
+                <div className="relative" ref={moreMenuRef}>
+                  <button
+                    type="button"
+                    aria-label="More navigation options"
+                    aria-haspopup="menu"
+                    aria-expanded={moreOpen}
+                    onClick={() => setMoreOpen((open) => !open)}
+                    className="grid h-10 w-10 place-items-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                  >
+                    <FiMoreHorizontal size={20} />
+                  </button>
+                  {moreOpen ? (
+                    <div role="menu" aria-label="Open in another app" className="absolute right-0 z-[1000] mt-1 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                      <a role="menuitem" href={googleMapsUrl(jobLoc[0], jobLoc[1])} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        <FiExternalLink aria-hidden="true" /> Open in Google Maps
+                      </a>
+                      <a role="menuitem" href={wazeUrl(jobLoc[0], jobLoc[1])} target="_blank" rel="noopener noreferrer" onClick={() => setMoreOpen(false)} className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        <FiExternalLink aria-hidden="true" /> Open in Waze
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
             <div className="space-y-3">
-              <button
-                onClick={() => loadRoute(undefined, undefined, { force: true })}
-                disabled={routeLoading || !gpsLocation}
-                className="group flex w-full items-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-left transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <FiRefreshCw className={`transition-transform group-hover:rotate-180 ${routeLoading ? 'animate-spin' : ''}`} />
-                {routeLoading ? 'Recalculating...' : 'Recalculate Route'}
-              </button>
-              {!arrived ? (
+              {statusKey === 'cancelled' ? (
+                <div role="status" className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  The office cancelled this job, so it is no longer on your job list.
+                  <Link to="/technician/my-jobs" className="mt-2 block font-semibold text-brand-700">Open My Jobs</Link>
+                </div>
+              ) : isFinished ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  This job is finished.
+                  <Link to="/technician/job-history" className="mt-2 block font-semibold text-brand-700">Open Job History</Link>
+                </div>
+              ) : isOnHold ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  This job is on hold. Resume it from My Jobs before you travel.
+                  <Link to={`/technician/my-jobs?ticketId=${ticketId}`} className="mt-2 block font-semibold text-amber-900 underline">Open the job</Link>
+                </div>
+              ) : readyToTravel ? (
                 <button
+                  type="button"
+                  onClick={requestStartTrip}
+                  disabled={startingTrip || pendingStart}
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white shadow-lg transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70"
+                >
+                  <FiNavigation />
+                  {startingTrip || pendingStart ? 'Starting trip…' : 'Start trip'}
+                </button>
+              ) : !arrived ? (
+                <button
+                  type="button"
                   onClick={markArrived}
-                  disabled={arrivalSaving || !gpsLocation || !navigationStarted}
-                  className="flex w-full items-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 font-medium text-white shadow-lg transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
+                  disabled={arrivalSaving || !gpsLocation}
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-white shadow-lg transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   <FiFlag />
-                  {arrivalSaving
-                    ? 'Marking arrival...'
-                    : !gpsLocation
-                      ? 'Start Location Sharing First'
-                      : !navigationStarted
-                        ? 'Start Navigation First'
-                        : 'Mark Arrived'}
+                  {arrivalSaving ? 'Marking arrival…' : !gpsLocation ? 'Share location to mark arrival' : 'Mark Arrived'}
                 </button>
               ) : (
                 <Link
                   to={`/technician/my-jobs?ticketId=${ticketId}`}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-emerald-500 bg-emerald-500 px-4 py-3 font-semibold text-white shadow-lg transition hover:bg-emerald-600"
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-emerald-500 bg-emerald-500 px-4 py-3 font-semibold text-white shadow-lg transition hover:bg-emerald-600"
                 >
                   Proceed to Job
                   <FiChevronRight size={20} />
                 </Link>
               )}
+              {readyToTravel ? (
+                <p className="text-xs text-slate-500">Start trip tells the client and the office you are on the way. Sharing your location alone only previews the route.</p>
+              ) : null}
               {arrivalMessage && (
-                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+                <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
                   {arrivalMessage}
                 </p>
               )}
+              {clientPhone ? (
+                <a href={toTelHref(clientPhone)} aria-label={`Call ${job.client?.full_name || 'the client'}`} className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                  <FiPhone aria-hidden="true" /> Call client
+                </a>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => loadRoute(undefined, undefined, { force: true })}
+                disabled={routeLoading || !gpsLocation}
+                className="group flex min-h-11 w-full items-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-left text-sm transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FiRefreshCw className={`transition-transform group-hover:rotate-180 ${routeLoading ? 'animate-spin' : ''}`} />
+                {routeLoading ? 'Recalculating…' : 'Recalculate Route'}
+              </button>
             </div>
           </div>
 

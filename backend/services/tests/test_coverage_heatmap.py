@@ -184,13 +184,19 @@ class CoverageHeatmapAccuracyTests(APITestCase):
         self.lead = User.objects.create_user(username='heat_lead', password='pass', role='technician', status='active', first_name='Lea', last_name='Lead')
         self.crew = User.objects.create_user(username='heat_crew', password='pass', role='technician', status='active', first_name='Cru', last_name='Crew')
 
-    def _completed(self, client, services, lat, lng, *, lead=None, crew=()):
+    def _completed(
+        self, client, services, lat, lng, *, lead=None, crew=(),
+        address='Heat St', city='Cabuyao', province='Laguna',
+    ):
         request_obj = ServiceRequest.objects.create(
             client=client, service_type=services[0], description='Done', priority='Normal', status='Completed',
         )
         for order, service in enumerate(services):
             self.ServiceRequestService.objects.create(request=request_obj, service_type=service, sort_order=order)
-        ServiceLocation.objects.create(request=request_obj, address='Heat St', city='Cabuyao', province='Laguna', latitude=lat, longitude=lng)
+        ServiceLocation.objects.create(
+            request=request_obj, address=address, city=city, province=province,
+            latitude=lat, longitude=lng,
+        )
         if lead:
             ticket = ServiceTicket.objects.create(
                 request=request_obj, technician=lead, scheduled_date=timezone.localdate(),
@@ -212,6 +218,33 @@ class CoverageHeatmapAccuracyTests(APITestCase):
         data = self._get()
         self.assertEqual(data['total_points'], 2)
         self.assertEqual(data['total_jobs'], 3)
+
+    def test_administrative_levels_group_barangay_city_and_province(self):
+        self._completed(
+            self.first_client, [self.solar], 14.2786, 121.1210,
+            address='12 Main Road, Brgy. Pulo', city='Cabuyao', province='Laguna',
+        )
+        self._completed(
+            self.second_client, [self.battery], 14.2986, 121.1410,
+            address='18 Lake Road, Barangay Pulo', city='Cabuyao', province='Laguna',
+        )
+        self._completed(
+            self.first_client, [self.solar], 14.3286, 121.0810,
+            address='4 Market Road, Brgy. San Antonio', city='Biñan', province='Laguna',
+        )
+
+        levels = self._get()['geographic_levels']
+
+        self.assertEqual([(row['area_name'], row['count']) for row in levels['barangay']], [
+            ('Pulo', 2),
+            ('San Antonio', 1),
+        ])
+        self.assertEqual([(row['area_name'], row['count']) for row in levels['city']], [
+            ('Cabuyao', 2),
+            ('Biñan', 1),
+        ])
+        self.assertEqual([(row['area_name'], row['count']) for row in levels['province']], [('Laguna', 3)])
+        self.assertAlmostEqual(levels['province'][0]['lat'], (14.2786 + 14.2986 + 14.3286) / 3)
 
     def test_every_service_of_a_multi_service_request_counts(self):
         self._completed(self.first_client, [self.solar, self.battery], 14.2786, 121.1250)

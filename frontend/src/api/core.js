@@ -9,11 +9,8 @@ export const api = axios.create({ baseURL: API_BASE_URL });
 
 const API_CACHE_PREFIX = 'afn_api_cache:';
 const CACHEABLE_METHODS = new Set(['get']);
-const WRITE_METHODS = new Set(['post', 'put', 'patch', 'delete']);
 const PUBLIC_CACHEABLE_PATHS = new Set(['/public/landing-page/']);
 const PUBLIC_CACHE_MAX_AGE_MS = 60 * 60 * 1000;
-
-const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
 const getRequestCacheKey = (config = {}) => {
   const method = String(config.method || 'get').toLowerCase();
@@ -92,11 +89,6 @@ export const clearStoredAuth = () => {
 };
 
 api.interceptors.request.use((config) => {
-  const method = String(config.method || 'get').toLowerCase();
-  if (isOffline() && WRITE_METHODS.has(method)) {
-    return Promise.reject(new Error('You are offline. Reconnect before saving changes.'));
-  }
-
   const token = sessionStorage.getItem('afn_token');
   if (token) {
     config.headers.Authorization = `Token ${token}`;

@@ -247,7 +247,7 @@ class AuditRegressionTests(APITestCase):
             {'step': 1, 'title': 'Isolate power'},
             {'step': 2, 'title': 'Mount panels'},
         ])
-        ServiceTicket.objects.filter(pk=self.ticket.pk).update(technician=self.technician)
+        ServiceTicket.objects.filter(pk=self.ticket.pk).update(technician=self.technician, status='In Progress')
         self.client.force_authenticate(self.technician)
 
         short = self.client.post('/api/checklist/', {

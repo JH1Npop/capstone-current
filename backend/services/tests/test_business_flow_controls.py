@@ -24,6 +24,8 @@ from services.deposits import ticket_deposit_gate
 from services.views.sales_records import ensure_draft_sales_record
 from services.views.helpers import apply_ticket_status_change
 from users.models import AdminSettings, User
+from services.business_time import business_timezone, business_today
+from datetime import datetime, time
 
 
 class FlowFixture(APITestCase):
@@ -83,7 +85,7 @@ class QuotationAcceptanceTests(FlowFixture):
         QuotationRecord.objects.filter(pk=self.quotation.pk).update(status='Accepted')
         response = self.as_user(self.admin).post(self.decision_url, {
             'decision': 'approve_service',
-            'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
+            'scheduled_date': (business_today() + timedelta(days=1)).isoformat(),
         }, format='json')
         self.assertEqual(response.status_code, 200, response.data)
 
@@ -93,19 +95,19 @@ class QuotationAcceptanceTests(FlowFixture):
         settings_obj.save(update_fields=['require_quotation_acceptance'])
         response = self.as_user(self.admin).post(self.decision_url, {
             'decision': 'approve_service',
-            'scheduled_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
+            'scheduled_date': (business_today() + timedelta(days=1)).isoformat(),
         }, format='json')
         self.assertEqual(response.status_code, 200, response.data)
 
     def test_same_day_installation_reuses_ticket_and_requires_a_time(self):
         QuotationRecord.objects.filter(pk=self.quotation.pk).update(status='Accepted')
-        today = timezone.localdate().isoformat()
+        # 09:00 on the business day (UTC+8); "today" and "now" are the business's, not the server's UTC.
+        business_day = business_today()
+        today = business_day.isoformat()
         installation_time = '10:00'
-        business_hours_now = timezone.localtime().replace(
-            hour=9, minute=0, second=0, microsecond=0,
-        )
+        business_hours_now = datetime.combine(business_day, time(9, 0), tzinfo=business_timezone())
 
-        with patch('services.views.tickets.timezone.localtime', return_value=business_hours_now):
+        with patch('django.utils.timezone.now', return_value=business_hours_now):
             missing_date = self.as_user(self.admin).post(
                 self.decision_url, {'decision': 'approve_service'}, format='json',
             )
@@ -126,7 +128,7 @@ class QuotationAcceptanceTests(FlowFixture):
         self.assertEqual(accepted.data['ticket_id'], self.inspected.id)
         self.assertEqual(self.inspected.status, 'Ready for Service')
         self.assertEqual(self.inspected.ticket_type, 'installation')
-        self.assertEqual(self.inspected.scheduled_date, timezone.localdate())
+        self.assertEqual(self.inspected.scheduled_date, business_day)
         self.assertEqual(self.inspected.scheduled_time.strftime('%H:%M'), installation_time)
         self.assertIsNone(self.inspected.technician_id)
 

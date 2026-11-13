@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { MapContainer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -60,13 +60,26 @@ const CITY_PROVINCE_OVERRIDES = {
   'lucena city': 'Quezon',
 };
 
-const inputClass = 'w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
+// 44 px tall, with 16 px text on phones so the browser does not zoom into the field.
+const inputClass = 'min-h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-base text-slate-900 sm:text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
 const labelClass = 'mb-1 block text-sm font-medium text-slate-700';
 
 function RequestSectionHeading({ id, title }) {
   return (
     <h2 id={id} className="text-base font-semibold text-slate-950">{title}</h2>
   );
+}
+
+// "2026-11-20" → "Fri, Nov 20, 2026" (read as a calendar day, not shifted by time zone).
+const formatPreferredDate = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number);
+  if (!year || !month || !day) return value || '';
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+// An error shown inside the section it is about.
+function SectionError({ text }) {
+  return text ? <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{text}</p> : null;
 }
 
 const requestBrowserPosition = (options) => new Promise((resolve, reject) => {
@@ -131,7 +144,13 @@ function LocationPicker({ lat, lng, setLat, setLng, onLocationChange }) {
 
 export default function ClientServiceRequests() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const sectionRefs = { service: useRef(null), location: useRef(null), schedule: useRef(null) };
+  // Which section a validation error belongs to, so it is shown (and scrolled to) there.
+  const [errorSection, setErrorSection] = useState('');
+  const [locationNotice, setLocationNotice] = useState('');
+  const [searchState, setSearchState] = useState('idle');
   const solarEstimateId = searchParams.get('solarEstimate');
   const [serviceTypes, setServiceTypes] = useState([]);
   const [serviceTypeIds, setServiceTypeIds] = useState([]);
@@ -222,18 +241,22 @@ export default function ClientServiceRequests() {
   const searchLocation = async (query) => {
     if (!query.trim()) {
       setSearchResults([]);
+      setSearchState('idle');
       return;
     }
 
+    setSearchState('searching');
     try {
       const sw = CALABARZON_BOUNDS.getSouthWest();
       const ne = CALABARZON_BOUNDS.getNorthEast();
       const viewbox = `${sw.lng},${ne.lat},${ne.lng},${sw.lat}`;
       const results = await searchLocations({ query, viewbox, limit: 5 });
       setSearchResults(results);
+      setSearchState(results.length ? 'done' : 'empty');
     } catch (err) {
-      setSubmitError(err.message || 'Location search failed.');
+      setLocationError(err.message || 'Location search failed.');
       setSearchResults([]);
+      setSearchState('idle');
     }
   };
 
@@ -249,6 +272,7 @@ const selectSearchResult = async (result) => {
 
   setSearchQuery('');
   setSearchResults([]);
+  setSearchState('idle');
   setLocationError('');
 
   await reverseGeocode(clat, clng);
@@ -305,9 +329,9 @@ const selectSearchResult = async (result) => {
     setProvince(provinceName);
     return true;
   } catch (err) {
-    setSubmitError(
+    setLocationError(
       err.message ||
-      'Could not read address from selected location.'
+      'Could not read address from selected location. Enter the address manually.'
     );
     return false;
   }
@@ -318,6 +342,7 @@ const selectSearchResult = async (result) => {
     const [clat, clng] = clampToCalabarzon(lat, lng);
     setMapCenter([clat, clng]);
     setLocationError('');
+    setLocationNotice('');
     reverseGeocode(clat, clng);
   };
 
@@ -328,7 +353,7 @@ const selectSearchResult = async (result) => {
 
   const handleUseMyLocation = async () => {
     setLocationError('');
-    setMessage('');
+    setLocationNotice('');
 
     if (insecurePhoneLocation) {
       setLocationError(
@@ -370,7 +395,7 @@ const selectSearchResult = async (result) => {
       const addressResolved = await reverseGeocode(clat, clng);
 
       const moved = Math.abs(clat - rawLat) > 0.0005 || Math.abs(clng - rawLng) > 0.0005;
-      setMessage(
+      setLocationNotice(
         moved
           ? 'Your position was outside Calabarzon; the pin was moved to the nearest point inside the service area.'
           : addressResolved
@@ -384,54 +409,46 @@ const selectSearchResult = async (result) => {
     }
   };
 
+  const failIn = (section, text) => {
+    setMessage('');
+    setErrorSection(section);
+    setSubmitError(text);
+    // Bring the section with the problem into view (on a phone it can be far above the button).
+    window.requestAnimationFrame(() => sectionRefs[section]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    return false;
+  };
+
   const validateRequest = () => {
     setSubmitError('');
+    setErrorSection('');
 
     if (serviceTypeIds.length === 0) {
-      setMessage('');
-      setSubmitError('Please choose at least one service type.');
-      return false;
+      return failIn('service', 'Please choose at least one service type.');
     }
     if (!serviceTypeIds.every((serviceTypeId) => serviceTypes.some((serviceType) => String(serviceType.id) === String(serviceTypeId)))) {
-      setMessage('');
-      setSubmitError('Please choose only available service types.');
-      return false;
+      return failIn('service', 'Please choose only available service types.');
     }
     if (latitude == null || longitude == null) {
-      setMessage('');
-      setSubmitError('Please select location on the map (lat/lng).');
-      return false;
+      return failIn('location', 'Please select location on the map (lat/lng).');
     }
     if (!address.trim()) {
-      setMessage('');
-      setSubmitError('Please add a location note (street/landmark).');
-      return false;
+      return failIn('location', 'Please add a location note (street/landmark).');
     }
     if (!city.trim()) {
-      setMessage('');
-      setSubmitError('Please enter a city.');
-      return false;
+      return failIn('location', 'Please enter a city.');
     }
     if (!province.trim()) {
-      setMessage('');
-      setSubmitError('Please enter a province.');
-      return false;
+      return failIn('location', 'Please enter a province.');
     }
     if (!preferredDate) {
-      setMessage('');
-      setSubmitError('Please select a preferred appointment date.');
-      return false;
+      return failIn('schedule', 'Please select a preferred appointment date.');
     }
     if (selectedDateAvailability?.availability?.status === 'unavailable') {
-      setMessage('');
-      setSubmitError('The selected appointment date has no availability. Please choose another date.');
-      return false;
+      return failIn('schedule', 'The selected appointment date has no availability. Please choose another date.');
     }
     const selectedSlotStatus = selectedDateAvailability?.availability?.slots?.[preferredTimeSlot]?.status;
     if (preferredTimeSlot && isUnavailableAppointmentStatus(selectedSlotStatus)) {
-      setMessage('');
-      setSubmitError('The selected time slot is full or closed. Please choose an available time slot.');
-      return false;
+      return failIn('schedule', 'The selected time slot is full or closed. Please choose an available time slot.');
     }
 
     return true;
@@ -440,6 +457,7 @@ const selectSearchResult = async (result) => {
   const createRequest = async () => {
     setIsSubmitting(true);
     setConfirmDialogOpen(false);
+    setErrorSection('');
     setMessage('Submitting service request...');
     try {
       const requestPayload = {
@@ -466,7 +484,9 @@ const selectSearchResult = async (result) => {
       setSuccessDialog({
         title: 'Request submitted',
         message: successMessage,
+        requestId: createdRequest.id,
       });
+      setLocationNotice('');
       setAddress('');
       setCity('');
       setProvince('');
@@ -489,6 +509,45 @@ const selectSearchResult = async (result) => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Warn before the page is closed with a half-filled form.
+  const formStarted = Boolean(serviceTypeIds.length || address.trim() || notes.trim() || preferredDate || latitude != null);
+  useEffect(() => {
+    if (!formStarted || isSubmitting) return undefined;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [formStarted, isSubmitting]);
+
+  // Escape closes the success box.
+  useEffect(() => {
+    if (!successDialog) return undefined;
+    const close = (event) => {
+      if (event.key === 'Escape') {
+        setSuccessDialog(null);
+        setMessage('');
+      }
+    };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [successDialog]);
+
+  // Progress shown on the step bar.
+  const stepsDone = {
+    Service: serviceTypeIds.length > 0,
+    Location: latitude != null && Boolean(address.trim() && city.trim() && province.trim()),
+    Schedule: Boolean(preferredDate),
+    Details: Boolean(notes.trim()),
+  };
+  const stepTargets = { Service: 'service', Location: 'location', Schedule: 'schedule', Details: 'details' };
+  const detailsRef = useRef(null);
+  const goToStep = (step) => {
+    const ref = step === 'Details' ? detailsRef : sectionRefs[stepTargets[step]];
+    ref?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleSubmitRequest = (e) => {
@@ -537,7 +596,7 @@ const selectSearchResult = async (result) => {
             </div>
             <div className="rounded-2xl border border-surface-200 bg-white p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred Date</p>
-              <p className="mt-1 text-slate-800">{preferredDate}</p>
+              <p className="mt-1 text-slate-800">{formatPreferredDate(preferredDate)}</p>
             </div>
             <div className="rounded-2xl border border-surface-200 bg-white p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Time Slot</p>
@@ -555,22 +614,32 @@ const selectSearchResult = async (result) => {
 
       {successDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl">
+          <div role="dialog" aria-modal="true" aria-labelledby="request-success-title" className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-600">
               <FiCheckCircle size={30} />
             </div>
-            <h2 className="mt-4 text-xl font-bold text-slate-950">{successDialog.title}</h2>
+            <h2 id="request-success-title" className="mt-4 text-xl font-bold text-slate-950">{successDialog.title}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">{successDialog.message}</p>
-            <button
-              type="button"
-              onClick={() => {
-                setSuccessDialog(null);
-                setMessage('');
-              }}
-              className="mt-5 w-full rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            >
-              OK
-            </button>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => navigate(`/client/requests/${successDialog.requestId}?entity=request`)}
+                className="min-h-11 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-100"
+              >
+                View request
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => {
+                  setSuccessDialog(null);
+                  setMessage('');
+                }}
+                className="min-h-11 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              >
+                OK
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -583,22 +652,30 @@ const selectSearchResult = async (result) => {
           </div>
           <div className="grid grid-cols-4 gap-2 text-center text-[11px] font-semibold text-slate-500 sm:w-[25rem]">
             {['Service', 'Location', 'Schedule', 'Details'].map((step, index) => (
-              <div key={step} className="rounded-lg bg-slate-50 px-2 py-2">
-                <span className="mr-1 text-brand-600">{index + 1}</span>{step}
-              </div>
+              <button
+                key={step}
+                type="button"
+                onClick={() => goToStep(step)}
+                aria-label={`${step}${stepsDone[step] ? ' (done)' : ''}`}
+                className={`min-h-11 rounded-lg px-2 py-2 transition ${stepsDone[step] ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-50 hover:bg-slate-100'}`}
+              >
+                <span className={`mr-1 ${stepsDone[step] ? 'text-emerald-600' : 'text-brand-600'}`}>{stepsDone[step] ? '✓' : index + 1}</span>{step}
+              </button>
             ))}
           </div>
         </div>
       </section>
 
       {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>}
-      <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="mt-5">
         <form onSubmit={handleSubmitRequest} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="space-y-5 p-5 sm:p-6">
+            <div ref={sectionRefs.service} className="scroll-mt-24">
             <RequestSectionHeading
               id="request-service-title"
               title="Choose services"
             />
+            </div>
             <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm">
                 <FiUser aria-hidden="true" />
@@ -620,7 +697,7 @@ const selectSearchResult = async (result) => {
                       return (
                         <label
                           key={serviceType.id}
-                          className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2.5 text-sm transition ${
+                          className={`flex min-h-11 cursor-pointer items-start gap-2 rounded-lg border px-3 py-2.5 text-sm transition ${
                             checked ? 'border-brand-300 bg-brand-50 text-brand-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                           }`}
                         >
@@ -630,7 +707,10 @@ const selectSearchResult = async (result) => {
                             onChange={() => toggleServiceType(serviceType.id)}
                             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500"
                           />
-                          <span>{serviceType.name}</span>
+                          <span className="min-w-0">
+                            <span className="block font-medium">{serviceType.name}</span>
+                            {serviceType.description ? <span className="mt-0.5 block line-clamp-2 text-xs text-slate-500">{serviceType.description}</span> : null}
+                          </span>
                         </label>
                       );
                     })}
@@ -656,28 +736,130 @@ const selectSearchResult = async (result) => {
                   ) : null}
                 </div>
               )}
+              {errorSection === 'service' ? <SectionError text={submitError} /> : null}
             </div>
-            <div className="border-t border-slate-200 pt-5">
+            <div ref={sectionRefs.location} className="scroll-mt-24 border-t border-slate-200 pt-5">
               <RequestSectionHeading
                 id="request-location-title"
                 title="Service location"
               />
+              <p className="mt-1 text-xs text-slate-500">Search, tap the map or use your location to drop a pin. The address fields fill in, and you can correct them.</p>
             </div>
-            <div>
-              <label htmlFor="request-address" className={labelClass}>Address / Landmark *</label>
-              <input id="request-address" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="House number, street, barangay, or nearby landmark" required />
+            {/* Full-width step: search and "Use My Location" on one row, the map, then the address fields in one row. */}
+            <div className="space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="relative min-w-0 flex-1">
+                  <div className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100">
+                    <FiSearch className="text-slate-400" size={18} aria-hidden="true" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search address or landmark"
+                      aria-label="Search service location"
+                      className="min-w-0 flex-1 bg-transparent text-base outline-none sm:text-sm"
+                      autoComplete="off"
+                      onKeyDown={(event) => {
+                        // The search sits inside the form: Enter picks the first place instead of submitting.
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          if (searchResults[0]) selectSearchResult(searchResults[0]);
+                        }
+                        if (event.key === 'Escape') {
+                          setSearchResults([]);
+                          setSearchState('idle');
+                        }
+                      }}
+                    />
+                  </div>
+                  {searchResults.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-[1000] mt-1 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-elevated">
+                      {searchResults.map((result, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => selectSearchResult(result)}
+                          className="min-h-11 w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition last:border-b-0 hover:bg-brand-50"
+                        >
+                          <div className="truncate font-medium">{result.display_name.split(',')[0]}</div>
+                          <div className="truncate text-xs text-slate-500">{result.display_name}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUseMyLocation}
+                  disabled={isLocating}
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-100 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <FiMapPin aria-hidden="true" />
+                  {isLocating ? 'Finding location...' : 'Use My Location'}
+                </button>
+              </div>
+              {searchState === 'empty' && searchQuery.trim() ? (
+                <p role="status" className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">No places found in the service area. Try a nearby landmark, or tap the map.</p>
+              ) : null}
+
+              <div className="map-wrapper h-72 overflow-hidden rounded-xl border border-slate-200 lg:h-80">
+                <MapContainer
+                  center={mapCenter}
+                  zoom={10}
+                  className="h-full w-full"
+                  maxBounds={CALABARZON_BOUNDS}
+                  maxBoundsViscosity={1}
+                  minZoom={9}
+                  maxZoom={18}
+                >
+                  <MapTileLayer />
+                  <LocationPicker lat={latitude} lng={longitude} setLat={setLatitude} setLng={setLongitude} onLocationChange={handleLocationChange} />
+                </MapContainer>
+              </div>
+
+              {/* Pin status and any location message, side by side on wide screens. */}
+              <div className="grid gap-2 md:grid-cols-2">
+                <div className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium ${
+                  latitude != null && longitude != null
+                    ? 'border-green-200 bg-green-50 text-green-800'
+                    : 'border-slate-200 bg-slate-50 text-slate-600'
+                }`}>
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${latitude != null && longitude != null ? 'bg-green-500' : 'bg-slate-300'}`} />
+                  {latitude != null && longitude != null
+                    ? `Pin selected: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+                    : 'No location pin selected yet'}
+                </div>
+                {locationError ? (
+                  <p className="flex min-h-11 items-center rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-800" role="alert">
+                    {locationError}
+                  </p>
+                ) : locationNotice ? (
+                  <p role="status" className="flex min-h-11 items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">{locationNotice}</p>
+                ) : null}
+              </div>
+              {insecurePhoneLocation ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                  GPS cannot open from a phone using this local HTTP address. Use the deployed HTTPS site or an HTTPS development link. Address search and manual map selection still work.
+                </p>
+              ) : null}
+
+              <div className="grid grid-cols-2 gap-3 pt-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="col-span-2 lg:col-span-1">
+                  <label htmlFor="request-address" className={labelClass}>Address / Landmark *</label>
+                  <input id="request-address" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="House number, street, barangay, or nearby landmark" required />
+                </div>
+                <div>
+                  <label htmlFor="request-city" className={labelClass}>City *</label>
+                  <input id="request-city" value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} placeholder="Enter city name" required />
+                </div>
+                <div>
+                  <label htmlFor="request-province" className={labelClass}>Province *</label>
+                  <input id="request-province" value={province} onChange={(e) => setProvince(e.target.value)} className={inputClass} placeholder="Enter province name" required />
+                </div>
+              </div>
+              {errorSection === 'location' ? <SectionError text={submitError} /> : null}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="request-city" className={labelClass}>City *</label>
-              <input id="request-city" value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} placeholder="Enter city name" required />
-            </div>
-            <div>
-              <label htmlFor="request-province" className={labelClass}>Province *</label>
-              <input id="request-province" value={province} onChange={(e) => setProvince(e.target.value)} className={inputClass} placeholder="Enter province name" required />
-            </div>
-            </div>
-            <section className="border-t border-slate-200 pt-5" aria-labelledby="preferred-schedule-title">
+            <section ref={sectionRefs.schedule} className="scroll-mt-24 border-t border-slate-200 pt-5" aria-labelledby="preferred-schedule-title">
               <RequestSectionHeading
                 id="preferred-schedule-title"
                 title="Preferred schedule"
@@ -715,8 +897,9 @@ const selectSearchResult = async (result) => {
                 </select>
                 <p className="mt-1 text-xs text-slate-500">Service visits are scheduled during business hours, from 8 AM to 5 PM.</p>
               </div>
+              {errorSection === 'schedule' ? <SectionError text={submitError} /> : null}
             </section>
-            <div className="border-t border-slate-200 pt-5">
+            <div ref={detailsRef} className="scroll-mt-24 border-t border-slate-200 pt-5">
               <RequestSectionHeading
                 id="request-details-title"
                 title="Additional details"
@@ -728,14 +911,14 @@ const selectSearchResult = async (result) => {
               </label>
               <textarea id="request-details" value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} rows="4" placeholder="Describe the work needed or anything the team should know before visiting" />
             </div>
-            {submitError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{submitError}</p>}
+            {submitError && !errorSection ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{submitError}</p> : null}
             {message && <p className={`rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm ${messageToneClassName}`}>{message}</p>}
           </div>
           <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
             <button
               type="submit"
               disabled={isSubmitting || serviceTypes.length === 0}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {isSubmitting ? 'Submitting...' : 'Create Service Request'}
               {!isSubmitting && <FiArrowRight aria-hidden="true" />}
@@ -743,87 +926,6 @@ const selectSearchResult = async (result) => {
           </div>
         </form>
 
-        <aside className="self-start overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
-            <h2 className="text-base font-semibold text-slate-950">Pin service location</h2>
-          </div>
-          <div className="p-4 sm:p-5">
-            <div className="relative">
-              <div className="flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2.5 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100">
-                <FiSearch className="text-slate-400" size={18} aria-hidden="true" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search address or landmark"
-                  aria-label="Search service location"
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-                  autoComplete="off"
-                />
-              </div>
-
-              {searchResults.length > 0 && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-elevated">
-                  {searchResults.map((result, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => selectSearchResult(result)}
-                      className="w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 transition last:border-b-0 hover:bg-brand-50"
-                    >
-                      <div className="truncate font-medium">{result.display_name.split(',')[0]}</div>
-                      <div className="truncate text-xs text-slate-500">{result.display_name}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-          <div className="map-wrapper mt-4 h-72 overflow-hidden rounded-xl border border-slate-200 lg:h-[24rem]">
-            <MapContainer
-              center={mapCenter}
-              zoom={10}
-              className="h-full w-full"
-              maxBounds={CALABARZON_BOUNDS}
-              maxBoundsViscosity={1}
-              minZoom={9}
-              maxZoom={18}
-            >
-              <MapTileLayer />
-              <LocationPicker lat={latitude} lng={longitude} setLat={setLatitude} setLng={setLongitude} onLocationChange={handleLocationChange} />
-            </MapContainer>
-          </div>
-          <div className={`mt-3 flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium ${
-            latitude != null && longitude != null
-              ? 'border-green-200 bg-green-50 text-green-800'
-              : 'border-slate-200 bg-slate-50 text-slate-600'
-          }`}>
-            <span className={`h-2.5 w-2.5 rounded-full ${latitude != null && longitude != null ? 'bg-green-500' : 'bg-slate-300'}`} />
-            {latitude != null && longitude != null
-              ? `Pin selected: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
-              : 'No location pin selected yet'}
-          </div>
-          <button
-            type="button"
-            onClick={handleUseMyLocation}
-            disabled={isLocating}
-            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-100 disabled:cursor-wait disabled:opacity-60"
-          >
-            <FiMapPin aria-hidden="true" />
-            {isLocating ? 'Finding location...' : 'Use My Location'}
-          </button>
-          {insecurePhoneLocation ? (
-            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-              GPS cannot open from a phone using this local HTTP address. Use the deployed HTTPS site or an HTTPS development link. Address search and manual map selection still work.
-            </p>
-          ) : null}
-          {locationError ? (
-            <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-800" role="alert">
-              {locationError}
-            </p>
-          ) : null}
-          </div>
-        </aside>
       </div>
     </Layout>
   );

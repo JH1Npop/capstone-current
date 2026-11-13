@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiAlertTriangle, FiClock, FiExternalLink, FiMail, FiMapPin, FiPhone, FiRefreshCw, FiSearch, FiWifi, FiWifiOff } from 'react-icons/fi';
+import { FiAlertTriangle, FiClock, FiExternalLink, FiMail, FiMapPin, FiPhone, FiRefreshCw, FiWifi, FiWifiOff, FiX } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
 import { MapContainer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
@@ -10,6 +10,8 @@ import { fetchTechnicianLocationHistory, fetchTrackingData } from '../../api/api
 import { resolveServiceRegion } from '../../utils/mapRegion';
 import { formatTicketId } from '../../utils/roleIds';
 import MapTileLayer from '../../components/maps/MapTileLayer';
+import SearchFilterBar from '../../components/shared/SearchFilterBar';
+import useEscapeKey from '../../hooks/useEscapeKey';
 import { startVisibleInterval } from '../../utils/visibleInterval';
 
 const TECH_PIN_COLORS = ['#2563eb', '#16a34a', '#f97316', '#8b5cf6', '#0891b2', '#e11d48'];
@@ -28,6 +30,23 @@ const getTechInitials = (name = '') =>
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || '')
     .join('') || 'T';
+
+const keepFocusInsideDialog = (event) => {
+  if (event.key !== 'Tab') return;
+  const focusable = event.currentTarget.querySelectorAll(
+    'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+  );
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+};
 
 const createTechIcon = (name = '', status = 'offline', movementState = 'unknown') => {
   const color = TECH_PIN_COLORS[getNameHash(name) % TECH_PIN_COLORS.length];
@@ -136,7 +155,26 @@ const formatLastSeen = (value) => {
   const minutes = Math.max(Math.floor((Date.now() - date.getTime()) / 60000), 0);
   if (minutes < 1) return 'Updated just now';
   if (minutes === 1) return 'Updated 1 min ago';
-  return `Updated ${minutes} min ago`;
+  if (minutes < 60) return `Updated ${minutes} min ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours === 1) return 'Updated 1 hour ago';
+  if (hours < 24) return `Updated ${hours} hours ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Updated 1 day ago';
+  if (days < 7) return `Updated ${days} days ago`;
+
+  const weeks = Math.floor(days / 7);
+  if (weeks === 1) return 'Updated 1 week ago';
+  if (weeks < 5) return `Updated ${weeks} weeks ago`;
+
+  const months = Math.floor(days / 30);
+  if (months === 1) return 'Updated 1 month ago';
+  if (months < 12) return `Updated ${months} months ago`;
+
+  const years = Math.floor(days / 365);
+  return `Updated ${years} year${years === 1 ? '' : 's'} ago`;
 };
 
 const formatTimestamp = (value) => {
@@ -214,6 +252,18 @@ export default function AdminTechnicianTracking() {
   const [lastSuccessfulSync, setLastSuccessfulSync] = useState(null);
   const [connectionState, setConnectionState] = useState('connecting');
   const requestSequence = useRef(0);
+  const detailsTriggerRef = useRef(null);
+  const detailsCloseButtonRef = useRef(null);
+
+  const openTechnicianDetails = useCallback((technicianId, trigger = null) => {
+    detailsTriggerRef.current = trigger || document.activeElement;
+    setSelectedTechId(technicianId);
+  }, []);
+
+  const closeTechnicianDetails = useCallback(() => {
+    setSelectedTechId(null);
+    window.requestAnimationFrame(() => detailsTriggerRef.current?.focus?.());
+  }, []);
 
   const handleMapReady = useCallback((instance) => {
     setMapInstance(instance);
@@ -336,6 +386,19 @@ export default function AdminTechnicianTracking() {
     [techsWithCoords, ticketsWithCoords]
   );
 
+  useEscapeKey(Boolean(selectedTech), closeTechnicianDetails);
+
+  useEffect(() => {
+    if (!selectedTech) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusFrame = window.requestAnimationFrame(() => detailsCloseButtonRef.current?.focus());
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedTech]);
+
   useEffect(() => {
     if (!selectedTechId) {
       setLocationTrail([]);
@@ -415,67 +478,53 @@ export default function AdminTechnicianTracking() {
 
   return (
     <Layout>
-      <section className="mb-3 rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="space-y-3 px-4 py-3">
-          <div className="flex min-w-0 flex-wrap items-end gap-2">
-            <label className="min-w-[14rem] flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Find technician or job
-              <span className="relative mt-1 block">
-                <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Name, client, service, or ticket ID"
-                  className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm font-normal normal-case tracking-normal text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                />
-              </span>
-            </label>
-            <label className="min-w-[12rem] text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Technician Status
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                disabled={loading}
-                className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal normal-case tracking-normal text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              >
-                <option value="all">All Technicians</option>
-                <option value="available">Available</option>
-                <option value="on_job">Currently Assigned</option>
-                <option value="offline">Offline / No Recent GPS</option>
-              </select>
-            </label>
-            <label className="min-w-[12rem] text-xs font-semibold uppercase tracking-wide text-slate-500">
-              GPS Health
-              <select
-                value={gpsFilter}
-                onChange={(event) => setGpsFilter(event.target.value)}
-                disabled={loading}
-                className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal normal-case tracking-normal text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              >
-                <option value="all">All GPS states</option>
-                <option value="fresh">Fresh location</option>
-                <option value="stale">Stale location</option>
-                <option value="missing">Missing coordinates</option>
-              </select>
-            </label>
-            <label className="min-w-[14rem] text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Ticket Display
-              <select
-                value={ticketFilter}
-                onChange={(e) => setTicketFilter(e.target.value)}
-                disabled={loading}
-                className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal normal-case tracking-normal text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              >
-                <option value="all">All Active Tickets</option>
-                <option value="in_progress">Only Started Jobs (en route, on site, in progress)</option>
-              </select>
-            </label>
+      <SearchFilterBar
+        className="mb-3"
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel="Find technician or job"
+        searchPlaceholder="Name, client, service, or ticket ID"
+        disabled={loading}
+        filters={[
+          {
+            key: 'technician-status', label: 'Technician Status', value: filterStatus, defaultValue: 'all', onChange: setFilterStatus,
+            options: [
+              { value: 'all', label: 'All Technicians' },
+              { value: 'available', label: 'Available' },
+              { value: 'on_job', label: 'Currently Assigned' },
+              { value: 'offline', label: 'Offline / No Recent GPS' },
+            ],
+          },
+          {
+            key: 'gps-health', label: 'GPS Health', value: gpsFilter, defaultValue: 'all', onChange: setGpsFilter,
+            options: [
+              { value: 'all', label: 'All GPS states' },
+              { value: 'fresh', label: 'Fresh location' },
+              { value: 'stale', label: 'Stale location' },
+              { value: 'missing', label: 'Missing coordinates' },
+            ],
+          },
+          {
+            key: 'ticket-display', label: 'Ticket Display', value: ticketFilter, defaultValue: 'all', onChange: setTicketFilter,
+            options: [
+              { value: 'all', label: 'All Active Tickets' },
+              { value: 'in_progress', label: 'Only Started Jobs (en route, on site, in progress)' },
+            ],
+          },
+        ]}
+        onClear={() => {
+          setSearch('');
+          setFilterStatus('all');
+          setGpsFilter('all');
+          setTicketFilter('all');
+        }}
+        toolbarContent={(
+          <>
             <button
               type="button"
               onClick={() => loadTrackingData({ manual: true })}
               disabled={loading || refreshing}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <FiRefreshCw className={refreshing ? 'animate-spin' : ''} />
               Refresh
@@ -484,7 +533,7 @@ export default function AdminTechnicianTracking() {
               <button
                 type="button"
                 onClick={clearFocus}
-                className="h-10 rounded-lg bg-slate-900 px-3 text-sm font-medium text-white hover:bg-slate-800"
+                className="h-11 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white hover:bg-slate-800"
               >
                 Show all markers
               </button>
@@ -494,9 +543,12 @@ export default function AdminTechnicianTracking() {
                 Focused: <strong>{focusedTarget.label}</strong>
               </span>
             ) : null}
-          </div>
+          </>
+        )}
+      />
 
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+      <section className="mb-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600" role="status" aria-live="polite">
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-semibold text-slate-800">
                 {connectionState === 'live' ? <FiWifi className="text-emerald-600" /> : <FiWifiOff className="text-amber-600" />}
@@ -508,7 +560,7 @@ export default function AdminTechnicianTracking() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 lg:grid-cols-4">
             <div className="rounded-lg bg-slate-50 px-3 py-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Online technicians</div>
               <div className="text-lg font-bold text-emerald-700">{onlineTechnicians}</div>
@@ -526,7 +578,6 @@ export default function AdminTechnicianTracking() {
               <div className="text-lg font-bold text-rose-600">{ticketsWithoutCoords}</div>
             </div>
           </div>
-        </div>
       </section>
 
       {loading && (
@@ -584,7 +635,6 @@ export default function AdminTechnicianTracking() {
                   eventHandlers={{
                     click: () => {
                       setSelectedRouteId(route.id);
-                      setSelectedTechId(route.tech.id);
                     },
                   }}
                 >
@@ -608,6 +658,13 @@ export default function AdminTechnicianTracking() {
                       <p className="mt-2 text-slate-500">
                         {route.isFallback ? 'Dashed line is a direct connection.' : formatDuration(route.ticket.routeDuration)}
                       </p>
+                      <button
+                        type="button"
+                        onClick={(event) => openTechnicianDetails(route.tech.id, event.currentTarget)}
+                        className="mt-2 w-full rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700"
+                      >
+                        View technician details
+                      </button>
                     </div>
                   </Popup>
                 </Polyline>
@@ -628,7 +685,6 @@ export default function AdminTechnicianTracking() {
                   key={`tech-${tech.id}`}
                   position={[tech.lat, tech.lng]}
                   icon={createTechIcon(tech.name, tech.status, tech.movementState)}
-                  eventHandlers={{ click: () => setSelectedTechId(tech.id) }}
                 >
                   <Popup minWidth={210} maxWidth={240}>
                     <div className="w-[210px] text-xs text-slate-700">
@@ -643,6 +699,13 @@ export default function AdminTechnicianTracking() {
                         <p>{nearestJobDistance == null ? 'No active job distance' : `${formatDistance(nearestJobDistance)} direct to nearest job`}</p>
                         <p>GPS accuracy: {Number(tech.gpsAccuracy) > 0 ? `±${Math.round(Number(tech.gpsAccuracy))} m` : 'Unavailable'}</p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={(event) => openTechnicianDetails(tech.id, event.currentTarget)}
+                        className="mt-2 w-full rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700"
+                      >
+                        View details
+                      </button>
                     </div>
                   </Popup>
                 </Marker>
@@ -711,36 +774,60 @@ export default function AdminTechnicianTracking() {
       </div>
 
       {selectedTech ? (
-        <section className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" aria-labelledby="selected-technician-heading">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Selected technician</p>
+        <div
+          className="fixed inset-0 z-[1200] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeTechnicianDetails();
+          }}
+        >
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="selected-technician-heading"
+          onKeyDown={keepFocusInsideDialog}
+          className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
+        >
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-6 sm:py-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Technician details</p>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTech.status === 'on_job' ? 'bg-blue-50 text-blue-700' : selectedTech.status === 'available' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                  {selectedTech.status === 'on_job' ? 'On active job' : selectedTech.status === 'available' ? 'Available' : 'Offline'}
+                </span>
+              </div>
               <h3 id="selected-technician-heading" className="mt-1 text-lg font-semibold text-slate-950">{selectedTech.name}</h3>
-              <p className="mt-1 text-sm text-slate-500">TECH-{String(selectedTech.id).padStart(4, '0')} · {selectedTech.status === 'on_job' ? 'On active job' : selectedTech.status === 'available' ? 'Available' : 'Offline'}</p>
+              <p className="mt-1 text-sm font-medium text-slate-500">TECH-{String(selectedTech.id).padStart(4, '0')}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {selectedTech.phone ? (
-                <a href={`tel:${selectedTech.phone}`} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"><FiPhone />Call</a>
-              ) : null}
-              {selectedTech.email ? (
-                <a href={`mailto:${selectedTech.email}`} className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"><FiMail />Email</a>
-              ) : null}
-              <Link to="/admin/service-tickets" className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white hover:bg-brand-700">Open Service Tickets<FiExternalLink /></Link>
-              <button type="button" onClick={() => setSelectedTechId(null)} className="h-9 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">Close details</button>
-            </div>
+            <button ref={detailsCloseButtonRef} type="button" aria-label="Close details" title="Close details" onClick={closeTechnicianDetails} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><FiX aria-hidden="true" size={20} /></button>
           </div>
-          <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
-            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:grid-cols-2">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
+            <section aria-labelledby="technician-location-summary">
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h4 id="technician-location-summary" className="text-sm font-semibold text-slate-900">Live location summary</h4>
+                  <p className="mt-0.5 text-xs text-slate-500">Latest GPS and workload information recorded by the system.</p>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTech.gpsState === 'fresh' ? 'bg-emerald-50 text-emerald-700' : selectedTech.gpsState === 'stale' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                  {selectedTech.gpsState === 'fresh' ? 'GPS fresh' : selectedTech.gpsState === 'stale' ? 'GPS stale' : 'GPS missing'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 text-sm sm:grid-cols-4">
               <TrackingFact label="GPS health" value={selectedTech.gpsState === 'fresh' ? 'Fresh' : selectedTech.gpsState === 'stale' ? 'Stale' : 'Missing'} />
               <TrackingFact label="Last GPS update" value={formatTimestamp(selectedTech.lastLocationUpdate)} />
               <TrackingFact label="GPS accuracy" value={Number(selectedTech.gpsAccuracy) > 0 ? `+/-${Math.round(Number(selectedTech.gpsAccuracy))} m` : 'Not captured'} />
               <TrackingFact label="Movement" value={formatMovement(selectedTech)} />
               <TrackingFact label="Active workload" value={`${selectedTech.activeJobs?.length || 0} job${selectedTech.activeJobs?.length === 1 ? '' : 's'}`} />
               <TrackingFact label="Recent trail" value={trailLoading ? 'Loading...' : trailError || `${locationTrail.length} point${locationTrail.length === 1 ? '' : 's'} in ${trailMinutes} min`} />
-              <TrackingFact label="Coordinates" value={hasCoords(selectedTech) ? `${selectedTech.lat.toFixed(6)}, ${selectedTech.lng.toFixed(6)}` : 'No usable coordinates'} />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current jobs</p>
+                <TrackingFact className="col-span-2" label="Coordinates" value={hasCoords(selectedTech) ? `${selectedTech.lat.toFixed(6)}, ${selectedTech.lng.toFixed(6)}` : 'No usable coordinates'} />
+              </div>
+            </section>
+            <section aria-labelledby="technician-current-jobs">
+              <div className="flex items-center justify-between gap-3">
+                <h4 id="technician-current-jobs" className="text-sm font-semibold text-slate-900">Current jobs</h4>
+                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                  {selectedTech.activeJobs?.length || 0} active
+                </span>
+              </div>
               {selectedTech.activeJobs?.length ? (
                 <div className="mt-2 space-y-2">
                   {selectedTech.activeJobs.map((job) => (
@@ -773,11 +860,26 @@ export default function AdminTechnicianTracking() {
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">No active job is assigned to this technician.</p>
+                <div className="mt-2 rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-4 py-4 text-sm text-slate-600">
+                  <p className="font-medium text-slate-700">No active job assigned</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">This technician currently has no open field assignment.</p>
+                </div>
               )}
-            </div>
+            </section>
           </div>
+          <footer className="flex shrink-0 flex-col gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex flex-wrap gap-2">
+              {selectedTech.phone ? (
+                <a href={`tel:${selectedTech.phone}`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"><FiPhone aria-hidden="true" />Call</a>
+              ) : null}
+              {selectedTech.email ? (
+                <a href={`mailto:${selectedTech.email}`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"><FiMail aria-hidden="true" />Email</a>
+              ) : null}
+            </div>
+            <Link to="/admin/service-tickets" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700">Open Service Tickets<FiExternalLink aria-hidden="true" /></Link>
+          </footer>
         </section>
+        </div>
       ) : null}
 
       {activeRouteGroups.length > 0 && (
@@ -864,7 +966,7 @@ export default function AdminTechnicianTracking() {
                       <div className="flex shrink-0 gap-2">
                         <button
                           type="button"
-                          onClick={() => setSelectedTechId(tech.id)}
+                          onClick={(event) => openTechnicianDetails(tech.id, event.currentTarget)}
                           className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                         >
                           {isSelected ? 'Details open' : 'View details'}
@@ -872,7 +974,6 @@ export default function AdminTechnicianTracking() {
                         <button
                           type="button"
                           onClick={() => {
-                            setSelectedTechId(tech.id);
                             focusLocation({
                               kind: 'tech', id: tech.id, label: tech.name,
                               lat: tech.lat, lng: tech.lng, zoom: 16
@@ -901,9 +1002,9 @@ export default function AdminTechnicianTracking() {
   );
 }
 
-function TrackingFact({ label, value }) {
+function TrackingFact({ label, value, className = '' }) {
   return (
-    <div className="min-w-0 rounded-lg bg-slate-50 p-3">
+    <div className={`min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 ${className}`}>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 break-words text-sm font-medium text-slate-900">{value}</p>
     </div>

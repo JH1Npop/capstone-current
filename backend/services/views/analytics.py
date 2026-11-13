@@ -1,4 +1,5 @@
 # Auto-split from services/views.py
+from collections import defaultdict
 from zoneinfo import ZoneInfo
 
 from services.views.helpers import *  # noqa: F401,F403
@@ -487,70 +488,78 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
             })
             month_cursor = next_month
 
-        technicians = User.objects.filter(role='technician', status='active', is_active=True)
+        technicians = User.objects.filter(
+            role='technician', status='active', is_active=True,
+        ).select_related('technician_profile')
         if request.user.role == 'technician':
             technicians = technicians.filter(pk=request.user.pk)
-        results = []
+        technicians = list(technicians)
+        tech_ids = [tech.id for tech in technicians]
 
-        for tech in technicians:
-            tickets = ServiceTicket.objects.filter(technician=tech)
-            if use_all_time:
-                period_total = tickets.count()
-                period_completed = tickets.filter(status__in=COMPLETED_TICKET_STATUSES).count()
-                period_active = tickets.filter(status__in=ACTIVE_TICKET_STATUSES).count()
-                completed_tickets = tickets.filter(
-                    status__in=COMPLETED_TICKET_STATUSES, start_time__isnull=False, end_time__isnull=False,
-                    end_time__gte=F('start_time'),
-                )
-                assigned_tickets = tickets.filter(assigned_at__isnull=False)
-            else:
-                assignment_period = (
-                    Q(assigned_at__date__gte=start_date, assigned_at__date__lte=end_date) |
-                    Q(assigned_at__isnull=True, scheduled_date__gte=start_date, scheduled_date__lte=end_date)
-                )
-                completion_period = (
-                    Q(completed_date__date__gte=start_date, completed_date__date__lte=end_date) |
-                    Q(completed_date__isnull=True, end_time__date__gte=start_date, end_time__date__lte=end_date)
-                )
-                period_total = tickets.filter(assignment_period).count()
-                period_completed = tickets.filter(status__in=COMPLETED_TICKET_STATUSES).filter(completion_period).count()
-                period_active = tickets.filter(
-                    assignment_period, status__in=ACTIVE_TICKET_STATUSES
-                ).count()
-                completed_tickets = tickets.filter(
-                    completion_period, status__in=COMPLETED_TICKET_STATUSES, start_time__isnull=False,
-                    end_time__isnull=False, end_time__gte=F('start_time'),
-                )
-                assigned_tickets = tickets.filter(
-                    assigned_at__date__gte=start_date,
-                    assigned_at__date__lte=end_date,
-                )
-
-            # Avg completion duration (start_time to end_time)
-            durations = []
-            for t in completed_tickets:
-                delta = t.end_time - t.start_time
-                durations.append(delta.total_seconds() / 3600)
-            avg_duration_hours = round(sum(durations) / len(durations), 2) if durations else 0
-
-            # Avg response time (request created to assigned_at)
-            response_times = []
-            for t in assigned_tickets:
-                if t.request and t.request.request_date:
-                    delta = t.assigned_at - t.request.request_date
-                    response_times.append(delta.total_seconds() / 3600)
-            avg_response_hours = round(sum(response_times) / len(response_times), 2) if response_times else 0
-
-            # Avg client rating
-            ratings = [t.client_rating for t in completed_tickets if t.client_rating]
-            avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else None
-
-            # Skills
-            skills = list(
-                TechnicianSkill.objects.filter(technician=tech)
-                .values_list('service_type__name', flat=True)
+        # Each figure is read once for every technician, grouped by technician
+        # (eight queries per technician, each reading their whole job history, took seconds).
+        tickets = ServiceTicket.objects.filter(technician_id__in=tech_ids)
+        done_q = Q(status__in=COMPLETED_TICKET_STATUSES)
+        active_q = Q(status__in=ACTIVE_TICKET_STATUSES)
+        timed_q = Q(start_time__isnull=False, end_time__isnull=False, end_time__gte=F('start_time'))
+        if use_all_time:
+            count_fields = {
+                'total': Count('pk'),
+                'completed': Count('pk', filter=done_q),
+                'active': Count('pk', filter=active_q),
+            }
+            completed_tickets = tickets.filter(done_q, timed_q)
+            assigned_tickets = tickets.filter(assigned_at__isnull=False)
+        else:
+            assignment_period = (
+                Q(assigned_at__date__gte=start_date, assigned_at__date__lte=end_date) |
+                Q(assigned_at__isnull=True, scheduled_date__gte=start_date, scheduled_date__lte=end_date)
             )
-            monthly_activity_map = {
+            completion_period = (
+                Q(completed_date__date__gte=start_date, completed_date__date__lte=end_date) |
+                Q(completed_date__isnull=True, end_time__date__gte=start_date, end_time__date__lte=end_date)
+            )
+            count_fields = {
+                'total': Count('pk', filter=assignment_period),
+                'completed': Count('pk', filter=done_q & completion_period),
+                'active': Count('pk', filter=assignment_period & active_q),
+            }
+            completed_tickets = tickets.filter(completion_period, done_q, timed_q)
+            assigned_tickets = tickets.filter(
+                assigned_at__date__gte=start_date,
+                assigned_at__date__lte=end_date,
+            )
+        counts = {
+            row['technician_id']: row
+            for row in tickets.order_by().values('technician_id').annotate(**count_fields)
+        }
+
+        # Avg completion duration (start_time to end_time) and avg client rating
+        durations_by_tech = defaultdict(list)
+        ratings_by_tech = defaultdict(list)
+        for row in completed_tickets.values('technician_id', 'start_time', 'end_time', 'client_rating'):
+            durations_by_tech[row['technician_id']].append((row['end_time'] - row['start_time']).total_seconds() / 3600)
+            if row['client_rating']:
+                ratings_by_tech[row['technician_id']].append(row['client_rating'])
+
+        # Avg response time (request created to assigned_at)
+        response_by_tech = defaultdict(list)
+        for row in assigned_tickets.values('technician_id', 'assigned_at', 'request__request_date'):
+            if row['request__request_date']:
+                response_by_tech[row['technician_id']].append(
+                    (row['assigned_at'] - row['request__request_date']).total_seconds() / 3600
+                )
+
+        skills_by_tech = defaultdict(list)
+        for tech_id, skill_name in (
+            TechnicianSkill.objects.filter(technician_id__in=tech_ids)
+            .order_by('pk')
+            .values_list('technician_id', 'service_type__name')
+        ):
+            skills_by_tech[tech_id].append(skill_name)
+
+        monthly_by_tech = {
+            tech_id: {
                 b['month']: {
                     'month': b['month'],
                     'label': b['label'],
@@ -559,44 +568,51 @@ class TechnicianPerformanceViewSet(viewsets.ModelViewSet):
                     'active_jobs': 0,
                 } for b in month_buckets
             }
+            for tech_id in tech_ids
+        }
+        for t in tickets.values('technician_id', 'assigned_at', 'scheduled_date', 'status', 'completed_date', 'end_time'):
+            monthly_activity_map = monthly_by_tech[t['technician_id']]
+            # Count assigned/scheduled jobs
+            assigned_dt = t['assigned_at'] or t['scheduled_date']
+            if assigned_dt:
+                if isinstance(assigned_dt, timezone.datetime):
+                    assigned_day = timezone.localtime(assigned_dt).date() if timezone.is_aware(assigned_dt) else assigned_dt.date()
+                else:
+                    assigned_day = assigned_dt
+                month_key = assigned_day.replace(day=1).isoformat()
+                if month_key in monthly_activity_map:
+                    monthly_activity_map[month_key]['total_jobs'] += 1
+                    if t['status'] in ACTIVE_TICKET_STATUSES:
+                        monthly_activity_map[month_key]['active_jobs'] += 1
 
-            for t in tickets:
-                # Count assigned/scheduled jobs
-                assigned_dt = t.assigned_at or t.scheduled_date
-                if assigned_dt:
-                    if isinstance(assigned_dt, timezone.datetime):
-                        assigned_day = timezone.localtime(assigned_dt).date() if timezone.is_aware(assigned_dt) else assigned_dt.date()
-                    else:
-                        assigned_day = assigned_dt
-                    month_key = assigned_day.replace(day=1).isoformat()
+            # Count completed jobs
+            if t['status'] in COMPLETED_TICKET_STATUSES:
+                completed_dt = t['completed_date'] or t['end_time']
+                if completed_dt:
+                    completed_day = timezone.localtime(completed_dt).date() if timezone.is_aware(completed_dt) else completed_dt.date()
+                    month_key = completed_day.replace(day=1).isoformat()
                     if month_key in monthly_activity_map:
-                        monthly_activity_map[month_key]['total_jobs'] += 1
-                        if t.status in ACTIVE_TICKET_STATUSES:
-                            monthly_activity_map[month_key]['active_jobs'] += 1
-                
-                # Count completed jobs
-                if t.status in COMPLETED_TICKET_STATUSES:
-                    completed_dt = t.completed_date or t.end_time
-                    if completed_dt:
-                        completed_day = timezone.localtime(completed_dt).date() if timezone.is_aware(completed_dt) else completed_dt.date()
-                        month_key = completed_day.replace(day=1).isoformat()
-                        if month_key in monthly_activity_map:
-                            monthly_activity_map[month_key]['completed_jobs'] += 1
+                        monthly_activity_map[month_key]['completed_jobs'] += 1
 
-            monthly_activity = list(monthly_activity_map.values())
+        results = []
+        for tech in technicians:
+            tech_counts = counts.get(tech.id, {})
+            durations = durations_by_tech[tech.id]
+            response_times = response_by_tech[tech.id]
+            ratings = ratings_by_tech[tech.id]
             results.append({
                 'technician_id': tech.id,
                 'username': tech.username,
                 'display_name': tech.get_full_name() or tech.username,
                 'is_available': tech.is_available,
-                'total_jobs': period_total,
-                'completed_jobs': period_completed,
-                'active_jobs': period_active,
-                'avg_duration_hours': avg_duration_hours,
-                'avg_response_hours': avg_response_hours,
-                'avg_rating': avg_rating,
-                'skills': skills,
-                'monthly_activity': monthly_activity,
+                'total_jobs': tech_counts.get('total', 0),
+                'completed_jobs': tech_counts.get('completed', 0),
+                'active_jobs': tech_counts.get('active', 0),
+                'avg_duration_hours': round(sum(durations) / len(durations), 2) if durations else 0,
+                'avg_response_hours': round(sum(response_times) / len(response_times), 2) if response_times else 0,
+                'avg_rating': round(sum(ratings) / len(ratings), 1) if ratings else None,
+                'skills': skills_by_tech[tech.id],
+                'monthly_activity': list(monthly_by_tech[tech.id].values()),
                 'period': 'all_time' if use_all_time else f'last_{days}_days',
                 'period_days': days,
             })

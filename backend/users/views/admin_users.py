@@ -292,7 +292,7 @@ class AdminClientsViewSet(viewsets.ViewSet):
         """Get all clients"""
         from users.views.helpers import delete_expired_unverified_clients
         delete_expired_unverified_clients()
-        clients = User.objects.filter(role='client').prefetch_related('capability_grants')
+        clients = User.objects.filter(role='client').select_related('client_profile', 'technician_profile', 'management_profile').prefetch_related('capability_grants')
         serializer = UserSerializer(clients, many=True)
         return Response(serializer.data)
 

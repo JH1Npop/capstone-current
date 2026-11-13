@@ -25,9 +25,18 @@ const normalizeMessage = (message) => ({
 
 export const fetchMessages = async (role, username) => {
   try {
-    const { data } = await api.get('/messages/', { params: { role, username } });
-    const messageArray = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
-    return Array.isArray(messageArray) ? messageArray.map(normalizeMessage) : [];
+    // Every room is built from this one list, so load all pages (the server's default page is only 10).
+    const messageArray = [];
+    for (let page = 1; page <= 20; page += 1) {
+      const { data } = await api.get('/messages/', { params: { role, username, page, page_size: 500 } });
+      if (Array.isArray(data)) {
+        messageArray.push(...data);
+        break;
+      }
+      messageArray.push(...(Array.isArray(data?.results) ? data.results : []));
+      if (!data?.next) break;
+    }
+    return messageArray.map(normalizeMessage);
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to load messages.'));
   }

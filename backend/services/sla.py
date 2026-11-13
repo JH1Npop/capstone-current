@@ -1,3 +1,4 @@
+from datetime import timezone as dt_timezone
 from datetime import datetime, time, timedelta
 
 from django.utils import timezone
@@ -163,17 +164,42 @@ def _resolve_scheduled_start(ticket):
     if scheduled_time is None:
         scheduled_time = TIME_SLOT_DEFAULTS['morning']
 
+    # The appointment's date and time are the business's local time (UTC+8), not the server's UTC.
+    from services.business_time import business_timezone
+
     naive_start = datetime.combine(ticket.scheduled_date, scheduled_time)
-    current_timezone = timezone.get_current_timezone()
     if timezone.is_naive(naive_start):
-        return timezone.make_aware(naive_start, current_timezone)
-    return naive_start.astimezone(current_timezone)
+        return naive_start.replace(tzinfo=business_timezone())
+    return naive_start.astimezone(business_timezone())
+
+
+def ticket_status_history(ticket):
+    """The ticket's status history, oldest first.
+
+    Uses the history already loaded with ``prefetch_related('status_history')`` (lists of tickets),
+    otherwise one query. Filtering or ordering the related manager would skip the prefetched rows and
+    query again for every ticket.
+    """
+    if not getattr(ticket, 'pk', None):
+        return []
+    prefetched = (getattr(ticket, '_prefetched_objects_cache', None) or {}).get('status_history')
+    if prefetched is not None:
+        oldest = datetime.min.replace(tzinfo=dt_timezone.utc)
+        return sorted(prefetched, key=lambda event: (event.timestamp or oldest, event.pk))
+    return list(ticket.status_history.order_by('timestamp', 'pk').only('ticket_id', 'status', 'timestamp'))
+
+
+def sla_batch_calendar():
+    """The work calendar, loaded once for a list of tickets (pass it as ``calendar=``)."""
+    from services.work_calendar import load_work_calendar
+
+    return load_work_calendar()
 
 
 def _status_entered_at(ticket):
     """When the ticket most recently entered its current status, if recorded."""
     try:
-        events = ticket.status_history.all()
+        events = ticket_status_history(ticket)
     except (ValueError, AttributeError):
         return None
     times = [event.timestamp for event in events if event.status == ticket.status and event.timestamp]
@@ -226,7 +252,9 @@ def get_ticket_dispatch_state(ticket, *, now=None):
     if now is None:
         now = timezone.now()
 
-    local_now = timezone.localtime(now)
+    from services.business_time import business_timezone
+
+    local_now = now.astimezone(business_timezone())
     scheduled_start = _resolve_scheduled_start(ticket)
     closed_statuses = set(CLOSED_TICKET_STATUSES)
 
@@ -334,7 +362,8 @@ def evaluate_service_request_sla(service_request, *, now=None):
     )
 
 
-def evaluate_service_ticket_sla(service_ticket, *, now=None):
+def evaluate_service_ticket_sla(service_ticket, *, now=None, calendar=None):
+    """``calendar``: pass ``sla_batch_calendar()`` when evaluating many tickets, so Settings are read once."""
     if now is None:
         now = timezone.now()
 
@@ -418,16 +447,35 @@ def evaluate_service_ticket_sla(service_ticket, *, now=None):
             or service_ticket.created_at
             or now
         )
-        warning_after, overdue_after = _rule_durations(
-            'execution_delay',
-            timedelta(minutes=estimated_minutes * EXECUTION_WARNING_MULTIPLIER),
-            timedelta(minutes=estimated_minutes * EXECUTION_OVERDUE_MULTIPLIER),
+        # The job is late only after its own estimated duration plus the allowed extra time, counted
+        # in working time (business hours on working days; see services/work_calendar.py). The
+        # Execution delay rule in Settings is that extra time; without it the extra is half the
+        # estimate (warning) and the full estimate (overdue). Time spent On Hold does not count.
+        from services.work_calendar import (
+            add_working_minutes,
+            load_work_calendar,
+            on_hold_intervals,
+            working_minutes_between,
         )
+
+        extra_warning, extra_overdue = _rule_durations(
+            'execution_delay',
+            timedelta(minutes=estimated_minutes * (EXECUTION_WARNING_MULTIPLIER - 1)),
+            timedelta(minutes=estimated_minutes * (EXECUTION_OVERDUE_MULTIPLIER - 1)),
+        )
+        calendar = calendar or load_work_calendar()
+        history = ticket_status_history(service_ticket)
+        held_minutes = sum(
+            working_minutes_between(max(held_from, execution_start), held_until, calendar, count_start_day=False)
+            for held_from, held_until in on_hold_intervals(history, now)
+            if held_until > execution_start
+        )
+        base_minutes = estimated_minutes + held_minutes
         return _build_timed_result(
             rule='execution_delay',
             label_prefix='Execution',
-            warning_at=execution_start + warning_after,
-            due_at=execution_start + overdue_after,
+            warning_at=add_working_minutes(execution_start, base_minutes + int(extra_warning.total_seconds() // 60), calendar),
+            due_at=add_working_minutes(execution_start, base_minutes + int(extra_overdue.total_seconds() // 60), calendar),
             action_required='Complete work',
             now=now,
         )
@@ -517,10 +565,11 @@ def check_and_escalate_sla_breaches(*, now=None):
     # Check tickets
     active_tickets = ServiceTicket.objects.filter(
         status__in=['Not Started', 'In Progress', 'On Hold', 'For Inspection', 'Ready for Service'],
-    )
+    ).select_related('request__service_type', 'technician').prefetch_related('status_history')
+    calendar = sla_batch_calendar()
 
     for ticket in active_tickets:
-        evaluation = evaluate_service_ticket_sla(ticket, now=now)
+        evaluation = evaluate_service_ticket_sla(ticket, now=now, calendar=calendar)
 
         if evaluation.get('state') == SLA_STATE_OVERDUE:
             rule = evaluation.get('rule')
@@ -753,10 +802,11 @@ def check_sla_warnings(*, now=None):
     # Check tickets
     active_tickets = ServiceTicket.objects.filter(
         status__in=['Not Started', 'In Progress', 'On Hold', 'For Inspection', 'Ready for Service'],
-    )
+    ).select_related('request__service_type', 'technician').prefetch_related('status_history')
+    calendar = sla_batch_calendar()
 
     for ticket in active_tickets:
-        evaluation = evaluate_service_ticket_sla(ticket, now=now)
+        evaluation = evaluate_service_ticket_sla(ticket, now=now, calendar=calendar)
 
         if evaluation.get('state') == SLA_STATE_WARNING:
             rule = evaluation.get('rule')

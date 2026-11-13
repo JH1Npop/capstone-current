@@ -1,7 +1,7 @@
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from .models import ServiceTicket, TicketCrewAssignment
+from .models import SLARule, ServiceTicket, TicketCrewAssignment
 
 
 def _sync_technician_ids(technician_ids):
@@ -43,3 +43,12 @@ def reconcile_added_crew_availability(sender, instance, **kwargs):
 @receiver(post_delete, sender=TicketCrewAssignment)
 def reconcile_removed_crew_availability(sender, instance, **kwargs):
     _sync_technician_ids({instance.technician_id})
+
+
+@receiver(post_save, sender=SLARule)
+@receiver(post_delete, sender=SLARule)
+def forget_cached_sla_rule(sender, instance, **kwargs):
+    """A saved SLA rule applies immediately instead of after the 5-minute rule cache expires."""
+    from django.core.cache import cache
+
+    cache.delete(f'sla_rule_{instance.key}')

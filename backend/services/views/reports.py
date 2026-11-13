@@ -1,4 +1,6 @@
 # Auto-split from services/views.py
+import re
+
 from services.views.helpers import *  # noqa: F401,F403
 from users.permissions import (
     CanViewAdminJobHistory,
@@ -42,6 +44,12 @@ def _format_person_name(user):
     ]
     full_name = ' '.join(part for part in parts if part)
     return full_name or getattr(user, 'username', '')
+
+
+def _barangay_from_address(address):
+    """Return a saved barangay label without pretending free-text addresses are authoritative GIS data."""
+    match = re.search(r'\b(?:brgy\.?|barangay)\s+([^,;]+)', str(address or ''), flags=re.IGNORECASE)
+    return match.group(1).strip() if match and match.group(1).strip() else 'Unspecified barangay'
 
 class CoverageHeatmapViewSet(viewsets.ViewSet):
     """Coverage Heatmap - GIS-based visualization showing areas with high concentrations of service requests."""
@@ -194,11 +202,89 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
             ]
             heatmap_points.append(point)
 
+        # Administrative summaries use the saved location text and coordinate centroid. They are
+        # summary markers, not official boundary polygons. Barangay is parsed from common
+        # "Brgy."/"Barangay" address forms because the current schema has no barangay column.
+        geographic_groups = {'barangay': {}, 'city': {}, 'province': {}}
+        for req in service_requests:
+            loc = req.location
+            latitude = float(loc.latitude)
+            longitude = float(loc.longitude)
+            city = str(loc.city or '').strip() or 'Unspecified city/municipality'
+            province = str(loc.province or '').strip() or 'Unspecified province'
+            barangay = _barangay_from_address(loc.address)
+            service_names = [
+                item.service_type.name
+                for item in req.service_items.all()
+                if item.service_type_id
+            ] or [req.service_type.name if req.service_type else 'Unknown Service']
+            technicians = {}
+            for ticket in getattr(req, 'heatmap_tickets', []):
+                technicians[ticket.technician_id] = _format_person_name(ticket.technician)
+                for assignment in ticket.crew_assignments.all():
+                    if assignment.technician_id:
+                        technicians[assignment.technician_id] = _format_person_name(assignment.technician)
+
+            area_specs = {
+                'barangay': ((barangay.casefold(), city.casefold(), province.casefold()), barangay, f'{barangay}, {city}'),
+                'city': ((city.casefold(), province.casefold()), city, f'{city}, {province}'),
+                'province': ((province.casefold(),), province, province),
+            }
+            for level, (key, name, label) in area_specs.items():
+                area = geographic_groups[level].setdefault(key, {
+                    'area_level': level,
+                    'area_name': name,
+                    'address': label,
+                    'count': 0,
+                    'latitude_total': 0.0,
+                    'longitude_total': 0.0,
+                    'service_breakdown': {},
+                    'clients': {},
+                    'technicians': {},
+                })
+                area['count'] += 1
+                area['latitude_total'] += latitude
+                area['longitude_total'] += longitude
+                for service_name in service_names:
+                    area['service_breakdown'][service_name] = area['service_breakdown'].get(service_name, 0) + 1
+                area['clients'][req.client_id] = _format_person_name(req.client)
+                area['technicians'].update(technicians)
+
+        geographic_levels = {}
+        for level, groups in geographic_groups.items():
+            rows = []
+            for area in groups.values():
+                count = area['count']
+                rows.append({
+                    'area_level': area['area_level'],
+                    'area_name': area['area_name'],
+                    'address': area['address'],
+                    'lat': area['latitude_total'] / count,
+                    'lng': area['longitude_total'] / count,
+                    'count': count,
+                    'service_breakdown': [
+                        {'name': name, 'count': service_count}
+                        for name, service_count in sorted(
+                            area['service_breakdown'].items(), key=lambda item: (-item[1], item[0])
+                        )
+                    ],
+                    'clients': [
+                        {'id': person_id, 'name': name}
+                        for person_id, name in sorted(area['clients'].items(), key=lambda item: item[1])
+                    ],
+                    'technicians': [
+                        {'id': person_id, 'name': name}
+                        for person_id, name in sorted(area['technicians'].items(), key=lambda item: item[1])
+                    ],
+                })
+            geographic_levels[level] = sorted(rows, key=lambda row: (-row['count'], row['address']))
+
         return Response({
             # total_points counts hotspots; total_jobs counts the completed jobs inside them.
             'total_points': len(heatmap_points),
             'total_jobs': sum(point['count'] for point in heatmap_points),
             'heatmap_data': heatmap_points,
+            'geographic_levels': geographic_levels,
             'max_density': max([p['count'] for p in heatmap_points]) if heatmap_points else 0,
             'client_options': sorted(client_options, key=lambda item: item['name'].lower()),
             'technician_options': sorted(technician_options, key=lambda item: item['name'].lower()),

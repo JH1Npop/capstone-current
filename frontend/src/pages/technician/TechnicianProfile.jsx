@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   FiCamera,
   FiMapPin,
@@ -15,7 +16,7 @@ import Layout from '../../components/layout/Layout';
 import ProfileIdentityCard, { ProfileField } from '../../components/shared/ProfileIdentityCard';
 import ProfileSecuritySection from '../../components/shared/ProfileSecuritySection';
 import { useAuth } from '../../context/AuthContext';
-import { PROFILE_IMAGE_ACCEPT, releaseObjectPreview, validateProfileImageFile } from '../../utils/profile';
+import { PROFILE_IMAGE_ACCEPT, profileSaveOutcome, releaseObjectPreview, validateProfileImageFile } from '../../utils/profile';
 
 const emptyProfile = {
   first_name: '',
@@ -25,7 +26,8 @@ const emptyProfile = {
   address: '',
 };
 
-const inputClass = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
+// 44 px tall, and 16 px text on phones so the browser does not zoom into the field.
+const inputClass = 'min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-base outline-none sm:text-sm transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
 
 const profileFromUser = (user) => ({
   first_name: user?.first_name || '',
@@ -77,6 +79,12 @@ export default function TechnicianProfile() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const messageRef = useRef(null);
+
+  // Messages sit at the top; on a phone the buttons are far below, so bring a new message into view.
+  useEffect(() => {
+    if (message.text) messageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [message]);
 
   useEffect(() => {
     if (!user) return;
@@ -157,17 +165,13 @@ export default function TechnicianProfile() {
         ...(emailChanged ? { current_password: emailChangePassword } : {}),
         ...(profileImageFile ? { profile_image: profileImageFile } : {}),
       });
+      const { savedUser, message: outcome } = profileSaveOutcome(updatedProfile, emailChanged);
       releaseObjectPreview(profileImagePreview);
-      updateCurrentUser(updatedProfile);
+      updateCurrentUser(savedUser);
       setEmailChangePassword('');
       setProfileImageFile(null);
       setEditing(false);
-      setMessage({
-        type: 'success',
-        text: emailChanged && updatedProfile.pending_email
-          ? `Profile saved. Verify ${updatedProfile.pending_email} before it replaces your current email.`
-          : 'Profile updated successfully.',
-      });
+      setMessage(outcome);
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to update profile.' });
     } finally {
@@ -180,7 +184,7 @@ export default function TechnicianProfile() {
       <div className="py-2">
         <div className="mx-auto max-w-5xl">
           {message.text ? (
-            <div role="status" aria-live="polite" className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+            <div ref={messageRef} role={message.type === 'error' ? 'alert' : 'status'} className={`mb-4 scroll-mt-24 rounded-lg border px-4 py-3 text-sm ${
               message.type === 'success'
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                 : 'border-rose-200 bg-rose-50 text-rose-700'
@@ -200,8 +204,10 @@ export default function TechnicianProfile() {
               <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
                 <FiShield size={14} /> Field Technician
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
-                {technicianProfile.status || 'Active'}
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 ${
+                (technicianProfile.status || 'Available') === 'Available' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {technicianProfile.status || 'Available'}
               </span>
             </ProfileIdentityCard>
 
@@ -213,15 +219,15 @@ export default function TechnicianProfile() {
 
             {editing ? (
               <form onSubmit={saveProfile} className="mt-6 space-y-4">
-                <label className="flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 sm:px-4">
+                <label className="flex min-h-11 min-w-0 cursor-pointer items-center gap-3 rounded-lg border border-dashed focus-within:ring-2 focus-within:ring-brand-300 border-slate-300 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 sm:px-4">
                   <FiCamera size={18} className="shrink-0" />
                   <span className="min-w-0 truncate">{profileImageFile ? profileImageFile.name : 'Choose a new profile photo'}</span>
-                  <input type="file" accept={PROFILE_IMAGE_ACCEPT} onChange={handleProfileImageChange} className="hidden" />
+                  <input type="file" accept={PROFILE_IMAGE_ACCEPT} onChange={handleProfileImageChange} className="sr-only" />
                 </label>
                 <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                   <span>JPEG, PNG, WebP, or GIF. Maximum 2 MB.</span>
                   {profileImageFile ? (
-                    <button type="button" onClick={() => { releaseObjectPreview(profileImagePreview); setProfileImageFile(null); setProfileImagePreview(user?.profile_image_url || ''); }} className="font-semibold text-slate-700 hover:text-slate-900">
+                    <button type="button" onClick={() => { releaseObjectPreview(profileImagePreview); setProfileImageFile(null); setProfileImagePreview(user?.profile_image_url || ''); }} className="-my-2 min-h-11 self-start font-semibold text-slate-700 hover:text-slate-900">
                       Clear selected photo
                     </button>
                   ) : null}
@@ -267,11 +273,11 @@ export default function TechnicianProfile() {
                   </label>
                 </div>
                 <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-                  <button type="submit" disabled={loading} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
+                  <button type="submit" disabled={loading} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
                     <FiSave size={16} />
-                    Save Changes
+                    {loading ? 'Saving…' : 'Save Changes'}
                   </button>
-                  <button type="button" onClick={cancelProfileEdit} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300">
+                  <button type="button" onClick={cancelProfileEdit} disabled={loading} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300">
                     <FiX size={16} />
                     Dismiss
                   </button>
@@ -294,11 +300,19 @@ export default function TechnicianProfile() {
               <h3 className="mt-1 text-lg font-semibold text-slate-900">Performance</h3>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <Metric label="Total Jobs" value={technicianProfile.totalCompleted || 0} />
-              <Metric label="Last 30 Days" value={completedLast30Days || 0} />
-              <Metric label="Avg Time" value={technicianProfile.avgCompletionTime || 'N/A'} />
-              <Metric label="Rating" value={rating ? `${rating.toFixed(1)} / 5` : 'Not rated'} />
+              <Metric label="Jobs completed" value={technicianProfile.totalCompleted || 0} />
+              <Metric label="Last 30 days" value={completedLast30Days || 0} />
+              <div className="col-span-2">
+                <Metric
+                  label="Client rating"
+                  value={rating ? `${rating.toFixed(1)} / 5` : 'No ratings yet'}
+                  note={rating && technicianProfile.ratedCount ? `from ${technicianProfile.ratedCount} rated job${technicianProfile.ratedCount === 1 ? '' : 's'}` : ''}
+                />
+              </div>
             </div>
+            <Link to="/technician/job-history" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-brand-600 hover:text-brand-700">
+              View job history
+            </Link>
           </section>
 
           <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
@@ -324,11 +338,6 @@ export default function TechnicianProfile() {
                         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${skillLevelClass(skill?.skill_level)}`}>
                           {formatSkillLevel(skill?.skill_level)}
                         </span>
-                        {skill?.service_type ? (
-                          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
-                            Service #{skill.service_type}
-                          </span>
-                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -348,11 +357,14 @@ export default function TechnicianProfile() {
   );
 }
 
-function Metric({ label, value }) {
+function Metric({ label, value, note = '' }) {
   return (
     <div className="rounded-lg bg-slate-50 px-4 py-3">
       <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
+      <p className="mt-1 text-lg font-bold text-slate-900">
+        {value}
+        {note ? <span className="ml-2 text-sm font-medium text-slate-500">{note}</span> : null}
+      </p>
     </div>
   );
 }

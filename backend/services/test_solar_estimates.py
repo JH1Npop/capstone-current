@@ -230,8 +230,8 @@ class SolarEstimateApiTests(APITestCase):
             'location_address': '123 Solar Street',
             'location_city': 'Davao City',
             'location_province': 'Davao del Sur',
-            'latitude': '7.073100',
-            'longitude': '125.612800',
+            'latitude': '14.211500',  # inside the service area
+            'longitude': '121.165000',
         }
 
         first = self.client.post(convert_url, conversion_payload, format='json')

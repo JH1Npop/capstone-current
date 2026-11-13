@@ -46,11 +46,18 @@ class AFNMediaCloudinaryStorage(MediaCloudinaryStorage):
     }
 
     def _get_resource_type(self, name):
-        extension = Path(name).suffix.lower()
+        normalized_name = str(name or '').replace('\\', '/').strip('/')
+        path_parts = tuple(part for part in normalized_name.split('/') if part)
+        extension = Path(normalized_name).suffix.lower()
         if extension in self.IMAGE_EXTENSIONS:
             return 'image'
         if extension in self.VIDEO_EXTENSIONS:
             return 'video'
+        # Cloudinary public IDs may omit the original extension. Profile files
+        # are image-validated at upload time, so their dedicated path is a
+        # stronger resource-type signal than an extensionless stored name.
+        if 'profiles' in path_parts:
+            return 'image'
         return 'raw'
 
     def _is_protected_document(self, name):

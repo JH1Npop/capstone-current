@@ -17,6 +17,14 @@ DATABASES = {
     },
 }
 
+# Pages fire many API calls at once (React development mode runs each load twice), and Django's
+# development server keeps only 10 waiting connections. On Windows the 11th is refused outright,
+# so a busy page showed "The server encountered an error" at random. Production runs Daphne and is
+# not affected; this raises the queue for the browser-test server only.
+from django.core.servers import basehttp as _basehttp  # noqa: E402
+
+_basehttp.WSGIServer.request_queue_size = 128
+
 PASSWORD_HASHERS = [
     'afn_service_management.hashers.FastTestPBKDF2PasswordHasher',
 ]

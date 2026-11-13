@@ -85,6 +85,8 @@ export const buildTicketContextFromPrefill = (ticket, prefill = null) => {
     project_details: prefill.ticket?.project_details || ticket?.project_details || ticket?.projectDetails || {},
     technical_data_sheet: prefill.technical_data_sheet || ticket?.technical_data_sheet || null,
     installation_contract: prefill.installation_contract || ticket?.installation_contract || null,
+    // Company name and address from Admin Settings (Organization & Document Defaults).
+    document_defaults: prefill.document_defaults || ticket?.document_defaults || null,
     turnover_acceptance: prefill.turnover_acceptance || ticket?.turnover_acceptance || null,
     field_service_reports: prefill.field_service_reports || ticket?.field_service_reports || [],
     request_details: {
@@ -638,8 +640,12 @@ export const buildInstallationContractFormFromTicket = (ticket, quotationData = 
   const ticketId = String(ticket?.id || '').padStart(3, '0');
   const quotation = quotationData?.[0] || null;
 
+  const companyDefaults = ticket?.document_defaults || {};
+
   return {
     ...base,
+    companyName: companyDefaults.company_name || base.companyName,
+    companyAddress: companyDefaults.company_address || base.companyAddress,
     contractDate,
     clientName,
     clientAddress: ticket?.request_details?.client_address || location,

@@ -1,5 +1,6 @@
 """Tests split mechanically from the former services.tests module."""
 
+from services.business_time import business_today
 from ._imports import *  # noqa: F403,F405
 
 
@@ -248,7 +249,7 @@ class FollowUpCaseApiTests(APITestCase):
 
     def test_warranty_case_response_due_date_is_not_coverage_expiry(self):
         self.completed_ticket.warranty_status = 'active'
-        self.completed_ticket.warranty_end_date = timezone.localdate() + timedelta(days=365)
+        self.completed_ticket.warranty_end_date = business_today() + timedelta(days=365)
         self.completed_ticket.save(update_fields=['warranty_status', 'warranty_end_date'])
         self.client.force_authenticate(user=self.admin_user)
 
@@ -265,7 +266,7 @@ class FollowUpCaseApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['due_date'], (timezone.localdate() + timedelta(days=2)).isoformat())
+        self.assertEqual(response.data['due_date'], (business_today() + timedelta(days=2)).isoformat())
         self.assertEqual(response.data['ticket_warranty_end_date'], self.completed_ticket.warranty_end_date.isoformat())
 
     def test_approving_auto_created_request_does_not_create_duplicate_ticket(self):

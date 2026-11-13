@@ -82,6 +82,11 @@ class FieldServiceReportSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if self.instance and self.instance.client_acknowledged:
             raise serializers.ValidationError("Cannot update a Field Service Report that has already been acknowledged by the client.")
+        request = self.context.get('request')
+        if request is not None and getattr(request.user, 'role', None) == 'technician':
+            # The client's acknowledgement (which locks the report) is recorded by the office.
+            attrs.pop('client_acknowledged', None)
+            attrs.pop('client_signature_date', None)
         return super().validate(attrs)
 
     class Meta:

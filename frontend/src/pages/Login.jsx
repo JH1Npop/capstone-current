@@ -41,6 +41,11 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState('');
   const [returningVisitor] = useState(hasSignedInBefore);
+  // Why the person was signed out (set by the profile page after a security change).
+  const signedOutNotice = {
+    password_changed: 'Your password was changed. Sign in with your new password.',
+    mfa_changed: 'Multi-factor authentication was turned off. Sign in again.',
+  }[searchParams.get('reason')] || '';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -102,6 +107,9 @@ export default function Login() {
       variant="solar"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
+        {signedOutNotice && !error ? (
+          <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{signedOutNotice}</p>
+        ) : null}
         <div className={mfaRequired ? 'hidden' : ''}>
           <label className="mb-2 block text-sm font-semibold text-slate-700">Username or Email</label>
           <input

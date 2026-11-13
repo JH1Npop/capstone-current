@@ -29,7 +29,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all().prefetch_related('capability_grants')
+    queryset = User.objects.all().select_related('client_profile', 'technician_profile', 'management_profile').prefetch_related('capability_grants')
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
@@ -68,9 +68,9 @@ class UserViewSet(viewsets.ModelViewSet):
         role_filter = self.request.query_params.get('role')
 
         if is_superadmin_role(user.role):
-            queryset = User.objects.all().prefetch_related('capability_grants')
+            queryset = User.objects.all().select_related('client_profile', 'technician_profile', 'management_profile').prefetch_related('capability_grants')
         elif user.role == 'admin' and user_has_any_capability(user, USER_DIRECTORY_VIEW_CAPABILITIES):
-            queryset = User.objects.all().prefetch_related('capability_grants')
+            queryset = User.objects.all().select_related('client_profile', 'technician_profile', 'management_profile').prefetch_related('capability_grants')
         elif user.role in ['admin', 'technician', 'client']:
             queryset = User.objects.filter(id=user.id).prefetch_related('capability_grants')
 
@@ -134,10 +134,14 @@ class UserViewSet(viewsets.ModelViewSet):
                         user.pending_email = None
                         user.pending_email_verification_sent_at = None
                         user.save(update_fields=['pending_email', 'pending_email_verification_sent_at'])
-                        return Response(
-                            {'error': 'Profile changes were saved, but the new email could not be verified right now. Please check the new email address or try again later.'},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        # The other changes are saved: return them, with the email left unchanged
+                        # (no pending_email), so the page can say the new address was not sent.
+                        data = UserSerializer(request.user, context={'request': request}).data
+                        data['email_change_error'] = (
+                            'The verification email for the new address could not be sent, so your email '
+                            'is unchanged. Check the address or try again later.'
                         )
+                        return Response(data)
                 return Response(UserSerializer(request.user, context={'request': request}).data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

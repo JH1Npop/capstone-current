@@ -135,7 +135,7 @@ test.describe('Responsive and keyboard smoke coverage', () => {
     await seedAuthState(page, authState);
     await page.goto('/admin/documents');
     await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible({ timeout: 30000 });
-    await page.getByRole('button', { name: 'Quotation Proposal' }).click();
+    await page.getByRole('combobox', { name: 'Document', exact: true }).selectOption('quotation_proposal');
     await expectNoHorizontalOverflow(page);
     await expectNoOverlappingMainButtons(page);
     await expectAssistantDoesNotCoverMainButtons(page);

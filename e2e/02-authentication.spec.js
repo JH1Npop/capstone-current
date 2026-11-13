@@ -114,3 +114,17 @@ test.describe('Authentication - Sign-in greeting', () => {
     await expect(heading).toHaveText('Welcome back');
   });
 });
+
+test.describe('Authentication - Local offline browser state', () => {
+  test('2.9 - localhost login still reaches the local backend without public internet', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, 'onLine', {
+        configurable: true,
+        get: () => false,
+      });
+    });
+
+    await loginAs(page, ACCOUNTS.superadmin.username, { expectedPath: /\/admin\/dashboard/ });
+    await expect(page.getByText('You are offline. Cached records may be shown, and updates will need a connection.')).toHaveCount(0);
+  });
+});

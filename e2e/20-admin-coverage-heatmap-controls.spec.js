@@ -35,6 +35,10 @@ for (const username of ['admin_test', 'superadmin_test']) {
     test.describe.configure({ timeout: 300000 });
 
     test(`20 - ${username}: every Coverage Heatmap control works`, async ({ page, request }) => {
+      const leafletErrors = [];
+      page.on('pageerror', (error) => {
+        if (/leaflet|_leaflet_pos/i.test(error.message)) leafletErrors.push(error.message);
+      });
       const auth = loadAuthStateFromBackend(username);
       const admin = apiAs(request, loadAuthStateFromBackend('superadmin_test'));
       const client = apiAs(request, loadAuthStateFromBackend('client_test'));
@@ -128,6 +132,32 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await expectNumbers(all);
       await expect(card('Technicians with a location')).toContainText(String(coverage.total_technicians));
 
+      // The density key stays on the map, while the ranked detail list sits beside it on desktop.
+      const densityScale = page.getByRole('img', { name: 'Service density scale, lower to higher jobs per area' });
+      await expect(densityScale).toBeVisible();
+      const mapBox = await page.locator('.leaflet-container').boundingBox();
+      const hotspotBox = await page.getByRole('region', { name: 'Busiest hotspots' }).boundingBox();
+      expect(mapBox).toBeTruthy();
+      expect(hotspotBox).toBeTruthy();
+      expect(hotspotBox.x).toBeGreaterThan(mapBox.x);
+
+      const geographicLevel = page.getByRole('combobox', { name: 'Geographic level' });
+      await expect(geographicLevel.locator('option')).toHaveCount(4);
+      for (const [value, key, cardTitle, singular, plural] of [
+        ['barangay', 'barangay', 'Mapped barangays', 'barangay', 'barangays'],
+        ['city', 'city', 'Mapped cities / municipalities', 'city / municipality', 'cities / municipalities'],
+        ['province', 'province', 'Mapped provinces', 'province', 'provinces'],
+      ]) {
+        await geographicLevel.selectOption(value);
+        const rows = all.geographic_levels[key];
+        await expect(card(cardTitle)).toContainText(String(rows.length));
+        const label = rows.length === 1 ? singular : plural;
+        await expect(page.getByText(new RegExp(`grouped into ${rows.length} mapped ${label}`))).toBeVisible();
+      }
+      await geographicLevel.selectOption('hotspot');
+      await expectNumbers(all);
+      expect(leafletErrors).toEqual([]);
+
       // ── Service Mix chips sum the per-hotspot service counts ──
       const mix = {};
       for (const point of all.heatmap_data) for (const s of point.service_breakdown) mix[s.name] = (mix[s.name] || 0) + s.count;
@@ -167,10 +197,12 @@ for (const username of ['admin_test', 'superadmin_test']) {
       const coverageLayer = page.getByRole('button', { name: 'Technician coverage', exact: true });
       await densityLayer.click();
       await expect(densityLayer).toHaveAttribute('aria-pressed', 'false');
+      await expect(densityScale).toHaveCount(0);
       await coverageLayer.click();
       await expect(coverageLayer).toHaveAttribute('aria-pressed', 'false');
       await expect(page.getByText('Both layers are hidden. Turn on Service density or Technician coverage.')).toBeVisible();
       await densityLayer.click();
+      await expect(densityScale).toBeVisible();
       await coverageLayer.click();
       await expect(page.getByText(/Both layers are hidden/)).toHaveCount(0);
 

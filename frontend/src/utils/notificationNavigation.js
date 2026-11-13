@@ -18,6 +18,7 @@ const SECTION_LABELS = {
   '/client/support': 'Open Client Support',
   '/client/service-history': 'Open service history',
   '/client/requests': 'Open request',
+  '/client/purchase-records': 'Open purchase record',
 };
 
 const lower = (value) => String(value || '').toLowerCase();
@@ -29,7 +30,7 @@ function adminSection(title, message, type) {
     if (/^new message from /.test(title) || /after-sales message/.test(title)) return '/admin/messages';
     if (/customer service|customer support|support case/.test(title)) return '/admin/client-support';
     if (/equipment requested/.test(title)) return '/admin/inventory';
-    if (/inspection report submitted|on hold|equipment|awaiting materials|reschedul|status updated|in progress/.test(title)) {
+    if (/inspection report submitted|on hold|equipment|awaiting materials|reschedul|status updated|in progress|deposit decision/.test(title)) {
       return '/admin/service-tickets';
     }
     if (/job completed|completed ticket/.test(title)) return '/admin/job-history';
@@ -55,6 +56,8 @@ function technicianSection(title, message) {
   const text = `${title} ${message}`;
   // The inspection team is released after the office decision, so the job is no longer in My Jobs.
   if (/inspection decision/.test(title)) return null;
+  // A cancelled job has left My Jobs too, so the notice stays in the bell.
+  if (/ cancelled$/.test(title)) return null;
   if (/^new message from /.test(title) || /after-sales message/.test(title) || /message/.test(text)) return '/technician/messages';
   if (/reschedul|schedule/.test(text)) return '/technician/schedule';
   return '/technician/my-jobs';
@@ -62,6 +65,10 @@ function technicianSection(title, message) {
 
 function clientSection(title, message) {
   if (/support/.test(title) || /customer support|support case/.test(message)) return '/client/support';
+  // "Purchase record available" and "Payment complete" belong to Purchase Records, not the request.
+  if (/purchase record|payment complete/.test(title) || /in your purchase records|is fully paid/.test(message)) {
+    return '/client/purchase-records';
+  }
   // "Inspection completed" is an early step, not finished work.
   if (/inspection/.test(`${title} ${message}`)) return '/client/requests';
   if (/completed/.test(`${title} ${message}`)) return '/client/service-history';
@@ -97,8 +104,22 @@ export const getNotificationDestination = (notification, role) => {
     const label = /equipment/.test(title) ? 'Open ticket' : SECTION_LABELS[section];
     return { path: `/technician/my-jobs?ticketId=${ticketId}`, label };
   }
-  if (section === '/client/requests' && requestId) {
-    return { path: `/client/requests/${requestId}?entity=request`, label: SECTION_LABELS[section] };
+  // "Customer support replied to case #12" / "Support case #12 resolved" open that case.
+  const supportCaseMatch = section === '/client/support' ? title.match(/case #(\d+)/) : null;
+  if (supportCaseMatch) {
+    return { path: `/client/support?case=${supportCaseMatch[1]}`, label: 'Open support case' };
   }
+  if (section === '/client/purchase-records' && ticketId) {
+    return { path: `/client/purchase-records?ticketId=${ticketId}`, label: SECTION_LABELS[section] };
+  }
+  if (section === '/client/requests' && requestId) {
+    // Notifications that ask the client to act name the action.
+    let label = SECTION_LABELS[section];
+    if (/quotation .* ready/.test(title)) label = 'Review quotation';
+    else if (/confirm the handover/.test(title)) label = 'Confirm handover';
+    return { path: `/client/requests/${requestId}?entity=request`, label };
+  }
+  // Without a linked request the button opens the list, so it must not promise "the request".
+  if (section === '/client/requests') return { path: section, label: 'Open My Requests' };
   return { path: section, label: SECTION_LABELS[section] || 'Open' };
 };

@@ -144,3 +144,113 @@ def ticket_deposit_gate(ticket):
             **summary,
         }
     return {'ready': True, 'code': 'deposit_paid', 'quotation': quotation, **summary}
+
+
+
+# ── A deposit after the job was cancelled ──
+# The office records whether the money was refunded or kept (for example as a cancellation fee).
+# The decision is an activity-log entry on the quotation (kind "deposit_outcome"); a refund also
+# voids the payments so they no longer count as received.
+DEPOSIT_OUTCOME_KIND = 'deposit_outcome'
+DEPOSIT_OUTCOMES = ('refunded', 'kept')
+
+
+def received_deposit_amount(quotation):
+    """Money received toward the deposit (voided payments excluded)."""
+    return sum(
+        (payment.amount for payment in quotation.deposit_payments.all() if not payment.is_voided),
+        Decimal('0.00'),
+    ).quantize(MONEY_QUANTUM)
+
+
+def deposit_outcome(quotation):
+    """What the office recorded for this deposit after the job was cancelled, or None."""
+    from users.models import ActivityLog
+
+    for log in ActivityLog.objects.filter(target_model='quotationrecord', target_id=quotation.pk).order_by('-id')[:50]:
+        metadata = log.metadata if isinstance(log.metadata, dict) else {}
+        if metadata.get('kind') == DEPOSIT_OUTCOME_KIND:
+            return {
+                'outcome': metadata.get('outcome'),
+                'amount': metadata.get('amount'),
+                'note': metadata.get('note', ''),
+                'recorded_by': log.actor_display_name,
+                'recorded_at': log.created_at,
+            }
+    return None
+
+
+def deposit_decision_needed(quotation):
+    """True while a cancelled job still holds received deposit money with no recorded outcome."""
+    ticket = getattr(quotation, 'ticket', None)
+    if ticket is None or ticket.status != 'Cancelled':
+        return False
+    return received_deposit_amount(quotation) > 0 and deposit_outcome(quotation) is None
+
+
+def notify_deposit_decision_needed(ticket):
+    """Tell the office when a job is cancelled while it holds deposit money."""
+    try:
+        quotation = ticket.quotation
+    except Exception:
+        return
+    if quotation is None:
+        return
+    amount = received_deposit_amount(quotation)
+    if amount <= 0:
+        return
+    from services.views.helpers import _notify_admin_superadmin
+
+    _notify_admin_superadmin(
+        message=(
+            f'Ticket #{ticket.id} was cancelled after a deposit of PHP {amount:,.2f} was received. '
+            'Record whether it was refunded or kept.'
+        ),
+        notification_type='warning',
+        title=f'Deposit decision needed for Ticket #{ticket.id}',
+        ticket=ticket,
+    )
+
+
+def kept_deposit_totals(ranges, *, client_type=None):
+    """Money kept from cancelled jobs, by when the office recorded "Kept" (all PHP), per range.
+
+    ``ranges`` is a list of (start_at, end_at) pairs (for example this period and the one before);
+    one query reads the decisions for all of them. Not a sale (a cancelled job makes no sales
+    record), so analytics shows it as its own figure. Returns one {'amount', 'count'} per range.
+    """
+    from services.models import QuotationRecord
+    from users.models import ActivityLog
+
+    results = [{'amount': Decimal('0.00'), 'count': 0} for _ in ranges]
+    if not ranges:
+        return results
+    decisions = []
+    logs = ActivityLog.objects.filter(
+        target_model='quotationrecord',
+        created_at__gte=min(start for start, _ in ranges),
+        created_at__lt=max(end for _, end in ranges),
+        message__contains=' kept after the job was cancelled',
+    ).only('target_id', 'created_at', 'metadata')
+    for log in logs:
+        metadata = log.metadata if isinstance(log.metadata, dict) else {}
+        if metadata.get('kind') != DEPOSIT_OUTCOME_KIND or metadata.get('outcome') != 'kept':
+            continue
+        try:
+            decisions.append((log.target_id, log.created_at, Decimal(str(metadata.get('amount') or '0'))))
+        except (InvalidOperation, ValueError):
+            continue
+    if client_type and decisions:
+        allowed = set(
+            QuotationRecord.objects.filter(
+                pk__in={target for target, _, _ in decisions}, client__client_profile__client_type=client_type,
+            ).values_list('pk', flat=True)
+        )
+        decisions = [row for row in decisions if row[0] in allowed]
+    for index, (start, end) in enumerate(ranges):
+        counted = {target: amount for target, moment, amount in decisions if start <= moment < end}
+        results[index] = {
+            'amount': sum(counted.values(), Decimal('0.00')).quantize(MONEY_QUANTUM),
+            'count': len(counted),
+        }
+    return results

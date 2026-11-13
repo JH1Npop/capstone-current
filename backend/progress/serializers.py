@@ -61,7 +61,31 @@ class TicketProgressReportSerializer(serializers.ModelSerializer):
 
 
 class TicketProgressSerializer(serializers.ModelSerializer):
+    # A plain progress report needs no status label; it defaults to "Progress update".
+    progress_status = serializers.CharField(max_length=100, required=False, default='Progress update')
+    percent_complete = serializers.IntegerField(required=False, allow_null=True, min_value=0, max_value=100)
+    updated_by_name = serializers.SerializerMethodField()
+
+    def get_updated_by_name(self, obj):
+        user = obj.updated_by
+        if not user:
+            return 'System'
+        return user.get_full_name().strip() or user.username
+
+    def validate_comment(self, value):
+        text = str(value or '').strip()
+        if len(text) > 2000:
+            raise serializers.ValidationError('Keep the note to 2000 characters or fewer.')
+        return text
+
+    def validate(self, attrs):
+        if not attrs.get('comment') and attrs.get('percent_complete') is None:
+            raise serializers.ValidationError({'comment': 'Write what was done, or give the percent complete.'})
+        if attrs.get('comment') is not None and 0 < len(attrs['comment']) < 3:
+            raise serializers.ValidationError({'comment': 'Write a little more about what was done.'})
+        return attrs
+
     class Meta:
         model = TicketProgress
         fields = '__all__'
-        read_only_fields = ['id', 'updated_by', 'updated_at']
+        read_only_fields = ['id', 'updated_by', 'updated_at', 'photo_urls', 'updated_by_name']

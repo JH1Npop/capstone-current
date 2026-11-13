@@ -1,11 +1,15 @@
 """Tests split mechanically from the former services.tests module."""
 
+from datetime import timezone as dt_timezone
+
 from ._imports import *  # noqa: F403,F405
 
 
 class SLAApiIntegrationTests(APITestCase):
     def setUp(self):
-        self.now = timezone.make_aware(datetime(2026, 3, 22, 10, 0, 0))
+        # 10:00 business time (UTC+8): appointment dates and times are local, like the real data.
+        from services.business_time import business_timezone
+        self.now = datetime(2026, 3, 22, 10, 0, 0, tzinfo=business_timezone())
         self.admin_user = User.objects.create_user(
             username='sla-admin',
             password='pass',
@@ -62,7 +66,8 @@ class SLAApiIntegrationTests(APITestCase):
             scheduled_time=time(hour=8, minute=30),
             status='In Progress',
             priority='Normal',
-            start_time=self.now - timedelta(minutes=100),
+            # Friday 20 March 2026, 14:20 local: 160 working minutes before this Sunday evening.
+            start_time=datetime(2026, 3, 20, 6, 20, 0, tzinfo=dt_timezone.utc),
         )
 
         ServiceRequest.objects.filter(pk=self.request_obj.pk).update(

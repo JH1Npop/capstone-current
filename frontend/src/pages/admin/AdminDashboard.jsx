@@ -42,6 +42,7 @@ import {
 } from '../../utils/dashboardHelpers';
 import { formatClientId, formatRequestId } from '../../utils/roleIds';
 import { startDashboardRefresh } from '../../utils/dashboardRefresh';
+import { getLocalDateInputValue } from '../../utils/date';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -248,12 +249,14 @@ export default function AdminDashboard() {
   );
 
   const filteredPendingRequests = pendingRequests;
+  const businessDateKey = getLocalDateInputValue();
 
   const filteredClientSchedule = useMemo(
     () => clientSchedule.filter((ticket) => (
       isActiveScheduleTicket(ticket)
+      && String(ticket?.scheduled_date || '') >= businessDateKey
     )),
-    [clientSchedule]
+    [businessDateKey, clientSchedule]
   );
 
   const filteredSlaQueue = slaWatchFilter === 'all'
@@ -521,7 +524,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Upcoming Schedule */}
-          <div className="card p-5">
+          <div className="card p-5" data-testid="upcoming-schedule">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-100 text-brand-700"><FiClock /></span>

@@ -6,6 +6,14 @@ const formatDate = (value) => (value
   ? new Date(value).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
   : '');
 
+// valid_until is a calendar date ("2026-12-08"): read it as a local date so it never shifts a day.
+const formatDay = (value) => {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return formatDate(value);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    .toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-PH', {
   style: 'currency',
   currency: 'PHP',
@@ -22,7 +30,8 @@ function Field({ label, value }) {
 }
 
 // Client decisions on a job: accept/decline a sent quotation and confirm the finished handover.
-export default function ClientJobDecisions({ ticketId, onChanged }) {
+// `jobCancelled`: the request was cancelled, so a quotation still marked Sent needs no answer.
+export default function ClientJobDecisions({ ticketId, onChanged, jobCancelled = false }) {
   const [quotation, setQuotation] = useState(null);
   const [turnover, setTurnover] = useState(null);
   const [declining, setDeclining] = useState(false);
@@ -88,6 +97,8 @@ export default function ClientJobDecisions({ ticketId, onChanged }) {
   };
 
   const materials = Array.isArray(visibleQuotation?.bill_of_materials) ? visibleQuotation.bill_of_materials : [];
+  // The server refuses acceptance after the validity period; the office then sends an updated quotation.
+  const expired = visibleQuotation?.status === 'Sent' && Boolean(visibleQuotation.is_expired);
 
   return (
     <div className="space-y-4">
@@ -104,15 +115,19 @@ export default function ClientJobDecisions({ ticketId, onChanged }) {
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-brand-50 text-brand-700"><FiFileText aria-hidden="true" /></span>
               <div>
                 <h3 id="client-quotation-title" className="text-base font-semibold text-slate-900">Quotation {visibleQuotation.quotation_number}</h3>
-                <p className="text-xs text-slate-500">Valid for {visibleQuotation.validity_days} days from {formatDate(visibleQuotation.created_at)}</p>
+                <p className="text-xs text-slate-500">
+                  {visibleQuotation.status === 'Sent' && visibleQuotation.valid_until
+                    ? `${expired ? 'Expired on' : 'Valid until'} ${formatDay(visibleQuotation.valid_until)}`
+                    : `Valid for ${visibleQuotation.validity_days} days`}
+                </p>
               </div>
             </div>
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${{
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${expired ? 'bg-slate-100 text-slate-700' : {
               Sent: 'bg-amber-50 text-amber-700',
               Accepted: 'bg-emerald-50 text-emerald-700',
               Rejected: 'bg-red-50 text-red-700',
             }[visibleQuotation.status] || 'bg-slate-100 text-slate-600'}`}>
-              {visibleQuotation.status === 'Sent' ? 'Waiting for your decision' : visibleQuotation.status === 'Rejected' ? 'Declined' : visibleQuotation.status}
+              {expired ? 'Expired' : visibleQuotation.status === 'Sent' ? 'Waiting for your decision' : visibleQuotation.status === 'Rejected' ? 'Declined' : visibleQuotation.status}
             </span>
           </div>
 
@@ -134,9 +149,15 @@ export default function ClientJobDecisions({ ticketId, onChanged }) {
                 <div><p className="text-slate-500">Received</p><p className="font-semibold text-slate-900">{formatMoney(visibleQuotation.deposit_paid_amount)}</p></div>
                 <div><p className="text-slate-500">Remaining</p><p className="font-semibold text-slate-900">{formatMoney(visibleQuotation.deposit_remaining_amount)}</p></div>
               </div>
-              <p className="mt-3 text-xs text-slate-600">
-                Payments are arranged outside this portal and recorded by the office. Service begins after the full required deposit is recorded.
-              </p>
+              {visibleQuotation.deposit_outcome ? (
+                <p role="status" className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                  Your deposit of {formatMoney(visibleQuotation.deposit_outcome.amount)} was {visibleQuotation.deposit_outcome.outcome === 'refunded' ? 'refunded' : 'kept after the job was cancelled'}{visibleQuotation.deposit_outcome.note ? `: ${visibleQuotation.deposit_outcome.note}` : '.'}
+                </p>
+              ) : (
+                <p className="mt-3 text-xs text-slate-600">
+                  Payments are arranged outside this portal and recorded by the office. Service begins after the full required deposit is recorded.
+                </p>
+              )}
               {Array.isArray(visibleQuotation.deposit_payments) && visibleQuotation.deposit_payments.some((payment) => !payment.is_voided) ? (
                 <ul className="mt-3 space-y-1 border-t border-blue-200 pt-3 text-xs text-slate-600">
                   {visibleQuotation.deposit_payments.filter((payment) => !payment.is_voided).map((payment) => (
@@ -164,23 +185,34 @@ export default function ClientJobDecisions({ ticketId, onChanged }) {
             </div>
           ) : null}
 
-          {visibleQuotation.status === 'Sent' ? (
+          {visibleQuotation.status === 'Sent' && jobCancelled ? (
+            <p role="status" className="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-600">
+              This job was cancelled, so this quotation no longer needs an answer.
+            </p>
+          ) : visibleQuotation.status === 'Sent' ? (
             <div className="mt-5 border-t border-slate-100 pt-4">
               {declining ? (
                 <div className="space-y-3">
                   <label className="block">
                     <span className="text-sm font-medium text-slate-700">Why are you declining?</span>
-                    <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100" />
+                    <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} maxLength={500} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100" />
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => respond('decline')} disabled={Boolean(busy)} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"><FiXCircle aria-hidden="true" /> {busy === 'decline' ? 'Sending...' : 'Send decline'}</button>
-                    <button type="button" onClick={() => setDeclining(false)} disabled={Boolean(busy)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back</button>
+                    <button type="button" onClick={() => respond('decline')} disabled={Boolean(busy)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"><FiXCircle aria-hidden="true" /> {busy === 'decline' ? 'Sending...' : 'Send decline'}</button>
+                    <button type="button" onClick={() => setDeclining(false)} disabled={Boolean(busy)} className="min-h-11 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back</button>
                   </div>
+                </div>
+              ) : expired ? (
+                <div className="space-y-3">
+                  <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    This quotation expired on {formatDay(visibleQuotation.valid_until)}, so its prices may have changed. Ask our office for an updated quotation; you will be notified when it is ready.
+                  </p>
+                  <button type="button" onClick={() => setDeclining(true)} disabled={Boolean(busy)} className="min-h-11 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Decline</button>
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => respond('accept')} disabled={Boolean(busy)} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"><FiCheckCircle aria-hidden="true" /> {busy === 'accept' ? 'Accepting...' : 'Accept quotation'}</button>
-                  <button type="button" onClick={() => setDeclining(true)} disabled={Boolean(busy)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Decline</button>
+                  <button type="button" onClick={() => respond('accept')} disabled={Boolean(busy)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"><FiCheckCircle aria-hidden="true" /> {busy === 'accept' ? 'Accepting...' : 'Accept quotation'}</button>
+                  <button type="button" onClick={() => setDeclining(true)} disabled={Boolean(busy)} className="min-h-11 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Decline</button>
                   <p className="w-full text-xs text-slate-500 sm:w-auto">
                     {visibleQuotation.deposit_policy !== 'none'
                       ? 'Accepting confirms the quotation. Service is scheduled after the required deposit is recorded.'
@@ -210,7 +242,7 @@ export default function ClientJobDecisions({ ticketId, onChanged }) {
             {visibleTurnover.status === 'accepted' ? (
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Confirmed {formatDate(visibleTurnover.client_confirmed_at)}</span>
             ) : (
-              <button type="button" onClick={confirmHandover} disabled={Boolean(busy)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
+              <button type="button" onClick={confirmHandover} disabled={Boolean(busy)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
                 <FiCheckCircle aria-hidden="true" /> {busy === 'handover' ? 'Confirming...' : 'Confirm handover'}
               </button>
             )}

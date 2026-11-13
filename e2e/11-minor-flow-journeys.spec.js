@@ -294,7 +294,7 @@ test.describe('Minor flows through the real UI', () => {
     const quotations = async () => list(await setup.admin.get(`/api/services/quotations/?ticket_id=${ticket.id}`));
     const sendQuotation = async (amount) => {
       await adminPage.goto('/admin/documents');
-      await adminPage.getByRole('button', { name: 'Quotation Proposal' }).click();
+      await adminPage.getByRole('combobox', { name: 'Document', exact: true }).selectOption('quotation_proposal');
       await adminPage.getByPlaceholder(/search ticket by id/i).fill(ticketCode);
       await adminPage.getByRole('button', { name: new RegExp(ticketCode) }).first().click();
       // First send, or a revision after the client declined.
@@ -371,7 +371,7 @@ test.describe('Minor flows through the real UI', () => {
     expect(await setup.status(ticket.id)).toBe('Awaiting Materials');
 
     await adminPage.goto(`/admin/documents`);
-    await adminPage.getByRole('button', { name: 'Quotation Proposal' }).click();
+    await adminPage.getByRole('combobox', { name: 'Document', exact: true }).selectOption('quotation_proposal');
     await adminPage.getByPlaceholder(/search ticket by id/i).fill(ticketCode);
     await adminPage.getByRole('button', { name: new RegExp(ticketCode) }).first().click();
     const docDeposit = adminPage.getByRole('region', { name: 'Pre-service deposit' });

@@ -56,16 +56,59 @@ def _last_achieved_status(ticket, workflow_stages):
     return None
 
 
+def _latest_reported_percent(ticket):
+    """The technician's most recent "percent complete" report for this job, if any."""
+    if not getattr(ticket, 'pk', None):
+        return None
+    loaded = (getattr(ticket, '_prefetched_objects_cache', None) or {}).get('progress_updates')
+    if loaded is not None:
+        # Loaded with prefetch_related('progress_updates'): no query per job.
+        reports = [row for row in loaded if row.percent_complete is not None]
+        if not reports:
+            return None
+        return max(reports, key=lambda row: (row.updated_at, row.pk)).percent_complete
+    try:
+        latest = (
+            ticket.progress_updates.filter(percent_complete__isnull=False)
+            .order_by('-updated_at', '-pk')
+            .values_list('percent_complete', flat=True)
+            .first()
+        )
+    except Exception:
+        return None
+    return latest
+
+
+def _with_report(percent, label, status, workflow_stages, ticket):
+    """While work is under way, move within the In Progress stage by the reported percent.
+
+    The bar never reaches 100 before the job is completed: a report of 100% shows as 99%.
+    """
+    if status != 'In Progress':
+        return percent, label, 'workflow_status'
+    reported = _latest_reported_percent(ticket)
+    if reported is None:
+        return percent, label, 'workflow_status'
+    base = workflow_stages['In Progress'][0]
+    # Round half up (Python's round() rounds 84.5 down to 84).
+    return min(99, base + (reported * (99 - base) + 50) // 100), f'{label} — {reported}% done', 'technician_report'
+
+
 def get_ticket_workflow_progress(ticket):
-    """Describe progress using persisted lifecycle evidence, never elapsed time."""
+    """Describe progress using persisted lifecycle evidence, never elapsed time.
+
+    Inside the "In Progress" stage, the technician's latest progress report (percent complete)
+    moves the bar, so a job that takes weeks shows how far along it is.
+    """
     status = getattr(ticket, 'status', '')
     track, track_label, workflow_stages = _progress_track(ticket)
     if status != 'On Hold':
         percent, label = workflow_stages.get(status, (0, status or 'Status unavailable'))
+        percent, label, basis = _with_report(percent, label, status, workflow_stages, ticket)
         return {
             'percent': percent,
             'label': label,
-            'basis': 'workflow_status',
+            'basis': basis,
             'is_paused': False,
             'track': track,
             'track_label': track_label,
@@ -73,10 +116,11 @@ def get_ticket_workflow_progress(ticket):
 
     previous_status = _last_achieved_status(ticket, workflow_stages)
     percent, previous_label = workflow_stages.get(previous_status, (35, 'Current stage'))
+    percent, previous_label, basis = _with_report(percent, previous_label, previous_status, workflow_stages, ticket)
     return {
         'percent': percent,
         'label': f'Paused — {previous_label}',
-        'basis': 'workflow_status',
+        'basis': basis,
         'is_paused': True,
         'track': track,
         'track_label': track_label,

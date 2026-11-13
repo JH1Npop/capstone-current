@@ -111,8 +111,11 @@ class ServiceTicketReportSerializer(serializers.ModelSerializer):
 
     def get_sla(self, obj):
         """Return SLA status"""
-        from ..sla import evaluate_service_ticket_sla, serialize_sla_evaluation
-        sla_evaluation = evaluate_service_ticket_sla(obj)
+        from ..sla import evaluate_service_ticket_sla, serialize_sla_evaluation, sla_batch_calendar
+        # One calendar (Settings read) per response, not per row.
+        if '_sla_calendar' not in self.context:
+            self.context['_sla_calendar'] = sla_batch_calendar()
+        sla_evaluation = evaluate_service_ticket_sla(obj, calendar=self.context['_sla_calendar'])
         return serialize_sla_evaluation(sla_evaluation)
 
     def _dispatch_state(self, obj):
@@ -277,7 +280,12 @@ class ServiceTicketSerializer(serializers.ModelSerializer):
         ]
 
     def get_sla(self, obj):
-        return serialize_sla_evaluation(evaluate_service_ticket_sla(obj))
+        from ..sla import sla_batch_calendar
+
+        # One calendar (Settings read) per response, not per row.
+        if '_sla_calendar' not in self.context:
+            self.context['_sla_calendar'] = sla_batch_calendar()
+        return serialize_sla_evaluation(evaluate_service_ticket_sla(obj, calendar=self.context['_sla_calendar']))
 
     def _dispatch_state(self, obj):
         return get_ticket_dispatch_state(obj)

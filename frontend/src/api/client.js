@@ -53,7 +53,12 @@ const deriveClientStatus = (requestStatus, ticketStatus) => {
 };
 
 // Client-facing wording for where the request is; avoids internal terms such as "ticket".
-const formatWorkflowLabel = (hasTicket) => (hasTicket ? 'Being handled by our team' : 'Waiting for office review');
+// The current step follows the status: a dismissed or finished request is not "waiting for review".
+const formatWorkflowLabel = (hasTicket, status = '') => {
+  if (status === 'cancelled') return 'Closed, no further work';
+  if (status === 'completed') return 'Work finished';
+  return hasTicket ? 'Being handled by our team' : 'Waiting for office review';
+};
 
 const normalizeServiceRequest = (request) => {
   const requestStatus = normalizeStatus(request.status);
@@ -67,7 +72,7 @@ const normalizeServiceRequest = (request) => {
     ticket_id: null,
     has_ticket: false,
     workflow_stage: 'request',
-    workflow_label: formatWorkflowLabel(false),
+    workflow_label: formatWorkflowLabel(false, requestStatus),
     // An office rejection is stored as Cancelled; keep the status for filtering but show it truthfully.
     rejected: request.closure?.kind === 'rejected',
     closure_reason: request.closure?.reason || '',
@@ -137,7 +142,7 @@ const mergeRequestWithTicket = (serviceRequest, ticket) => {
     ticket_id: ticket.id,
     has_ticket: true,
     workflow_stage: 'ticket',
-    workflow_label: formatWorkflowLabel(true),
+    workflow_label: formatWorkflowLabel(true, clientStatus),
     request_source: ticket.request_source || serviceRequest.request_source,
     request_source_label: ticket.request_source_label || serviceRequest.request_source_label,
     status: clientStatus,
@@ -179,6 +184,16 @@ const mergeRequestWithTicket = (serviceRequest, ticket) => {
     progress_track: ticket.workflow_progress_track || 'service',
     progress_track_label: ticket.workflow_progress_track_label || 'Service job',
   };
+};
+
+// Same rule as the server: an open request can be dismissed until the technician is on the way
+// or working on site (then the office has to do it).
+const FIELD_OR_FINISHED_TICKET_STATUSES = ['navigating', 'arrived_on_site', 'in_progress', 'on_hold', 'completed', 'turned_over_accepted', 'cancelled'];
+export const canClientDismissRequest = (request) => {
+  if (!request) return false;
+  const status = String(request.status || '').toLowerCase().replace(/\s+/g, '_');
+  if (['completed', 'cancelled', 'canceled', 'rejected', 'closed'].includes(status) || request.rejected) return false;
+  return !FIELD_OR_FINISHED_TICKET_STATUSES.includes(String(request.ticket_status || ''));
 };
 
 export const fetchClientRequests = async () => {

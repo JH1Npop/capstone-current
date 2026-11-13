@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { FiPlus, FiSearch, FiUserCheck, FiUsers } from 'react-icons/fi';
+import { FiEye, FiEyeOff, FiLoader, FiPlus, FiSearch, FiSettings, FiUserCheck, FiUsers, FiX } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
@@ -151,6 +151,12 @@ const isPendingVerification = (record) => Boolean(record.email) && !record.email
 const sameCapabilities = (left, right) => JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
 
 const getRoleLabel = (role) => ROLE_SECTIONS.find((section) => section.value === role)?.label || role || 'Unknown';
+const getRoleBadgeLabel = (role) => ({
+  superadmin: 'Superadmin',
+  admin: 'Administrator',
+  technician: 'Technician',
+  client: 'Client'
+}[role] || role || 'Unknown');
 const getEntityLabel = (role) => (role === 'technician' ? 'Technician' : role === 'client' ? 'Client' : role === 'admin' ? 'Administrator' : 'User');
 const isHardDeleteRole = (role) => false;
 const getAllowedRoleFilter = (canViewAllUsers, search) => {
@@ -215,6 +221,7 @@ export default function AdminUserManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showInactive, setShowInactive] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [editingProfileUser, setEditingProfileUser] = useState(null);
   const [editingAccessUser, setEditingAccessUser] = useState(null);
   const [viewingAccessUser, setViewingAccessUser] = useState(null);
@@ -347,6 +354,7 @@ export default function AdminUserManagement() {
 
   const resetCreate = () => {
     setCreateForm(emptyCreate);
+    setShowCreatePassword(false);
     setShowCreateForm(false);
     setDialogError('');
   };
@@ -720,68 +728,93 @@ export default function AdminUserManagement() {
         </div>
       ) : null}
       {canCreateAccounts && showCreateForm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm" onClick={closeCreate}>
-          <form onSubmit={handleCreate} noValidate role="dialog" aria-modal="true" aria-label="Create user" className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-lg bg-brand-50 text-brand-700">
-                  <FiUserCheck />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-3 py-4 backdrop-blur-sm sm:px-6" onClick={closeCreate}>
+          <form onSubmit={handleCreate} noValidate role="dialog" aria-modal="true" aria-labelledby="create-user-title" className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/25" onClick={(event) => event.stopPropagation()}>
+            <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+                  <FiUserCheck size={19} />
                 </span>
-                <div>
-                  <h3 className="font-semibold text-slate-900">Create user</h3>
-                  <p className="text-xs text-slate-500">If you enter an email, a verification email is sent and the account can sign in once it is verified.</p>
+                <div className="min-w-0">
+                  <h3 id="create-user-title" className="text-base font-semibold text-slate-950">Create user</h3>
+                  <p className="mt-0.5 max-w-xl text-xs leading-5 text-slate-500">Add an administrator, technician, or client. Accounts with an email must verify it before signing in.</p>
                 </div>
               </div>
-              <button type="button" disabled={isSubmitting} onClick={closeCreate} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
-                Close
+              <button type="button" disabled={isSubmitting} onClick={closeCreate} aria-label="Close" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
+                <FiX size={18} />
               </button>
+            </header>
+
+            <div className="overflow-y-auto px-5 py-5 sm:px-6">
+              <section aria-labelledby="create-account-details">
+                <div className="mb-4">
+                  <h4 id="create-account-details" className="text-sm font-semibold text-slate-900">Account details</h4>
+                  <p className="mt-0.5 text-xs text-slate-500">Choose the role and enter the user’s contact information.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="create-username" className="mb-1.5 block text-sm font-medium text-slate-700">Username</label>
+                    <input id="create-username" autoComplete="off" className={inputClass} value={createForm.username} onChange={(event) => setCreateForm({ ...createForm, username: event.target.value })} />
+                  </div>
+                  <div>
+                    <label htmlFor="create-full-name" className="mb-1.5 block text-sm font-medium text-slate-700">Full name</label>
+                    <input id="create-full-name" autoComplete="name" className={inputClass} value={createForm.name} onChange={(event) => setCreateForm({ ...createForm, name: event.target.value })} />
+                  </div>
+                  <div>
+                    <label htmlFor="create-role" className="mb-1.5 block text-sm font-medium text-slate-700">Role</label>
+                    <select id="create-role" className={inputClass} value={createForm.role} onChange={(event) => setCreateForm({ ...createForm, role: event.target.value })}>
+                      {CREATE_ROLE_SECTIONS.map((section) => <option key={section.value} value={section.value}>{section.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="create-email" className="mb-1.5 block text-sm font-medium text-slate-700">Email <span className="font-normal text-slate-400">(optional)</span></label>
+                    <input id="create-email" type="email" autoComplete="email" className={inputClass} value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} />
+                  </div>
+                  <div>
+                    <label htmlFor="create-phone" className="mb-1.5 block text-sm font-medium text-slate-700">Phone <span className="font-normal text-slate-400">(optional)</span></label>
+                    <input id="create-phone" type="tel" inputMode="numeric" autoComplete="tel" placeholder="09XXXXXXXXX" className={inputClass} value={createForm.phone} onChange={(event) => setCreateForm({ ...createForm, phone: event.target.value })} />
+                  </div>
+                  {createForm.role === 'client' ? (
+                    <div>
+                      <label htmlFor="create-address" className="mb-1.5 block text-sm font-medium text-slate-700">Address <span className="font-normal text-slate-400">(optional)</span></label>
+                      <input id="create-address" autoComplete="street-address" className={inputClass} value={createForm.address} onChange={(event) => setCreateForm({ ...createForm, address: event.target.value })} />
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+
+              <section aria-labelledby="create-security-details" className="mt-6 rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                <div className="mb-4">
+                  <h4 id="create-security-details" className="text-sm font-semibold text-slate-900">Secure access</h4>
+                  <p className="mt-0.5 text-xs text-slate-500">Use at least 8 characters. The confirmation stays hidden for privacy.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="create-password" className="mb-1.5 block text-sm font-medium text-slate-700">Password</label>
+                    <div className="relative">
+                      <input id="create-password" type={showCreatePassword ? 'text' : 'password'} autoComplete="new-password" className={`${inputClass} pr-11`} value={createForm.password} onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })} />
+                      <button type="button" onClick={() => setShowCreatePassword((visible) => !visible)} aria-label={showCreatePassword ? 'Hide password' : 'Show password'} aria-pressed={showCreatePassword} className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-lg text-slate-500 transition hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400">
+                        {showCreatePassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="create-password-confirm" className="mb-1.5 block text-sm font-medium text-slate-700">Confirm password</label>
+                    <input id="create-password-confirm" type="password" autoComplete="new-password" className={inputClass} value={createForm.passwordConfirm} onChange={(event) => setCreateForm({ ...createForm, passwordConfirm: event.target.value })} />
+                  </div>
+                </div>
+              </section>
             </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Username</span>
-                <input className={inputClass} value={createForm.username} onChange={(event) => setCreateForm({ ...createForm, username: event.target.value })} />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Full name</span>
-                <input className={inputClass} value={createForm.name} onChange={(event) => setCreateForm({ ...createForm, name: event.target.value })} />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Role</span>
-                <select className={inputClass} value={createForm.role} onChange={(event) => setCreateForm({ ...createForm, role: event.target.value })}>
-                  {CREATE_ROLE_SECTIONS.map((section) => <option key={section.value} value={section.value}>{section.label}</option>)}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Email</span>
-                <input type="email" className={inputClass} value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Phone</span>
-                <input type="tel" placeholder="09XXXXXXXXX" className={inputClass} value={createForm.phone} onChange={(event) => setCreateForm({ ...createForm, phone: event.target.value })} />
-              </label>
-              {createForm.role === 'client' ? (
-                <label className="block md:col-span-2">
-                  <span className="mb-1 block text-sm font-medium text-slate-700">Address</span>
-                  <input className={inputClass} value={createForm.address} onChange={(event) => setCreateForm({ ...createForm, address: event.target.value })} />
-                </label>
-              ) : null}
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Password</span>
-                <input type="password" autoComplete="new-password" className={inputClass} value={createForm.password} onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })} />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Confirm password</span>
-                <input type="password" autoComplete="new-password" className={inputClass} value={createForm.passwordConfirm} onChange={(event) => setCreateForm({ ...createForm, passwordConfirm: event.target.value })} />
-              </label>
-            </div>
-            <div className="sticky bottom-0 mt-5 border-t border-slate-200 bg-white pt-4">
+
+            <footer className="border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
               {dialogError ? <p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{dialogError}</p> : null}
-              <div className="flex justify-end">
-              <button type="submit" disabled={isSubmitting} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60">
-                {isSubmitting ? 'Creating...' : 'Create User'}
-              </button>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" disabled={isSubmitting} onClick={closeCreate} className="min-h-10 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="min-h-10 rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60">
+                  {isSubmitting ? 'Creating...' : 'Create User'}
+                </button>
               </div>
-            </div>
+            </footer>
           </form>
         </div>
       ) : null}
@@ -849,10 +882,10 @@ export default function AdminUserManagement() {
               <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className={`${canManageUsers ? 'w-[22%]' : 'w-[25%]'} border-b border-slate-200 px-3 py-3`}>User</th>
-                  <th className="w-[10%] border-b border-slate-200 px-3 py-3">Role</th>
+                  <th className="w-[14%] min-w-[144px] border-b border-slate-200 px-3 py-3">Role</th>
                   <th className={`${canManageUsers ? 'w-[18%]' : 'w-[22%]'} border-b border-slate-200 px-3 py-3`}>Address</th>
                   <th className={`${canManageUsers ? 'w-[20%]' : 'w-[24%]'} border-b border-slate-200 px-3 py-3`}>Contact</th>
-                  <th className={`${canManageUsers ? 'w-[13%]' : 'w-[12%]'} border-b border-slate-200 px-3 py-3`}>Access</th>
+                  <th className={`${canManageUsers ? 'w-[13%]' : 'w-[12%]'} min-w-[132px] border-b border-slate-200 px-3 py-3`}>Access</th>
                   <th className="w-[8%] border-b border-slate-200 px-3 py-3">Status</th>
                   {(canManageUsers || canManageTechnicianSkills) ? <th className="w-[12%] min-w-[128px] border-b border-slate-200 px-3 py-3 text-right">Actions</th> : null}
                 </tr>
@@ -868,6 +901,11 @@ export default function AdminUserManagement() {
                   const busyRemoveLabel = 'Deactivating...';
                   const accessAreas = getAccessAreas(record);
                   const recordName = getFullName(record) !== '-' ? getFullName(record) : record.username;
+                  const accessSummary = record.role === 'superadmin'
+                    ? 'All areas'
+                    : accessAreas.length > 0
+                      ? `${accessAreas.length} ${accessAreas.length === 1 ? 'area' : 'areas'}`
+                      : (canViewAllUsers ? 'Read only' : 'Technician only');
                   return (
                     <tr key={record.id} className="bg-white transition hover:bg-brand-50/40">
                       <td className="border-b border-slate-100 px-3 py-2 align-middle">
@@ -881,8 +919,8 @@ export default function AdminUserManagement() {
                           </div>
                         </div>
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle">
-                        <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{getRoleLabel(record.role)}</span>
+                      <td className="min-w-[144px] border-b border-slate-100 px-3 py-2 align-middle">
+                        <span className="inline-flex whitespace-nowrap rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{getRoleBadgeLabel(record.role)}</span>
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2 align-middle text-slate-600">
                         <div className="line-clamp-2">{getAddressSummary(record)}</div>
@@ -893,19 +931,23 @@ export default function AdminUserManagement() {
                           <div className="mt-0.5 truncate text-xs text-slate-500" title={record.phone || ''}>{record.phone || '-'}</div>
                         </div>
                       </td>
-                      <td className="border-b border-slate-100 px-3 py-2 align-middle">
+                      <td className="min-w-[132px] border-b border-slate-100 px-3 py-2 align-middle">
                         {canEditAccess ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            <button type="button" aria-label={`Accessible areas for ${recordName}`} onClick={() => setViewingAccessUser(record)} className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100">
-                              Areas ({accessAreas.length})
+                          <div className="inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                            <button type="button" aria-label={`Accessible areas for ${recordName}`} onClick={() => setViewingAccessUser(record)} className="inline-flex items-center gap-2 whitespace-nowrap px-2.5 text-xs font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-blue-700 focus-visible:z-10">
+                              <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                              {accessSummary}
                             </button>
-                            <button type="button" aria-label={`Manage access for ${recordName}`} disabled={busyUserId === record.id} onClick={() => openAccessEditor(record)} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
-                              {busyUserId === record.id && editingAccessUser?.id !== record.id ? 'Loading...' : 'Manage'}
+                            <button type="button" aria-label={`Manage access for ${recordName}`} title="Manage access" disabled={busyUserId === record.id} onClick={() => openAccessEditor(record)} className="grid w-8 shrink-0 place-items-center border-l border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-blue-700 focus-visible:z-10 disabled:cursor-not-allowed disabled:opacity-60">
+                              {busyUserId === record.id && editingAccessUser?.id !== record.id
+                                ? <FiLoader aria-hidden="true" className="animate-spin" size={14} />
+                                : <FiSettings aria-hidden="true" size={14} />}
                             </button>
                           </div>
                         ) : (
-                          <button type="button" aria-label={`Accessible areas for ${recordName}`} onClick={() => setViewingAccessUser(record)} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
-                            {accessAreas.length === 0 ? (canViewAllUsers ? 'Read only' : 'Technician only') : `Areas (${accessAreas.length})`}
+                          <button type="button" aria-label={`Accessible areas for ${recordName}`} onClick={() => setViewingAccessUser(record)} className="inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
+                            <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${accessAreas.length > 0 ? 'bg-blue-500' : 'bg-slate-400'}`} />
+                            {accessSummary}
                           </button>
                         )}
                       </td>

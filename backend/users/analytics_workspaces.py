@@ -491,6 +491,16 @@ def _sales_workspace(params, filters):
         'unpaid_records': owed['unpaid_records'] or 0,
         'currency': owed['currency'] if owed['currency_count'] == 1 else None,
     }
+    # Deposits kept after a job was cancelled: money received that is not a sale (PHP only).
+    from services.deposits import kept_deposit_totals
+
+    if currency and currency != 'PHP':
+        kept_current = kept_previous = {'amount': Decimal('0.00'), 'count': 0}
+    else:
+        kept_current, kept_previous = kept_deposit_totals(
+            [(filters['start_at'], filters['end_at']), (filters['previous_start_at'], filters['previous_end_at'])],
+            client_type=client_type,
+        )
     composition = list(
         SalesRecordLine.objects.filter(sales_record__in=official, line_total__isnull=False)
         .values('line_type').annotate(amount=Sum('line_total')).order_by('-amount')
@@ -504,6 +514,11 @@ def _sales_workspace(params, filters):
             'average_sale_value': {**_comparison(average, previous_average, filters, precision=2), 'currency': currencies[0] if len(currencies) == 1 else None},
             'quotation_conversion_rate': _comparison(conversion, previous_conversion, filters, rate=True),
             'collections': collections,
+            'kept_deposits': {
+                **_comparison(kept_current['amount'], kept_previous['amount'], filters, precision=2),
+                'count': kept_current['count'],
+                'currency': 'PHP',
+            },
             'voided_sales_amount': {
                 'current': voided_total,
                 'count': voided_summary['count'] or 0,

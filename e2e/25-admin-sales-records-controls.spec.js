@@ -123,7 +123,11 @@ for (const username of ['admin_test', 'superadmin_test']) {
       const draft = await recordFor(firstTicket, 'draft');
 
       // ── Confirm without a separate save: the typed value is what gets confirmed ──
-      await details.getByLabel('Recorded contract value (manual)').fill('25000');
+      const manualContractValue = details.getByLabel('Recorded contract value (manual)');
+      await manualContractValue.fill('200000.50');
+      await expect(manualContractValue).toHaveValue('200,000.50');
+      await manualContractValue.fill('25000');
+      await expect(manualContractValue).toHaveValue('25,000');
       await details.getByLabel('Reason for manual value').fill('Agreed by phone; no quotation issued.');
       await expect(details.getByText('Unsaved changes')).toBeVisible();
       await details.getByRole('button', { name: 'Confirm record' }).click();
@@ -161,6 +165,14 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await summary.getByRole('button', { name: /^Outstanding balance/ }).click();
       await expect(paymentFilter).toHaveValue('unpaid_or_partial');
       await expect(listPanel.getByRole('button', { name: new RegExp(draft.record_number) })).toBeVisible();
+
+      // ── A sale with a live payment cannot be voided; the reason is shown ──
+      await details.getByRole('button', { name: 'Void and replace' }).click();
+      await details.getByLabel('Reason for voiding').fill('Trying before the payment is voided.');
+      await details.getByRole('button', { name: 'Confirm void' }).click();
+      await expect(page.getByText('This sale has recorded payments. Void those payments first (for example after a refund).')).toBeVisible();
+      expect((await recordFor(firstTicket, 'confirmed')).record_number).toBe(draft.record_number);
+      await details.getByRole('button', { name: 'Dismiss', exact: true }).click();
 
       // ── Void the payment, then the record; Prepare replacement ──
       await details.getByRole('button', { name: /^Void payment of/ }).click();
@@ -209,6 +221,7 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await page.getByRole('button', { name: 'Prepare record' }).click();
       await expect(status).toContainText('draft prepared');
       await details.getByLabel('Recorded contract value (manual)').fill('12000');
+      await expect(details.getByLabel('Recorded contract value (manual)')).toHaveValue('12,000');
       await details.getByLabel('Reason for manual value').fill('Fixed price agreed on site.');
       await details.getByRole('button', { name: 'Confirm record' }).click();
       await page.getByRole('dialog', { name: /^Confirm SAL/ }).getByRole('button', { name: 'Confirm record' }).click();
@@ -218,8 +231,8 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await seedAuthState(clientPage, loadAuthStateFromBackend('client_test'));
       await clientPage.goto('/client/purchase-records');
       const second = await recordFor(secondTicket, 'confirmed');
-      await clientPage.getByRole('textbox', { name: 'Search sales records' }).fill(second.record_number);
-      await expect(clientPage.getByRole('region', { name: 'Sales record details' })).toContainText(peso(12000));
+      await clientPage.getByRole('textbox', { name: 'Search purchase records' }).fill(second.record_number);
+      await expect(clientPage.getByRole('region', { name: 'Purchase record details' })).toContainText(peso(12000));
       await expect(clientPage.getByText('Payments received')).toHaveCount(0);
       await expect(clientPage.getByRole('region', { name: 'Sales summary' })).toHaveCount(0);
       await clientContext.close();

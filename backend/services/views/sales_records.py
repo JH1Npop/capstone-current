@@ -11,10 +11,12 @@ from rest_framework.response import Response
 
 from inventory.models import InventoryTransaction
 from notifications.models import Notification
+from notifications.notification_utils import in_app_notifications_enabled
 from services.models import SalesPayment, SalesRecord, SalesRecordLine, ServiceTicket
 from services.serializers import SalesPaymentSerializer, SalesRecordSerializer, sales_payment_summary
 from users.permissions import CanAccessDocuments, CanManageDocuments
 from users.rbac import is_admin_workspace_role
+from services.business_time import business_timezone, business_today
 from services.ticket_status import COMPLETED_TICKET_STATUSES
 
 
@@ -442,19 +444,24 @@ class SalesRecordViewSet(viewsets.ModelViewSet):
 
         _refresh_record_sources(record, record.ticket)
         record.status = 'confirmed'
-        record.sale_date = record.ticket.completed_date.date() if record.ticket.completed_date else timezone.localdate()
+        # The business (UTC+8) day the work was finished: before 08:00 local the UTC date is still yesterday.
+        record.sale_date = (
+            record.ticket.completed_date.astimezone(business_timezone()).date()
+            if record.ticket.completed_date else business_today()
+        )
         record.confirmed_by = request.user
         record.confirmed_at = timezone.now()
         record.save()
-        Notification.objects.create(
-            user=record.client,
-            ticket=record.ticket,
-            request=record.ticket.request,
-            title='Purchase record available',
-            message=f'{record.record_number} is now available in your purchase records.',
-            type='success',
-            send_email=False,
-        )
+        if in_app_notifications_enabled():
+            Notification.objects.create(
+                user=record.client,
+                ticket=record.ticket,
+                request=record.ticket.request,
+                title='Purchase record available',
+                message=f'{record.record_number} is now available in your purchase records.',
+                type='success',
+                send_email=False,
+            )
         return Response(self.get_serializer(record).data)
 
     @action(detail=True, methods=['post'])
@@ -483,6 +490,10 @@ class SalesRecordViewSet(viewsets.ModelViewSet):
     def payments(self, request, pk=None):
         """List payments, or record a payment received outside the system."""
         if request.method == 'GET':
+            # Payment entries carry staff names, receipt references and office notes; the client
+            # serializer already leaves payment data out, so the list is for office staff only.
+            if not is_admin_workspace_role(request.user.role):
+                return Response({'detail': 'Payment details are available from the office.'}, status=status.HTTP_403_FORBIDDEN)
             record = self.get_object()
             return Response(SalesPaymentSerializer(record.payments.select_related('recorded_by'), many=True).data)
 
@@ -498,7 +509,7 @@ class SalesRecordViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         payment = serializer.save(sales_record=record, recorded_by=request.user)
-        if sales_payment_summary(record)['payment_status'] == 'paid':
+        if sales_payment_summary(record)['payment_status'] == 'paid' and in_app_notifications_enabled():
             Notification.objects.create(
                 user=record.client,
                 ticket=record.ticket,
@@ -514,6 +525,9 @@ class SalesRecordViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def void_payment(self, request, pk=None):
         record = get_object_or_404(SalesRecord.objects.select_for_update(), pk=pk)
+        if record.status == 'voided':
+            # A voided sale is a read-only audit record.
+            return Response({'detail': 'This sales record is voided and read-only.'}, status=status.HTTP_409_CONFLICT)
         payment = get_object_or_404(
             SalesPayment.objects.select_for_update(), pk=request.data.get('payment_id'), sales_record=record,
         )
