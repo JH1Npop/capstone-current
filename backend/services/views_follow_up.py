@@ -17,6 +17,7 @@ from .maintenance import ensure_maintenance_follow_up_case, evaluate_schedule_st
 from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent, MaintenanceSchedule, ServiceTicket
 from .serializers import FollowUpCaseSerializer, MaintenanceScheduleSerializer
 from .views.helpers import _display_name, _notify_admin_superadmin
+from services.business_time import business_today
 from services.ticket_status import COMPLETED_TICKET_STATUSES
 
 
@@ -66,7 +67,7 @@ class FollowUpCaseViewSet(viewsets.ModelViewSet):
         elif status_filter == 'overdue':
             queryset = queryset.filter(
                 status__in=['open', 'in_progress'],
-                due_date__lt=timezone.localdate(),
+                due_date__lt=business_today(),
             )
         elif status_filter:
             queryset = queryset.filter(status=status_filter)
@@ -108,7 +109,7 @@ class FollowUpCaseViewSet(viewsets.ModelViewSet):
             if (
                 service_ticket.warranty_status != 'active'
                 or not service_ticket.warranty_end_date
-                or service_ticket.warranty_end_date < timezone.localdate()
+                or service_ticket.warranty_end_date < business_today()
             ):
                 raise ValidationError({
                     'service_ticket': 'Warranty cases can only be opened while the ticket warranty is active.',
@@ -118,7 +119,7 @@ class FollowUpCaseViewSet(viewsets.ModelViewSet):
         due_date = serializer.validated_data.get('due_date')
         if due_date is None:
             response_days = {'urgent': 1, 'high': 2, 'normal': 3, 'low': 5}
-            due_date = timezone.localdate() + timedelta(days=response_days.get(priority, 3))
+            due_date = business_today() + timedelta(days=response_days.get(priority, 3))
 
         case = serializer.save(
             client=service_ticket.request.client,
@@ -155,11 +156,16 @@ class FollowUpCaseViewSet(viewsets.ModelViewSet):
             case.resolved_at = None
             case.save(update_fields=['resolved_at'])
 
-        if maintenance_schedule and case.case_type == 'maintenance':
-            if case.status in resolved_statuses:
+        # A maintenance case drives its schedule only while the schedule is active: "resolved" means
+        # the maintenance was done (schedule completed); "closed" ends the case without the work, so
+        # reminders continue. A completed (final) or stopped schedule is never changed from a case;
+        # use the schedule's own Resume / Complete actions for those.
+        schedule_is_active = maintenance_schedule is not None and maintenance_schedule.status not in {'completed', 'dismissed'}
+        if schedule_is_active and case.case_type == 'maintenance' and case.status != 'closed':
+            if case.status == 'resolved':
                 maintenance_schedule.status = 'completed'
             else:
-                today = timezone.localdate()
+                today = business_today()
                 if today >= maintenance_schedule.next_due_date:
                     maintenance_schedule.status = 'due'
                 elif today >= maintenance_schedule.notify_on_date:
@@ -250,7 +256,7 @@ class FollowUpCaseViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
-        today = timezone.now().date()
+        today = business_today()
         queryset = self.get_queryset()
         open_statuses = ['open', 'in_progress']
 
@@ -306,7 +312,7 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = self._base_queryset()
         status_filter = self.request.query_params.get('status') or 'active'
-        today = timezone.localdate()
+        today = business_today()
         if status_filter == 'active':
             queryset = queryset.exclude(status__in=['completed', 'dismissed'])
         elif status_filter == 'upcoming':
@@ -384,7 +390,7 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
         if schedule.status != 'dismissed':
             raise ValidationError({'status': 'Only stopped maintenance reminders can be resumed.'})
 
-        today = timezone.localdate()
+        today = business_today()
         schedule._activity_reason = reason
         if today >= schedule.next_due_date:
             schedule.status = 'due'
@@ -408,13 +414,13 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
         next_due_date = parse_date(str(request.data.get('next_due_date') or '').strip())
         if next_due_date is None:
             raise ValidationError({'next_due_date': 'Choose a valid maintenance date.'})
-        if next_due_date < timezone.localdate():
+        if next_due_date < business_today():
             raise ValidationError({'next_due_date': 'The maintenance date cannot be in the past.'})
 
         schedule._activity_reason = reason
         schedule.next_due_date = next_due_date
         schedule.notify_on_date = next_due_date - timedelta(days=schedule.follow_up_window_days)
-        schedule.status = evaluate_schedule_status(schedule, reference_date=timezone.localdate())
+        schedule.status = evaluate_schedule_status(schedule, reference_date=business_today())
         reminder_fields = [
             'due_soon_notified_at', 'three_day_notified_at', 'due_notified_at',
             'client_notified_at', 'client_three_day_notified_at', 'client_due_notified_at',
@@ -459,7 +465,7 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
-        today = timezone.localdate()
+        today = business_today()
         queryset = MaintenanceSchedule.objects.all()
         active = queryset.exclude(status__in=['completed', 'dismissed'])
         return Response({

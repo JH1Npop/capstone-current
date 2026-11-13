@@ -14,6 +14,7 @@ from django.core.cache import cache
 from django.db import DatabaseError, connection, transaction
 from django.db.models import OuterRef, Subquery
 from django.utils import timezone
+from services.business_time import business_today
 from django.utils.dateparse import parse_date
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
@@ -102,7 +103,7 @@ def _movement_snapshot(technician, *, now):
 def public_landing_page_settings_view(request):
     """Return only content that is safe to render on the public landing page."""
     settings_obj = AdminSettings.objects.order_by('id').first() or AdminSettings()
-    today = timezone.localdate().isoformat()
+    today = business_today().isoformat()
     active_promotions = []
     for promotion in settings_obj.landing_page_promotions or []:
         if not isinstance(promotion, dict) or not promotion.get('active', True):
@@ -485,7 +486,12 @@ def checklist_view(request):
             {'error': 'This job is already closed, so its checklist can no longer be edited.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
-
+    # Same order as the page and My Jobs: Start Job, then the checklist, then Finish Job.
+    if ticket.status != 'In Progress':
+        return Response(
+            {'error': 'Start the job before you submit its checklist.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     completed = _parse_json_field(request.data.get('completed', {}), {}) or {}
     if not isinstance(completed, dict):
         return Response({'completed': 'Checklist completion data must be a JSON object.'}, status=400)
@@ -594,7 +600,10 @@ def checklist_view(request):
         follow_up_due_date = parse_date(str(follow_up_due_date))
         if follow_up_due_date is None:
             return Response({'follow_up_due_date': 'Follow-up due date must be a valid date.'}, status=400)
-        if follow_up_due_date < timezone.localdate():
+        from services.business_time import business_today
+
+        # Compared with the business day (UTC+8), not the server's UTC date.
+        if follow_up_due_date < business_today():
             return Response({'follow_up_due_date': 'Follow-up due date cannot be in the past.'}, status=400)
     else:
         follow_up_due_date = None

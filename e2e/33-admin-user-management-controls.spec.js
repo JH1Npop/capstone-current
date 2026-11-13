@@ -78,11 +78,38 @@ test.describe('User management as superadmin_test', () => {
       await page.getByLabel('Search users').fill('_test');
       await expect(rowFor(page, 'tech_test')).toBeVisible({ timeout: 30000 });
       await expect(rowFor(page, 'superadmin_test').getByText('You', { exact: true })).toBeVisible();
+      const adminRoleBadge = rowFor(page, 'admin_test').getByText('Administrator', { exact: true });
+      await expect(adminRoleBadge).toBeVisible();
+      const roleBadgeBox = await adminRoleBadge.boundingBox();
+      const roleCellBox = await adminRoleBadge.locator('xpath=..').boundingBox();
+      expect(roleBadgeBox).not.toBeNull();
+      expect(roleCellBox).not.toBeNull();
+      expect(roleBadgeBox.x).toBeGreaterThanOrEqual(roleCellBox.x);
+      expect(roleBadgeBox.x + roleBadgeBox.width).toBeLessThanOrEqual(roleCellBox.x + roleCellBox.width);
       await page.getByLabel('Search users').fill('');
 
       // ── Create: errors stay inside the dialog ──
       await page.getByRole('button', { name: 'New User' }).click();
       const createDialog = page.getByRole('dialog', { name: 'Create user' });
+      await page.setViewportSize({ width: 390, height: 844 });
+      const mobileDialogBox = await createDialog.boundingBox();
+      expect(mobileDialogBox).not.toBeNull();
+      expect(mobileDialogBox.x).toBeGreaterThanOrEqual(0);
+      expect(mobileDialogBox.x + mobileDialogBox.width).toBeLessThanOrEqual(390);
+      await expect(createDialog.getByRole('button', { name: 'Cancel' })).toBeVisible();
+      await expect(createDialog.getByRole('button', { name: 'Create User' })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const passwordInput = createDialog.getByLabel('Password', { exact: true });
+      const confirmPasswordInput = createDialog.getByLabel('Confirm password');
+      await expect(passwordInput).toHaveAttribute('type', 'password');
+      await expect(confirmPasswordInput).toHaveAttribute('type', 'password');
+      await createDialog.getByRole('button', { name: 'Show password' }).click();
+      await expect(passwordInput).toHaveAttribute('type', 'text');
+      await expect(confirmPasswordInput).toHaveAttribute('type', 'password');
+      await createDialog.getByRole('button', { name: 'Hide password' }).click();
+      await expect(passwordInput).toHaveAttribute('type', 'password');
+      await expect(createDialog.getByRole('button', { name: /password/i })).toHaveCount(1);
       await createDialog.getByRole('button', { name: 'Create User' }).click();
       await expect(createDialog.getByRole('alert')).toHaveText('Username is required.');
       await createDialog.getByLabel('Username').fill(username);
@@ -91,8 +118,8 @@ test.describe('User management as superadmin_test', () => {
       await createDialog.getByRole('button', { name: 'Create User' }).click();
       await expect(createDialog.getByRole('alert')).toContainText('Philippine mobile number');
       await createDialog.getByLabel('Phone').fill('09171234567');
-      await createDialog.getByLabel('Password', { exact: true }).fill('short');
-      await createDialog.getByLabel('Confirm password').fill('short');
+      await passwordInput.fill('short');
+      await confirmPasswordInput.fill('short');
       await createDialog.getByRole('button', { name: 'Create User' }).click();
       await expect(createDialog.getByRole('alert')).toHaveText('Password must be at least 8 characters.');
       await createDialog.getByLabel('Password', { exact: true }).fill('TestPass123!');
@@ -151,11 +178,28 @@ test.describe('User management as superadmin_test', () => {
       // The offline option says what it does.
       await rowFor(page, username).getByRole('button', { name: /^Edit / }).click();
       await expect(page.getByText('Offline deactivates the account.')).toBeVisible();
-      await page.keyboard.press('Escape');
+      await page.getByRole('dialog', { name: 'Edit Technician' }).getByRole('button', { name: 'Close' }).click();
       await expect(page.getByRole('dialog', { name: 'Edit Technician' })).toHaveCount(0);
 
       // ── Access editor: discard prompt and a failed save shown inside the dialog ──
-      await rowFor(page, 'inventory_viewer_test').getByRole('button', { name: /^Manage access for / }).click();
+      await page.getByLabel('Search users').fill('inventory_viewer_test');
+      const accessRow = rowFor(page, 'inventory_viewer_test');
+      await expect(accessRow).toBeVisible();
+      const areasButton = accessRow.getByRole('button', { name: /^Accessible areas for / });
+      const manageAccessButton = accessRow.getByRole('button', { name: /^Manage access for / });
+      await expect(areasButton).toHaveText(/^(?:[0-9]+ areas?|Read only)$/);
+      const areasButtonBox = await areasButton.boundingBox();
+      const manageAccessButtonBox = await manageAccessButton.boundingBox();
+      expect(areasButtonBox).not.toBeNull();
+      expect(manageAccessButtonBox).not.toBeNull();
+      expect(Math.abs(areasButtonBox.y - manageAccessButtonBox.y)).toBeLessThanOrEqual(1);
+      expect(areasButtonBox.height).toBe(manageAccessButtonBox.height);
+      await areasButton.click();
+      const areasDialog = page.getByRole('dialog', { name: 'Accessible areas' });
+      await expect(areasDialog).toBeVisible();
+      await areasDialog.getByRole('button', { name: 'Close' }).click();
+      await expect(areasDialog).toHaveCount(0);
+      await manageAccessButton.click();
       const accessDialog = page.getByRole('dialog', { name: /^Capabilities for inventory_viewer_test/ });
       await expect(accessDialog).toBeVisible();
       await expect(accessDialog.getByRole('button', { name: 'Save access' })).toBeDisabled();
@@ -172,6 +216,9 @@ test.describe('User management as superadmin_test', () => {
       await page.keyboard.press('Escape');
       await discard.getByRole('button', { name: 'Discard' }).click();
       await expect(accessDialog).toHaveCount(0);
+
+      await page.getByLabel('Search users').fill(username);
+      await expect(rowFor(page, username)).toBeVisible();
 
       // ── Deactivate: confirm, a server failure stays inside the dialog, then it works ──
       await rowFor(page, username).getByRole('button', { name: /^Deactivate / }).click();
@@ -201,6 +248,7 @@ test.describe('User management as superadmin_test', () => {
       await expect(page.getByLabel(/Show inactive accounts/)).toHaveCount(0);
 
       // ── Filters and search ──
+      await page.getByLabel('Search users').fill('');
       await page.getByRole('button', { name: /^Clients/ }).click();
       await expect(page.getByRole('button', { name: /^Clients/ })).toHaveAttribute('aria-pressed', 'true');
       await expect(rowFor(page, 'client_test')).toBeVisible();

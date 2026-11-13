@@ -55,7 +55,9 @@ export const fetchNavigationRoute = async (techLat, techLng, jobLat, jobLng) => 
         distance: step.distance || 0,
         duration: estimateTravelSeconds(step.distance),
         type: step.type || 0,
-        modifier: step.modifier || ''
+        modifier: step.modifier || '',
+        // Where on the route line this step begins, so the page can tell when you reach it.
+        startIndex: Array.isArray(step.way_points) ? Number(step.way_points[0]) : null
       }));
     }
 
@@ -256,12 +258,54 @@ export const updateProjectDetails = async (ticketId, projectDetails) => {
   }
 };
 
+const normalizeProgressReport = (report) => ({
+  id: report.id,
+  ticketId: report.ticket,
+  percent: report.percent_complete ?? null,
+  note: report.comment || '',
+  label: report.progress_status || 'Progress update',
+  photos: Array.isArray(report.photo_urls) ? report.photo_urls : [],
+  workDate: report.work_date || null,
+  author: report.updated_by_name || 'System',
+  timestamp: report.updated_at,
+});
+
+// Progress reports on a job (newest first): what was done, how far along, and photos.
+export const fetchTicketProgress = async (ticketId) => {
+  try {
+    const { data } = await api.get('/progress/ticket-progress/', { params: { ticket: ticketId, page_size: 100 } });
+    const reports = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
+    return reports.map(normalizeProgressReport)
+      .sort((left, right) => new Date(right.timestamp || 0) - new Date(left.timestamp || 0));
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load progress updates.'));
+  }
+};
+
+export const postTicketProgress = async ({ ticketId, percent, note, photos = [] }) => {
+  try {
+    const form = new FormData();
+    form.append('ticket', String(ticketId));
+    if (percent !== '' && percent !== null && percent !== undefined) form.append('percent_complete', String(percent));
+    if (note) form.append('comment', note);
+    photos.forEach((photo) => form.append('photo_files', photo));
+    const { data } = await api.post('/progress/ticket-progress/', form);
+    return normalizeProgressReport(data);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to post the progress update.'));
+  }
+};
+
 export const fetchTicketTimeline = async (ticketId) => {
   try {
-    const { data } = await api.get('/services/status-history/', { params: { ticket: ticketId } });
+    // Status changes plus progress reports; a failure loading the reports still shows the statuses.
+    const [{ data }, reports] = await Promise.all([
+      api.get('/services/status-history/', { params: { ticket: ticketId } }),
+      fetchTicketProgress(ticketId).catch(() => []),
+    ]);
     const events = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
-    return events
-      .map((event) => ({
+    return [
+      ...events.map((event) => ({
         id: event.id,
         ticketId: event.ticket,
         status: event.status,
@@ -269,8 +313,19 @@ export const fetchTicketTimeline = async (ticketId) => {
         actorId: event.changed_by || null,
         notes: event.notes || '',
         timestamp: event.timestamp
-      }))
-      .sort((left, right) => new Date(right.timestamp || 0) - new Date(left.timestamp || 0));
+      })),
+      ...reports.map((report) => ({
+        id: `progress-${report.id}`,
+        ticketId: report.ticketId,
+        kind: 'progress',
+        status: 'Progress update',
+        actor: report.author,
+        notes: report.note,
+        percent: report.percent,
+        photos: report.photos,
+        timestamp: report.timestamp,
+      })),
+    ].sort((left, right) => new Date(right.timestamp || 0) - new Date(left.timestamp || 0));
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to load ticket timeline.'));
   }
@@ -1176,6 +1231,16 @@ export const voidQuotationDepositPayment = async (quotationId, paymentId, reason
   }
 };
 
+// After a job is cancelled: record whether the received deposit was refunded or kept.
+export const settleQuotationDeposit = async (quotationId, outcome, note) => {
+  try {
+    const { data } = await api.post(`/services/quotations/${quotationId}/settle-deposit/`, { outcome, note });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to record what happened to the deposit.'));
+  }
+};
+
 export const fetchSalesRecords = async (filters = {}) => {
   try {
     const params = {};
@@ -1366,5 +1431,5 @@ export const fetchSolarProjectProfile = async (locationId) => { const response =
 export const saveSolarProjectProfile = async (payload) => { if (payload.id) { const response = await api.put(`/services/solar-project-profiles/${payload.id}/`, payload); return response.data; } const response = await api.post(`/services/solar-project-profiles/`, payload); return response.data; };
 export const promoteEstimateToProjectProfile = async (payload) => { const response = await api.post(`/services/solar-project-profiles/promote-estimate/`, payload); return response.data; };
 export const promoteTicketToProjectProfile = async (ticketId) => { const response = await api.post(`/services/service-tickets/${ticketId}/promote-to-project-profile/`); return response.data; };
-export const fetchFieldServiceReport = async (ticketId) => { const response = await api.get(`/services/field-service-reports/?ticket=${ticketId}`); return response.data.length ? response.data[0] : null; };
+export const fetchFieldServiceReport = async (ticketId) => { const response = await api.get(`/services/field-service-reports/?ticket=${ticketId}`); const rows = Array.isArray(response.data) ? response.data : (response.data?.results || []); return rows.length ? rows[rows.length - 1] : null; };
 export const saveFieldServiceReport = async (payload) => { if (payload.id) { const response = await api.put(`/services/field-service-reports/${payload.id}/`, payload); return response.data; } const response = await api.post(`/services/field-service-reports/`, payload); return response.data; };

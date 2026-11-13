@@ -179,8 +179,12 @@ export const fetchTechnicianSchedule = async (techName, options = {}) => {
     if (options.end) params.end = options.end;
     if (options.showCompleted) params.show_completed = '1';
     const { data } = await api.get('/technician/schedule/', { params });
-    const scheduleArray = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
-    return Array.isArray(scheduleArray) ? scheduleArray.map(normalizeTechnicianJob) : [];
+    // { jobs, day_notes }: the jobs plus what to know about each day (days off, holidays, closures).
+    const scheduleArray = Array.isArray(data) ? data : (Array.isArray(data?.jobs) ? data.jobs : (Array.isArray(data?.results) ? data.results : []));
+    return {
+      jobs: scheduleArray.map(normalizeTechnicianJob),
+      dayNotes: data && typeof data.day_notes === 'object' && !Array.isArray(data.day_notes) ? data.day_notes : {},
+    };
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to load technician schedule.'));
   }
@@ -229,6 +233,7 @@ export const fetchTechnicianHistory = async (techName, filters = {}) => {
       page: Array.isArray(data) ? 1 : Number(data?.page || 1),
       pageSize: Array.isArray(data) ? historyArray.length : Number(data?.page_size || filters.pageSize || 10),
       totalPages: Array.isArray(data) ? 1 : Number(data?.total_pages || 1),
+      summary: data?.summary || null,
       results: Array.isArray(historyArray) ? historyArray.map(normalizeTechnicianJob) : [],
     };
   } catch (error) {
@@ -355,6 +360,7 @@ export const submitInspectionChecklist = async (ticketId, checklistData) => {
       ? await api.patch(`/services/inspections/${existingInspection.id}/`, payload)
       : await api.post('/services/inspections/', payload);
     
+    // The page leaves out photos already on the ticket, so a retry after a failed last step does not upload them twice.
     if (checklistData.photos && checklistData.photos.length > 0) {
       const photoFormData = new FormData();
       for (const photo of checklistData.photos) {
@@ -363,6 +369,7 @@ export const submitInspectionChecklist = async (ticketId, checklistData) => {
       // Let Axios/the browser add the multipart boundary. Supplying only the
       // media type can make Django receive the request with no parsed files.
       await api.post(`/services/service-tickets/${ticketId}/upload_photos/`, photoFormData);
+      checklistData.onPhotosUploaded?.();
     }
     
     if (data && data.id) {

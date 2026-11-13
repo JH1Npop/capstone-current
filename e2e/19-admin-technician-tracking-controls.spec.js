@@ -101,6 +101,11 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await expect(tile('GPS attention')).toContainText(String(techs.filter((t) => t.gpsState !== 'fresh').length));
 
       // ── Technician Status and GPS Health filters: every option ──
+      await expect(page.getByRole('combobox', { name: 'Technician Status' })).toHaveCount(0);
+      const filtersButton = page.getByRole('button', { name: /^Filters/ });
+      await expect(filtersButton).toHaveAttribute('aria-expanded', 'false');
+      await filtersButton.click();
+      await expect(filtersButton).toHaveAttribute('aria-expanded', 'true');
       const statusFilter = page.getByRole('combobox', { name: 'Technician Status' });
       for (const value of ['available', 'on_job', 'offline', 'all']) {
         await statusFilter.selectOption(value);
@@ -134,7 +139,7 @@ for (const username of ['admin_test', 'superadmin_test']) {
 
       // ── View details: contact links, the job with its own ticket link, Close details ──
       await techList.getByRole('button', { name: 'View details' }).click();
-      const details = page.getByRole('region', { name: techName });
+      const details = page.getByRole('dialog', { name: techName });
       await expect(details).toBeVisible();
       await expect(details.getByText('Fresh', { exact: true })).toBeVisible();
       await expect(details.getByText('+/-9 m')).toBeVisible();
@@ -151,7 +156,7 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await techList.getByRole('button', { name: 'Center', exact: true }).click();
       await expect(page.getByText(`Focused: ${techName}`)).toBeVisible();
       await expect(techList.getByRole('button', { name: 'Centered' })).toBeVisible();
-      await expect(details).toBeVisible();
+      await expect(details).toHaveCount(0);
       await page.getByRole('button', { name: 'Show all markers' }).click();
       await expect(page.getByText(/^Focused:/)).toHaveCount(0);
 
@@ -161,7 +166,7 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await page.getByRole('button', { name: 'Show all markers' }).click();
 
       // ── The job's Open ticket link opens that ticket on Service Tickets ──
-      // Centring on the technician already opened their details.
+      await techList.getByRole('button', { name: 'View details' }).click();
       await expect(details).toBeVisible();
       await details.getByRole('link', { name: `Open ticket ${ticketCode(ticket.id)}` }).click();
       await expect(page).toHaveURL(new RegExp(`/admin/service-tickets\\?ticketId=${ticket.id}$`));
@@ -170,9 +175,20 @@ for (const username of ['admin_test', 'superadmin_test']) {
       // ── Refresh ──
       await page.goto('/admin/technician-tracking');
       await expect(page.getByRole('status')).toContainText('Live', { timeout: 30000 });
+      await page.route('**/api/tracking/', async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        const marker = body.techMarkers?.find((entry) => Number(entry.id) === Number(tech.id));
+        if (marker) {
+          marker.lastLocationUpdate = new Date(Date.now() - (1097 * 60000)).toISOString();
+          marker.gpsState = 'stale';
+        }
+        await route.fulfill({ response, json: body });
+      }, { times: 1 });
       const refreshed = page.waitForResponse((r) => r.url().includes('/api/tracking/') && r.request().method() === 'GET');
       await page.getByRole('button', { name: 'Refresh', exact: true }).click();
       await refreshed;
+      await expect(techList.getByText(/Updated 18 hours ago/)).toBeVisible();
     });
   });
 }

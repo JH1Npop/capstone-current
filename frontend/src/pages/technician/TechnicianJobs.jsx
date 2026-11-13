@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { toTelHref } from '../../utils/landingSettings';
 import { Link } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
+import JobProgressPanel from '../../components/technician/JobProgressPanel';
 import TicketTimelineModal from '../../components/shared/TicketTimelineModal';
 import StatusBadge, { formatStatusLabel } from '../../components/ui/StatusBadge';
 import { useTechnicianJobs } from '../../hooks/useTechnicianJobs';
-import { FiChevronDown, FiClipboard, FiClock, FiEye, FiMapPin, FiPackage, FiPhone, FiPlus, FiUpload, FiX } from 'react-icons/fi';
+import { FiChevronDown, FiClipboard, FiClock, FiEye, FiMapPin, FiPackage, FiPhone, FiPlus, FiRefreshCw, FiUpload, FiX } from 'react-icons/fi';
 import { fetchTicketTimeline } from '../../api/api';
 import { formatReservationId, formatTicketId } from '../../utils/roleIds';
 
@@ -75,6 +78,14 @@ export default function TechnicianJobs() {
   const {
     activeJob,
     actionMessage,
+    setActionMessage,
+    setError,
+    dialogError,
+    setDialogError,
+    completionError,
+    setCompletionError,
+    loading,
+    updatingJobId,
     closeJobDetails,
     completionJob,
     completionNotes,
@@ -129,6 +140,49 @@ export default function TechnicianJobs() {
 
   const [holdJobId, setHoldJobId] = useState(null);
   const [holdReason, setHoldReason] = useState('');
+  const [showAllJobs, setShowAllJobs] = useState(false);
+  const [pendingDiscard, setPendingDiscard] = useState(null);
+  const [progressDirty, setProgressDirty] = useState(false);
+
+  // Closing the details clears what was typed for that job, so a request can never go to another job.
+  const closeDetails = () => {
+    closeJobDetails();
+    setProgressDirty(false);
+    setHoldJobId(null);
+    setHoldReason('');
+    setEquipmentForm({ itemIds: [], quantities: {}, notes: '', pauseJob: false });
+    setEquipmentDropdownOpen(false);
+  };
+  const detailsDirty = Boolean(holdReason.trim()) || equipmentForm.itemIds.length > 0 || Boolean(equipmentForm.notes.trim()) || progressDirty;
+  const requestCloseDetails = () => {
+    if (detailsDirty) setPendingDiscard('details');
+    else closeDetails();
+  };
+  const closeCompletion = () => {
+    setCompletionJob(null);
+    setProofImages([]);
+    setCompletionNotes('');
+    setCompletionError('');
+  };
+  const completionDirty = proofImages.length > 0 || Boolean(completionNotes.trim());
+  const requestCloseCompletion = () => {
+    if (isCompleting) return;
+    if (completionDirty) setPendingDiscard('completion');
+    else closeCompletion();
+  };
+
+  // Escape closes the top layer only (the timeline and the discard prompt handle their own Escape;
+  // an open equipment list closes first).
+  useEffect(() => {
+    if (!selectedJob && !completionJob) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape' || pendingDiscard || timelineJob || equipmentDropdownOpen) return;
+      if (completionJob) requestCloseCompletion();
+      else if (selectedJob) requestCloseDetails();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  });
   const canRequestEquipment = ['not_started', 'navigating', 'arrived_on_site', 'in_progress', 'on_hold'].includes(selectedJob?.status);
   // Only the lead pauses field work, and only once it is under way; the server enforces the same rule.
   const canPauseSelectedJob = selectedJob?.assignmentRole !== 'crew'
@@ -169,7 +223,8 @@ export default function TechnicianJobs() {
 
   const openCompletionFromDetails = () => {
     const job = selectedJob;
-    closeJobDetails();
+    closeDetails();
+    setCompletionError('');
     setCompletionJob(job);
   };
 
@@ -191,16 +246,23 @@ export default function TechnicianJobs() {
 
   return (
     <Layout>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm text-slate-500">Open assignments, complete field steps, and navigate to each site.</p>
+      <div className="mb-6 flex justify-end gap-3">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => loadJobs()}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            <FiRefreshCw aria-hidden="true" /> Refresh
+          </button>
+          <Link
+            to="/technician/job-history"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Job History
+          </Link>
         </div>
-        <Link
-          to="/technician/job-history"
-          className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          Job History
-        </Link>
       </div>
 
       {/* Active Job Banner */}
@@ -218,6 +280,7 @@ export default function TechnicianJobs() {
             </div>
             <div className="text-left sm:text-right">
               <button
+                type="button"
                 onClick={() => openJobDetails(activeJob)}
                 className="w-full rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 sm:w-auto"
               >
@@ -229,15 +292,21 @@ export default function TechnicianJobs() {
       )}
 
       {actionMessage && (
-        <div className="mb-4 rounded border-l-4 border-green-500 bg-green-100 p-3 text-green-800">
-          {actionMessage}
+        <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded border-l-4 border-green-500 bg-green-100 p-3 text-green-800">
+          <span>{actionMessage}</span>
+          <button type="button" onClick={() => setActionMessage('')} className="shrink-0 text-sm font-semibold">Dismiss</button>
         </div>
       )}
       {error && (
-        <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-800">{error}</div>
+        <div role="alert" className="mb-4 flex items-start justify-between gap-3 rounded border border-red-200 bg-red-50 p-3 text-red-800">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError('')} className="shrink-0 text-sm font-semibold">Dismiss</button>
+        </div>
       )}
 
-      {activeJobs.length === 0 ? (
+      {loading ? (
+        <div className="py-12 text-center text-sm text-slate-500" role="status">Loading your jobs…</div>
+      ) : activeJobs.length === 0 ? (
         <div className="py-12 text-center">
           <FiClipboard className="mx-auto mb-4 h-12 w-12 text-slate-400" />
           <h3 className="mb-2 text-lg font-medium text-slate-900">No active jobs</h3>
@@ -253,7 +322,7 @@ export default function TechnicianJobs() {
         <>
           {/* Active / Pending Jobs - max 5 cards */}
           {(() => {
-            const displayJobs = activeJobs.slice(0, 5);
+            const displayJobs = showAllJobs ? activeJobs : activeJobs.slice(0, 5);
             const hiddenCount = activeJobs.length - displayJobs.length;
             if (displayJobs.length === 0) return (
               <div className="mb-6 rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
@@ -269,15 +338,7 @@ export default function TechnicianJobs() {
                   {displayJobs.map((job) => (
                     <div
                       key={job.id}
-                      role="button"
-                      tabIndex={0}
                       onClick={() => openJobDetails(job)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          openJobDetails(job);
-                        }
-                      }}
                       className="flex cursor-pointer flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-100 sm:p-5"
                     >
                       <div className="mb-3 flex items-start justify-between gap-3">
@@ -366,6 +427,7 @@ export default function TechnicianJobs() {
                         )}
                         {job.status === 'arrived_on_site' && (
                           <button
+                            type="button"
                             onClick={(event) => {
                               event.stopPropagation();
                               handleStatusUpdate(job.id, 'in_progress');
@@ -377,11 +439,12 @@ export default function TechnicianJobs() {
                                 : 'bg-blue-500 hover:bg-brand-600'
                             }`}
                           >
-                            {isUpdatingStatus ? 'Starting...' : hasDifferentActiveJob(job) ? 'Hold or Finish Other Job' : 'Start Job'}
+                            {updatingJobId === job.id ? 'Starting...' : hasDifferentActiveJob(job) ? 'Hold or Finish Other Job' : 'Start Job'}
                           </button>
                         )}
                         {job.status === 'on_hold' && (
                           <button
+                            type="button"
                             onClick={(event) => {
                               event.stopPropagation();
                               handleStatusUpdate(job.id, 'in_progress');
@@ -393,7 +456,7 @@ export default function TechnicianJobs() {
                                 : 'bg-brand-600 hover:bg-brand-700'
                             }`}
                           >
-                            {isUpdatingStatus ? 'Resuming...' : hasDifferentActiveJob(job) ? 'Hold or Finish Other Job' : 'Resume Job'}
+                            {updatingJobId === job.id ? 'Resuming...' : hasDifferentActiveJob(job) ? 'Hold or Finish Other Job' : 'Resume Job'}
                           </button>
                         )}
                         {job.status === 'in_progress' && job.checklistCompleted && (
@@ -403,8 +466,10 @@ export default function TechnicianJobs() {
                             </div>
                           ) : (
                             <button
+                              type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
+                                setCompletionError('');
                                 setCompletionJob(job);
                               }}
                               className="rounded-lg bg-green-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-600 w-full"
@@ -425,6 +490,7 @@ export default function TechnicianJobs() {
                         <div className={`grid gap-2 ${ROUTE_REVIEW_STATUSES.has(job.status) ? 'grid-cols-2' : 'grid-cols-1'}`}>
                           <button
                             type="button"
+                            aria-label={`Details for ${formatTicketId(job.ticketId)}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               openJobDetails(job);
@@ -447,11 +513,19 @@ export default function TechnicianJobs() {
                     </div>
                   ))}
                 </div>
-                {hiddenCount > 0 && (
-                  <p className="mt-3 text-center text-sm text-slate-500">
-                    + {hiddenCount} more active job{hiddenCount > 1 ? 's' : ''}
-                  </p>
-                )}
+                {hiddenCount > 0 ? (
+                  <div className="mt-3 text-center">
+                    <button type="button" onClick={() => setShowAllJobs(true)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                      Show {hiddenCount} more active job{hiddenCount > 1 ? 's' : ''}
+                    </button>
+                  </div>
+                ) : showAllJobs && activeJobs.length > 5 ? (
+                  <div className="mt-3 text-center">
+                    <button type="button" onClick={() => setShowAllJobs(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                      Show fewer
+                    </button>
+                  </div>
+                ) : null}
               </div>
             );
           })()}
@@ -471,7 +545,7 @@ export default function TechnicianJobs() {
               </div>
               <button
                 type="button"
-                onClick={closeJobDetails}
+                onClick={requestCloseDetails}
                 aria-label="Close job details"
                 className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
               >
@@ -533,7 +607,7 @@ export default function TechnicianJobs() {
               {selectedJob.client?.phone && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <a
-                    href={`tel:${selectedJob.client.phone}`}
+                    href={toTelHref(selectedJob.client.phone)}
                     className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-blue-700 shadow-sm ring-1 ring-blue-200 hover:bg-blue-100"
                   >
                     <FiPhone size={15} /> Call Client
@@ -578,6 +652,15 @@ export default function TechnicianJobs() {
                 </div>
               )}
             </div>
+
+            {/* Progress reports for jobs that take days or months (lead or crew can post while it is under way). */}
+            <JobProgressPanel
+              key={selectedJob.id}
+              ticketId={selectedJob.ticketId || selectedJob.id}
+              canPost={['arrived_on_site', 'in_progress', 'on_hold'].includes(selectedJob.status)}
+              onPosted={() => loadJobs()}
+              onDirtyChange={setProgressDirty}
+            />
 
             {selectedJob.crewMembers?.length > 0 && (
               <div className="mt-3 rounded-xl bg-emerald-50 p-3 sm:mt-4 sm:p-4">
@@ -659,7 +742,7 @@ export default function TechnicianJobs() {
               )}
 
               {canRequestEquipment ? (
-                <form onSubmit={handleRequestEquipment} className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+                <form onSubmit={handleRequestEquipment} noValidate className="mt-4 space-y-3 border-t border-slate-200 pt-4">
                   <div className="space-y-3">
                     <div className="relative" ref={equipmentPickerRef}>
                       <span className="mb-1 block text-xs font-medium text-slate-500">Additional equipment</span>
@@ -748,6 +831,8 @@ export default function TechnicianJobs() {
                     )}
                   </div>
                   <textarea
+                    aria-label="Reason or details for admin"
+                    maxLength={500}
                     value={equipmentForm.notes}
                     onChange={(event) => setEquipmentForm((prev) => ({ ...prev, notes: event.target.value }))}
                     rows={2}
@@ -792,6 +877,10 @@ export default function TechnicianJobs() {
               </div>
             )}
 
+            {dialogError ? (
+              <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 sm:mt-4">{dialogError}</p>
+            ) : null}
+
             {isHoldFormOpen && (
               <form onSubmit={submitHold} className="mt-3 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3 sm:mt-4 sm:p-4">
                 <label className="block">
@@ -799,6 +888,7 @@ export default function TechnicianJobs() {
                   <textarea
                     value={holdReason}
                     onChange={(event) => setHoldReason(event.target.value)}
+                    maxLength={500}
                     rows={2}
                     placeholder="For example: waiting for a replacement breaker"
                     className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-500 focus:outline-none"
@@ -814,7 +904,7 @@ export default function TechnicianJobs() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setHoldJobId(null); setHoldReason(''); }}
+                    onClick={() => { setHoldJobId(null); setHoldReason(''); setDialogError(''); }}
                     className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                   >
                     Dismiss
@@ -870,7 +960,7 @@ export default function TechnicianJobs() {
                   disabled={isUpdatingStatus || hasDifferentActiveJob(selectedJob)}
                   className="col-span-2 rounded-lg bg-brand-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
-                  {isUpdatingStatus ? 'Starting...' : hasDifferentActiveJob(selectedJob) ? 'Hold or Finish Other Job' : 'Start Job'}
+                  {updatingJobId === selectedJob.id ? 'Starting...' : hasDifferentActiveJob(selectedJob) ? 'Hold or Finish Other Job' : 'Start Job'}
                 </button>
               ) : selectedJob.status === 'on_hold' ? (
                 <button
@@ -879,7 +969,7 @@ export default function TechnicianJobs() {
                   disabled={isUpdatingStatus || hasDifferentActiveJob(selectedJob)}
                   className="col-span-2 rounded-lg bg-brand-600 px-4 py-2.5 text-center text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
-                  {isUpdatingStatus ? 'Resuming...' : hasDifferentActiveJob(selectedJob) ? 'Hold or Finish Other Job' : 'Resume Job'}
+                  {updatingJobId === selectedJob.id ? 'Resuming...' : hasDifferentActiveJob(selectedJob) ? 'Hold or Finish Other Job' : 'Resume Job'}
                 </button>
               ) : ['completed', 'cancelled'].includes(selectedJob.status) ? (
                 <Link
@@ -925,21 +1015,17 @@ export default function TechnicianJobs() {
 
       {completionJob && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 sm:items-center sm:p-4">
-          <div className="flex h-[100dvh] max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
+          <div role="dialog" aria-modal="true" aria-labelledby="finish-job-title" className="flex h-[100dvh] max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6 sm:py-4">
               <div className="min-w-0">
-                <h3 className="text-lg font-bold text-slate-900 sm:text-2xl">Finish Job</h3>
+                <h3 id="finish-job-title" className="text-lg font-bold text-slate-900 sm:text-2xl">Finish Job</h3>
                 <p className="truncate text-sm text-slate-600 sm:text-base">
                   {formatTicketId(completionJob.ticketId)} for {completionJob.client?.full_name || completionJob.client}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setCompletionJob(null);
-                  setProofImages([]);
-                  setCompletionNotes('');
-                }}
+                onClick={requestCloseCompletion}
                 aria-label="Close Finish Job"
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
               >
@@ -955,13 +1041,13 @@ export default function TechnicianJobs() {
                   <FiUpload className="mr-2 inline" /> Completion Photo (Required)
                 </label>
                 <p className="mb-3 text-sm leading-5 text-slate-600 sm:mb-4">
-                  Add at least one clear photo showing the finished work. You can select more than one.
+                  Add at least one clear photo showing the finished work. You can select more than one (JPG, PNG or WebP, up to 10 MB each, 20 at most).
                 </p>
                 <input
                   id={`completion-photos-${completionJob.ticketId}`}
                   type="file"
                   multiple
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={handleImageUpload}
                   className="sr-only"
                 />
@@ -1012,6 +1098,8 @@ export default function TechnicianJobs() {
                   Completion Notes (Optional)
                 </label>
                 <textarea
+                  aria-label="Completion notes"
+                  maxLength={2000}
                   value={completionNotes}
                   onChange={(e) => setCompletionNotes(e.target.value)}
                   placeholder="Describe the work completed, any issues encountered, recommendations for client, etc."
@@ -1094,6 +1182,10 @@ export default function TechnicianJobs() {
                 </div>
               )}
 
+              {completionError ? (
+                <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{completionError}</p>
+              ) : null}
+
               {/* Action Buttons */}
               <div className="sticky bottom-0 z-10 -mx-4 -mb-4 grid gap-2 border-t border-slate-200 bg-white p-4 shadow-[0_-8px_20px_rgba(15,23,42,0.08)] sm:static sm:mx-0 sm:mb-0 sm:flex sm:border-0 sm:p-0 sm:shadow-none">
                 <button
@@ -1122,11 +1214,7 @@ export default function TechnicianJobs() {
                 <button
                   type="button"
                   disabled={isCompleting}
-                  onClick={() => {
-                    setCompletionJob(null);
-                    setProofImages([]);
-                    setCompletionNotes('');
-                  }}
+                  onClick={requestCloseCompletion}
                   className="rounded-lg bg-slate-200 px-6 py-3 font-medium text-slate-700 transition hover:bg-slate-300"
                 >
                   Dismiss
@@ -1137,6 +1225,24 @@ export default function TechnicianJobs() {
           </div>
         </div>
       )}
+      {pendingDiscard ? (
+        <ConfirmationDialog
+          title={pendingDiscard === 'completion' ? 'Discard the photos and notes?' : 'Discard what you entered?'}
+          message={pendingDiscard === 'completion'
+            ? 'The job is not finished yet. Closing now removes the photos and notes you added.'
+            : 'Closing now removes the hold reason or equipment request you started for this job.'}
+          tone="warning"
+          icon="warning"
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          onCancel={() => setPendingDiscard(null)}
+          onConfirm={() => {
+            if (pendingDiscard === 'completion') closeCompletion();
+            else closeDetails();
+            setPendingDiscard(null);
+          }}
+        />
+      ) : null}
     </Layout>
   );
 }

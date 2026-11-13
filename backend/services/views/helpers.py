@@ -5,6 +5,7 @@ from rest_framework.decorators import api_view
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, ValidationError
 from django.core.files.storage import default_storage
 from django.utils import timezone
+from services.business_time import business_today
 from django.utils.dateparse import parse_date, parse_time
 from django.utils.text import slugify
 from django.db import transaction
@@ -264,6 +265,9 @@ ALLOWED_TICKET_TRANSITIONS = {
     'Turned Over / Accepted': set(),
     'Cancelled': set(),
 }
+FIELD_WORK_STATUSES = {'Navigating', 'Arrived on Site', 'In Progress'}
+POST_INSPECTION_WORK_STATUSES = {'Ready for Service', 'Navigating', 'Arrived on Site', 'In Progress', 'Completed'}
+PRE_SERVICE_STATUSES = {'Not Started', 'Ready for Service'}
 ASSIGNABLE_TICKET_STATUSES = {'Not Started', 'For Inspection', 'Ready for Service', 'Awaiting Materials', 'Navigating', 'On Hold'}
 CLIENT_RESCHEDULABLE_TICKET_STATUSES = {'Not Started', 'For Inspection', 'Ready for Service'}
 CONTACTABLE_TICKET_STATUSES = {
@@ -295,10 +299,10 @@ GENERAL_SERVICE_NAME = 'General Services'
 
 
 def send_notification_email(user, subject, message):
-    """Helper function to send email notifications"""
-    from notifications.notification_utils import notifications_enabled
+    """Helper function to send email notifications (only while Email Alerts are on)."""
+    from notifications.notification_utils import email_notifications_enabled
 
-    if not notifications_enabled():
+    if not email_notifications_enabled():
         return
 
     if not user.email:
@@ -324,16 +328,16 @@ def send_notification_email(user, subject, message):
     transaction.on_commit(deliver, robust=True)
 
 
-def create_notification(user, message, notification_type='info', *, title='', ticket=None):
+def create_notification(user, message, notification_type='info', *, title='', ticket=None, service_request=None):
     """Helper to create in-app notifications.
 
-    A title and ticket are optional; when given, the notification opens its record and its
+    A title, ticket and request are optional; when given, the notification opens its record and its
     sidebar badge is routed by the system-written title instead of the free-text message.
     """
-    from notifications.notification_utils import notifications_enabled
+    from notifications.notification_utils import in_app_notifications_enabled
     from notifications.models import Notification
 
-    if not notifications_enabled():
+    if not in_app_notifications_enabled():
         return None
 
     return Notification.objects.create(
@@ -342,7 +346,7 @@ def create_notification(user, message, notification_type='info', *, title='', ti
         type=notification_type,
         title=title or '',
         ticket=ticket,
-        request=ticket.request if ticket is not None else None,
+        request=service_request or (ticket.request if ticket is not None else None),
     )
 
 
@@ -703,7 +707,7 @@ def apply_schedule_fields(ticket, *, scheduled_date=None, scheduled_time=None, s
 def build_initial_ticket_payload(request_obj):
     preferred_time_slot = normalize_time_slot(request_obj.preferred_time_slot)
     return {
-        'scheduled_date': request_obj.preferred_date or timezone.localdate(),
+        'scheduled_date': request_obj.preferred_date or business_today(),
         'scheduled_time_slot': preferred_time_slot,
         'scheduled_time': get_default_time_for_slot(preferred_time_slot),
         'status': 'Not Started',
@@ -914,31 +918,30 @@ def parse_inventory_usage(value):
     return value
 
 
-def build_ticket_daily_duration_allocations(ticket, *, limit_minutes=None, scheduled_date=None):
+def build_ticket_daily_duration_allocations(ticket, *, limit_minutes=None, scheduled_date=None, calendar=None):
+    """{date: minutes} a ticket occupies: day 1 is its scheduled date, later days are working days
+    (days off and holidays are skipped; see services/work_calendar.py)."""
+    from services.work_calendar import load_work_calendar, work_day_allocations
+
     effective_scheduled_date = scheduled_date or getattr(ticket, 'scheduled_date', None)
     if not ticket or not effective_scheduled_date:
         return {}
 
-    daily_limit = int(limit_minutes or get_daily_capacity_limit_minutes())
-    daily_limit = max(1, daily_limit)
-    remaining_minutes = max(0, int(ticket.request.service_type.estimated_duration or 0))
-    current_date = effective_scheduled_date
-    allocations = {}
-
-    while remaining_minutes > 0:
-        day_minutes = min(remaining_minutes, daily_limit)
-        allocations[current_date] = day_minutes
-        remaining_minutes -= day_minutes
-        current_date += timedelta(days=1)
-
-    return allocations
+    if calendar is None:
+        calendar = load_work_calendar(daily_limit_minutes=int(limit_minutes or get_daily_capacity_limit_minutes()))
+    minutes = max(0, int(ticket.request.service_type.estimated_duration or 0))
+    return work_day_allocations(effective_scheduled_date, minutes, calendar)
 
 
 def get_technician_scheduled_minutes_by_date(technician, start_date, end_date, *, exclude_ticket=None):
     if not technician or not start_date or not end_date:
         return {}
 
+    from services.business_time import business_timezone
+    from services.work_calendar import load_work_calendar
+
     limit_minutes = get_daily_capacity_limit_minutes()
+    calendar = load_work_calendar(daily_limit_minutes=limit_minutes)
     totals = {}
     queryset = get_technician_ticket_queryset(technician).filter(
         scheduled_date__lte=end_date,
@@ -947,8 +950,14 @@ def get_technician_scheduled_minutes_by_date(technician, start_date, end_date, *
         queryset = queryset.exclude(pk=exclude_ticket.pk)
 
     for existing_ticket in queryset.select_related('request__service_type'):
-        allocations = build_ticket_daily_duration_allocations(existing_ticket, limit_minutes=limit_minutes)
+        allocations = build_ticket_daily_duration_allocations(existing_ticket, calendar=calendar)
+        # A finished job stops reserving days after the day it finished.
+        finished_on = None
+        if existing_ticket.status in COMPLETED_TICKET_STATUSES and existing_ticket.completed_date:
+            finished_on = existing_ticket.completed_date.astimezone(business_timezone()).date()
         for allocated_date, allocated_minutes in allocations.items():
+            if finished_on and allocated_date > finished_on:
+                continue
             if start_date <= allocated_date <= end_date:
                 totals[allocated_date] = totals.get(allocated_date, 0) + allocated_minutes
 
@@ -968,10 +977,11 @@ def get_technician_daily_scheduled_minutes(technician, scheduled_date, *, exclud
     return totals.get(scheduled_date, 0)
 
 
-def get_daily_capacity_limit_minutes():
-    from users.models import AdminSettings
+def get_daily_capacity_limit_minutes(settings_obj=None):
+    if settings_obj is None:
+        from users.models import AdminSettings
 
-    settings_obj = AdminSettings.objects.order_by('id').first()
+        settings_obj = AdminSettings.objects.order_by('id').first()
     if not settings_obj or not settings_obj.allow_overtime_dispatch:
         return DAILY_TECHNICIAN_CAPACITY_MINUTES
 
@@ -1343,6 +1353,22 @@ def validate_ticket_transition(ticket, new_status, *, allow_same=False):
     if normalized_status not in allowed_statuses:
         raise ValueError(f'Cannot move ticket from {ticket.status} to {normalized_status}.')
 
+    # Field work needs someone in the field: a ticket cannot be "on the way", "arrived" or
+    # "in progress" with no technician (the client would see work that nobody is doing).
+    if normalized_status in FIELD_WORK_STATUSES and not ticket.technician_id:
+        raise ValueError('Assign a technician before moving this ticket into field work.')
+
+    # A service that needs a site inspection cannot leave "Not Started" / "Ready for Service" for
+    # service work before the inspection visit has reported, whichever action asks (dispatch, the
+    # office's manual status change, ...). Tickets already past those points are not re-checked, so
+    # older records without a full status history never get stuck mid-job.
+    if (
+        ticket.status in PRE_SERVICE_STATUSES
+        and normalized_status in POST_INSPECTION_WORK_STATUSES
+        and ticket_requires_inspection_visit(ticket)
+    ):
+        raise ValueError('This service needs a site inspection first. Dispatch the inspection visit before service work.')
+
     if normalized_status in {'Ready for Service', 'Navigating'} and ticket.ticket_type != 'inspection':
         from services.deposits import ticket_deposit_gate
 
@@ -1484,6 +1510,9 @@ def apply_ticket_status_change(ticket, new_status, *, changed_by, notes='', extr
             performed_by=changed_by,
             reason=f'Released automatically when ticket #{ticket.id} was cancelled.',
         )
+        from services.deposits import notify_deposit_decision_needed
+
+        notify_deposit_decision_needed(ticket)
 
     ServiceStatusHistory.objects.create(
         ticket=ticket,

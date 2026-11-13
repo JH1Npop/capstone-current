@@ -97,6 +97,10 @@ for every configured check of every service on the ticket and a note for each
 No, ignores unconfigured extras, and stores normalized answers
 (`service_type_id`, `service_name`, `title`, `answer`, `notes`) in the report's
 `checklist_items`; the office decision copies them into the findings history.
+The technician service checklist (`POST /api/checklist/`) is accepted only
+while the ticket is `In Progress` (Start Job first); any other open state
+returns 400 "Start the job before you submit its checklist.", and closed
+tickets keep their own 400.
 Ticket and crew-assignment model signals reconcile that derived state after
 direct model/admin changes as well as API workflow changes. The
 `reconcile_technician_availability` management command reports historical
@@ -208,6 +212,7 @@ rule and required amount are snapshotted from the services at creation.
 | `Sent` | `Rejected` | Owning client declines with a required reason |
 | `Rejected` | `Sent` (revision) | Office revises and resends; the number becomes `QUO-…-R2`, `-R3`, …, the client response is cleared, the client is notified, and the decline note is kept in the activity log |
 | `Accepted` | none | Locked; corrections need a new commercial agreement |
+| `Draft` | `Accepted` | Office records an offline acceptance ("Client accepted offline", for example a printed quotation signed on paper) |
 
 Any other edit of a `Rejected` quotation is refused. The client can respond
 only to a `Sent` quotation. Deposit payments can be recorded only on an
@@ -281,3 +286,72 @@ Added 2026-11-06. Source of truth: `backend/services/views/document_templates.py
 | inactive or active | deleted | `DELETE /document-definitions/<id>/` | Only if it never produced an output or a prepared instance; removes its designs, versions, stored files and fields. |
 
 The six core document types cannot be edited, disabled or deleted.
+
+
+## Quotation validity (2026-11-08)
+
+A `Sent` quotation can be moved to `Accepted` only through its last valid business (UTC+8) day: the day it was last sent (`updated_at` while `Sent`) plus `validity_days`. After that, `respond` refuses `accept` (409); `decline` (`Sent` → `Rejected`) is still allowed. The office restarts the period by sending an updated quotation. Rule: `services/quotation_validity.py`.
+
+## Shared transition guards (2026-11-09)
+
+`validate_ticket_transition` (used by every status-changing action, including the office's manual
+`update_status`) now also refuses, with 400:
+
+- moving a ticket with no lead technician into `Navigating`, `Arrived on Site` or `In Progress`
+  ("Assign a technician before moving this ticket into field work.");
+- leaving `Not Started` or `Ready for Service` for `Ready for Service`, `Navigating`, `Arrived on Site`,
+  `In Progress` or `Completed` while the request needs a site inspection that has not reported
+  (`ticket_requires_inspection_visit`: no `Inspection Completed` in the ticket's status history and the
+  ticket is not the inspection visit itself) ("This service needs a site inspection first. Dispatch
+  the inspection visit before service work."). Tickets already past those states are not re-checked,
+  so older records without a full status history are never stuck mid-job. Before this, the manual
+  status change could skip the inspection entirely.
+
+Client cancellation: a client cannot cancel once the ticket is `Navigating`, `Arrived on Site`,
+`In Progress` **or `On Hold`** (409, `code: cancellation_requires_office`); a paused job has already
+started in the field and its request is `In Progress`. The office can still cancel it. The client
+pages hide "Dismiss request" in the same states (`canClientDismissRequest`).
+
+Generated coverage: `services/tests/test_ticket_and_request_state_rules.py` tries every pair of
+ticket statuses through `update_status` for service tickets and inspection visits, the guards, every
+role on every request and job action, and the request decision states.
+
+
+## Cancelling a job (2026-11-09)
+
+Every job type (direct or inspection first, with or without a deposit) at every stage, with every cancel
+path, is tested by `services/tests/test_job_type_cancel_matrix.py`.
+
+- An office dismissal (`update_status` to `Cancelled`) now tells the client "Ticket #N Cancelled" (the
+  office's reason stays an internal note) and tells every team member, lead and crew, "Ticket #N
+  Cancelled". It used to send the client "Status Updated" and only the lead.
+- A cancelled job is closed to its technicians: travel, arrival, start, hold, finish, proof upload,
+  equipment request, inspection report and field forms (data sheet, commissioning checklist, field service
+  report) all answer 409 `job_cancelled`, "The office cancelled ticket #N, so it is no longer on your job
+  list." (`services/views/document_locks.TechniciansLeaveCancelledJobsMixin`, and the technician job
+  actions). Reading the job and its documents still works. Technicians not on the job get the normal
+  answer, so nothing about it is revealed.
+- Open: the office has no way to refuse a client's reschedule request except by setting a date.
+
+
+## Quotation guards (2026-11-09)
+
+Enforced by `QuotationRecordSerializer.validate` and `QuotationRecordViewSet`, tested by
+`services/tests/test_quotation_and_deposit_rules.py`:
+
+- Only the client declines (through `respond`, with a reason); the office cannot set `Rejected`.
+- A new quotation starts as `Draft` or `Sent`; an acceptance is recorded afterwards.
+- A `Sent` quotation cannot go back to `Draft` (the client already has it); the office updates and sends it again.
+- Only a `Draft` quotation can be deleted (409 otherwise); a quotation the client has received stays on record.
+- For a `Cancelled` job: no quotation can be sent or accepted, the client cannot answer one (409), and no new
+  deposit can be recorded (409). Voiding an earlier deposit payment (for example after a refund) still works.
+
+Deposit after a cancelled job (2026-11-09): when a job is cancelled (office dismissal, inspection
+cancellation or the client's own cancellation) while it holds received deposit money, active
+admins get "Deposit decision needed for Ticket #N". The office records the outcome once through
+`settle-deposit` (`outcome` = `refunded` or `kept`, a note of at least 3 characters): Refunded voids
+each remaining payment ("Refunded after the job was cancelled: <note>"), Kept leaves the payments
+counted and adds "Kept after the job was cancelled: <note>" to their notes. The decision is an
+activity-log entry on the quotation (`metadata.kind = deposit_outcome`, no schema change) and is
+shown as `deposit_outcome` (with `deposit_decision_needed` until then); the client is notified.
+Refused: an open job (409, void instead), a second decision (409), nothing received (409).

@@ -17,6 +17,11 @@ class TicketProgress(models.Model):
     progress_status = models.CharField(max_length=100)  # Assigned, On Site, Work Started, Work Completed
     comment = models.TextField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now_add=True)
+    # Progress reports on long jobs: how much of the work is done (as the technician judges it),
+    # the day of work it covers, and photos (stored like other job proof photos).
+    percent_complete = models.PositiveSmallIntegerField(null=True, blank=True)
+    work_date = models.DateField(null=True, blank=True)
+    photo_urls = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return f"{self.progress_status} for Ticket {self.ticket.id} by {self.updated_by}"

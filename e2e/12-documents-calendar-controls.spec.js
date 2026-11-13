@@ -7,13 +7,13 @@ import zlib from 'node:zlib';
 import { test, expect } from '@playwright/test';
 import { loadAuthStateFromBackend, seedAuthState, visitWorkspacePage } from './helpers';
 
-const STAGES = [
-  'TDS - Technical Data Sheet',
-  'Quotation Proposal',
-  'Solar Installation Contract',
-  'PV Solar Site Commissioning Checklist',
-  'Turnover / Acceptance Form',
-  'Field Service Report',
+const DOCUMENTS = [
+  'technical_data_sheet',
+  'quotation_proposal',
+  'installation_contract',
+  'commissioning_checklist',
+  'turnover_acceptance',
+  'field_service_report',
 ];
 
 // Reads word/document.xml out of a .docx buffer (zip central directory + raw deflate), so a test can check the text
@@ -68,22 +68,78 @@ test.describe('Admin Documents and Calendar - controls', () => {
 
   const monthLabel = (page) => page.getByRole('heading', { level: 3, name: /^[A-Z][a-z]+ 20\d\d$/ });
   const showing = (page) => page.getByText(/^Showing \d+ of \d+ events?$/);
+  const documentSelect = (page) => page.getByRole('combobox', { name: 'Document', exact: true });
+  const chooseDocument = (page, value) => documentSelect(page).selectOption(value);
 
   // ------------------------------------------------------------------ Documents
 
-  test('12.1 - Every document stage button switches the editor', async ({ page }) => {
+  test('12.0 - Opening Documents does not resize the application shell', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.route(/\/api\/services\/document-definitions\/\?is_active=true$/, async (route) => {
+      const response = await route.fetch();
+      const payload = await response.json();
+      const customDefinition = {
+        id: 999999,
+        code: 'e2e-preventive-maintenance-report',
+        name: 'Preventive Maintenance Report',
+        description: 'Reusable preventive-maintenance inspection, servicing, findings, recommendations, and acknowledgment report.',
+        category: 'custom',
+        is_active: true,
+      };
+      const definitions = Array.isArray(payload) ? payload : payload.results;
+      const updatedDefinitions = [...definitions, customDefinition];
+      await route.fulfill({
+        response,
+        json: Array.isArray(payload) ? updatedDefinitions : { ...payload, results: updatedDefinitions },
+      });
+    });
+    await visitWorkspacePage(page, '/admin/dashboard');
+
+    const shellSnapshot = async () => page.evaluate(() => {
+      const bodyStyle = window.getComputedStyle(document.body);
+      const sidebar = document.querySelector('aside');
+      return {
+        bodyFontFamily: bodyStyle.fontFamily,
+        bodyFontSize: bodyStyle.fontSize,
+        sidebarWidth: sidebar?.getBoundingClientRect().width ?? 0,
+        viewportWidth: document.documentElement.clientWidth,
+        documentWidth: document.documentElement.scrollWidth,
+      };
+    });
+
+    const before = await shellSnapshot();
+    await page.getByRole('link', { name: 'Documents', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Documents', exact: true })).toBeVisible();
+    const selector = documentSelect(page);
+    const customOption = selector.locator('option', { hasText: 'Preventive Maintenance Report' });
+    await expect(customOption).toHaveCount(1);
+    const after = await shellSnapshot();
+    const ticketBox = await page.getByPlaceholder(/search ticket by id/i).locator('..').boundingBox();
+    const documentBox = await selector.boundingBox();
+    const optionCount = await selector.locator('option').count();
+
+    expect(after.bodyFontFamily).toBe(before.bodyFontFamily);
+    expect(after.bodyFontSize).toBe(before.bodyFontSize);
+    expect(after.sidebarWidth).toBeCloseTo(before.sidebarWidth, 0);
+    expect(after.documentWidth).toBe(after.viewportWidth);
+    expect(optionCount).toBeGreaterThan(DOCUMENTS.length);
+    expect(documentBox?.x).toBeGreaterThan(ticketBox?.x || 0);
+    expect(documentBox?.y).toBeCloseTo(ticketBox?.y || 0, 0);
+  });
+
+  test('12.1 - The dynamic document dropdown switches every built-in editor', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/documents');
-    for (const stage of STAGES) {
-      await page.getByRole('button', { name: stage, exact: true }).click();
-      await expect(page.getByRole('button', { name: stage, exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const selector = documentSelect(page);
+    for (const documentId of DOCUMENTS) {
+      await selector.selectOption(documentId);
+      await expect(selector).toHaveValue(documentId);
     }
-    // Only one stage is active at a time.
-    await expect(page.locator('button[aria-pressed="true"]').filter({ hasText: /TDS|Quotation|Contract|Commissioning|Turnover|Service Report/ })).toHaveCount(1);
+    expect(await selector.locator('option').count()).toBeGreaterThanOrEqual(DOCUMENTS.length);
   });
 
   test('12.2 - Save draft, Save specs and Generate stay disabled until a ticket is chosen, then enable', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/documents');
-    await page.getByRole('button', { name: 'Field Service Report', exact: true }).click();
+    await chooseDocument(page, 'field_service_report');
     const saveDraft = page.getByRole('button', { name: 'Save draft' });
     const saveSpecs = page.getByRole('button', { name: 'Save specs to ticket' });
     const generate = page.getByRole('button', { name: 'Generate active design' });
@@ -100,7 +156,7 @@ test.describe('Admin Documents and Calendar - controls', () => {
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await visitWorkspacePage(page, '/admin/documents');
-    await page.getByRole('button', { name: 'Field Service Report', exact: true }).click();
+    await chooseDocument(page, 'field_service_report');
     await pickFirstTicket(page);
 
     const draftResponse = page.waitForResponse((r) => r.url().includes('/document-draft/') && r.request().method() === 'POST');
@@ -121,7 +177,7 @@ test.describe('Admin Documents and Calendar - controls', () => {
 
   test('12.4 - Reset puts the ticket-filled values back', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/documents');
-    await page.getByRole('button', { name: 'Field Service Report', exact: true }).click();
+    await chooseDocument(page, 'field_service_report');
     await pickFirstTicket(page);
     const client = page.locator('label:has(> span:text-is("Client")) textarea').first();
     await expect(client).toBeVisible();
@@ -134,7 +190,7 @@ test.describe('Admin Documents and Calendar - controls', () => {
 
   test('12.5 - Add row and Remove row change the table', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/documents');
-    await page.getByRole('button', { name: 'Field Service Report', exact: true }).click();
+    await chooseDocument(page, 'field_service_report');
     const removeButtons = page.getByRole('button', { name: 'Remove row' });
     const before = await removeButtons.count();
     expect(before).toBeGreaterThan(0);
@@ -166,7 +222,7 @@ test.describe('Admin Documents and Calendar - controls', () => {
 
   test('12.7 - Print opens the printable document', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/documents');
-    await page.getByRole('button', { name: 'Field Service Report', exact: true }).click();
+    await chooseDocument(page, 'field_service_report');
     const popupPromise = page.waitForEvent('popup');
     await page.getByRole('button', { name: 'Print', exact: true }).click();
     const popup = await popupPromise;
@@ -209,7 +265,7 @@ test.describe('Admin Documents and Calendar - controls', () => {
       await route.fulfill({ response, json: payload });
     });
     await visitWorkspacePage(page, '/admin/documents');
-    await page.getByRole('button', { name: 'Field Service Report', exact: true }).click();
+    await chooseDocument(page, 'field_service_report');
     await pickFirstTicket(page);
     const source = page.getByLabel('Service Report Source');
     await expect(source).toBeVisible();
@@ -224,8 +280,8 @@ test.describe('Admin Documents and Calendar - controls', () => {
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await visitWorkspacePage(page, '/admin/documents');
-    const stageRail = page.getByRole('navigation', { name: 'Document templates' });
-    await expect(stageRail.getByRole('button', { name: /E2E Maintenance Certificate/ })).toHaveCount(0);
+    const selector = documentSelect(page);
+    await expect(selector.locator('option', { hasText: 'E2E Maintenance Certificate' })).toHaveCount(0);
 
     // 1. Register a new document type in the template library.
     await page.getByRole('button', { name: 'Template library' }).click();
@@ -265,11 +321,14 @@ test.describe('Admin Documents and Calendar - controls', () => {
     await manager.getByRole('button', { name: 'Close template manager' }).click();
     await expect(manager).toBeHidden();
 
-    // 5. The new document now sits next to the six built-in ones.
-    const newStage = stageRail.getByRole('button', { name: /E2E Maintenance Certificate/ });
-    await expect(newStage).toBeVisible();
+    // 5. The new document is appended to the same dynamic selector as the six built-in ones.
+    const newOption = selector.locator('option', { hasText: 'E2E Maintenance Certificate' });
+    await expect(newOption).toHaveCount(1);
+    expect(await selector.locator('option').count()).toBeGreaterThan(DOCUMENTS.length);
+    const customValue = await newOption.getAttribute('value');
+    expect(customValue).toBeTruthy();
     await pickFirstTicket(page);
-    await newStage.click();
+    await selector.selectOption(customValue || '');
     const workspace = page.getByRole('dialog', { name: 'Fill a document' });
     await expect(workspace).toBeVisible();
     await expect(workspace.getByRole('combobox').first()).toContainText('E2E Maintenance Certificate');
@@ -457,7 +516,7 @@ test.describe('Admin Documents and Calendar - controls', () => {
     await expect(manager.getByLabel('Document type').locator('option', { hasText: 'E2E Disposable Type' })).toHaveCount(0);
   });
 
-  test('12.21 - A custom document tab without a ticket asks for one, then opens as soon as a ticket is picked', async ({ page }) => {
+  test('12.21 - A custom dropdown option without a ticket asks for one, then opens as soon as a ticket is picked', async ({ page }) => {
     test.setTimeout(150000);
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -474,29 +533,30 @@ test.describe('Admin Documents and Calendar - controls', () => {
     expect(used.ok(), await used.text()).toBeTruthy();
 
     await visitWorkspacePage(page, '/admin/documents');
-    const stageRail = page.getByRole('navigation', { name: 'Document templates' });
-    const tab = stageRail.getByRole('button', { name: new RegExp(name) });
+    const selector = documentSelect(page);
+    const customValue = `custom:${definition.code}`;
+    await expect(selector.locator('option', { hasText: name })).toHaveCount(1);
     const fillWindow = page.getByRole('dialog', { name: 'Fill a document' });
 
     // 1. No ticket: no empty window, a note instead, and the ticket search is ready to type in.
-    await tab.click();
+    await selector.selectOption(customValue);
     await expect(fillWindow).toHaveCount(0);
     const note = page.getByRole('status').filter({ hasText: 'Choose a ticket above to fill' });
     await expect(note).toContainText(name);
-    await expect(tab).toHaveAttribute('aria-pressed', 'true');
+    await expect(selector).toHaveValue(customValue);
     await expect(page.getByPlaceholder(/search ticket by id/i)).toBeFocused();
     // The previous built-in document's editor is hidden so it is not mistaken for this one.
     await expect(page.getByText('Editor preview')).toBeHidden();
     await page.screenshot({ path: 'test-results/screenshots/12-custom-tab-needs-ticket.png' });
 
-    // Cancel clears the note and the tab.
+    // Cancel clears the note and restores the active built-in document.
     await note.getByRole('button', { name: 'Cancel' }).click();
     await expect(note).toHaveCount(0);
-    await expect(tab).toHaveAttribute('aria-pressed', 'false');
+    await expect(selector).toHaveValue('field_service_report');
     await expect(page.getByText('Editor preview')).toBeVisible();
 
     // 2. Pick a ticket after choosing the tab: the Fill window opens on its own.
-    await tab.click();
+    await selector.selectOption(customValue);
     await page.getByRole('button', { name: /TKT-\d+/ }).first().click();
     await expect(fillWindow).toBeVisible({ timeout: 15000 });
     await expect(fillWindow).toContainText(name);
@@ -506,7 +566,7 @@ test.describe('Admin Documents and Calendar - controls', () => {
     await expect(note).toHaveCount(0);
 
     // 3. With a ticket already chosen the tab opens the window straight away.
-    await tab.click();
+    await selector.selectOption(customValue);
     await expect(fillWindow).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(fillWindow).toBeHidden();

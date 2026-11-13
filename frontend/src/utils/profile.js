@@ -17,3 +17,24 @@ export const releaseObjectPreview = (previewUrl) => {
     URL.revokeObjectURL(previewUrl);
   }
 };
+
+/**
+ * Splits a profile save response into the user to keep and the message to show. When the new
+ * email's verification could not be sent, the server saves the other changes, keeps the old email
+ * and says so in `email_change_error`.
+ */
+export const profileSaveOutcome = (response, emailChanged) => {
+  const { email_change_error: emailChangeError, ...savedUser } = response || {};
+  if (emailChanged && emailChangeError) {
+    return { savedUser, message: { type: 'error', text: `Your other changes were saved. ${emailChangeError}` } };
+  }
+  return {
+    savedUser,
+    message: {
+      type: 'success',
+      text: emailChanged && savedUser.pending_email
+        ? `Profile saved. Verify ${savedUser.pending_email} before it replaces your current email.`
+        : 'Profile updated successfully.',
+    },
+  };
+};

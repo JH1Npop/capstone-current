@@ -102,12 +102,13 @@ Address: ${job.address || 'Not provided'}
 Lead Technician: ${job.leadTechnician || 'Unassigned'}
 Crew: ${job.crewSummary || 'No crew assigned'}
 Warranty: ${formatStatusLabel(job.warrantyStatus || job.warranty_status || 'not_applicable')}
-  Next Maintenance: ${job.maintenanceSchedule?.next_due_date ? formatDate(job.maintenanceSchedule.next_due_date) : 'Not scheduled'}
+Next Maintenance: ${job.maintenanceSchedule?.next_due_date ? formatDate(job.maintenanceSchedule.next_due_date) : 'Not scheduled'}
 Started: ${formatDateTime(job.startTime)}
 Finished: ${formatDateTime(job.endTime)}
 Actual Duration: ${job.durationMinutes != null ? `${job.durationMinutes} minutes` : 'Not recorded'}
 Checklist Steps: ${getChecklistItems(job).length}
 Proof Files: ${getProofMedia(job).length}
+Client Rating: ${job.clientRating ? `${job.clientRating}/5` : 'Not yet rated'}
 
 Notes:
 ${job.completionNotes || job.completion_notes || job.notes || 'No notes captured for this completed job.'}
@@ -135,7 +136,9 @@ export default function TechnicianJobHistory() {
   const [dateTo, setDateTo] = useState('');
   const [actionJob, setActionJob] = useState(null);
   const [equipmentReturnJob, setEquipmentReturnJob] = useState(null);
+  const [summary, setSummary] = useState(null);
   const loadSequence = useRef(0);
+  const timelineSequence = useRef(0);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -149,16 +152,16 @@ export default function TechnicianJobHistory() {
   useEffect(() => {
     const handleEscape = (event) => {
       if (event.key !== 'Escape') return;
-      if (equipmentReturnJob) return;
-      setSelectedProof(null);
-      setImageViewer(null);
-      setActionJob(null);
-      setSelectedJob(null);
-      setTimelineJob(null);
+      // The return dialog and the timeline handle their own Escape; otherwise close only the top layer.
+      if (equipmentReturnJob || timelineJob) return;
+      if (selectedProof) setSelectedProof(null);
+      else if (imageViewer) setImageViewer(null);
+      else if (actionJob) setActionJob(null);
+      else if (selectedJob) setSelectedJob(null);
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [equipmentReturnJob]);
+  }, [equipmentReturnJob, timelineJob, selectedProof, imageViewer, actionJob, selectedJob]);
 
   const loadHistory = async () => {
     const sequence = ++loadSequence.current;
@@ -179,6 +182,7 @@ export default function TechnicianJobHistory() {
       setHistory(data.results);
       setTotal(data.total);
       setTotalPages(data.totalPages);
+      setSummary(data.summary);
       setError('');
       if (data.page !== page) setPage(data.page);
     } catch (loadError) {
@@ -197,7 +201,7 @@ export default function TechnicianJobHistory() {
     const reportUrl = URL.createObjectURL(reportBlob);
     const link = document.createElement('a');
     link.href = reportUrl;
-    link.download = `ticket-${job.ticketId}-report.txt`;
+    link.download = `${formatTicketId(job.ticketId)}-work-summary.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -205,18 +209,35 @@ export default function TechnicianJobHistory() {
   };
 
   const openTimeline = async (job) => {
+    // A late reply for a job that is no longer open is ignored.
+    const sequence = ++timelineSequence.current;
     setTimelineJob(job);
     setTimelineEvents([]);
     setTimelineError('');
     setTimelineLoading(true);
     try {
       const events = await fetchTicketTimeline(job.ticketId || job.id);
-      setTimelineEvents(events);
+      if (sequence === timelineSequence.current) setTimelineEvents(events);
     } catch (loadError) {
-      setTimelineError(loadError.message || 'Unable to load ticket timeline.');
+      if (sequence === timelineSequence.current) setTimelineError(loadError.message || 'Unable to load ticket timeline.');
     } finally {
-      setTimelineLoading(false);
+      if (sequence === timelineSequence.current) setTimelineLoading(false);
     }
+  };
+
+  const closeTimeline = () => {
+    timelineSequence.current += 1;
+    setTimelineJob(null);
+  };
+
+  const firstShown = total ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = (page - 1) * pageSize + history.length;
+  const hasFilters = Boolean(searchTerm || dateFrom || dateTo);
+  const clearFilters = () => {
+    setSearchTerm('');
+    setDateFrom('');
+    setDateTo('');
+    setPage(1);
   };
 
   return (
@@ -224,6 +245,30 @@ export default function TechnicianJobHistory() {
       <div className="mb-4">
         <p className="text-sm text-slate-500">Review completed work, proof files, reports, and performance.</p>
       </div>
+      {summary ? (
+        <dl className="mb-4 grid grid-cols-3 gap-2 sm:gap-3" aria-label="Your work summary">
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <dt className="text-xs font-semibold text-slate-500">Jobs completed</dt>
+            <dd className="mt-1 text-2xl font-bold text-slate-900">{summary.completed_total}</dd>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <dt className="text-xs font-semibold text-slate-500">This month</dt>
+            <dd className="mt-1 text-2xl font-bold text-slate-900">{summary.completed_this_month}</dd>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <dt className="text-xs font-semibold text-slate-500">Client rating</dt>
+            <dd className="mt-1 flex items-baseline gap-1 text-2xl font-bold text-slate-900">
+              {summary.average_rating != null ? (
+                <>
+                  <FiStar className="self-center text-yellow-500" size={18} aria-hidden="true" />
+                  {summary.average_rating}
+                  <span className="text-xs font-medium text-slate-500">({summary.rated_count})</span>
+                </>
+              ) : <span className="text-sm font-medium text-slate-500">No ratings yet</span>}
+            </dd>
+          </div>
+        </dl>
+      ) : null}
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px]">
           <label className="relative block">
@@ -238,7 +283,7 @@ export default function TechnicianJobHistory() {
             />
           </label>
           <label className="relative block">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">From</span>
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">From<span className="sr-only"> completed date</span></span>
             <input
               type="date"
               value={dateFrom}
@@ -248,7 +293,7 @@ export default function TechnicianJobHistory() {
             />
           </label>
           <label className="relative block">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">To</span>
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">To<span className="sr-only"> completed date</span></span>
             <input
               type="date"
               value={dateTo}
@@ -258,13 +303,18 @@ export default function TechnicianJobHistory() {
             />
           </label>
         </div>
+        {hasFilters ? (
+          <button type="button" onClick={clearFilters} className="mt-3 min-h-11 rounded-lg px-3 text-sm font-semibold text-brand-700 hover:bg-brand-50">Clear filters</button>
+        ) : null}
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
           <p className="font-semibold">Job history could not be loaded.</p>
           <p className="mt-1">{error}</p>
-          <button type="button" onClick={loadHistory} className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 font-semibold hover:bg-red-100">Try again</button>
+          {dateFrom && dateTo && dateFrom > dateTo ? null : (
+            <button type="button" onClick={loadHistory} className="mt-3 min-h-11 rounded-lg border border-red-300 bg-white px-4 font-semibold hover:bg-red-100">Try again</button>
+          )}
         </div>
       ) : loading ? (
         <ListSkeleton rows={6} />
@@ -278,14 +328,17 @@ export default function TechnicianJobHistory() {
         </div>
       ) : history.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white py-12 text-center text-sm text-slate-500">
-          No completed jobs match the current filters.
+          <p>No completed jobs match the current filters.</p>
+          <button type="button" onClick={clearFilters} className="mt-3 min-h-11 rounded-lg border border-slate-300 px-4 font-semibold text-slate-700 hover:bg-slate-50">Clear filters</button>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
             <div>
               <h3 className="text-base font-semibold text-slate-900">Completed Jobs</h3>
-              <p className="text-xs text-slate-500">Showing {history.length} of {total} completed job{total === 1 ? '' : 's'}.</p>
+              <p className="text-xs text-slate-500">
+                {totalPages > 1 ? `Showing ${firstShown}–${lastShown} of ${total} completed jobs.` : `Showing ${history.length} of ${total} completed job${total === 1 ? '' : 's'}.`}
+              </p>
             </div>
           </div>
           <div className="divide-y divide-slate-100 md:hidden">
@@ -308,7 +361,7 @@ export default function TechnicianJobHistory() {
                     <button
                       type="button"
                       onClick={() => setActionJob(job)}
-                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
                       title="Open actions"
                       aria-label={`Open actions for ${formatTicketId(job.ticketId)}`}
                     >
@@ -360,7 +413,8 @@ export default function TechnicianJobHistory() {
                   <button
                     type="button"
                     onClick={() => setSelectedJob(job)}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100"
+                    aria-label={`View job details for ${formatTicketId(job.ticketId)}`}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100"
                   >
                     <FiEye size={16} />
                     View job details
@@ -463,14 +517,14 @@ export default function TechnicianJobHistory() {
           <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
             <label className="flex items-center gap-2 text-slate-500">
               Rows
-              <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-slate-700">
+              <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} className="min-h-11 rounded-lg border border-slate-300 bg-white px-2 text-slate-700">
                 {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
               </select>
             </label>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-slate-500">Page {page} of {totalPages}</span>
-              <button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40">Previous</button>
-              <button type="button" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40">Next</button>
+              <button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="min-h-11 rounded-lg border border-slate-300 px-4 disabled:opacity-40">Previous</button>
+              <button type="button" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="min-h-11 rounded-lg border border-slate-300 px-4 disabled:opacity-40">Next</button>
             </div>
           </div>
         </div>
@@ -546,21 +600,6 @@ export default function TechnicianJobHistory() {
           </div>
         </div>
       )}
-
-      <div className="mt-12 grid gap-6 md:grid-cols-3">
-        <div className="card p-5 md:col-span-2">
-          <h4 className="mb-4 text-lg font-semibold text-slate-900">Performance Summary</h4>
-          <p className="leading-relaxed text-slate-600">
-            {history.length > 0
-              ? `Completed ${total} jobs. Use the filters above to review a specific service record.`
-              : 'Your performance metrics will appear here as you complete more jobs.'}
-          </p>
-        </div>
-        <div className="card p-5">
-          <h4 className="mb-4 text-center text-lg font-semibold">Total Jobs</h4>
-          <div className="text-center text-3xl font-bold text-slate-900">{total}</div>
-        </div>
-      </div>
 
       {selectedJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -732,7 +771,7 @@ export default function TechnicianJobHistory() {
                   <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Checklist Steps</div>
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedJob.inspection.is_completed ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>
                         {selectedJob.inspection.is_completed ? 'Completed' : 'Not completed'}
                       </span>
                     </div>
@@ -742,11 +781,19 @@ export default function TechnicianJobHistory() {
                           <div key={`${item.label || item.title || index}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                             <div className="flex items-start justify-between gap-3 text-sm">
                               <span className="font-medium text-slate-900">{item.label || item.title || item.name || `Step ${index + 1}`}</span>
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${item.completed ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-                                {item.completed ? 'Done' : 'Missing'}
-                              </span>
+                              {typeof item.answer === 'boolean' ? (
+                                // Site inspection checks are answered Yes/No, not done/missing.
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${item.answer ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                  {item.answer ? 'Yes' : 'No'}
+                                </span>
+                              ) : (
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${item.completed ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                                  {item.completed ? 'Done' : 'Missing'}
+                                </span>
+                              )}
                             </div>
                             {item.description && <p className="mt-1 text-xs leading-5 text-slate-500">{item.description}</p>}
+                            {item.notes && <p className="mt-1 text-xs leading-5 text-slate-600">{item.notes}</p>}
                           </div>
                         ))}
                       </div>
@@ -767,6 +814,7 @@ export default function TechnicianJobHistory() {
                           key={item.id}
                           type="button"
                           onClick={() => setSelectedProof(item)}
+                          aria-label={`Preview ${item.name}`}
                           className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left"
                         >
                           {isVideoProof(item) ? (
@@ -902,6 +950,8 @@ export default function TechnicianJobHistory() {
                   <a
                     href={selectedProof.url}
                     download
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600"
                   >
                     <FiDownload size={15} /> Download
@@ -936,7 +986,7 @@ export default function TechnicianJobHistory() {
         events={timelineEvents}
         loading={timelineLoading}
         error={timelineError}
-        onClose={() => setTimelineJob(null)}
+        onClose={closeTimeline}
       />
     </Layout>
   );

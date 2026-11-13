@@ -120,6 +120,7 @@ class LegacyAdminEndpointCapabilityTests(APITestCase):
         progress_response = self.client.post('/api/progress/ticket-progress/', {
             'ticket': self.ticket.id,
             'progress_status': 'Manager update',
+            'comment': 'Client confirmed the handover by phone.',
         }, format='json')
         inspection_response = self.client.post('/api/services/inspections/', {}, format='json')
 

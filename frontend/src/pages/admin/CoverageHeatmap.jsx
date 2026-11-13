@@ -14,18 +14,26 @@ import MapTileLayer from '../../components/maps/MapTileLayer';
 import SearchFilterBar from '../../components/shared/SearchFilterBar';
 
 const TECH_COLORS = ['#2563eb', '#0f766e', '#7c3aed', '#ea580c', '#be123c', '#0891b2'];
+const DENSITY_GRADIENT = 'linear-gradient(90deg, #22c55e 0%, #16a34a 25%, #eab308 50%, #f97316 75%, #dc2626 100%)';
+const GEOGRAPHIC_LEVELS = {
+  hotspot: { option: 'Hotspot areas', singular: 'hotspot', plural: 'hotspots' },
+  barangay: { option: 'Barangay', singular: 'barangay', plural: 'barangays' },
+  city: { option: 'City / municipality', singular: 'city / municipality', plural: 'cities / municipalities' },
+  province: { option: 'Province', singular: 'province', plural: 'provinces' },
+};
 
 function MapResizeController({ mapCenter, points }) {
   const map = useMap();
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      map.invalidateSize();
+      map.stop();
+      map.invalidateSize({ animate: false });
 
       if (points.length > 1) {
-        map.fitBounds(points, { padding: [28, 28], maxZoom: 12 });
+        map.fitBounds(points, { padding: [28, 28], maxZoom: 12, animate: false });
       } else {
-        map.setView(mapCenter, 11);
+        map.setView(mapCenter, 11, { animate: false });
       }
     }, 80);
 
@@ -47,6 +55,8 @@ const getServiceBreakdown = (point) => {
 
 export default function CoverageHeatmap() {
   const [heatmapData, setHeatmapData] = useState([]);
+  const [geographicLevels, setGeographicLevels] = useState({ barangay: [], city: [], province: [] });
+  const [geographicLevel, setGeographicLevel] = useState('hotspot');
   const [technicianCoverage, setTechnicianCoverage] = useState([]);
   const [clientOptions, setClientOptions] = useState([]);
   const [technicianOptions, setTechnicianOptions] = useState([]);
@@ -61,7 +71,12 @@ export default function CoverageHeatmap() {
   // Only the newest request may update the page when filters change quickly.
   const requestSequence = useRef(0);
   const [error, setError] = useState('');
-  const boundedHeatmapData = heatmapData.filter((point) => CALABARZON_BOUNDS.contains([point.lat, point.lng]));
+  const geographicConfig = GEOGRAPHIC_LEVELS[geographicLevel];
+  const selectedGeographicData = geographicLevel === 'hotspot'
+    ? heatmapData
+    : geographicLevels[geographicLevel] || [];
+  const boundedHeatmapData = selectedGeographicData.filter((point) => CALABARZON_BOUNDS.contains([point.lat, point.lng]));
+  const displayedMaxDensity = Math.max(0, ...boundedHeatmapData.map((point) => Number(point.count || 0)));
   const boundedTechnicianCoverage = technicianCoverage.filter((tech) => CALABARZON_BOUNDS.contains(tech.center));
   const mapPoints = useMemo(
     () => [
@@ -117,6 +132,7 @@ export default function CoverageHeatmap() {
       if (requestId !== requestSequence.current) return;
 
       setHeatmapData(heatmapResponse.heatmap_data || []);
+      setGeographicLevels(heatmapResponse.geographic_levels || { barangay: [], city: [], province: [] });
       setTechnicianCoverage(coverageResponse.coverage_areas || []);
       setClientOptions(heatmapResponse.client_options || []);
       setTechnicianOptions(heatmapResponse.technician_options || coverageResponse.coverage_areas?.map((tech) => ({
@@ -134,6 +150,7 @@ export default function CoverageHeatmap() {
     } catch (error) {
       if (requestId !== requestSequence.current) return;
       setHeatmapData([]);
+      setGeographicLevels({ barangay: [], city: [], province: [] });
       setTechnicianCoverage([]);
       setServiceOptions([]);
       setStats({ totalPoints: 0, totalJobs: 0, maxDensity: 0, totalTechnicians: 0 });
@@ -151,15 +168,18 @@ export default function CoverageHeatmap() {
   const getHeatmapColor = (count, maxDensity) => {
     if (!maxDensity) return '#64748b';
     const intensity = count / maxDensity;
-    if (intensity > 0.8) return '#dc2626'; // Red for high density
-    if (intensity > 0.6) return '#ea580c'; // Orange
-    if (intensity > 0.4) return '#ca8a04'; // Yellow
-    if (intensity > 0.2) return '#16a34a'; // Green
-    return '#22c55e'; // Light green for low density
+    if (intensity > 0.8) return '#dc2626';
+    if (intensity > 0.6) return '#f97316';
+    if (intensity > 0.4) return '#eab308';
+    if (intensity > 0.2) return '#16a34a';
+    return '#22c55e';
   };
 
-  const getHeatmapRadius = (count) => {
-    return Math.max(20, Math.min(50, count * 2)); // Scale radius based on count
+  const getHeatmapRadius = (count, maxDensity) => {
+    if (!maxDensity) return 180;
+    const intensity = Math.max(0, Math.min(1, count / maxDensity));
+    // Area, rather than diameter, grows with volume so busy points do not dominate the map.
+    return Math.round(180 + Math.sqrt(intensity) * 320);
   };
 
   const getTechnicianColor = (technicianId, index) => {
@@ -182,6 +202,19 @@ export default function CoverageHeatmap() {
         onClear={resetFilters}
         toolbarContent={(
           <>
+            <label className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3">
+              <span className="text-xs font-semibold text-slate-500">View by</span>
+              <select
+                aria-label="Geographic level"
+                value={geographicLevel}
+                onChange={(event) => setGeographicLevel(event.target.value)}
+                className="min-w-0 bg-transparent text-sm font-semibold text-slate-800 outline-none"
+              >
+                {Object.entries(GEOGRAPHIC_LEVELS).map(([value, config]) => (
+                  <option key={value} value={value}>{config.option}</option>
+                ))}
+              </select>
+            </label>
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Layers</span>
             <button
               type="button"
@@ -212,14 +245,14 @@ export default function CoverageHeatmap() {
           <div className="mt-1 text-xs text-slate-400">With a mapped service location</div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-[13px] font-medium text-slate-500">Hotspots</div>
-          <div className="mt-1.5 text-3xl font-bold text-slate-800">{stats.totalPoints}</div>
-          <div className="mt-1 text-xs text-slate-400">Areas about 1 km across</div>
+          <div className="text-[13px] font-medium text-slate-500">{geographicLevel === 'hotspot' ? 'Hotspots' : `Mapped ${geographicConfig.plural}`}</div>
+          <div className="mt-1.5 text-3xl font-bold text-slate-800">{boundedHeatmapData.length}</div>
+          <div className="mt-1 text-xs text-slate-400">{geographicLevel === 'hotspot' ? 'Areas about 1 km across' : `Grouped by saved ${geographicConfig.singular}`}</div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-[13px] font-medium text-slate-500">Busiest hotspot</div>
-          <div className="mt-1.5 text-3xl font-bold text-blue-600">{stats.maxDensity}</div>
-          <div className="mt-1 text-xs text-slate-400">Completed jobs in one area</div>
+          <div className="text-[13px] font-medium text-slate-500">Busiest {geographicConfig.singular}</div>
+          <div className="mt-1.5 text-3xl font-bold text-blue-600">{displayedMaxDensity}</div>
+          <div className="mt-1 text-xs text-slate-400">Completed jobs in one mapped group</div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="text-[13px] font-medium text-slate-500">Technicians with a location</div>
@@ -255,18 +288,32 @@ export default function CoverageHeatmap() {
             Coverage Map
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Showing {stats.totalJobs} completed job{stats.totalJobs === 1 ? '' : 's'} grouped into {boundedHeatmapData.length} mapped hotspot{boundedHeatmapData.length === 1 ? '' : 's'}.
+            Showing {stats.totalJobs} completed job{stats.totalJobs === 1 ? '' : 's'} grouped into {boundedHeatmapData.length} mapped {boundedHeatmapData.length === 1 ? geographicConfig.singular : geographicConfig.plural}.
           </p>
         </div>
-        {loading ? (
-          <div className="h-[min(68vh,720px)] min-h-[520px] p-4">
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_22rem]">
+          {loading ? (
+            <div className="h-[min(68vh,720px)] min-h-[520px] p-4 lg:col-span-2">
             <PanelSkeleton rows={10} />
           </div>
         ) : (
-          <div className="relative h-[min(68vh,720px)] min-h-[520px]">
+          <div className={`relative h-[min(68vh,720px)] min-h-[520px] ${rankedHotspots.length ? '' : 'lg:col-span-2'}`}>
             {!showServiceDensity && !showTechnicianCoverage && (
               <div role="status" className="pointer-events-none absolute inset-x-0 top-4 z-[500] mx-auto w-fit rounded-lg border border-amber-200 bg-white px-4 py-2 text-sm font-medium text-amber-800 shadow">
                 Both layers are hidden. Turn on Service density or Technician coverage.
+              </div>
+            )}
+            {showServiceDensity && (
+              <div role="img" aria-label="Service density scale, lower to higher jobs per area" className="pointer-events-none absolute bottom-4 left-4 z-[500] w-48 rounded-xl border border-white/80 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
+                <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-800">
+                  <span>Service density</span>
+                  <span className="font-normal text-slate-500">jobs per area</span>
+                </div>
+                <div className="mt-2 h-2.5 rounded-full" style={{ background: DENSITY_GRADIENT }} />
+                <div className="mt-1 flex justify-between text-[11px] text-slate-600">
+                  <span>Lower</span>
+                  <span>Higher</span>
+                </div>
               </div>
             )}
             <MapContainer
@@ -287,17 +334,17 @@ export default function CoverageHeatmap() {
                   <Circle
                     key={`heatmap-${index}`}
                     center={[point.lat, point.lng]}
-                    radius={getHeatmapRadius(point.count) * 10}
+                    radius={getHeatmapRadius(point.count, displayedMaxDensity)}
                     pathOptions={{
-                      color: getHeatmapColor(point.count, stats.maxDensity),
-                      fillColor: getHeatmapColor(point.count, stats.maxDensity),
-                      fillOpacity: 0.55,
+                      color: getHeatmapColor(point.count, displayedMaxDensity),
+                      fillColor: getHeatmapColor(point.count, displayedMaxDensity),
+                      fillOpacity: 0.5,
                       weight: 2
                     }}
                   >
                     <Popup>
                       <div className="min-w-[220px] text-left text-sm">
-                        <strong>Service Hotspot</strong>
+                        <strong>{geographicLevel === 'hotspot' ? 'Service hotspot' : geographicConfig.option}</strong>
                         <div className="mt-1 text-slate-700">{point.address || 'Mapped service area'}</div>
                         <div className="mt-2 font-semibold text-slate-900">
                           {point.count} completed service{point.count === 1 ? '' : 's'}
@@ -352,7 +399,7 @@ export default function CoverageHeatmap() {
                     pathOptions={{
                       color,
                       fillColor: color,
-                      fillOpacity: 0.1,
+                      fillOpacity: 0.08,
                       weight: 2,
                       dashArray: '5, 5'
                     }}
@@ -371,14 +418,14 @@ export default function CoverageHeatmap() {
         )}
 
         {!loading && rankedHotspots.length > 0 && (
-          <section aria-labelledby="busiest-hotspots-heading" className="border-t border-slate-200 p-4">
-            <h3 id="busiest-hotspots-heading" className="text-sm font-semibold text-slate-900">Busiest hotspots</h3>
+          <section aria-labelledby="busiest-hotspots-heading" className="border-t border-slate-200 bg-slate-50/60 p-4 lg:max-h-[min(68vh,720px)] lg:min-h-[520px] lg:overflow-y-auto lg:border-l lg:border-t-0">
+            <h3 id="busiest-hotspots-heading" className="text-sm font-semibold text-slate-900">Busiest {geographicConfig.plural}</h3>
             <p className="mt-0.5 text-xs text-slate-500">
               Showing {Math.min(HOTSPOT_LIST_LIMIT, rankedHotspots.length)} of {rankedHotspots.length}, most completed jobs first.
             </p>
             <ol className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">
               {rankedHotspots.slice(0, HOTSPOT_LIST_LIMIT).map((point) => (
-                <li key={`${point.lat},${point.lng}`} className="grid gap-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,1.4fr)_6rem_minmax(0,1.6fr)] sm:items-center">
+                <li key={`${point.lat},${point.lng}`} className="grid gap-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,1.4fr)_6rem_minmax(0,1.6fr)] sm:items-center lg:grid-cols-1">
                   <span className="min-w-0 truncate font-medium text-slate-900" title={point.address || ''}>{point.address || 'Mapped service area'}</span>
                   <span className="font-semibold text-blue-700">{point.count} job{point.count === 1 ? '' : 's'}</span>
                   <span className="min-w-0 truncate text-xs text-slate-500">
@@ -390,31 +437,10 @@ export default function CoverageHeatmap() {
             </ol>
           </section>
         )}
+        </div>
 
         <div className="border-t border-slate-200 p-4">
-          <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-5">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-red-600"></div>
-              <span>High density</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-orange-600"></div>
-              <span>Medium-high</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-yellow-600"></div>
-              <span>Medium</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-green-600"></div>
-              <span>Low</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-green-400"></div>
-              <span>Very low</span>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-4 border-t border-slate-200 pt-3 text-sm">
+          <div className="flex flex-wrap gap-4 text-sm">
             {boundedTechnicianCoverage.length ? boundedTechnicianCoverage.map((tech, index) => {
               const color = getTechnicianColor(tech.technician_id, index);
               return (

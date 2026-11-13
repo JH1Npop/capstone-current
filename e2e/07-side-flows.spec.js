@@ -127,8 +127,8 @@ test.describe('Side Flow - Client Support', () => {
     await page.getByLabel('Subject').fill('E2E ticket-linked support request');
     await page.getByLabel('Category').selectOption('warranty');
     await page.getByLabel('Priority').selectOption('high');
-    await page.getByLabel('Related ticket').selectOption({ index: 1 });
-    const selectedTicketId = await page.getByLabel('Related ticket').inputValue();
+    await page.getByLabel('Related request').selectOption({ index: 1 });
+    const selectedTicketId = await page.getByLabel('Related request').inputValue();
     await page.getByPlaceholder('Write your customer service concern...').fill('Please review the warranty details for this completed service.');
 
     const createCaseResponse = page.waitForResponse((response) => (

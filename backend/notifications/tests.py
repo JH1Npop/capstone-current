@@ -157,6 +157,36 @@ class NotificationViewSetTests(APITestCase):
         self.assertIsNotNone(first.read_at)
         self.assertIsNotNone(second.read_at)
 
+    def test_list_pages_by_tab_on_the_server(self):
+        # The Notifications page asks for one tab, one page at a time (thousands of notices pile up).
+        types = ['success', 'task_completed', 'warning', 'urgent', 'error', 'info', 'message', 'ticket_assigned', 'status_update']
+        for index, kind in enumerate(types):
+            Notification.objects.create(user=self.user, title=f'N{index}', message='x', type=kind,
+                                        status='unread' if index % 2 == 0 else 'read')
+        Notification.objects.create(user=self.other_user, title='Hidden', message='x', type='success')
+
+        def titles(query):
+            response = self.client.get(f'/api/notifications/{query}')
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            return response.data['count'], {row['title'] for row in response.data['results']}
+
+        self.assertEqual(titles('?category=success'), (2, {'N0', 'N1'}))
+        self.assertEqual(titles('?category=warning'), (3, {'N2', 'N3', 'N4'}))
+        self.assertEqual(titles('?category=info'), (4, {'N5', 'N6', 'N7', 'N8'}))
+        self.assertEqual(titles('?status=unread'), (5, {'N0', 'N2', 'N4', 'N6', 'N8'}))
+        self.assertEqual(titles('?status=unread&category=warning'), (2, {'N2', 'N4'}))
+        self.assertEqual(titles('')[0], 9)
+        # Newest first, ten to a page; the page after the last is a 404 (the page then steps back).
+        for index in range(9, 14):
+            Notification.objects.create(user=self.user, title=f'N{index}', message='x', type='info')
+        first = self.client.get('/api/notifications/').data
+        self.assertEqual(first['count'], 14)
+        self.assertEqual([row['title'] for row in first['results']][:2], ['N13', 'N12'])
+        self.assertEqual(len(self.client.get('/api/notifications/?page=2').data['results']), 4)
+        self.assertEqual(self.client.get('/api/notifications/?page=3').status_code, status.HTTP_404_NOT_FOUND)
+        # The tabs only narrow the list; unread count and Mark all read still cover every notice.
+        self.assertEqual(self.client.get('/api/notifications/unread_count/?category=success').data['unread_count'], 10)
+
     def test_user_cannot_create_notification_via_api(self):
         response = self.client.post('/api/notifications/', {
             'user': self.other_user.id,

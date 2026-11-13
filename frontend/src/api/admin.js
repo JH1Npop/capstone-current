@@ -1,3 +1,4 @@
+import { getLocalDateInputValue } from '../utils/date';
 import {
   api,
   buildUserCreatePayload,
@@ -523,7 +524,7 @@ export const downloadActivityLogs = async (filters = {}) => {
     });
     const contentDisposition = response.headers?.['content-disposition'] || '';
     const serverFilename = contentDisposition.match(/filename="?([^";]+)"?/i)?.[1];
-    const filename = serverFilename || `activity-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    const filename = serverFilename || `activity-logs-${getLocalDateInputValue()}.csv`;
     const url = window.URL.createObjectURL(response.data);
     const anchor = document.createElement('a');
     anchor.href = url;

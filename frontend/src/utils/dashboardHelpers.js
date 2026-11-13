@@ -121,6 +121,9 @@ export const createLinePoints = (data, width, height, paddingX, paddingY, access
 };
 
 export const queueActionLabel = (ticket) => {
+  // Closed jobs have no next step (a dismissed job used to say "Dispatch technician").
+  if (['cancelled', 'canceled', 'dismissed'].includes(ticket.status)) return 'None, the job was cancelled';
+  if (ticket.status === 'turned_over_accepted') return 'None, the job was handed over';
   if (ticket.isMissedDispatch) return ticket.dispatchAction || 'Assign technician or reschedule';
   if (!ticket.assignedTech) return 'Dispatch technician';
   if (ticket.status === 'not_started' || ticket.status === 'assigned') return 'Confirm arrival window';

@@ -20,11 +20,27 @@ class NotificationViewSet(viewsets.ModelViewSet):
             return [ScopedRateThrottle()]
         return super().get_throttles()
 
+    # The Notifications page tabs, the same grouping as the page's categoryOf().
+    SUCCESS_TYPES = ('success', 'task_completed')
+    WARNING_TYPES = ('warning', 'urgent', 'error')
+
     def get_queryset(self):
         # Return only notifications for the current user
-        return Notification.objects.filter(user=self.request.user).select_related(
+        queryset = Notification.objects.filter(user=self.request.user).select_related(
             'user', 'ticket', 'request'
-        ).order_by('-created_at')
+        ).order_by('-created_at', '-id')
+        if self.action == 'list':
+            # The page asks for one tab, one page at a time (a few thousand notices build up within months).
+            if self.request.query_params.get('status') == 'unread':
+                queryset = queryset.filter(status='unread')
+            category = self.request.query_params.get('category')
+            if category == 'success':
+                queryset = queryset.filter(type__in=self.SUCCESS_TYPES)
+            elif category == 'warning':
+                queryset = queryset.filter(type__in=self.WARNING_TYPES)
+            elif category == 'info':
+                queryset = queryset.exclude(type__in=self.SUCCESS_TYPES + self.WARNING_TYPES)
+        return queryset
 
     def create(self, request, *args, **kwargs):
         raise MethodNotAllowed('POST')

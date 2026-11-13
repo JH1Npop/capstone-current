@@ -75,6 +75,8 @@ export default function SolarCalculator({
     availableRoofArea: '',
   });
   const [saveState, setSaveState] = useState({ loading: false, error: '', message: '', estimateId: null });
+  // The inputs of the last saved estimate; "Save" is offered again only after something changes.
+  const [savedSignature, setSavedSignature] = useState('');
 
   useEffect(() => {
     setForm((current) => ({
@@ -205,7 +207,11 @@ export default function SolarCalculator({
     } : {},
   });
 
+  const currentSignature = JSON.stringify(buildEstimatePayload());
+  const alreadySaved = Boolean(savedSignature) && savedSignature === currentSignature;
+
   const saveEstimate = async () => {
+    if (alreadySaved) return;
     setSaveState((current) => ({ ...current, error: '', message: '' }));
     if (!isAuthenticated) {
       sessionStorage.setItem(PENDING_ESTIMATE_KEY, JSON.stringify({ mode, form, appliances }));
@@ -219,7 +225,9 @@ export default function SolarCalculator({
 
     setSaveState((current) => ({ ...current, loading: true }));
     try {
-      const estimate = await createSolarEstimate(buildEstimatePayload());
+      const payload = buildEstimatePayload();
+      const estimate = await createSolarEstimate(payload);
+      setSavedSignature(JSON.stringify(payload));
       sessionStorage.removeItem(PENDING_ESTIMATE_KEY);
       setSaveState({
         loading: false,
@@ -236,9 +244,9 @@ export default function SolarCalculator({
   return (
     <section id="solar-calculator" className={`scroll-mt-24 bg-gradient-to-br from-brand-50 via-white to-brand-100 text-slate-900 ${embedded ? 'overflow-hidden rounded-2xl border border-brand-200 py-8 sm:py-10' : 'py-16'}`}>
       <div className={`mx-auto max-w-7xl ${embedded ? 'px-4 sm:px-6' : 'px-6 lg:px-10'}`}>
-        <div className="mb-8 max-w-3xl">
+        <div className={`${embedded ? 'mb-6' : 'mb-8'} max-w-3xl`}>
           <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700"><Calculator className="h-4 w-4" /> Free preliminary estimate</span>
-          <h2 className="mt-4 text-3xl font-bold text-brand-900 sm:text-4xl">{configured.title}</h2>
+          <h2 className={`mt-4 font-bold text-brand-900 ${embedded ? 'text-2xl sm:text-3xl' : 'text-3xl sm:text-4xl'}`}>{configured.title}</h2>
           <p className="mt-3 text-slate-600">{configured.description}</p>
         </div>
 
@@ -251,7 +259,7 @@ export default function SolarCalculator({
           <div className="mb-6 rounded-2xl border border-brand-100 bg-white p-5 text-slate-900 shadow-card sm:p-7">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div><h3 className="font-bold">Appliance load schedule</h3><p className="text-sm text-slate-500">Day and night hours are calculated separately for solar and battery estimates. "Runs %" is how much of those hours the appliance actually draws power — compressors in aircons and refrigerators cycle on and off.</p></div>
-              <button type="button" onClick={() => setAppliances((rows) => [...rows, createAppliance()])} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"><Plus className="h-4 w-4" /> Add appliance</button>
+              <button type="button" onClick={() => setAppliances((rows) => [...rows, createAppliance()])} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"><Plus className="h-4 w-4" /> Add appliance</button>
             </div>
             <div className="mt-4 space-y-3">
               {appliances.map((appliance) => (
@@ -266,7 +274,7 @@ export default function SolarCalculator({
                   <ApplianceInput label="Night hours" value={appliance.nightHours} min="0" max="24" step="0.5" onChange={(value) => updateAppliance(appliance.id, 'nightHours', value)} />
                   <ApplianceInput label="Runs %" value={appliance.dutyCycle} min="1" max="100" step="5" onChange={(value) => updateAppliance(appliance.id, 'dutyCycle', value)} />
                   <ApplianceInput label="Surge ×" value={appliance.surgeFactor} min="1" max="10" step="0.1" onChange={(value) => updateAppliance(appliance.id, 'surgeFactor', value)} />
-                  <button type="button" title="Remove appliance" disabled={appliances.length === 1} onClick={() => setAppliances((rows) => rows.filter((row) => row.id !== appliance.id))} className="rounded-lg p-2.5 text-rose-600 hover:bg-rose-50 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
+                  <button type="button" title="Remove appliance" aria-label={`Remove ${appliance.name || 'this row'}`} disabled={appliances.length === 1} onClick={() => setAppliances((rows) => rows.filter((row) => row.id !== appliance.id))} className="grid h-11 w-11 place-items-center justify-self-end rounded-lg text-rose-600 hover:bg-rose-50 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
                 </div>
               ))}
             </div>
@@ -279,7 +287,7 @@ export default function SolarCalculator({
           </div>
         ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
           <div className="rounded-2xl border border-brand-100 bg-white p-5 text-slate-900 shadow-card sm:p-7">
             <div className="grid gap-4 sm:grid-cols-2">
               {mode === 'monthly' ? <InputField label="Monthly consumption" suffix="kWh" min="1" max="1000000" step="1" value={form.monthlyConsumption} onChange={updateForm('monthlyConsumption')} /> : null}
@@ -312,18 +320,18 @@ export default function SolarCalculator({
             </div>
             <p className="mt-5 text-xs leading-5 text-slate-500">This is a preliminary estimate, not a final engineering design. About {formatNumber(results.selfConsumedEnergy, 0)} kWh/mo of the solar output is used directly and {formatNumber(results.exportedEnergy, 0)} kWh/mo goes to the grid; batteries can shift more of it to the evening. Actual appliance use, shading, roof orientation, weather, equipment compatibility, your utility's monthly rates, and net-metering approval can change the final design and savings.</p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <button type="button" disabled={saveState.loading} onClick={saveEstimate} className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60">
-                {saveState.loading ? 'Saving…' : isAuthenticated ? 'Save estimate' : 'Save & book a site inspection'}
+              <button type="button" disabled={saveState.loading || alreadySaved} onClick={saveEstimate} className="min-h-11 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60">
+                {saveState.loading ? 'Saving…' : alreadySaved ? 'Saved ✓' : isAuthenticated ? 'Save estimate' : 'Save & book a site inspection'}
               </button>
               {saveState.estimateId ? (
-                <button type="button" onClick={() => navigate(`/client/service-requests?solarEstimate=${saveState.estimateId}`)} className="rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-800 transition hover:bg-brand-50">
+                <button type="button" onClick={() => navigate(`/client/service-requests?solarEstimate=${saveState.estimateId}`)} className="min-h-11 rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-800 transition hover:bg-brand-50">
                   Request site assessment
                 </button>
               ) : null}
             </div>
             {!isAuthenticated ? <p className="mt-3 text-xs text-slate-500">A free account is needed to book. Your estimate is kept while you sign in or register.</p> : null}
-            {saveState.message ? <p className="mt-3 text-sm font-medium text-emerald-700">{saveState.message}</p> : null}
-            {saveState.error ? <p className="mt-3 text-sm font-medium text-rose-700">{saveState.error}</p> : null}
+            {saveState.message ? <p role="status" className="mt-3 text-sm font-medium text-emerald-700">{saveState.message}{alreadySaved ? '' : savedSignature ? ' Change a value to save another estimate.' : ''}</p> : null}
+            {saveState.error ? <p role="alert" className="mt-3 text-sm font-medium text-rose-700">{saveState.error}</p> : null}
           </div>
         </div>
 
@@ -449,7 +457,7 @@ function ApplianceInput({ label, value, onChange, ...props }) {
 }
 
 function ModeButton({ active, children, onClick }) {
-  return <button type="button" onClick={onClick} className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${active ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-brand-50 hover:text-brand-700'}`}>{children}</button>;
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`min-h-10 rounded-lg px-4 py-2 text-sm font-semibold transition ${active ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-brand-50 hover:text-brand-700'}`}>{children}</button>;
 }
 
 function LoadSummary({ label, value }) {

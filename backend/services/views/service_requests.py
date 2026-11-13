@@ -50,13 +50,15 @@ from users.rbac import SUPERVISOR_DISPATCH_VIEW, user_has_capability
 
 
 def notify_service_request_submitted(request_obj):
-    admins = User.objects.filter(role__in=['superadmin', 'admin'])
+    admins = User.objects.filter(role__in=['superadmin', 'admin'], is_active=True)
     client_label = client_technician_label(request_obj.client) or 'Client'
     for admin in admins:
         create_notification(
             admin,
             f"New service request #{request_obj.id} from {client_label} is pending review.",
-            'info'
+            'info',
+            title=f'New Service Request #{request_obj.id}',
+            service_request=request_obj,
         )
         send_notification_email(
             admin,
@@ -67,7 +69,9 @@ def notify_service_request_submitted(request_obj):
     create_notification(
         request_obj.client,
         f"Your service request #{request_obj.id} has been submitted and is pending review.",
-        'info'
+        'info',
+        title=f'Service Request #{request_obj.id} Submitted',
+        service_request=request_obj,
     )
 
 
@@ -189,7 +193,9 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
         location, or technician identifiers. It is an advisory view of current
         non-cancelled appointments, not a dispatch or capacity guarantee.
         """
-        today = timezone.localdate()
+        from services.business_time import business_today
+
+        today = business_today()  # the business day (UTC+8), not the server's UTC date
         start_date = parse_date(str(request.query_params.get('start') or '')) or today
         end_date = parse_date(str(request.query_params.get('end') or '')) or (start_date + timedelta(days=41))
 
@@ -396,7 +402,9 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
             create_notification(
                 service_request.client,
                 f"Your service request has been approved. Ticket #{ticket.id} is ready for assignment.",
-                'success'
+                'success',
+                title=f'Service Request #{service_request.id} Approved',
+                ticket=ticket,
             )
             send_notification_email(
                 service_request.client,
@@ -464,7 +472,10 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if related_ticket and related_ticket.status in FIELD_WORK_TICKET_STATUSES + COMPLETED_TICKET_STATUSES:
+        # A paused job ("On Hold") has already started in the field, so it counts as field work here:
+        # the request is In Progress and only the office may cancel it.
+        client_blocked_statuses = FIELD_WORK_TICKET_STATUSES + ('On Hold',)
+        if related_ticket and related_ticket.status in client_blocked_statuses + COMPLETED_TICKET_STATUSES:
             is_office = is_admin_workspace_role(getattr(request.user, 'role', None))
             if related_ticket.status in COMPLETED_TICKET_STATUSES or not is_office:
                 return Response(
@@ -472,7 +483,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                         'error': (
                             'Your technician is already on the way or working on site, so this request can no longer '
                             'be cancelled online. Please contact our office.'
-                            if related_ticket.status in FIELD_WORK_TICKET_STATUSES
+                            if related_ticket.status in client_blocked_statuses
                             else f'Request cannot be cancelled while ticket #{related_ticket.id} is {related_ticket.status.lower()}.'
                         ),
                         'code': 'cancellation_requires_office',
@@ -519,11 +530,14 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                     'Ticket cancelled because the parent service request was cancelled.'
                 )
             )
+            from services.deposits import notify_deposit_decision_needed
+
+            notify_deposit_decision_needed(related_ticket)
             for assigned_technician in get_ticket_team_members(related_ticket):
                 send_user_notification(
                     user=assigned_technician,
                     title=f"Ticket #{related_ticket.id} Cancelled",
-                    body=f"Ticket #{related_ticket.id} was cancelled before work started.",
+                    body=f"Ticket #{related_ticket.id} was cancelled. It is no longer on your job list.",
                     notification_type='warning',
                     ticket=related_ticket,
                     request=service_request,

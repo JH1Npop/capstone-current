@@ -108,6 +108,7 @@ for (const username of ['admin_test', 'superadmin_test']) {
         ];
         payload.client_schedule = [
           { id: 888888, client: 'Schedule Client', service_type: 'Scheduled visit', status: 'Scheduled', scheduled_date: dayKey(3), scheduled_time: '09:00' },
+          { id: 777777, client: 'Past Schedule Client', service_type: 'Overdue active visit', status: 'Not Started', scheduled_date: dayKey(-3), scheduled_time: '09:00' },
           ...list(payload.client_schedule),
         ];
         if (realTicketId) {
@@ -267,6 +268,10 @@ for (const username of ['admin_test', 'superadmin_test']) {
 
       // ── Upcoming Schedule: header link and a row ──
       await openDashboard();
+      const upcomingSchedule = page.getByTestId('upcoming-schedule');
+      await expect(upcomingSchedule).toContainText('Schedule Client');
+      await expect(upcomingSchedule).not.toContainText('Past Schedule Client');
+      expect(await upcomingSchedule.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
       await page.getByRole('button', { name: 'Dispatch board →' }).click();
       await expectPageOk(/\/admin\/dispatch-board$/);
       await openDashboard();

@@ -3,8 +3,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.db import transaction
-from django.db.models import Count, Sum, Q, Avg, F
+from django.db.models import Count, Sum, Q, Avg, F, Prefetch
 from django.utils import timezone
+from services.business_time import business_day_start
 from django.utils.dateparse import parse_date
 from datetime import timedelta
 import hashlib
@@ -41,6 +42,7 @@ from services.models import (
     MaintenanceSchedule,
     ServiceLocation,
     ServiceRequest,
+    ServiceStatusHistory,
     ServiceTicket,
 )
 from services.sla import (
@@ -104,7 +106,7 @@ def _serialize_active_technician_jobs(assigned_admin=None):
     """Get all active technician jobs."""
     active_jobs = ServiceTicket.objects.select_related(
         'technician', 'request__client', 'request__service_type', 'request__location'
-    ).prefetch_related('status_history').filter(
+    ).prefetch_related('status_history', 'progress_updates').filter(
         status__in=ACTIVE_TICKET_STATUSES,
         scheduled_date__isnull=False,
         technician__isnull=False
@@ -217,7 +219,10 @@ def _low_stock_inventory_items():
 
 
 def _build_sla_summary(*, service_requests=None, service_tickets=None, limit=8):
+    from services.sla import sla_batch_calendar
+
     now = timezone.now()
+    calendar = sla_batch_calendar()
     summary = {
         'warning_count': 0,
         'overdue_count': 0,
@@ -259,7 +264,7 @@ def _build_sla_summary(*, service_requests=None, service_tickets=None, limit=8):
         })
 
     for ticket in service_tickets or []:
-        evaluation = evaluate_service_ticket_sla(ticket, now=now)
+        evaluation = evaluate_service_ticket_sla(ticket, now=now, calendar=calendar)
         if evaluation['state'] not in {'warning', 'overdue'}:
             continue
 
@@ -383,12 +388,15 @@ class DashboardView(APIView):
             'client', 'service_type', 'location'
         ).order_by('-request_date')[:5]
 
-        # Client schedule for upcoming assignment tasks - load all relationships
+        # Client schedule for upcoming assignment tasks - load all relationships.
+        # Active but overdue work belongs in the progress/SLA workspaces, not in a
+        # card labelled "Upcoming Schedule".
+        today = get_business_today()
         client_schedule_queryset = ServiceTicket.objects.select_related(
             'request', 'request__client', 'request__service_type', 'request__location', 'technician'
         ).filter(
             status__in=ACTIVE_TICKET_STATUSES,
-            scheduled_date__isnull=False
+            scheduled_date__gte=today,
         )
         client_schedule_count = client_schedule_queryset.count()
         unassigned_scheduled_jobs = client_schedule_queryset.filter(technician__isnull=True).count()
@@ -414,7 +422,6 @@ class DashboardView(APIView):
         active_maintenance = maintenance_schedules.exclude(status__in=['completed', 'dismissed'])
 
         # After-sales functionality for the admin dashboard
-        today = get_business_today()
         week_ago = today - timezone.timedelta(days=7)
         cases = FollowUpCase.objects.select_related(
             'client', 'service_ticket', 'assigned_to', 'created_by'
@@ -447,6 +454,20 @@ class DashboardView(APIView):
             service_requests=sla_service_requests,
             service_tickets=sla_service_tickets,
         )
+        # Built once: "operations" and its older alias "supervisor" carry the same lists.
+        recent_team_tickets = [
+            {
+                'id': ticket.id,
+                'technician': _display_name(ticket.technician) if ticket.technician else None,
+                'client': _display_name(ticket.request.client),
+                'service_type': ticket.request.service_type.name,
+                'status': ticket.status,
+                'priority': ticket.priority,
+                'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+            }
+            for ticket in team_tickets.order_by('-id')[:10]
+        ]
+        active_technician_jobs = _serialize_active_technician_jobs()
 
         return Response({
             'role': 'admin',
@@ -479,7 +500,7 @@ class DashboardView(APIView):
                 'total_cases': cases.count(),
                 'open_cases': unresolved_cases.count(),
                 'overdue_cases': unresolved_cases.filter(due_date__lt=today).count(),
-                'resolved_this_week': cases.filter(resolved_at__date__gte=week_ago).count(),
+                'resolved_this_week': cases.filter(resolved_at__gte=business_day_start(week_ago)).count(),
                 # Supervisor metrics
                 'team_tickets': team_ticket_count,
                 'active_team_tickets': active_team_tickets,
@@ -541,37 +562,15 @@ class DashboardView(APIView):
             },
             'operations': {
                 'technician_performance': technician_stats,
-                'recent_tickets': [
-                    {
-                        'id': ticket.id,
-                        'technician': _display_name(ticket.technician) if ticket.technician else None,
-                        'client': _display_name(ticket.request.client),
-                        'service_type': ticket.request.service_type.name,
-                        'status': ticket.status,
-                        'priority': ticket.priority,
-                        'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
-                    }
-                    for ticket in team_tickets.order_by('-id')[:10]
-                ],
-                'active_technician_jobs': _serialize_active_technician_jobs()
+                'recent_tickets': recent_team_tickets,
+                'active_technician_jobs': active_technician_jobs,
             },
             # Compatibility alias for older frontend code. This is operations data,
             # not a standalone supervisor role dashboard.
             'supervisor': {
                 'technician_performance': technician_stats,
-                'recent_tickets': [
-                    {
-                        'id': ticket.id,
-                        'technician': _display_name(ticket.technician) if ticket.technician else None,
-                        'client': _display_name(ticket.request.client),
-                        'service_type': ticket.request.service_type.name,
-                        'status': ticket.status,
-                        'priority': ticket.priority,
-                        'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
-                    }
-                    for ticket in team_tickets.order_by('-id')[:10]
-                ],
-                'active_technician_jobs': _serialize_active_technician_jobs()
+                'recent_tickets': recent_team_tickets,
+                'active_technician_jobs': active_technician_jobs,
             },
         })
 
@@ -644,200 +643,143 @@ class DashboardView(APIView):
         })
 
     def get_client_dashboard(self):
-        """Client dashboard with service request focus"""
+        """Client dashboard: each job is counted once, in exactly one stage.
+
+        A request waits for approval (Pending); approval creates its ticket, which is then
+        waiting to start, in field work, on hold, finished (Completed or Turned Over / Accepted)
+        or cancelled. Finished work keeps counting after the client accepts the turnover.
+        """
         try:
             user = self.request.user
+            today = get_business_today()
+            my_requests = ServiceRequest.objects.select_related('service_type').filter(client=user)
+            pending_requests = my_requests.filter(status='Pending')
+            my_tickets = ServiceTicket.objects.filter(request__client=user).select_related(
+                'request', 'request__service_type', 'request__location', 'technician'
+            )
+            active_tickets = my_tickets.filter(status__in=ACTIVE_TICKET_STATUSES)
+            finished_tickets = my_tickets.filter(status__in=COMPLETED_TICKET_STATUSES)
+            field_statuses = ('Navigating', 'Arrived on Site', 'In Progress')
 
-            # My service requests with safe access
-            try:
-                my_requests = ServiceRequest.objects.select_related(
-                    'client', 'service_type'
-                ).filter(client=user)
-                active_requests = my_requests.filter(Q(status__in=['Pending', 'Approved']))
-                pending_requests = my_requests.filter(status='Pending')
-                requests_count = my_requests.count()
-                active_req_count = active_requests.count()
-            except Exception as e:
-                logger.warning(f"Error fetching requests for {user}: {str(e)}")
-                requests_count = 0
-                active_req_count = 0
-                active_requests = []
-                pending_requests = []
+            pending_count = pending_requests.count()
+            active_count = active_tickets.count()
+            in_progress_count = active_tickets.filter(status__in=field_statuses).count()
+            on_hold_count = active_tickets.filter(status='On Hold').count()
+            rated = finished_tickets.filter(client_rating__isnull=False)
+            rated_count = rated.count()
+            average = rated.aggregate(avg=Avg('client_rating'))['avg'] if rated_count else None
 
-            # My tickets with safe access
-            try:
-                my_tickets = ServiceTicket.objects.filter(request__client=user).select_related(
-                    'request', 'request__service_type', 'technician'
-                )
-                active_tickets = my_tickets.filter(Q(status__in=ACTIVE_TICKET_STATUSES))
-                on_hold_tickets = my_tickets.filter(status='On Hold')
-                completed_tickets_qs = my_tickets.filter(status='Completed').order_by('-completed_date')[:5]
-                tickets_count = my_tickets.count()
-                active_tickets_count = active_tickets.count()
-            except Exception as e:
-                logger.warning(f"Error fetching tickets for {user}: {str(e)}")
-                tickets_count = 0
-                active_tickets_count = 0
-                active_tickets = []
-                on_hold_tickets = []
-                completed_tickets_qs = []
+            def service_name(ticket):
+                service_type = getattr(ticket.request, 'service_type', None) if ticket.request_id else None
+                return service_type.name if service_type else 'Service'
 
-            # Status breakdown with safe counts
-            status_stats = {}
-            try:
-                status_stats['pending'] = my_requests.filter(status='Pending').count()
-                status_stats['approved'] = my_requests.filter(status='Approved').count()
-                status_stats['in_progress'] = my_tickets.filter(status='In Progress').count()
-                status_stats['completed'] = my_tickets.filter(status='Completed').count()
-                status_stats['on_hold'] = on_hold_tickets.count() if 'on_hold_tickets' in locals() else 0
-            except Exception as e:
-                logger.warning(f"Error counting statuses: {str(e)}")
-                status_stats = {'pending': 0, 'approved': 0, 'in_progress': 0, 'completed': 0, 'on_hold': 0}
+            def ticket_row(ticket):
+                label = (_client_technician_label(ticket.technician) if ticket.technician else '') or 'Not assigned yet'
+                return {
+                    'id': ticket.id,
+                    'request_id': ticket.request_id,
+                    'service_type': service_name(ticket),
+                    'technician': label,
+                    'technician_full_name': label,
+                    'status': ticket.status,
+                    'scheduled_date': ticket.scheduled_date.isoformat() if ticket.scheduled_date else None,
+                    'scheduled_time_slot': ticket.scheduled_time_slot,
+                    'location': _get_request_address(ticket.request) if ticket.request_id else '',
+                    'priority': ticket.priority,
+                }
 
-            # Calculate rating safely
-            avg_rating = None
-            total_rated = 0
-            try:
-                completed_with_rating = my_tickets.filter(status='Completed', client_rating__isnull=False)
-                total_rated = completed_with_rating.count()
-                if total_rated > 0:
-                    rating_agg = completed_with_rating.aggregate(avg=Avg('client_rating'))
-                    avg_rating = round(rating_agg['avg'], 1) if rating_agg['avg'] else None
-            except Exception as e:
-                logger.warning(f"Error calculating rating: {str(e)}")
+            # Open jobs: the next visits first (today onward, soonest first), then unscheduled,
+            # then visits whose date has passed (for example a job on hold).
+            open_jobs = sorted(
+                active_tickets,
+                key=lambda ticket: (
+                    0 if ticket.scheduled_date and ticket.scheduled_date >= today else (1 if not ticket.scheduled_date else 2),
+                    ticket.scheduled_date or today,
+                    ticket.id,
+                ),
+            )
+            next_visit = next(
+                (ticket for ticket in open_jobs if ticket.scheduled_date and ticket.scheduled_date >= today),
+                None,
+            )
 
-            # Build active requests list
-            active_requests_list = []
-            try:
-                for req in active_requests.order_by('-request_date')[:3]:
-                    try:
-                        active_requests_list.append({
-                            'id': req.id,
-                            'service_type': req.service_type.name if req.service_type else 'Unknown',
-                            'status': req.status,
-                            'created_at': str(req.request_date.isoformat()) if req.request_date else None,
-                            'description': (req.description[:100] + '...') if len(req.description) > 100 else req.description
-                        })
-                    except AttributeError:
-                        logger.warning(f"Missing service_type for request {req.id}")
-            except Exception as e:
-                logger.warning(f"Error building active requests list: {str(e)}")
-
-            # Build active tickets list
-            active_tickets_list = []
-            try:
-                for ticket in active_tickets.order_by('scheduled_date')[:3]:
-                    try:
-                        tech_label = 'Not assigned'
-                        if ticket.technician:
-                            tech_label = _client_technician_label(ticket.technician) or 'Technician'
-                        service_name = 'Unknown'
-                        if ticket.request and ticket.request.service_type:
-                            service_name = ticket.request.service_type.name
-
-                        active_tickets_list.append({
-                            'id': ticket.id,
-                            'service_type': service_name,
-                            'technician': tech_label,
-                            'technician_full_name': tech_label,
-                            'status': ticket.status,
-                            'scheduled_date': str(ticket.scheduled_date) if ticket.scheduled_date else None,
-                            'scheduled_time': str(ticket.scheduled_time) if ticket.scheduled_time else None,
-                            'scheduled_time_slot': ticket.scheduled_time_slot,
-                            'location': _get_request_address(ticket.request) if ticket.request else '',
-                            'priority': ticket.priority
-                        })
-                    except Exception as inner_e:
-                        logger.warning(f"Error processing ticket {ticket.id}: {str(inner_e)}")
-            except Exception as e:
-                logger.warning(f"Error building active tickets list: {str(e)}")
-
-            # Build history list
-            recent_history_list = []
-            try:
-                for ticket in completed_tickets_qs:
-                    try:
-                        tech_label = _client_technician_label(ticket.technician) if ticket.technician else None
-                        if not tech_label:
-                            tech_label = '-'
-                        service_name = 'Unknown'
-                        if ticket.request and ticket.request.service_type:
-                            service_name = ticket.request.service_type.name
-
-                        recent_history_list.append({
-                            'id': ticket.id,
-                            'service_type': service_name,
-                            'completed_date': str(ticket.completed_date.isoformat()) if ticket.completed_date else None,
-                            'technician': tech_label,
-                            'technician_full_name': tech_label,
-                            'rating': ticket.client_rating
-                        })
-                    except Exception as inner_e:
-                        logger.warning(f"Error processing history ticket {ticket.id}: {str(inner_e)}")
-            except Exception as e:
-                logger.warning(f"Error building history list: {str(e)}")
-
-            # Alerts and recommendations
             alerts = []
+            if pending_count:
+                alerts.append({
+                    'type': 'warning',
+                    'message': (
+                        'You have 1 request waiting for approval.' if pending_count == 1
+                        else f'You have {pending_count} requests waiting for approval.'
+                    ),
+                })
+            if on_hold_count:
+                alerts.append({
+                    'type': 'alert',
+                    'message': (
+                        '1 service is on hold. Open it to see why.' if on_hold_count == 1
+                        else f'{on_hold_count} services are on hold. Open them to see why.'
+                    ),
+                })
             recommendations = []
-
-            try:
-                if pending_requests.count() > 0:
-                    alerts.append({
-                        'type': 'warning',
-                        'message': f'You have {pending_requests.count()} request(s) waiting for approval'
-                    })
-                if on_hold_tickets.count() > 0:
-                    alerts.append({
-                        'type': 'alert',
-                        'message': f'{on_hold_tickets.count()} service(s) are on hold - check for details'
-                    })
-                if active_tickets_count == 0 and active_req_count == 0:
-                    recommendations.append({
-                        'message': 'No active services - Schedule maintenance or request evaluation',
-                        'action': 'Create Request'
-                    })
-                if requests_count > 10:
-                    recommendations.append({
-                        'message': 'Consider a service plan for better coverage',
-                        'action': 'Learn More'
-                    })
-            except Exception as e:
-                logger.warning(f"Error building alerts: {str(e)}")
+            if not pending_count and not active_count:
+                recommendations.append({
+                    'message': 'You have no open services. Book a maintenance visit or a new service.',
+                    'action': 'Create Request',
+                })
 
             return Response({
                 'role': 'client',
                 'overview': {
-                    'total_requests': requests_count,
-                    'active_requests': active_req_count,
-                    'active_tickets': active_tickets_count,
-                    'completed_services': my_tickets.filter(status='Completed').count() if 'my_tickets' in locals() else 0,
+                    'total_requests': my_requests.count(),
+                    'awaiting_approval': pending_count,
+                    'active_tickets': active_count,
+                    'completed_services': finished_tickets.count(),
+                    # Older name kept for compatibility: requests not yet decided.
+                    'active_requests': pending_count,
                 },
-                'status_breakdown': status_stats,
+                'status_breakdown': {
+                    'pending': pending_count,
+                    'waiting_to_start': active_count - in_progress_count - on_hold_count,
+                    'in_progress': in_progress_count,
+                    'on_hold': on_hold_count,
+                },
                 'performance': {
-                    'avg_rating': avg_rating,
-                    'total_rated': total_rated
+                    'avg_rating': round(float(average), 1) if average is not None else None,
+                    'total_rated': rated_count,
                 },
-                'active_requests': active_requests_list,
-                'active_tickets': active_tickets_list,
-                'recent_history': recent_history_list,
+                'next_appointment': ticket_row(next_visit) if next_visit else None,
+                'active_requests': [
+                    {
+                        'id': request_obj.id,
+                        'service_type': request_obj.service_type.name if request_obj.service_type else 'Service',
+                        'status': request_obj.status,
+                        'created_at': request_obj.request_date.isoformat() if request_obj.request_date else None,
+                        'preferred_date': request_obj.preferred_date.isoformat() if request_obj.preferred_date else None,
+                        'description': (request_obj.description[:100] + '…') if len(request_obj.description or '') > 100 else (request_obj.description or ''),
+                    }
+                    for request_obj in pending_requests.order_by('-request_date')[:5]
+                ],
+                'active_tickets': [ticket_row(ticket) for ticket in open_jobs[:5]],
+                'recent_history': [
+                    {
+                        'id': ticket.id,
+                        'request_id': ticket.request_id,
+                        'service_type': service_name(ticket),
+                        'status': ticket.status,
+                        'completed_date': ticket.completed_date.isoformat() if ticket.completed_date else None,
+                        'technician': (_client_technician_label(ticket.technician) if ticket.technician else '') or '-',
+                        'technician_full_name': (_client_technician_label(ticket.technician) if ticket.technician else '') or '-',
+                        'rating': ticket.client_rating,
+                    }
+                    for ticket in finished_tickets.order_by('-completed_date', '-id')[:5]
+                ],
                 'alerts': alerts,
-                'recommendations': recommendations
+                'recommendations': recommendations,
             })
-        except Exception as e:
-            logger.exception(f"Critical error in get_client_dashboard: {str(e)}")
-            return Response({
-                'error': f'Error fetching client dashboard: {str(e)}',
-                'role': 'client',
-                'overview': {'total_requests': 0, 'active_requests': 0, 'active_tickets': 0, 'completed_services': 0},
-                'status_breakdown': {},
-                'performance': {'avg_rating': None, 'total_rated': 0},
-                'active_requests': [],
-                'active_tickets': [],
-                'recent_history': [],
-                'alerts': [],
-                'recommendations': []
-            }, status=200)  # Return 200 not 500 to show partial data is better than nothing
+        except Exception:
+            logger.exception('Critical error in get_client_dashboard')
+            # The error text stays in the server log; the client sees a plain message.
+            return Response({'error': 'Your dashboard could not be loaded. Try again in a moment.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class DashboardChangesView(DashboardView):
@@ -871,6 +813,13 @@ class DashboardChangesView(DashboardView):
         return self._change_token('client')
 
 
+def _reschedule_history_queryset():
+    """Status-history rows that record a reschedule, newest first."""
+    return ServiceStatusHistory.objects.filter(
+        Q(notes__startswith='Rescheduled to ') | Q(notes__icontains='Schedule confirmed'),
+    ).order_by('-timestamp')
+
+
 class AdminCalendarView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -880,13 +829,16 @@ class AdminCalendarView(APIView):
         if not user_has_any_capability(request.user, SUPERVISOR_DISPATCH_CAPABILITIES):
             return Response({'error': 'You do not have access to the admin calendar.'}, status=status.HTTP_403_FORBIDDEN)
 
-        today = timezone.localdate()
+        today = get_business_today()
         start_date = parse_date(str(request.query_params.get('start') or '')) or today.replace(day=1)
         end_date = parse_date(str(request.query_params.get('end') or '')) or (start_date + timedelta(days=62))
         if end_date < start_date:
             return Response({'error': 'end must be on or after start.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        from services.work_calendar import load_work_calendar, tickets_overlapping, work_days_in_range
+
         show_completed = str(request.query_params.get('show_completed') or '').lower() in {'1', 'true', 'yes', 'all'}
+        calendar = load_work_calendar()
         tickets = ServiceTicket.objects.select_related(
             'request',
             'request__client',
@@ -896,10 +848,11 @@ class AdminCalendarView(APIView):
             'assigned_admin',
         ).prefetch_related(
             'crew_assignments__technician',
-        ).filter(
-            scheduled_date__gte=start_date,
-            scheduled_date__lte=end_date,
-        ).exclude(
+            # Loaded once for all jobs (asking each job separately took thousands of queries a month).
+            Prefetch('status_history', queryset=_reschedule_history_queryset(), to_attr='reschedule_history'),
+        )
+        # Jobs that started before the range but are still running in it are included too.
+        tickets = tickets_overlapping(tickets, start_date, end_date, calendar).exclude(
             status='Cancelled',
         ).order_by('scheduled_date', 'scheduled_time', 'id')
         if not show_completed:
@@ -919,7 +872,15 @@ class AdminCalendarView(APIView):
             status='Cancelled',
         ).order_by('preferred_date', 'id')
 
-        events = [self._serialize_ticket_event(ticket) for ticket in tickets]
+        events = []
+        for ticket in tickets:
+            work_days = work_days_in_range(ticket, calendar, start_date, end_date)
+            if not work_days:
+                continue
+            event = self._serialize_ticket_event(ticket)
+            # Every day of the job inside the range ("Day 3 of 65"); the event's own date stays the start.
+            event['work_days'] = work_days
+            events.append(event)
         events.extend(self._serialize_request_event(service_request) for service_request in request_fallbacks)
         events.sort(key=lambda event: (event['date'] or '', event.get('time') or '', event['id']))
 
@@ -952,12 +913,10 @@ class AdminCalendarView(APIView):
         calendar_status = self._calendar_status_for_ticket(ticket)
         dispatch_state = get_ticket_dispatch_state(ticket)
         assignment_status = 'assigned' if ticket.technician_id else 'unassigned'
-        latest_reschedule = (
-            ticket.status_history
-            .filter(Q(notes__startswith='Rescheduled to ') | Q(notes__icontains='Schedule confirmed'))
-            .order_by('-timestamp')
-            .first()
-        )
+        loaded = getattr(ticket, 'reschedule_history', None)
+        if loaded is None:
+            loaded = list(_reschedule_history_queryset().filter(ticket=ticket)[:1])
+        latest_reschedule = loaded[0] if loaded else None
         return {
             'id': f'ticket-{ticket.id}',
             'entity_type': 'ticket',
@@ -987,7 +946,7 @@ class AdminCalendarView(APIView):
             'assigned_technician': _display_name(ticket.technician) if ticket.technician else None,
             'crew_members': [
                 _display_name(assignment.technician)
-                for assignment in ticket.crew_assignments.select_related('technician').order_by('created_at', 'id')
+                for assignment in sorted(ticket.crew_assignments.all(), key=lambda row: (row.created_at, row.id))
             ],
             'assigned_admin': _display_name(ticket.assigned_admin) if ticket.assigned_admin else None,
             'location': _get_request_address(ticket.request),
@@ -1063,7 +1022,7 @@ class AdminCalendarClosureView(APIView):
         if permission_error:
             return permission_error
 
-        today = timezone.localdate()
+        today = get_business_today()
         start_date = parse_date(str(request.query_params.get('start') or '')) or today.replace(day=1)
         end_date = parse_date(str(request.query_params.get('end') or '')) or (start_date + timedelta(days=62))
         if end_date < start_date:
@@ -1162,7 +1121,7 @@ class AdminCalendarClosureView(APIView):
             if (end_date - start_date).days > 92:
                 return Response({'end_date': 'A single availability change can cover at most 93 days.'}, status=status.HTTP_400_BAD_REQUEST)
             dates = [start_date + timedelta(days=offset) for offset in range((end_date - start_date).days + 1)]
-        if start_date < timezone.localdate():
+        if start_date < get_business_today():
             return Response({'date': 'Past dates cannot be changed.'}, status=status.HTTP_400_BAD_REQUEST)
         # "any" reopens every closed or limited part of the chosen days (used by "Reopen this day").
         reopen_any_slot = action_name == 'reopen' and time_slot == 'any'

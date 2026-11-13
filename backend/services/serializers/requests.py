@@ -1,3 +1,4 @@
+from django.conf import settings
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.utils import timezone
@@ -442,6 +443,13 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
     def get_client_address(self, obj):
         return obj.client.address if obj.client else ''
 
+    @staticmethod
+    def _inside_service_region(latitude, longitude):
+        return (
+            Decimal(str(settings.TRACKING_REGION_SOUTH_LAT)) <= latitude <= Decimal(str(settings.TRACKING_REGION_NORTH_LAT))
+            and Decimal(str(settings.TRACKING_REGION_WEST_LNG)) <= longitude <= Decimal(str(settings.TRACKING_REGION_EAST_LNG))
+        )
+
     def _normalize_coordinate(self, value, *, field_name, minimum, maximum):
         if value in (None, ''):
             return None
@@ -565,7 +573,10 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
                 'preferred_time_slot': BUSINESS_HOURS_ERROR,
             })
 
-        if preferred_date and preferred_date < timezone.localdate():
+        # "Today" is the business day (UTC+8), not the server's UTC date.
+        from services.business_time import business_today
+
+        if preferred_date and preferred_date < business_today():
             raise serializers.ValidationError({
                 'preferred_date': 'Preferred appointment date cannot be in the past.',
             })
@@ -629,6 +640,17 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
                 'location_address': 'A service location is required.',
                 'latitude': 'A map location is required.',
                 'longitude': 'A map location is required.',
+            })
+
+        # A client can only book inside the service area (the region the map is limited to).
+        if (
+            user and user.is_authenticated and user.role == 'client'
+            and latitude is not None and longitude is not None
+            and not self._inside_service_region(latitude, longitude)
+        ):
+            region = getattr(settings, 'TRACKING_REGION_NAME', 'the service area')
+            raise serializers.ValidationError({
+                'latitude': f'Choose a location inside our service area ({region}).',
             })
 
         if has_location_input:

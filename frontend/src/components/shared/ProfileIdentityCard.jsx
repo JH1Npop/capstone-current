@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { FiCalendar, FiCheckCircle, FiEdit2, FiHash, FiShield } from 'react-icons/fi';
 import { formatRoleId } from '../../utils/roleIds';
 
@@ -22,6 +23,9 @@ export default function ProfileIdentityCard({
   onEdit,
   children,
 }) {
+  // A photo that cannot load (for example a file missing from storage) falls back to the initials.
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => { setImageFailed(false); }, [profileImage]);
   const initials = displayName
     .split(/\s+/)
     .filter(Boolean)
@@ -43,8 +47,8 @@ export default function ProfileIdentityCard({
       <div className="px-4 pb-4 sm:px-6 sm:pb-5">
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:flex sm:gap-4">
           <div className="-mt-8 h-20 w-20 shrink-0 rounded-full bg-white p-1 shadow-md sm:-mt-10 sm:h-24 sm:w-24">
-            {profileImage ? (
-              <img src={profileImage} alt={displayName} className="h-full w-full rounded-full object-cover" />
+            {profileImage && !imageFailed ? (
+              <img src={profileImage} alt={displayName} onError={() => setImageFailed(true)} className="h-full w-full rounded-full object-cover" />
             ) : (
               <div className="grid h-full w-full place-items-center rounded-full bg-brand-50 text-2xl font-bold text-brand-700">
                 {initials}
@@ -57,7 +61,7 @@ export default function ProfileIdentityCard({
             <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">{children}</div>
           </div>
           {!editing ? (
-            <button type="button" onClick={onEdit} className="col-span-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 sm:mt-3 sm:w-auto">
+            <button type="button" onClick={onEdit} className="col-span-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 sm:mt-3 sm:w-auto">
               <FiEdit2 size={16} />
               Edit Profile
             </button>

@@ -223,6 +223,38 @@ class MessageApiTests(APITestCase):
         self.assertEqual(message.room_type, 'direct')
         self.assertEqual(message.message_text, 'Please update your current job status.')
 
+    def test_direct_message_reaches_receiver_only_and_is_not_lost_behind_newer_messages(self):
+        private = self.client.post(
+            '/api/messages/',
+            {'room_type': 'direct', 'receiver': self.technician_user.id, 'text': 'Private: call me about the inverter.'},
+            format='json',
+        )
+        self.assertEqual(private.status_code, status.HTTP_201_CREATED, private.data)
+        # Twelve newer staff-group messages: more than the default page of 10.
+        Message.objects.bulk_create([
+            Message(sender=self.superadmin_user, room_type='group', group_key='staff', message_text=f'Group {index}')
+            for index in range(12)
+        ])
+        other_technician = User.objects.create_user(
+            username='message-other-tech', password='Password123!', role='technician',
+        )
+
+        self.client.credentials()
+        self.client.force_authenticate(user=self.technician_user)
+        default_page = self.client.get('/api/messages/')
+        self.assertEqual(len(default_page.data['results']), 10)
+        self.assertNotIn('Private: call me about the inverter.', [item['text'] for item in default_page.data['results']])
+        everything = self.client.get('/api/messages/', {'page_size': 500})
+        self.assertEqual(everything.data['count'], 13)
+        self.assertIsNone(everything.data['next'])
+        self.assertIn('Private: call me about the inverter.', [item['text'] for item in everything.data['results']])
+
+        self.client.force_authenticate(user=other_technician)
+        seen_by_other = self.client.get('/api/messages/', {'page_size': 500})
+        self.assertEqual(seen_by_other.data['count'], 12)
+        self.assertNotIn('Private: call me about the inverter.', [item['text'] for item in seen_by_other.data['results']])
+        self.assertEqual(self.client.get(f"/api/messages/{private.data['id']}/").status_code, status.HTTP_404_NOT_FOUND)
+
     def test_websocket_ticket_participants_exclude_unrelated_receivers_and_include_crew(self):
         crew_user = User.objects.create_user(
             username='message-crew-tech',
@@ -268,6 +300,8 @@ class MessageApiTests(APITestCase):
         restricted = self.configured_admin('support-notification-restricted', SYSTEM_SETTINGS_VIEW)
         client_token = Token.objects.create(user=self.client_user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {client_token.key}')
+        # Client messages go into an existing case (the page always opens one first).
+        CustomerSupportCase.objects.get_or_create(client=self.client_user, group_key=f'customer_support_client_{self.client_user.id}', defaults={'subject': 'Help'})
 
         response = self.client.post(
             '/api/messages/',
@@ -324,6 +358,8 @@ class MessageApiTests(APITestCase):
     def test_client_can_create_customer_support_message_without_ticket(self):
         client_token = Token.objects.create(user=self.client_user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {client_token.key}')
+        # Client messages go into an existing case (the page always opens one first).
+        CustomerSupportCase.objects.get_or_create(client=self.client_user, group_key=f'customer_support_client_{self.client_user.id}', defaults={'subject': 'Help'})
 
         response = self.client.post(
             '/api/messages/',
@@ -454,6 +490,8 @@ class MessageApiTests(APITestCase):
     def test_customer_support_message_notifies_admins_only(self):
         client_token = Token.objects.create(user=self.client_user)
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {client_token.key}')
+        # Client messages go into an existing case (the page always opens one first).
+        CustomerSupportCase.objects.get_or_create(client=self.client_user, group_key=f'customer_support_client_{self.client_user.id}', defaults={'subject': 'Help'})
 
         response = self.client.post(
             '/api/messages/',
@@ -747,3 +785,57 @@ class MessageApiTests(APITestCase):
             format='json',
         )
         self.assertEqual(team_notifications.filter(user=self.technician_user).count(), 1)
+
+
+class ClientSupportCaseRulesTests(APITestCase):
+    """What a client can do on Client Support, whatever the page sends."""
+
+    def setUp(self):
+        self.client_user = User.objects.create_user(username='support-rules-client', password='x', role='client')
+        self.other_client = User.objects.create_user(username='support-rules-other', password='x', role='client')
+        service_type = ServiceType.objects.create(name='Support rules service')
+        own_request = ServiceRequest.objects.create(client=self.client_user, service_type=service_type, description='x', status='Approved')
+        self.own_ticket = ServiceTicket.objects.create(request=own_request, scheduled_date=timezone.now().date(), status='Completed')
+        other_request = ServiceRequest.objects.create(client=self.other_client, service_type=service_type, description='x', status='Approved')
+        self.other_ticket = ServiceTicket.objects.create(request=other_request, scheduled_date=timezone.now().date(), status='Completed')
+        self.client.force_authenticate(self.client_user)
+
+    def open_case(self, **data):
+        payload = {'subject': 'Inverter beeping', 'category': 'technical', 'priority': 'normal', **data}
+        return self.client.post('/api/messages/support-cases/', payload, format='json')
+
+    def post_message(self, group_key, text='Hello'):
+        return self.client.post('/api/messages/', {'room_type': 'group', 'group_key': group_key, 'text': text}, format='json')
+
+    def test_the_related_ticket_is_saved_and_must_be_the_clients_own(self):
+        created = self.open_case(ticket=self.own_ticket.id)
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        self.assertEqual(created.data['ticket_id'], self.own_ticket.id)
+        self.assertEqual(created.data['ticket_code'], f'TKT-{self.own_ticket.id:04d}')
+        self.assertEqual(created.data['request_id'], self.own_ticket.request_id)
+
+        refused = self.open_case(ticket=self.other_ticket.id)
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST, refused.data)
+
+    def test_messages_go_only_into_an_open_case_of_the_client(self):
+        case = self.open_case().data
+        self.assertEqual(self.post_message(case['group_key']).status_code, status.HTTP_201_CREATED)
+
+        # A made-up thread without a case would be invisible to the office.
+        orphan = self.post_message(f'customer_support_client_{self.client_user.id}_made_up')
+        self.assertEqual(orphan.status_code, status.HTTP_400_BAD_REQUEST, orphan.data)
+
+        # A resolved case is read-only for the client; they start a new case instead.
+        CustomerSupportCase.objects.filter(pk=case['id']).update(status='resolved')
+        closed = self.post_message(case['group_key'])
+        self.assertEqual(closed.status_code, status.HTTP_400_BAD_REQUEST, closed.data)
+        self.assertIn('new case', str(closed.data).lower())
+
+    def test_a_client_message_moves_the_case_to_the_top(self):
+        older = self.open_case(subject='Older').data
+        newer = self.open_case(subject='Newer').data
+        self.post_message(older['group_key'])
+        rows = self.client.get('/api/messages/support-cases/').data
+        rows = rows.get('results', rows)
+        self.assertEqual(rows[0]['id'], older['id'])
+        self.assertNotEqual(rows[0]['id'], newer['id'])

@@ -20,8 +20,8 @@ test.describe('Client Workspace - All Pages', () => {
     await visitWorkspacePage(page, '/client/dashboard', 'test-results/screenshots/05-client-dashboard.png');
     await expect(page.getByRole('button', { name: 'Create Service Request' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'My requests' })).toBeVisible();
-    await expect(page.getByText('Active requests', { exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Request Pipeline' })).toBeVisible();
+    await expect(page.getByText('Waiting for approval', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Open Jobs' })).toBeVisible();
     const requestButton = page.getByRole('button', { name: 'E2E Solar Installation' }).first();
     await expect(requestButton).toBeVisible();
     await requestButton.focus();
@@ -151,7 +151,6 @@ test.describe('Client Workspace - All Pages', () => {
   test('5.6 - Client Purchase Records page', async ({ page }) => {
     await visitWorkspacePage(page, '/client/purchase-records', 'test-results/screenshots/05-client-purchase-records.png');
     await expect(page.getByRole('heading', { name: 'Purchase Records', exact: true })).toBeVisible();
-    await expect(page.getByText(/Payments are handled outside this portal/i)).toBeVisible();
   });
 
   test('5.7 - Client support assistant answers portal questions', async ({ page }) => {
@@ -160,14 +159,115 @@ test.describe('Client Workspace - All Pages', () => {
     await expect(openAssistant).toBeVisible({ timeout: 10000 });
     await openAssistant.click();
 
-    await expect(page.getByRole('heading', { name: 'Client Support Assistant' })).toBeVisible();
-    await page.getByRole('button', { name: 'How do I request service?' }).click();
-    await expect(page.getByText(/Open Request Service, select the service you need/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Request service', exact: true })).toBeVisible();
+    const assistant = page.getByRole('dialog', { name: 'Client Support Assistant' });
+    await expect(assistant).toBeVisible();
+    await expect(assistant).toContainText('Helping with Dashboard');
+    await expect(assistant.getByRole('status').first()).toContainText('Records checked', { timeout: 30000 });
+    const desktopAssistantBox = await assistant.boundingBox();
+    expect(desktopAssistantBox).not.toBeNull();
+    // Keep the client panel on the exact same 31rem x 540px shell as Analytics Assistant.
+    expect(desktopAssistantBox.width).toBeLessThanOrEqual(504);
+    expect(desktopAssistantBox.width).toBeGreaterThanOrEqual(488);
+    expect(desktopAssistantBox.height).toBeLessThanOrEqual(548);
+    expect(desktopAssistantBox.height).toBeGreaterThanOrEqual(532);
 
-    await page.getByRole('button', { name: 'Where can I see what I purchased?' }).click();
-    await expect(page.getByText(/does not process billing or payments/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'View purchase records', exact: true })).toBeVisible();
+    // Static guidance is accurate and gives direct, reversible navigation choices.
+    await assistant.getByRole('button', { name: 'How do I request service?' }).click();
+    await expect(assistant.getByText(/preferred date is a request—not a confirmed appointment/i)).toBeVisible();
+    await expect(assistant.getByRole('button', { name: 'Request service', exact: true })).toBeVisible();
+    await expect(assistant.getByRole('button', { name: 'View my requests', exact: true })).toBeVisible();
+
+    await assistant.getByRole('button', { name: 'Where can I see payments and purchases?' }).click();
+    await expect(assistant.getByText(/payments happen outside the portal/i)).toBeVisible();
+    await expect(assistant.getByRole('button', { name: 'View purchase records', exact: true })).toBeVisible();
+
+    // Typed questions read the signed-in client's real unified request data, including requests
+    // that are still waiting for office review rather than only records with tickets.
+    const question = assistant.getByRole('textbox', { name: 'Ask the client support assistant' });
+    const ask = assistant.getByRole('button', { name: 'Send question to client support assistant' });
+    await question.fill('What is my latest request status?');
+    await ask.click();
+    await expect(assistant.getByText(/REQ-\d{4} is for/i).last()).toBeVisible();
+    await expect(assistant.getByRole('button', { name: /Open REQ-\d{4}/ }).last()).toBeVisible();
+
+    await question.fill('Who is my technician?');
+    await ask.click();
+    await expect(assistant.getByText(/is assigned to REQ-\d{4}/i).last()).toBeVisible();
+
+    await question.fill('When is my next appointment?');
+    await ask.click();
+    await expect(assistant.getByText(/next confirmed appointment is REQ-\d{4}/i).last()).toBeVisible();
+
+    await question.fill('How many support cases are open?');
+    await ask.click();
+    await expect(assistant.getByText(/You have 1 open support case/i).last()).toBeVisible();
+
+    await question.fill('Can I use this app offline?');
+    await ask.click();
+    await expect(assistant.getByText(/live requests, messages, schedules, payments, and record changes still require an internet connection/i)).toBeVisible();
+
+    await assistant.getByRole('button', { name: 'Start a new assistant conversation' }).click();
+    await expect(assistant.getByText(/I cannot change records or replace the office team/i)).toBeVisible();
+    await expect(assistant.getByText(/live requests, messages, schedules/i)).toHaveCount(0);
+
+    // Escape closes the non-modal assistant. Reopening on another client page updates its context
+    // and suggestions; the mobile panel stays within the viewport.
+    await page.keyboard.press('Escape');
+    await expect(assistant).toHaveCount(0);
+    await page.goto('/client/service-history');
+    await page.getByRole('button', { name: 'Open client support assistant' }).click();
+    const historyAssistant = page.getByRole('dialog', { name: 'Client Support Assistant' });
+    await expect(historyAssistant).toContainText('Helping with Service History');
+    await expect(historyAssistant.getByRole('button', { name: 'Is any warranty active?' })).toBeVisible();
+    const historyQuestion = historyAssistant.getByRole('textbox', { name: 'Ask the client support assistant' });
+    await expect(historyQuestion).toBeEnabled({ timeout: 30000 });
+    await historyQuestion.fill('How do I update my contact details?');
+    await historyAssistant.getByRole('button', { name: 'Send question to client support assistant' }).click();
+    await expect(historyAssistant.getByText(/Profile lets you update your own contact details/i)).toBeVisible();
+    await expect(historyAssistant.getByRole('button', { name: 'Open profile' })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(historyAssistant).toBeVisible();
+    const mobileAssistantBox = await historyAssistant.boundingBox();
+    expect(mobileAssistantBox).not.toBeNull();
+    expect(mobileAssistantBox.x).toBeGreaterThanOrEqual(11);
+    expect(mobileAssistantBox.x + mobileAssistantBox.width).toBeLessThanOrEqual(391);
+    expect(mobileAssistantBox.height).toBeLessThanOrEqual(548);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  });
+
+  test('5.7b - Client assistant fails safely when account records cannot refresh', async ({ page }) => {
+    for (const apiPath of [
+      '**/api/services/service-requests/**',
+      '**/api/services/service-tickets/**',
+      '**/api/messages/support-cases/**',
+    ]) {
+      await page.route(apiPath, async (route) => route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'Temporarily unavailable for E2E.' }),
+      }));
+    }
+
+    await page.goto('/client/dashboard');
+    await page.getByRole('button', { name: 'Open client support assistant' }).click();
+    const assistant = page.getByRole('dialog', { name: 'Client Support Assistant' });
+    await expect(assistant.getByText('Some records could not be refreshed')).toBeVisible({ timeout: 30000 });
+    await expect(assistant.getByText(/Answers that need unavailable records will say so/i)).toBeVisible();
+
+    // Guidance that does not need account data remains useful.
+    await assistant.getByRole('button', { name: 'How do I request service?' }).click();
+    await expect(assistant.getByText(/preferred date is a request—not a confirmed appointment/i)).toBeVisible();
+
+    const question = assistant.getByRole('textbox', { name: 'Ask the client support assistant' });
+    const ask = assistant.getByRole('button', { name: 'Send question to client support assistant' });
+    await question.fill('What is my latest request status?');
+    await ask.click();
+    await expect(assistant.getByText(/could not refresh your request information/i)).toBeVisible();
+
+    await question.fill('There is smoke and sparking from my equipment');
+    await ask.click();
+    await expect(assistant.getByText(/Move to a safe location and contact local emergency services/i)).toBeVisible();
+    await expect(assistant.getByText(/Do not touch damaged electrical, battery, or solar equipment/i)).toBeVisible();
   });
 
   test('5.8 - Notifications page', async ({ page }) => {
@@ -200,7 +300,7 @@ test.describe('Client Workspace - All Pages', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from('not an image'),
     });
-    await expect(page.getByRole('status')).toContainText('Choose a JPEG, PNG, WebP, or GIF image.');
+    await expect(page.getByRole('alert')).toContainText('Choose a JPEG, PNG, WebP, or GIF image.');
 
     const companyName = `E2E Client Company ${Date.now()}`;
     await page.getByLabel('Company Name (Optional)').fill(companyName);
@@ -221,7 +321,7 @@ test.describe('Client Workspace - All Pages', () => {
     await securitySection.getByLabel('New password', { exact: true }).fill('DifferentPassword123!');
     await securitySection.getByLabel('Confirm new password', { exact: true }).fill('AnotherPassword123!');
     await securitySection.getByRole('button', { name: 'Change Password' }).click();
-    await expect(page.getByRole('status')).toContainText('do not match');
+    await expect(securitySection.getByRole('alert')).toContainText('do not match');
   });
 
   test('5.11 - Solar calculator stays inside the client workspace', async ({ page }) => {

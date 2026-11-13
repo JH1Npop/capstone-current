@@ -109,7 +109,7 @@ class DataPersistenceSmokeTests(APITestCase):
             request=service_request,
             technician=self.technician,
             scheduled_date=timezone.localdate() + timedelta(days=1),
-            status='Not Started',
+            status='In Progress',  # the checklist is filed after Start Job
         )
         self.client.force_authenticate(user=self.technician)
 
@@ -144,6 +144,34 @@ class DataPersistenceSmokeTests(APITestCase):
         self.assertEqual(checklist.required_equipment_snapshot[0]['name'], 'Ladder')
         self.assertTrue(checklist.warranty_provided)
         self.assertEqual(checklist.warranty_period_days, 30)
+
+    def test_technician_checklist_is_refused_until_the_job_is_started(self):
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user,
+            service_type=self.service_type,
+            description='Checklist before start request.',
+            status='Approved',
+        )
+        self.client.force_authenticate(user=self.technician)
+        for job_status in ('Not Started', 'Navigating', 'Arrived on Site', 'On Hold'):
+            with self.subTest(job_status=job_status):
+                ticket = ServiceTicket.objects.create(
+                    request=service_request if job_status == 'Not Started' else ServiceRequest.objects.create(
+                        client=self.client_user, service_type=self.service_type,
+                        description=f'Checklist before start ({job_status}).', status='Approved',
+                    ),
+                    technician=self.technician,
+                    scheduled_date=timezone.localdate(),
+                    status=job_status,
+                )
+                response = self.client.post(
+                    '/api/checklist/',
+                    {'jobId': ticket.id, 'completed': {'0': True}},
+                    format='json',
+                )
+                self.assertEqual(response.status_code, 400, response.data)
+                self.assertEqual(response.data['error'], 'Start the job before you submit its checklist.')
+                self.assertFalse(InspectionChecklist.objects.filter(ticket=ticket).exists())
 
     def test_technician_checklist_rejects_unassigned_ticket_without_distinct_lock_query(self):
         service_request = ServiceRequest.objects.create(
@@ -210,6 +238,57 @@ class DataPersistenceSmokeTests(APITestCase):
         self.assertIn('safety_equipment_present', response.data)
         self.assertIn('recommendation', response.data)
         self.assertFalse(InspectionChecklist.objects.filter(ticket=ticket).exists())
+
+    def test_inspection_report_notifies_the_rest_of_the_team_with_a_ticket_link(self):
+        from notifications.models import Notification
+        from services.models import TicketCrewAssignment
+
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user, service_type=self.service_type,
+            description='Inspection notification request.', status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=service_request, technician=self.technician,
+            scheduled_date=timezone.localdate(), ticket_type='inspection', status='Arrived on Site',
+        )
+        crew = User.objects.create_user(username='persist-crew', password='Password123!', role='technician', status='active')
+        TicketCrewAssignment.objects.create(ticket=ticket, technician=crew)
+        Notification.objects.all().delete()
+        self.client.force_authenticate(user=self.technician)
+
+        response = self.client.post('/api/services/inspections/', {
+            'ticket': ticket.id, 'site_accessible': True, 'electrical_adequate': True,
+            'safety_equipment_present': True, 'recommendation': 'Approved', 'checklist_items': [],
+        }, format='json')
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertFalse(Notification.objects.filter(user=self.technician, title__startswith='Inspection Report').exists())
+        notice = Notification.objects.get(user=crew, title__startswith='Inspection Report')
+        self.assertEqual(notice.title, f'Inspection Report Started for Ticket #{ticket.id}')
+        self.assertEqual(notice.ticket_id, ticket.id)
+
+    def test_equipment_shortage_notifications_name_and_link_the_ticket(self):
+        from inventory.automation import _notify_shortage
+        from notifications.models import Notification
+
+        service_request = ServiceRequest.objects.create(
+            client=self.client_user, service_type=self.service_type,
+            description='Shortage notification request.', status='Approved',
+        )
+        ticket = ServiceTicket.objects.create(
+            request=service_request, technician=self.technician,
+            scheduled_date=timezone.localdate(), status='Not Started',
+        )
+        inactive_admin = User.objects.create_user(username='persist-old-admin', password='Password123!', role='admin', is_active=False)
+        Notification.objects.all().delete()
+
+        _notify_shortage(ticket, self.technician, f'Ticket #{ticket.id} needs 2 x Inverter, but only 0 could be reserved.')
+
+        title = f'Equipment Shortage for Ticket #{ticket.id}'
+        for user in (self.technician, self.admin_user, self.superadmin):
+            notice = Notification.objects.get(user=user)
+            self.assertEqual((notice.title, notice.ticket_id, notice.type), (title, ticket.id, 'warning'))
+        self.assertFalse(Notification.objects.filter(user=inactive_admin).exists())
 
     def test_site_inspection_requires_notes_for_negative_answers(self):
         service_request = ServiceRequest.objects.create(

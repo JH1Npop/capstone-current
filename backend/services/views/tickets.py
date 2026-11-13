@@ -1,9 +1,12 @@
 # Auto-split from services/views.py
+from services.views.document_locks import KeepFinishedDocumentsMixin, TechniciansLeaveCancelledJobsMixin
 from django.http import FileResponse
 from django.db.models import Subquery
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import ValidationError
 
+from services.business_time import business_timezone, business_today
+from services.quotation_validity import quotation_is_expired, quotation_valid_until
 from services.dynamic_document_generation import DOCX_CONTENT_TYPE, generate_archived_document
 from services.views.helpers import (
     AFTER_SALES_VIEW_CAPABILITIES,
@@ -18,6 +21,7 @@ from services.views.helpers import (
     CONTACTABLE_TICKET_STATUSES,
     CanViewSupervisorDispatch,
     CanViewSupervisorTickets,
+    CanViewTechnicianChecklist,
     CanViewTechnicianJobs,
     InspectionChecklist,
     IsAdmin,
@@ -253,7 +257,7 @@ class ServiceLocationViewSet(viewsets.ModelViewSet):
         return self.queryset.filter(request__in=visible_requests)
 
 
-class ServiceTicketViewSet(viewsets.ModelViewSet):
+class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelViewSet):
     DOCUMENT_TITLES = {
         'field_service_report': 'Field Service Report',
         'turnover_acceptance': 'Turnover / Acceptance Form',
@@ -389,26 +393,34 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """Return stable ticket counts for cards that must not depend on paginated rows."""
-        queryset = self.get_queryset()
-        tickets = list(queryset)
-        active_tickets = [
-            ticket for ticket in tickets
-            if ticket.status not in CLOSED_TICKET_STATUSES
-        ]
-        dispatchable_tickets = [
-            ticket for ticket in active_tickets
-            if ticket.technician_id is None and ticket.status in ['Not Started', 'For Inspection', 'Ready for Service', 'Awaiting Materials', 'On Hold']
-        ]
-        assigned_active_tickets = [
-            ticket for ticket in active_tickets
-            if ticket.technician_id is not None
-        ]
+        from django.db.models import Count, Prefetch, Q
+        from services.models import ServiceStatusHistory
+        from services.sla import sla_batch_calendar
+
+        # Counts come from the database; loading every ticket (with all its related rows) to count it
+        # took most of a minute on a few years of jobs.
+        visible = self.get_queryset().order_by().values('pk')
+        tickets = ServiceTicket.objects.filter(pk__in=visible)
+        open_q = ~Q(status__in=CLOSED_TICKET_STATUSES)
+        counts = tickets.aggregate(
+            total=Count('pk'),
+            active=Count('pk', filter=open_q),
+            completed=Count('pk', filter=Q(status='Completed')),
+            cancelled=Count('pk', filter=Q(status='Cancelled')),
+            unassigned_active=Count('pk', filter=open_q & Q(technician__isnull=True)),
+            dispatchable=Count('pk', filter=open_q & Q(technician__isnull=True) & Q(status__in=['Not Started', 'For Inspection', 'Ready for Service', 'Awaiting Materials', 'On Hold'])),
+            assigned_active=Count('pk', filter=open_q & Q(technician__isnull=False)),
+        )
+        active_tickets = tickets.filter(open_q).select_related('request__service_type', 'technician').prefetch_related(
+            Prefetch('status_history', queryset=ServiceStatusHistory.objects.only('pk', 'ticket_id', 'status', 'timestamp')),
+        )
 
         missed_dispatch_count = 0
         warning_count = 0
         overdue_count = 0
 
         now = timezone.now()
+        calendar = sla_batch_calendar()
         for ticket in active_tickets:
             try:
                 if get_ticket_dispatch_state(ticket).get('is_missed_dispatch'):
@@ -417,7 +429,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 logger.exception('Failed to evaluate dispatch state for ticket %s', ticket.id)
 
             try:
-                sla_state = evaluate_service_ticket_sla(ticket, now=now).get('state')
+                sla_state = evaluate_service_ticket_sla(ticket, now=now, calendar=calendar).get('state')
                 if sla_state == 'warning':
                     warning_count += 1
                 elif sla_state == 'overdue':
@@ -426,13 +438,13 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 logger.exception('Failed to evaluate SLA state for ticket %s', ticket.id)
 
         return Response({
-            'total_tickets': len(tickets),
-            'active_queue': len(active_tickets),
-            'completed': sum(1 for ticket in tickets if ticket.status == 'Completed'),
-            'cancelled': sum(1 for ticket in tickets if ticket.status == 'Cancelled'),
-            'unassigned_active': sum(1 for ticket in active_tickets if ticket.technician_id is None),
-            'dispatchable': len(dispatchable_tickets),
-            'assigned_active': len(assigned_active_tickets),
+            'total_tickets': counts['total'],
+            'active_queue': counts['active'],
+            'completed': counts['completed'],
+            'cancelled': counts['cancelled'],
+            'unassigned_active': counts['unassigned_active'],
+            'dispatchable': counts['dispatchable'],
+            'assigned_active': counts['assigned_active'],
             'missed_dispatch': missed_dispatch_count,
             'sla_warning': warning_count,
             'sla_overdue': overdue_count,
@@ -659,10 +671,13 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
         )
 
     def _build_document_defaults(self):
+        from users.models import AdminSettings
+
+        settings_row = AdminSettings.objects.order_by('id').first()
         return {
-            'company_name': 'AFN Solar Power Engineering Services',
-            'company_address': 'Lot2a9, Brgy. Bigo, Pagbilao, Quezon',
-            'company_contact': '09171480224 / (042)9111107 | afnsunenergyserv@gmail.com',
+            'company_name': getattr(settings_row, 'company_name', '') or 'AFN Solar Power Engineering Services',
+            'company_address': getattr(settings_row, 'company_address', '') or 'Lot2a9, Brgy. Bigo, Pagbilao, Quezon',
+            'company_contact': '09171460224 / (042)9111107 | afnsunenergyserv@gmail.com',
             'prepared_by': 'C/ENGR. ARVIN F. NAPENAS',
             'prepared_title': 'General Manager',
             'currency': 'Philippine Peso',
@@ -1444,7 +1459,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
             scheduled_date = parse_date(scheduled_date_value)
             if scheduled_date is None:
                 return Response({'error': 'scheduled_date must be a valid date.'}, status=status.HTTP_400_BAD_REQUEST)
-            if scheduled_date < timezone.localdate():
+            if scheduled_date < business_today():
                 return Response({'error': 'The installation date cannot be in the past.'}, status=status.HTTP_400_BAD_REQUEST)
             if scheduled_time_value:
                 scheduled_time = parse_time(scheduled_time_value)
@@ -1452,7 +1467,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                     return Response({'error': 'scheduled_time must be a valid time.'}, status=status.HTTP_400_BAD_REQUEST)
                 if not is_business_start_time(scheduled_time):
                     return Response({'error': BUSINESS_HOURS_ERROR}, status=status.HTTP_400_BAD_REQUEST)
-            if scheduled_date == timezone.localdate() and scheduled_time is None:
+            if scheduled_date == business_today() and scheduled_time is None:
                 return Response(
                     {
                         'error': 'Choose an installation time for a same-day inspection and installation.',
@@ -1461,8 +1476,8 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if (
-                scheduled_date == timezone.localdate()
-                and scheduled_time <= timezone.localtime().time().replace(tzinfo=None)
+                scheduled_date == business_today()
+                and scheduled_time <= timezone.now().astimezone(business_timezone()).time().replace(tzinfo=None)
             ):
                 return Response(
                     {
@@ -1800,6 +1815,29 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
 
             sync_completion_follow_up_case(ticket)
             _notify_ticket_completion_recipients(ticket=ticket, technician=request.user)
+
+        if resolved_status == 'Cancelled':
+            # Same wording as every other cancel path: the client is told plainly (the reason the office
+            # typed is an internal note), and the whole team (lead and crew) is released.
+            send_user_notification(
+                user=ticket.request.client,
+                title=f"Ticket #{ticket.id} Cancelled",
+                body=f"Our office cancelled ticket #{ticket.id}. Please contact us if you have questions.",
+                notification_type='warning',
+                ticket=ticket,
+                request=ticket.request,
+            )
+            for member in get_ticket_team_members(ticket):
+                if member != request.user:
+                    send_user_notification(
+                        user=member,
+                        title=f"Ticket #{ticket.id} Cancelled",
+                        body=f"The office cancelled ticket #{ticket.id}. It is no longer on your job list.",
+                        notification_type='warning',
+                        ticket=ticket,
+                        request=ticket.request,
+                    )
+            return Response({'success': True, 'message': 'Status updated', 'ticket_id': ticket.id, 'status': resolved_status})
 
         send_user_notification(
             user=ticket.request.client,
@@ -2157,7 +2195,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                         item=item,
                         quantity=quantity,
                         technician=request.user,
-                        required_date=ticket.scheduled_date or timezone.localdate(),
+                        required_date=ticket.scheduled_date or business_today(),
                         service_ticket=ticket,
                         performed_by=request.user,
                         notes=reservation_notes,
@@ -2303,9 +2341,10 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                         {'error': 'preferred_date must be a valid date.'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                if normalized_preferred_date < timezone.localdate():
+                # Business (UTC+8) day: before 08:00 local the UTC date is still yesterday.
+                if normalized_preferred_date < business_today():
                     return Response(
-                        {'error': 'preferred_date cannot be in the past.'},
+                        {'error': 'Choose today or a later date.'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
@@ -2333,7 +2372,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                     ticket.request.preferred_time_slot = normalized_preferred_time_slot
                 ticket.request.save(update_fields=['preferred_date', 'preferred_time_slot', 'updated_at'])
 
-            admins = User.objects.filter(role__in=['superadmin', 'admin'])
+            admins = User.objects.filter(role__in=['superadmin', 'admin'], is_active=True)
             for admin in admins:
                 send_user_notification(
                     user=admin,
@@ -2387,7 +2426,7 @@ class ServiceTicketViewSet(viewsets.ModelViewSet):
                 normalized_scheduled_date = parse_date(str(scheduled_date))
                 if normalized_scheduled_date is None:
                     return Response({'error': 'scheduled_date must be a valid date.'}, status=status.HTTP_400_BAD_REQUEST)
-                if normalized_scheduled_date < timezone.localdate():
+                if normalized_scheduled_date < business_today():
                     return Response({'error': 'scheduled_date cannot be in the past.'}, status=status.HTTP_400_BAD_REQUEST)
 
             normalized_time_slot = None
@@ -2624,7 +2663,7 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == 'respond':
             return [permissions.IsAuthenticated()]
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'payments', 'void_payment']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'payments', 'void_payment', 'settle_deposit']:
             return [CanManageDocuments()]
         return [CanAccessDocuments()]
 
@@ -2675,6 +2714,12 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         quotation = self.get_object()
+        # A quotation the client has received (sent, accepted or declined) stays on record.
+        if quotation.status != 'Draft':
+            return Response(
+                {'detail': 'Only a draft quotation can be deleted. A quotation the client has received stays on record.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         if quotation.deposit_payments.exists():
             return Response(
                 {'detail': 'This quotation has deposit payment history and cannot be deleted.'},
@@ -2690,6 +2735,8 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
                 f"Quotation {quotation.quotation_number} for ticket #{quotation.ticket_id} is ready. "
                 "Please review it and accept or decline in your request details.",
                 'info',
+                title=f'Quotation {quotation.quotation_number} ready',
+                ticket=quotation.ticket,
             )
 
     @action(detail=True, methods=['post'])
@@ -2707,6 +2754,11 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
                 {'error': 'Only a quotation that has been sent to you can be accepted or declined.'},
                 status=status.HTTP_409_CONFLICT,
             )
+        if quotation.ticket.status == 'Cancelled':
+            return Response(
+                {'error': 'This job was cancelled, so its quotation can no longer be accepted or declined.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         decision = str(request.data.get('decision') or '').strip().lower()
         if decision not in {'accept', 'decline'}:
             return Response({'decision': ['Choose accept or decline.']}, status=status.HTTP_400_BAD_REQUEST)
@@ -2714,6 +2766,15 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
         if decision == 'decline' and not note:
             return Response({'note': ['Please tell us why you are declining.']}, status=status.HTTP_400_BAD_REQUEST)
         if decision == 'accept':
+            # The price is only promised for the validity period; after it the office must send an
+            # updated quotation (declining stays possible so the office hears why).
+            if quotation_is_expired(quotation):
+                valid_until = quotation_valid_until(quotation)
+                return Response(
+                    {'error': f"This quotation expired on {valid_until:%B} {valid_until.day}, {valid_until.year}. "
+                              'Ask our office for an updated quotation.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
             total = decimal_from_money(quotation.total_amount)
             if total is None or total <= 0:
                 return Response(
@@ -2746,6 +2807,11 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
         if quotation.status != 'Accepted':
             return Response(
                 {'detail': 'Deposit payments can only be recorded after the quotation is accepted.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if quotation.ticket.status == 'Cancelled':
+            return Response(
+                {'detail': 'This job was cancelled, so no new deposit can be recorded. Voiding an earlier payment is still possible.'},
                 status=status.HTTP_409_CONFLICT,
             )
         summary = quotation_deposit_summary(quotation)
@@ -2782,6 +2848,8 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
                 f"PHP {updated['deposit_remaining_amount']:,.2f}."
             ),
             'success',
+            title='Deposit payment recorded',
+            ticket=quotation.ticket,
         )
         return Response(self.get_serializer(quotation).data, status=status.HTTP_201_CREATED)
 
@@ -2807,6 +2875,78 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
         payment.voided_by = request.user
         payment.void_reason = reason
         payment.save(update_fields=['is_voided', 'voided_at', 'voided_by', 'void_reason'])
+        quotation._prefetched_objects_cache.pop('deposit_payments', None)
+        return Response(self.get_serializer(quotation).data)
+
+    @action(detail=True, methods=['post'], url_path='settle-deposit')
+    @transaction.atomic
+    def settle_deposit(self, request, pk=None):
+        """After a job is cancelled, record whether the received deposit was refunded or kept."""
+        from services.deposits import DEPOSIT_OUTCOME_KIND, DEPOSIT_OUTCOMES, deposit_outcome, received_deposit_amount
+        from users.signals import log_activity
+
+        quotation = get_object_or_404(
+            self.get_queryset().select_for_update(of=('self',)).select_related('ticket'), pk=pk,
+        )
+        if quotation.ticket.status != 'Cancelled':
+            return Response(
+                {'detail': 'Only the deposit of a cancelled job is settled here. While the job is open, void a payment instead.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if deposit_outcome(quotation) is not None:
+            return Response({'detail': 'What happened to this deposit is already recorded.'}, status=status.HTTP_409_CONFLICT)
+        quotation._prefetched_objects_cache.pop('deposit_payments', None)
+        amount = received_deposit_amount(quotation)
+        if amount <= 0:
+            return Response({'detail': 'No deposit was received for this job.'}, status=status.HTTP_409_CONFLICT)
+        outcome = str(request.data.get('outcome') or '').strip().lower()
+        if outcome not in DEPOSIT_OUTCOMES:
+            return Response({'outcome': ['Choose Refunded or Kept.']}, status=status.HTTP_400_BAD_REQUEST)
+        note = str(request.data.get('note') or '').strip()
+        if len(note) < 3:
+            return Response(
+                {'note': ['Add a short note, for example how the money was returned or why it was kept.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        now = timezone.now()
+        for payment in SalesPayment.objects.select_for_update().filter(quotation=quotation, is_voided=False):
+            if outcome == 'refunded':
+                payment.is_voided = True
+                payment.voided_at = now
+                payment.voided_by = request.user
+                payment.void_reason = f'Refunded after the job was cancelled: {note}'
+                payment.save(update_fields=['is_voided', 'voided_at', 'voided_by', 'void_reason'])
+            else:
+                kept_line = f'Kept after the job was cancelled: {note}'
+                payment.notes = f'{payment.notes}\n{kept_line}' if payment.notes else kept_line
+                payment.save(update_fields=['notes'])
+
+        log_activity(
+            actor=request.user,
+            category='tickets',
+            action='update',
+            target=quotation,
+            message=f'Deposit of PHP {amount:,.2f} for {quotation.quotation_number} {outcome} after the job was cancelled',
+            metadata={
+                'kind': DEPOSIT_OUTCOME_KIND,
+                'outcome': outcome,
+                'amount': f'{amount:.2f}',
+                'note': note,
+                'ticket_id': quotation.ticket_id,
+            },
+        )
+        create_notification(
+            quotation.client,
+            (
+                f'Your deposit of PHP {amount:,.2f} for quotation {quotation.quotation_number} was refunded. {note}'
+                if outcome == 'refunded' else
+                f'Your deposit of PHP {amount:,.2f} for quotation {quotation.quotation_number} was kept after the job was cancelled. {note}'
+            ),
+            'info',
+            title='Deposit refunded' if outcome == 'refunded' else 'Deposit kept after cancellation',
+            ticket=quotation.ticket,
+        )
         quotation._prefetched_objects_cache.pop('deposit_payments', None)
         return Response(self.get_serializer(quotation).data)
 
@@ -2882,7 +3022,11 @@ class SolarProjectProfileViewSet(viewsets.ModelViewSet):
         )
         return Response(self.get_serializer(profile).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
-class FieldServiceReportViewSet(viewsets.ModelViewSet):
+class FieldServiceReportViewSet(TechniciansLeaveCancelledJobsMixin, KeepFinishedDocumentsMixin, viewsets.ModelViewSet):
+    def document_is_finished(self, instance):
+        # A field service report has no status; the client's acknowledgement makes it final.
+        return bool(instance.client_acknowledged)
+
     from services.models.documents import FieldServiceReport
     queryset = FieldServiceReport.objects.all()
     from services.serializers import FieldServiceReportSerializer

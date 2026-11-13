@@ -107,12 +107,15 @@ class AutoDispatchTests(TestCase):
             longitude=Decimal('120.9842'),
         )
 
-        # Create ticket
+        # Create ticket on the next Monday: multi-day jobs skip weekends, so a fixed weekday keeps
+        # these capacity tests the same whatever day they run.
+        today = timezone.localdate()
+        next_monday = today + timedelta(days=(7 - today.weekday()) or 7)
         self.ticket = ServiceTicket.objects.create(
             request=self.request,
             status='Not Started',
             priority='Normal',
-            scheduled_date=timezone.localdate() + timedelta(days=1),
+            scheduled_date=next_monday,
         )
 
         AdminSettings.objects.create(
@@ -647,7 +650,7 @@ class SLAEscalationTests(TestCase):
             technician=self.tech,
             status='In Progress',
             scheduled_date=timezone.localdate(),
-            start_time=timezone.now() - timedelta(hours=3),
+            start_time=timezone.now() - timedelta(days=10),
         )
         TicketCrewAssignment.objects.create(ticket=ticket, technician=crew_user)
 

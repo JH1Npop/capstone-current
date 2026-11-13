@@ -1,3 +1,4 @@
+import { getLocalDateInputValue } from '../../utils/date';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
@@ -616,7 +617,7 @@ export default function AdminJobHistory() {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `completed-jobs-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `completed-jobs-${getLocalDateInputValue()}.csv`;
     link.click();
     window.URL.revokeObjectURL(url);
     setExporting(false);

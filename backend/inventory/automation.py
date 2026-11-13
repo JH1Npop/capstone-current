@@ -2,6 +2,7 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 
 from notifications.models import Notification
+from notifications.notification_utils import in_app_notifications_enabled
 from users.models import User
 
 from .models import (
@@ -12,15 +13,27 @@ from .models import (
 )
 
 
-def _notify_roles(message, notification_type='info', roles=None):
+def _notify_roles(message, notification_type='info', roles=None, *, title='', ticket=None):
+    if not in_app_notifications_enabled():
+        return
     target_roles = roles or ['superadmin', 'admin']
-    recipients = User.objects.filter(role__in=target_roles)
+    recipients = User.objects.filter(role__in=target_roles, is_active=True)
     for recipient in recipients:
         Notification.objects.create(
             user=recipient,
             message=message,
             type=notification_type,
+            title=title,
+            ticket=ticket,
         )
+
+
+def _notify_shortage(ticket, technician, message):
+    """A shortage names its ticket, so the notification opens that ticket (office and technician)."""
+    title = f'Equipment Shortage for Ticket #{ticket.id}'
+    _notify_roles(message, notification_type='warning', title=title, ticket=ticket)
+    if technician and in_app_notifications_enabled():
+        Notification.objects.create(user=technician, message=message, type='warning', title=title, ticket=ticket)
 
 
 def serialize_ticket_inventory(ticket, *, use_prefetch=False):
@@ -267,12 +280,7 @@ def sync_ticket_reservations(ticket, *, performed_by):
                 'reserved_quantity': reserve_quantity,
                 'missing_quantity': shortage_quantity,
             })
-            _notify_roles(shortage_message, notification_type='warning')
-            Notification.objects.create(
-                user=technician,
-                message=shortage_message,
-                type='warning',
-            )
+            _notify_shortage(ticket, technician, shortage_message)
 
     return {
         **summary,
@@ -365,12 +373,7 @@ def apply_ticket_equipment_plan(ticket, equipment_plan, *, performed_by):
                 'reserved_quantity': reserve_quantity,
                 'missing_quantity': shortage_quantity,
             })
-            _notify_roles(shortage_message, notification_type='warning')
-            Notification.objects.create(
-                user=technician,
-                message=shortage_message,
-                type='warning',
-            )
+            _notify_shortage(ticket, technician, shortage_message)
 
     return {
         **summary,

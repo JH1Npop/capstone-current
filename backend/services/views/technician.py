@@ -1,6 +1,7 @@
 # Auto-split from services/views.py
 from services.views.helpers import *  # noqa: F401,F403
 from services.user_display import client_technician_label
+from services.views.document_locks import cancelled_job_message
 from django.utils.dateparse import parse_date
 from services.ticket_status import COMPLETED_TICKET_STATUSES
 
@@ -101,8 +102,16 @@ class TechnicianDashboardView(viewsets.ViewSet):
             )
         )
 
+        # "Today" is the business day (UTC+8), not the UTC date, so between midnight and 08:00 local time
+        # the schedule, "completed today" and "last 7 days" are still the right days.
+        from datetime import datetime, time as time_of_day, timedelta
+        from services.business_time import business_timezone, business_today
+
+        today = business_today()
+        day_start = datetime.combine(today, time_of_day.min, tzinfo=business_timezone())
+        day_end = day_start + timedelta(days=1)
+
         # Upcoming schedule
-        today = timezone.now().date()
         todays_tickets = assigned_tickets.filter(scheduled_date__gte=today).exclude(status='Cancelled').order_by('scheduled_date', 'scheduled_time')
 
         # Active tickets (not completed)
@@ -111,16 +120,33 @@ class TechnicianDashboardView(viewsets.ViewSet):
         )
 
         # Recent activity (last 7 days)
-        week_ago = timezone.now().date() - timezone.timedelta(days=7)
-        recent_tickets = assigned_tickets.filter(
-            Q(request__request_date__date__gte=week_ago) | Q(assigned_at__date__gte=week_ago)
-        ).order_by('-assigned_at')[:10]
+        # Recent activity is what actually changed in the last 7 days (a status change, an assignment or a
+        # completion), newest first, not only what was assigned.
+        from django.db.models import Max
+
+        week_start = day_start - timedelta(days=7)
+        candidates = assigned_tickets.annotate(last_status_at=Max('status_history__timestamp')).filter(
+            Q(assigned_at__gte=week_start) | Q(last_status_at__gte=week_start) | Q(completed_date__gte=week_start)
+        )
+
+        def last_activity(ticket):
+            moments = [moment for moment in (ticket.assigned_at, ticket.last_status_at, ticket.completed_date) if moment]
+            return max(moments) if moments else None
+
+        recent_tickets = sorted(
+            (ticket for ticket in candidates if last_activity(ticket) and last_activity(ticket) >= week_start),
+            key=last_activity,
+            reverse=True,
+        )[:10]
+        for ticket in recent_tickets:
+            ticket.last_activity_at = last_activity(ticket)
 
         # Calculate stats
         total_assigned = assigned_tickets.count()
         completed_today = assigned_tickets.filter(
             status='Completed',
-            completed_date__date=today
+            completed_date__gte=day_start,
+            completed_date__lt=day_end,
         ).count()
         pending_count = active_tickets.count()
 
@@ -217,6 +243,7 @@ class TechnicianDashboardView(viewsets.ViewSet):
             'location': _get_request_address(ticket.request),
             'status': ticket.status,
             'assigned_at': ticket.assigned_at,
+            'last_activity_at': getattr(ticket, 'last_activity_at', None),
             'created_at': ticket.request.request_date,
             'assignment_role': 'lead' if ticket.technician_id == technician.id else 'crew',
         }
@@ -256,6 +283,20 @@ class TechnicianJobsView(viewsets.ViewSet):
         if not ticket_has_technician_access(ticket, user):
             raise ServiceTicket.DoesNotExist
         return ticket
+
+    @staticmethod
+    def cancelled_job_response(ticket):
+        """A job the office cancelled (possibly while the technician was on the way) answers plainly."""
+        if ticket.status != 'Cancelled':
+            return None
+        return Response(
+            {
+                'error': cancelled_job_message(ticket),
+                'code': 'job_cancelled',
+                'status': ticket.status,
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
 
     def get_locked_job(self, user, pk):
         ticket = self.get_locked_job_queryset().get(pk=pk)
@@ -384,6 +425,9 @@ class TechnicianJobsView(viewsets.ViewSet):
             User.objects.select_for_update().get(pk=request.user.pk)
         except ServiceTicket.DoesNotExist:
             return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
+        cancelled = self.cancelled_job_response(ticket)
+        if cancelled:
+            return cancelled
 
         if ticket.status in ['Navigating', 'Arrived on Site', 'In Progress', 'Completed']:
             return Response({'status': 'already_notified', 'ticket_id': ticket.id})
@@ -429,7 +473,9 @@ class TechnicianJobsView(viewsets.ViewSet):
         create_notification(
             ticket.request.client,
             f"{technician_name} is on the way to your service location for ticket #{ticket.id}.",
-            'info'
+            'info',
+            title='Technician on the way',
+            ticket=ticket,
         )
 
         admin_message = f"{technician_name} started navigation to ticket #{ticket.id}."
@@ -449,6 +495,9 @@ class TechnicianJobsView(viewsets.ViewSet):
             ticket = self.get_locked_job(request.user, pk)
         except ServiceTicket.DoesNotExist:
             return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
+        cancelled = self.cancelled_job_response(ticket)
+        if cancelled:
+            return cancelled
 
         if ticket.status != 'Navigating':
             return Response({
@@ -567,7 +616,9 @@ class TechnicianJobsView(viewsets.ViewSet):
         create_notification(
             ticket.request.client,
             f"{technician_name} has arrived at your service location for ticket #{ticket.id}.",
-            'info'
+            'info',
+            title='Technician arrived',
+            ticket=ticket,
         )
 
         admin_message = (
@@ -632,6 +683,9 @@ class TechnicianJobsView(viewsets.ViewSet):
             User.objects.select_for_update().get(pk=request.user.pk)
         except ServiceTicket.DoesNotExist:
             return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
+        cancelled = self.cancelled_job_response(ticket)
+        if cancelled:
+            return cancelled
 
         status_map = {
             'accepted': 'Not Started',
@@ -729,7 +783,9 @@ class TechnicianJobsView(viewsets.ViewSet):
             create_notification(
                 ticket.request.client,
                 f"Your service ticket #{ticket.id} has been completed!",
-                'success'
+                'success',
+                title=f"Ticket #{ticket.id} Completed",
+                ticket=ticket,
             )
             _notify_ticket_completion_recipients(ticket=ticket, technician=request.user)
         elif resolved_status == 'In Progress':
@@ -744,7 +800,9 @@ class TechnicianJobsView(viewsets.ViewSet):
             create_notification(
                 ticket.request.client,
                 f"Work has started for ticket #{ticket.id}.",
-                'info'
+                'info',
+                title=f"Work Started for Ticket #{ticket.id}",
+                ticket=ticket,
             )
             technician_name = (
                 request.user.get_full_name().strip()
@@ -775,22 +833,28 @@ class TechnicianScheduleView(viewsets.ViewSet):
         """Get technician's schedule"""
         technician = request.user
 
-        today = timezone.localdate()
+        from services.business_time import business_today
+
+        today = business_today()
         start_date = parse_date(str(request.query_params.get('start') or '')) or today
         end_date = parse_date(str(request.query_params.get('end') or '')) or (start_date + timezone.timedelta(days=62))
         if end_date < start_date:
             return Response({'error': 'end must be on or after start.'}, status=400)
+        # A calendar view is at most a few weeks; refuse open-ended ranges.
+        if (end_date - start_date).days > 120:
+            return Response({'error': 'Choose a range of 120 days or less.'}, status=400)
+
+        from services.work_calendar import load_work_calendar, tickets_overlapping, work_days_in_range
 
         show_completed = str(request.query_params.get('show_completed') or '').lower() in {'1', 'true', 'yes', 'all'}
-        tickets = get_technician_ticket_queryset(
+        calendar = load_work_calendar()
+        # Jobs that started before the range but are still running in it are included too.
+        tickets = tickets_overlapping(get_technician_ticket_queryset(
             technician,
             base_queryset=ServiceTicket.objects.select_related(
                 'request__service_type', 'request__client', 'request__location', 'technician', 'inspection'
             ).prefetch_related('crew_assignments__technician')
-        ).filter(
-            scheduled_date__gte=start_date,
-            scheduled_date__lte=end_date,
-        ).exclude(
+        ), start_date, end_date, calendar).exclude(
             status='Cancelled'
         ).order_by('scheduled_date')
         if not show_completed:
@@ -798,6 +862,9 @@ class TechnicianScheduleView(viewsets.ViewSet):
 
         schedule = []
         for ticket in tickets:
+            work_days = work_days_in_range(ticket, calendar, start_date, end_date)
+            if not work_days:
+                continue
             try:
                 location = ticket.request.location
                 location_address = location.address if location else None
@@ -809,7 +876,12 @@ class TechnicianScheduleView(viewsets.ViewSet):
                 'ticket_id': f'TKT-{ticket.id:04d}',
                 'ticket_type': ticket.ticket_type,
                 'service_type': ticket.request.service_type.name,
-                'client': ticket.request.client.username,
+                # The client's name, as everywhere else (it was the username).
+                'client': {
+                    'id': ticket.request.client.id,
+                    'full_name': ticket.request.client.get_full_name().strip() or ticket.request.client.username,
+                    'phone': ticket.request.client.phone or '',
+                },
                 'location': location_address,
                 'status': ticket.status,  # Keep original status
                 'priority': ticket.request.priority,
@@ -819,9 +891,44 @@ class TechnicianScheduleView(viewsets.ViewSet):
                 'notes': ticket.notes or '',
                 'assignment_role': 'lead' if ticket.technician_id == technician.id else 'crew',
                 'crew_members': serialize_ticket_crew_members(ticket, use_prefetch=True),
+                # Every day of the job inside the range ("Day 3 of 65"); a one-day job has one.
+                'work_days': work_days,
             })
 
-        return Response(schedule)
+        return Response({'jobs': schedule, 'day_notes': self._day_notes(start_date, end_date)})
+
+    def _day_notes(self, start_date, end_date):
+        """What a technician should know about each day: days off, holidays and closed or limited days."""
+        from collections import defaultdict
+        from datetime import timedelta
+
+        from services.models import CalendarClosure
+        from users.models import AdminSettings
+
+        settings_obj = AdminSettings.objects.order_by('id').first()
+        working_days = set(getattr(settings_obj, 'business_days', None) or [1, 2, 3, 4, 5])
+        holidays = {str(value) for value in (getattr(settings_obj, 'holiday_dates', None) or [])}
+        notes = defaultdict(list)
+
+        day = start_date
+        while day <= end_date:
+            key = day.isoformat()
+            if key in holidays:
+                notes[key].append({'kind': 'holiday', 'label': 'Holiday'})
+            elif day.isoweekday() not in working_days:
+                notes[key].append({'kind': 'day_off', 'label': 'Not a working day'})
+            day += timedelta(days=1)
+
+        closures = CalendarClosure.objects.filter(is_active=True, date__gte=start_date, date__lte=end_date).order_by('date')
+        for closure in closures:
+            closed = closure.availability_status == 'closed'
+            slot = closure.get_time_slot_display()
+            notes[closure.date.isoformat()].append({
+                'kind': 'closed' if closed else 'limited',
+                'label': f"{'Closed' if closed else 'Limited'}: {slot}",
+                'reason': closure.reason or '',
+            })
+        return dict(notes)
 
 
 class TechnicianProfileView(viewsets.ViewSet):
@@ -829,7 +936,11 @@ class TechnicianProfileView(viewsets.ViewSet):
 
     def list(self, request):
         technician = request.user
-        completed_tickets = get_technician_ticket_queryset(technician).filter(status='Completed')
+        # Same finished work as Job History (Completed and Turned Over), one row per ticket so a
+        # crew join cannot count a job twice or skew the average.
+        completed_tickets = ServiceTicket.objects.filter(
+            id__in=get_technician_ticket_queryset(technician).filter(status__in=COMPLETED_TICKET_STATUSES).values('id'),
+        )
         avg_rating = completed_tickets.exclude(client_rating__isnull=True).aggregate(avg=Avg('client_rating')).get('avg')
         thirty_days_ago = timezone.now() - timezone.timedelta(days=29)
         completed_last_30_days = completed_tickets.filter(completed_date__gte=thirty_days_ago)
@@ -861,6 +972,7 @@ class TechnicianProfileView(viewsets.ViewSet):
             'completedLast30Days': completed_last_30_days.count(),
             'avgCompletionTime': '',
             'rating': float(avg_rating) if avg_rating is not None else 0,
+            'ratedCount': completed_tickets.exclude(client_rating__isnull=True).count(),
             'ratingLast30Days': float(avg_rating_last_30_days) if avg_rating_last_30_days is not None else 0,
             'status': 'Available' if technician.is_available and technician.status == 'active' else technician.status.title()
         })
@@ -927,6 +1039,29 @@ class TechnicianHistoryView(viewsets.ViewSet):
             'risk_level': schedule.risk_level,
         }
 
+    def _summary(self, tickets):
+        """All-time figures for the technician, unaffected by the search and date filters."""
+        from datetime import datetime, time
+        from django.db.models import Avg, Count, Q
+        from services.business_time import business_timezone, business_today
+
+        # One row per ticket (crew joins can repeat a ticket), so the average is not skewed.
+        tickets = ServiceTicket.objects.filter(id__in=tickets.values('id'))
+        today = business_today()
+        month_start = datetime.combine(today.replace(day=1), time.min, tzinfo=business_timezone())
+        figures = tickets.aggregate(
+            completed_total=Count('id'),
+            average_rating=Avg('client_rating'),
+            rated_count=Count('id', filter=Q(client_rating__isnull=False)),
+        )
+        average = figures['average_rating']
+        return {
+            'completed_total': figures['completed_total'],
+            'completed_this_month': tickets.filter(completed_date__gte=month_start).count(),
+            'average_rating': round(float(average), 1) if average is not None else None,
+            'rated_count': figures['rated_count'],
+        }
+
     def list(self, request):
         tickets = get_technician_ticket_queryset(
             request.user,
@@ -945,6 +1080,7 @@ class TechnicianHistoryView(viewsets.ViewSet):
         ).filter(
             status__in=COMPLETED_TICKET_STATUSES
         )
+        summary = self._summary(tickets)
 
         search = str(request.query_params.get('search') or '').strip()
         if search:
@@ -960,10 +1096,13 @@ class TechnicianHistoryView(viewsets.ViewSet):
             return Response({'detail': 'date_to must use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
         if date_from and date_to and date_from > date_to:
             return Response({'detail': 'date_from cannot be later than date_to.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Business days (UTC+8): a job finished at 07:00 local time belongs to that day.
+        from services.business_time import business_day_start
+
         if date_from:
-            tickets = tickets.filter(completed_date__date__gte=date_from)
+            tickets = tickets.filter(completed_date__gte=business_day_start(date_from))
         if date_to:
-            tickets = tickets.filter(completed_date__date__lte=date_to)
+            tickets = tickets.filter(completed_date__lt=business_day_start(date_to + timezone.timedelta(days=1)))
 
         total = tickets.count()
         try:
@@ -1084,5 +1223,6 @@ class TechnicianHistoryView(viewsets.ViewSet):
             'page': page,
             'page_size': page_size,
             'total_pages': total_pages,
+            'summary': summary,
             'results': history,
         })

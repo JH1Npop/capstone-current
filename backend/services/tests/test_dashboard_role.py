@@ -1,6 +1,7 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
+from services.business_time import business_today
 
 
 class DashboardRoleTests(TestCase):
@@ -62,7 +63,7 @@ class DashboardRoleTests(TestCase):
             request=self.request_obj,
             technician=self.technician_user,
             assigned_admin=self.operations_admin,
-            scheduled_date=timezone.now().date(),
+            scheduled_date=business_today(),
             status='Not Started',
             priority='Normal',
         )
@@ -82,6 +83,28 @@ class DashboardRoleTests(TestCase):
         self.assertEqual(len(response.data['client_schedule']), 1)
         self.assertEqual(response.data['client_schedule'][0]['id'], self.ticket.id)
         self.assertEqual(response.data['overview']['unassigned_scheduled_jobs'], 1)
+
+    def test_admin_dashboard_upcoming_schedule_excludes_active_past_visits(self):
+        self.ticket.technician = None
+        self.ticket.scheduled_date = business_today() - timezone.timedelta(days=1)
+        self.ticket.save(update_fields=['technician', 'scheduled_date'])
+        self.api_client.force_authenticate(user=self.admin_user)
+
+        past_response = self.api_client.get('/api/dashboard/stats/', {'role': 'admin'})
+
+        self.assertEqual(past_response.status_code, 200)
+        self.assertEqual(past_response.data['client_schedule'], [])
+        self.assertEqual(past_response.data['list_counts']['client_schedule'], 0)
+        self.assertEqual(past_response.data['overview']['unassigned_scheduled_jobs'], 0)
+
+        self.ticket.scheduled_date = business_today()
+        self.ticket.save(update_fields=['scheduled_date'])
+
+        today_response = self.api_client.get('/api/dashboard/stats/', {'role': 'admin'})
+
+        self.assertEqual([row['id'] for row in today_response.data['client_schedule']], [self.ticket.id])
+        self.assertEqual(today_response.data['list_counts']['client_schedule'], 1)
+        self.assertEqual(today_response.data['overview']['unassigned_scheduled_jobs'], 1)
 
     def test_admin_stats_dashboard_prefers_full_names(self):
         self.client_user.first_name = 'Mia'
@@ -209,8 +232,9 @@ class DashboardRoleTests(TestCase):
             'location_address': '123 Test St',
             'location_city': 'Testville',
             'location_province': 'Test',
-            'latitude': '10.000000',
-            'longitude': '20.000000',
+            # Inside the service area: clients can only book there.
+            'latitude': '14.270000',
+            'longitude': '121.120000',
         }, format='json')
 
         self.assertEqual(response.status_code, 201)

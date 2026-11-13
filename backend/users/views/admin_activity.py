@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.db.models import Count
 from django.http import StreamingHttpResponse
 from django.utils import timezone
+from services.business_time import business_today
 from django.utils.dateparse import parse_date
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
@@ -105,10 +106,14 @@ class AdminActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def summary(self, request):
         queryset = self.filter_queryset(self.get_queryset())
-        today = timezone.localdate()
+        # "Today" is the business day (UTC+8); the server's date is UTC.
+        from datetime import datetime, time as time_of_day, timedelta
+        from services.business_time import business_timezone
+
+        today_start = datetime.combine(business_today(), time_of_day.min, tzinfo=business_timezone())
         totals = queryset.aggregate(
             total=Count('id'),
-            today=Count('id', filter=Q(created_at__date=today)),
+            today=Count('id', filter=Q(created_at__gte=today_start, created_at__lt=today_start + timedelta(days=1))),
             attention=Count('id', filter=Q(action='error')),
             user_actions=Count('id', filter=Q(actor__isnull=False)),
         )
@@ -148,7 +153,7 @@ class AdminActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
             chain([writer.writerow(header)], rows()),
             content_type='text/csv; charset=utf-8',
         )
-        response['Content-Disposition'] = f'attachment; filename="activity-logs-{timezone.localdate().isoformat()}.csv"'
+        response['Content-Disposition'] = f'attachment; filename="activity-logs-{business_today().isoformat()}.csv"'
         response['X-Content-Type-Options'] = 'nosniff'
         return response
 
@@ -190,13 +195,17 @@ class AdminActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
         if object_id:
             queryset = queryset.filter(target_id=object_id)
 
+        # Business days (UTC+8), not the server's UTC dates.
+        from datetime import timedelta as one_day_step
+        from services.business_time import business_day_start
+
         date_from = parse_date(query_params.get('date_from') or query_params.get('from') or '')
         if date_from:
-            queryset = queryset.filter(created_at__date__gte=date_from)
+            queryset = queryset.filter(created_at__gte=business_day_start(date_from))
 
         date_to = parse_date(query_params.get('date_to') or query_params.get('to') or '')
         if date_to:
-            queryset = queryset.filter(created_at__date__lte=date_to)
+            queryset = queryset.filter(created_at__lt=business_day_start(date_to + one_day_step(days=1)))
 
         search = query_params.get('search')
         if search:

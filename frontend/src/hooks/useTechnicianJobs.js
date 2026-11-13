@@ -9,6 +9,11 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { formatTicketId } from '../utils/roleIds';
 
+// The server accepts these completion photos (services/views/helpers.py).
+const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+const MAX_PHOTOS = 20;
+
 export function useTechnicianJobs() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -19,6 +24,19 @@ export function useTechnicianJobs() {
   const [completionJob, setCompletionJob] = useState(null);
   const [actionMessage, setActionMessage] = useState('');
   const [error, setError] = useState('');
+  // Errors from the job details dialog and the Finish Job dialog are shown inside that dialog.
+  const [dialogError, setDialogError] = useState('');
+  const [completionError, setCompletionError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [updatingJobId, setUpdatingJobId] = useState(null);
+  const requestSequence = useRef(0);
+  const successTimer = useRef(null);
+  const showSuccess = (text) => {
+    window.clearTimeout(successTimer.current);
+    setActionMessage(text);
+    successTimer.current = window.setTimeout(() => setActionMessage(''), 6000);
+  };
+  useEffect(() => () => window.clearTimeout(successTimer.current), []);
   const [proofImages, setProofImages] = useState([]);
   const proofPreviews = useRef(new Set());
   useEffect(() => {
@@ -42,17 +60,24 @@ export function useTechnicianJobs() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  const loadJobs = async () => {
+  // Only the newest load may update the list (a slow, older reply must not replace a newer one).
+  // A failed refresh keeps the jobs already on screen.
+  const loadJobs = async ({ silent = true } = {}) => {
+    const requestId = requestSequence.current + 1;
+    requestSequence.current = requestId;
+    if (!silent) setLoading(true);
     try {
       const data = await fetchTechnicianJobs(techName);
+      if (requestId !== requestSequence.current) return;
       setJobs(data);
       const active = data.find((job) => ['navigating', 'arrived_on_site', 'in_progress'].includes(job.status?.toLowerCase()));
       setActiveJob(active || null);
       setError('');
     } catch (loadError) {
-      setJobs([]);
-      setActiveJob(null);
-      setError(loadError.message || 'Unable to load jobs.');
+      if (requestId !== requestSequence.current) return;
+      setError(`${loadError.message || 'Unable to load jobs.'}${jobs.length ? ' Showing the last list we received.' : ''}`);
+    } finally {
+      if (requestId === requestSequence.current) setLoading(false);
     }
   };
 
@@ -66,7 +91,7 @@ export function useTechnicianJobs() {
   };
 
   useEffect(() => {
-    loadJobs();
+    loadJobs({ silent: false });
     loadInventoryItems();
   }, []);
 
@@ -101,6 +126,7 @@ export function useTechnicianJobs() {
   }, [jobs, searchParams]);
 
   const openJobDetails = (job) => {
+    setDialogError('');
     setSelectedJob(job);
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.set('ticketId', String(job.ticketId || job.id));
@@ -108,6 +134,7 @@ export function useTechnicianJobs() {
   };
 
   const closeJobDetails = () => {
+    setDialogError('');
     setSelectedJob(null);
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('ticketId');
@@ -115,68 +142,84 @@ export function useTechnicianJobs() {
   };
 
   // Keep the selected files themselves (uploaded on Finish Job) with lightweight local previews.
+  // Photos the server would refuse are left out here, with the reason, instead of failing on Finish Job.
   const handleImageUpload = (event) => {
-    const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith('image/'));
-    const images = files.map((file) => ({ file, preview: URL.createObjectURL(file) }));
-    setProofImages((currentImages) => [
-      ...currentImages,
-      ...images,
-    ]);
+    const chosen = Array.from(event.target.files || []);
     event.target.value = '';
+    const refused = [];
+    const accepted = [];
+    chosen.forEach((file) => {
+      if (!PHOTO_TYPES.has(file.type)) refused.push(`${file.name} is not a JPG, PNG or WebP photo`);
+      else if (file.size > MAX_PHOTO_BYTES) refused.push(`${file.name} is larger than 10 MB`);
+      else accepted.push(file);
+    });
+    const room = Math.max(0, MAX_PHOTOS - proofImages.length);
+    if (accepted.length > room) refused.push(`only ${MAX_PHOTOS} photos can be attached`);
+    const images = accepted.slice(0, room).map((file) => ({ file, preview: URL.createObjectURL(file) }));
+    setProofImages((currentImages) => [...currentImages, ...images]);
+    setCompletionError(refused.length ? `Not added: ${refused.join('; ')}.` : '');
   };
 
   const removeImage = (index) => {
     setProofImages((currentImages) => currentImages.filter((image, imageIndex) => imageIndex !== index));
   };
 
+  // A failure is shown where the person is: inside the job details dialog when it is open.
+  const reportError = (text) => {
+    if (selectedJob) setDialogError(text);
+    else setError(text);
+  };
+
   const handleStatusUpdate = async (jobId, newStatus) => {
+    setDialogError('');
     if (newStatus === 'in_progress' && activeJob && activeJob.id !== jobId) {
-      setError(`You already have an active job (${formatTicketId(activeJob.ticketId || activeJob.id)}). Please complete or hold it first.`);
-      setTimeout(() => setError(''), 5000);
+      reportError(`You already have an active job (${formatTicketId(activeJob.ticketId || activeJob.id)}). Put it on hold or finish it first.`);
       return;
     }
 
+    const job = jobs.find((entry) => entry.id === jobId);
+    const code = formatTicketId(job?.ticketId || jobId);
+    const resuming = job?.status === 'on_hold';
     try {
       setIsUpdatingStatus(true);
-      setActionMessage(`Updating job status to ${newStatus}...`);
+      setUpdatingJobId(jobId);
       const response = await updateJobStatus(jobId, newStatus, '', []);
-      if (response.error) {
-        setError(response.error);
-        setTimeout(() => setError(''), 5000);
+      if (response?.error) {
+        reportError(response.error);
         return;
       }
       await loadJobs();
-      setActionMessage(`Job status updated to ${newStatus}.`);
-      setTimeout(() => setActionMessage(''), 3000);
+      showSuccess(newStatus === 'in_progress' ? `${code} ${resuming ? 'resumed' : 'started'}. Work is now in progress.` : `${code} updated.`);
     } catch (statusError) {
-      setError(statusError.message || 'Unable to update job status.');
-      setTimeout(() => setError(''), 5000);
+      reportError(statusError.message || 'Unable to update job status.');
     } finally {
       setIsUpdatingStatus(false);
+      setUpdatingJobId(null);
     }
   };
 
   const handleHoldJob = async (jobId, reason) => {
     const trimmedReason = String(reason || '').trim();
+    setDialogError('');
     if (trimmedReason.length < 5) {
-      setError('Please give a reason for putting the job on hold.');
-      setTimeout(() => setError(''), 4000);
+      reportError('Give a reason of at least 5 characters for putting the job on hold.');
       return false;
     }
 
+    const job = jobs.find((entry) => entry.id === jobId);
     try {
       setIsUpdatingStatus(true);
+      setUpdatingJobId(jobId);
       await updateJobStatus(jobId, 'on_hold', trimmedReason);
       await loadJobs();
-      setActionMessage('Job put on hold. Resume it when you are ready to continue.');
-      setTimeout(() => setActionMessage(''), 4000);
+      showSuccess(`${formatTicketId(job?.ticketId || jobId)} is on hold. Resume it when you are ready to continue.`);
       return true;
     } catch (holdError) {
-      setError(holdError.message || 'Unable to put the job on hold.');
-      setTimeout(() => setError(''), 5000);
+      reportError(holdError.message || 'Unable to put the job on hold.');
       return false;
     } finally {
       setIsUpdatingStatus(false);
+      setUpdatingJobId(null);
     }
   };
 
@@ -185,24 +228,24 @@ export function useTechnicianJobs() {
       return;
     }
 
+    setCompletionError('');
     if (completionJob.assignmentRole === 'crew') {
-      setActionMessage('Only the lead technician can complete this job.');
+      setCompletionError('Only the lead technician can complete this job.');
       return;
     }
 
     if (!completionJob.checklistCompleted) {
-      setActionMessage('Complete and submit the job checklist before closing this job.');
+      setCompletionError('Complete and submit the job checklist before closing this job.');
       return;
     }
 
     if (completionJob.ticketType !== 'inspection' && proofImages.length === 0) {
-      setActionMessage('Please upload at least one proof image before completing the job.');
+      setCompletionError('Add at least one photo of the finished work before completing the job.');
       return;
     }
 
     try {
       setIsCompleting(true);
-      setActionMessage('Finishing job...');
       const inventoryUsage = (completionJob.inventoryReservations || [])
         .filter((reservation) => reservation.status === 'pending')
         .map((reservation) => ({
@@ -217,10 +260,9 @@ export function useTechnicianJobs() {
       setProofImages([]);
       setCompletionNotes('');
       setMaterialUsage({});
-      setActionMessage(`${formatTicketId(completionJob.ticketId || completionJob.id)} completed successfully.`);
-      setTimeout(() => setActionMessage(''), 4000);
+      showSuccess(`${formatTicketId(completionJob.ticketId || completionJob.id)} completed. It is now in Job History.`);
     } catch (completeError) {
-      setActionMessage(completeError.message || 'Unable to complete job.');
+      setCompletionError(completeError.message || 'Unable to complete job.');
     } finally {
       setIsCompleting(false);
     }
@@ -232,9 +274,9 @@ export function useTechnicianJobs() {
       return;
     }
 
+    setDialogError('');
     if (equipmentForm.itemIds.length === 0) {
-      setError('Please choose the equipment you need.');
-      setTimeout(() => setError(''), 4000);
+      reportError('Choose the equipment you need.');
       return;
     }
 
@@ -252,8 +294,7 @@ export function useTechnicianJobs() {
       (item) => !Number.isFinite(item.quantity) || item.quantity < 1 || item.quantity > item.availableQuantity
     );
     if (invalidItem) {
-      setError(`Enter a quantity between 1 and ${invalidItem.availableQuantity} for ${invalidItem.name}.`);
-      setTimeout(() => setError(''), 4000);
+      reportError(`Enter a quantity between 1 and ${invalidItem.availableQuantity} for ${invalidItem.name}.`);
       return;
     }
 
@@ -269,13 +310,11 @@ export function useTechnicianJobs() {
       setEquipmentDropdownOpen(false);
       await loadJobs();
       await loadInventoryItems();
-      setActionMessage(pausedJob
+      showSuccess(pausedJob
         ? 'Equipment requested and the job is on hold. Resume it when you are ready to continue.'
         : 'Equipment requested. You can keep working while the admin reviews it.');
-      setTimeout(() => setActionMessage(''), 4000);
     } catch (requestError) {
-      setError(requestError.message || 'Unable to request additional equipment.');
-      setTimeout(() => setError(''), 5000);
+      reportError(requestError.message || 'Unable to request additional equipment.');
     } finally {
       setEquipmentSubmitting(false);
     }
@@ -315,6 +354,14 @@ export function useTechnicianJobs() {
   return {
     activeJob,
     actionMessage,
+    setActionMessage,
+    setError,
+    dialogError,
+    setDialogError,
+    completionError,
+    setCompletionError,
+    loading,
+    updatingJobId,
     closeJobDetails,
     completionJob,
     completionNotes,

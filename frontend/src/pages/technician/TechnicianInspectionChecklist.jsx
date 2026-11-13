@@ -4,6 +4,7 @@ import { FiCheck, FiCheckSquare, FiImage, FiSend, FiTrash2 } from 'react-icons/f
 import Layout from '../../components/layout/Layout';
 import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
 import TechnicalDataSheetForm from '../../components/documents/TechnicalDataSheetForm';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import { fetchTechnicianJob, submitInspectionChecklist } from '../../api/technician';
 import { formatTicketId } from '../../utils/roleIds';
 
@@ -83,7 +84,18 @@ export default function TechnicianInspectionChecklist() {
   const [techNotes, setTechNotes] = useState('');
   const [photos, setPhotos] = useState([]);
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessageText] = useState('');
+  // The message colour is stated, not guessed from its words.
+  const [messageTone, setMessageTone] = useState('error');
+  const setMessage = (text, tone = 'error') => {
+    setMessageText(text);
+    setMessageTone(tone);
+  };
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  // Photos already on the ticket (a later step failed); a retry sends only the others.
+  const uploadedPhotosRef = useRef(new Set());
   const [fieldErrors, setFieldErrors] = useState({});
   const [activeTab, setActiveTab] = useState('inspection');
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -176,6 +188,21 @@ export default function TechnicianInspectionChecklist() {
     setServiceAnswers((previous) => ({ ...previous, [key]: { ...previous[key], notes } }));
     setFieldErrors((previous) => ({ ...previous, [`serviceNotes:${key}`]: '' }));
   };
+  // Thumbnails so the technician can see which photos are attached.
+  const photoPreviews = useMemo(() => photos.map((file) => URL.createObjectURL(file)), [photos]);
+  useEffect(() => () => photoPreviews.forEach((url) => URL.revokeObjectURL(url)), [photoPreviews]);
+
+  // Photos are not kept in the draft: warn before the page is closed while some are selected.
+  useEffect(() => {
+    if (!photos.length || submitted) return undefined;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [photos.length, submitted]);
+
   const photoSummary = useMemo(
     () => photos.length === 1 ? '1 site photo selected' : `${photos.length} site photos selected`,
     [photos.length],
@@ -257,19 +284,37 @@ export default function TechnicianInspectionChecklist() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = async () => {
+  // First check everything, then show a short review before the report is sent (it ends the visit).
+  const requestSubmit = () => {
     if (!ticketId || submitting) return;
     if (!validate()) {
       setMessage('Review the highlighted items before completing the inspection.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Go to the first item that needs attention, not the top of the page.
+      window.requestAnimationFrame(() => {
+        document.querySelector('[data-has-error="true"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
       return;
     }
+    setMessage('');
+    setReviewOpen(true);
+  };
+
+  const requestLeave = () => {
+    if (photos.length && !submitted) setLeaveOpen(true);
+    else navigate('/technician/my-jobs');
+  };
+
+  const handleSubmit = async () => {
+    if (!ticketId || submitting) return;
+    setReviewOpen(false);
     setSubmitting(true);
-    setMessage('Submitting inspection and site evidence...');
+    setMessage('Submitting inspection and site evidence…', 'info');
+    const pendingPhotos = photos.filter((photo) => !uploadedPhotosRef.current.has(photo));
     try {
       await submitInspectionChecklist(ticketId, {
         notes: techNotes.trim(),
-        photos,
+        photos: pendingPhotos,
+        onPhotosUploaded: () => pendingPhotos.forEach((photo) => uploadedPhotosRef.current.add(photo)),
         siteAccessible,
         siteAccessibleNotes: siteAccessible ? '' : siteAccessibleNotes.trim(),
         electricalAdequate,
@@ -285,11 +330,14 @@ export default function TechnicianInspectionChecklist() {
         })),
       });
       localStorage.removeItem(draftKey(ticketId));
-      setMessage('Inspection submitted successfully.');
-      setTimeout(() => navigate('/technician/dashboard'), 1200);
+      setSubmitted(true);
+      setMessage('Inspection submitted. The office will review it and plan the work.', 'success');
+      setTimeout(() => navigate('/technician/dashboard'), 1500);
     } catch (submitError) {
       const errorMessage = submitError.message || 'Failed to submit inspection.';
       setMessage(errorMessage);
+      // The message sits above the form; bring it into view from the submit bar.
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       if (/photo|image|proof|file/i.test(errorMessage)) {
         setFieldErrors((previous) => ({ ...previous, photos: errorMessage }));
       }
@@ -318,6 +366,31 @@ export default function TechnicianInspectionChecklist() {
           <h2 className="flex items-center gap-2 text-xl font-semibold"><FiCheckSquare /> Inspection Already Completed</h2>
           <p className="mt-2 text-sm">The inspection checklist for this job has already been submitted.</p>
           <Link to="/technician/dashboard" className="mt-4 inline-block rounded-lg bg-green-700 px-4 py-2 font-medium text-white hover:bg-green-800">Back to Dashboard</Link>
+        </div>
+      </Layout>
+    );
+  }
+
+  // A service visit is reported on the work checklist, not here.
+  if (job?.ticketType && job.ticketType !== 'inspection') {
+    return (
+      <Layout>
+        <div className="max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 text-slate-800">
+          <h2 className="flex items-center gap-2 text-xl font-semibold"><FiCheckSquare /> This is a service job</h2>
+          <p className="mt-2 text-sm">Service work is reported on the work checklist, not the site inspection form.</p>
+          <Link to={`/technician/checklist?ticketId=${ticketId}`} className="mt-4 inline-block rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700">Open Work Checklist</Link>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (job?.status === 'on_hold') {
+    return (
+      <Layout>
+        <div className="max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+          <h2 className="flex items-center gap-2 text-xl font-semibold"><FiCheckSquare /> This inspection is on hold</h2>
+          <p className="mt-2 text-sm">Resume the job from My Jobs before you file the inspection report.</p>
+          <Link to={`/technician/my-jobs?ticketId=${ticketId}`} className="mt-4 inline-block rounded-lg bg-amber-600 px-4 py-2 font-medium text-white hover:bg-amber-700">Open Job in My Jobs</Link>
         </div>
       </Layout>
     );
@@ -374,8 +447,8 @@ export default function TechnicianInspectionChecklist() {
         </div>
 
         <div className="mb-6 flex gap-4 overflow-x-auto border-b border-slate-200">
-          <button type="button" onClick={() => setActiveTab('inspection')} className={`whitespace-nowrap px-1 pb-3 text-sm font-medium ${activeTab === 'inspection' ? 'border-b-2 border-purple-500 text-purple-700' : 'text-slate-500'}`}>Site Inspection</button>
-          <button type="button" onClick={() => setActiveTab('tds')} className={`whitespace-nowrap px-1 pb-3 text-sm font-medium ${activeTab === 'tds' ? 'border-b-2 border-purple-500 text-purple-700' : 'text-slate-500'}`}>TDS / Assessment</button>
+          <button type="button" aria-pressed={activeTab === 'inspection'} onClick={() => setActiveTab('inspection')} className={`whitespace-nowrap px-1 pb-3 text-sm font-medium ${activeTab === 'inspection' ? 'border-b-2 border-purple-500 text-purple-700' : 'text-slate-500'}`}>Site Inspection</button>
+          <button type="button" aria-pressed={activeTab === 'tds'} onClick={() => setActiveTab('tds')} className={`whitespace-nowrap px-1 pb-3 text-sm font-medium ${activeTab === 'tds' ? 'border-b-2 border-purple-500 text-purple-700' : 'text-slate-500'}`}>TDS / Assessment</button>
         </div>
 
         {activeTab === 'tds' ? <TechnicalDataSheetForm ticketId={ticketId} userRole="technician" /> : (
@@ -385,12 +458,12 @@ export default function TechnicianInspectionChecklist() {
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-purple-600 transition-all" style={{ width: `${completionPercent}%` }} /></div>
             </div>
 
-            {message && <div role="alert" className={`mb-6 rounded-xl border p-4 text-sm font-medium ${message.includes('successfully') ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>{message}</div>}
+            {message && <div role={messageTone === 'error' ? 'alert' : 'status'} className={`mb-6 rounded-xl border p-4 text-sm font-medium ${messageTone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : messageTone === 'info' ? 'border-blue-200 bg-blue-50 text-blue-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`}>{message}</div>}
 
             <section className="space-y-4" aria-labelledby="assessment-heading">
               <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">1. Site checks</p><h3 id="assessment-heading" className="mt-1 text-xl font-semibold text-slate-900">Answer every check</h3><p className="mt-1 text-sm text-slate-600">Nothing is preselected. A “No” answer needs a short field note.</p></div>
               {questions.map((question, index) => (
-                <div key={question.key} className={`rounded-2xl border bg-white p-4 shadow-sm sm:p-5 ${fieldErrors[question.key] || fieldErrors[question.notesKey] ? 'border-rose-300' : 'border-slate-200'}`}>
+                <div key={question.key} data-has-error={Boolean(fieldErrors[question.key] || fieldErrors[question.notesKey])} className={`rounded-2xl border bg-white p-4 shadow-sm sm:p-5 ${fieldErrors[question.key] || fieldErrors[question.notesKey] ? 'border-rose-300' : 'border-slate-200'}`}>
                   <div className="grid gap-4 sm:grid-cols-[1fr_190px] sm:items-center">
                     <div><p className="font-semibold text-slate-900">{index + 1}. {question.label}</p><p className="mt-1 text-sm leading-5 text-slate-500">{question.hint}</p></div>
                     <AnswerButtons value={question.value} onChange={(value) => chooseAnswer(question.key, value)} label={question.label} />
@@ -398,8 +471,8 @@ export default function TechnicianInspectionChecklist() {
                   {fieldErrors[question.key] && <p className="mt-2 text-sm font-medium text-rose-700">{fieldErrors[question.key]}</p>}
                   {question.value === false && (
                     <div className="mt-4">
-                      <label className="mb-2 block text-sm font-semibold text-rose-900">Required explanation</label>
-                      <textarea value={question.notes} onChange={(event) => { question.setNotes(event.target.value); setFieldErrors((previous) => ({ ...previous, [question.notesKey]: '' })); }} rows={3} placeholder={question.placeholder} className={`w-full rounded-xl border bg-rose-50 p-3 text-sm text-rose-950 focus:outline-none focus:ring-2 focus:ring-rose-300 ${fieldErrors[question.notesKey] ? 'border-rose-500' : 'border-rose-200'}`} />
+                      <label className="mb-2 block text-sm font-semibold text-rose-900" htmlFor={`site-notes-${question.key}`}>Required explanation</label>
+                      <textarea id={`site-notes-${question.key}`} value={question.notes} onChange={(event) => { question.setNotes(event.target.value); setFieldErrors((previous) => ({ ...previous, [question.notesKey]: '' })); }} rows={3} placeholder={question.placeholder} className={`w-full rounded-xl border bg-rose-50 p-3 text-sm text-rose-950 focus:outline-none focus:ring-2 focus:ring-rose-300 ${fieldErrors[question.notesKey] ? 'border-rose-500' : 'border-rose-200'}`} />
                       {fieldErrors[question.notesKey] && <p className="mt-2 text-sm font-medium text-rose-700">{fieldErrors[question.notesKey]}</p>}
                     </div>
                   )}
@@ -415,7 +488,7 @@ export default function TechnicianInspectionChecklist() {
                   const answerError = fieldErrors[`service:${check.key}`];
                   const notesError = fieldErrors[`serviceNotes:${check.key}`];
                   return (
-                    <div key={check.key} className={`rounded-2xl border bg-white p-4 shadow-sm sm:p-5 ${answerError || notesError ? 'border-rose-300' : 'border-slate-200'}`}>
+                    <div key={check.key} data-has-error={Boolean(answerError || notesError)} className={`rounded-2xl border bg-white p-4 shadow-sm sm:p-5 ${answerError || notesError ? 'border-rose-300' : 'border-slate-200'}`}>
                       <div className="grid gap-4 sm:grid-cols-[1fr_190px] sm:items-center">
                         <div>
                           <p className="text-xs font-semibold text-purple-700">{check.serviceName}</p>
@@ -438,7 +511,7 @@ export default function TechnicianInspectionChecklist() {
               </section>
             )}
 
-            <section className="mt-8" aria-labelledby="recommendation-heading">
+            <section className="mt-8" aria-labelledby="recommendation-heading" data-has-error={Boolean(fieldErrors.recommendation)}>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{serviceChecks.length > 0 ? 3 : 2}. Decision</p><h3 id="recommendation-heading" className="mt-1 text-xl font-semibold text-slate-900">Overall recommendation</h3>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {RECOMMENDATIONS.map((option) => (
@@ -450,7 +523,7 @@ export default function TechnicianInspectionChecklist() {
               {fieldErrors.recommendation && <p className="mt-2 text-sm font-medium text-rose-700">{fieldErrors.recommendation}</p>}
             </section>
 
-            <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="evidence-heading">
+            <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="evidence-heading" data-has-error={Boolean(fieldErrors.photos)}>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{serviceChecks.length > 0 ? 4 : 3}. Findings and evidence</p><h3 id="evidence-heading" className="mt-1 text-xl font-semibold text-slate-900">Record what the next team needs</h3>
               <label className="mt-5 block text-sm font-semibold text-slate-800" htmlFor="inspection-notes">Inspection notes</label>
               <textarea id="inspection-notes" value={techNotes} onChange={(event) => setTechNotes(event.target.value)} rows={5} className="mt-2 w-full rounded-xl border border-slate-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" placeholder="Describe site conditions, measurements, obstacles, and special requirements..." />
@@ -460,19 +533,51 @@ export default function TechnicianInspectionChecklist() {
               </div>
               {fieldErrors.photos && <p className="mt-2 text-sm font-medium text-rose-700">{fieldErrors.photos}</p>}
               {photos.length > 0 && <div className="mt-4 space-y-2">{photos.map((photo, index) => (
-                <div key={`${photo.name}-${photo.lastModified}-${index}`} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5 text-sm ring-1 ring-slate-200"><span className="min-w-0 truncate text-slate-700">{photo.name}</span><button type="button" aria-label={`Remove ${photo.name}`} onClick={() => setPhotos((previous) => previous.filter((_, photoIndex) => photoIndex !== index))} className="shrink-0 rounded-lg p-2 text-rose-600 hover:bg-rose-50"><FiTrash2 /></button></div>
+                <div key={`${photo.name}-${photo.lastModified}-${index}`} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-2 py-2 text-sm ring-1 ring-slate-200"><span className="flex min-w-0 items-center gap-2"><img src={photoPreviews[index]} alt={`Site photo ${index + 1}`} className="h-12 w-12 shrink-0 rounded-lg object-cover" /><span className="min-w-0 truncate text-slate-700">{photo.name}</span></span><button type="button" aria-label={`Remove ${photo.name}`} onClick={() => setPhotos((previous) => previous.filter((_, photoIndex) => photoIndex !== index))} className="shrink-0 rounded-lg p-2 text-rose-600 hover:bg-rose-50"><FiTrash2 /></button></div>
               ))}</div>}
             </section>
 
             <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur sm:static sm:mt-8 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
               <div className="mx-auto flex max-w-3xl gap-3">
-                <Link to="/technician/my-jobs" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 font-semibold text-slate-700 hover:bg-slate-50">Dismiss</Link>
-                <button type="button" onClick={handleSubmit} disabled={submitting} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"><FiSend /> {submitting ? 'Submitting inspection...' : 'Review and complete inspection'}</button>
+                <button type="button" onClick={requestLeave} className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 font-semibold text-slate-700 hover:bg-slate-50">Back</button>
+                <button type="button" onClick={requestSubmit} disabled={submitting || submitted} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"><FiSend /> {submitting ? 'Submitting inspection...' : 'Review and complete inspection'}</button>
               </div>
             </div>
           </>
         )}
       </div>
+
+      {reviewOpen ? (
+        <ConfirmationDialog
+          title="Complete the inspection?"
+          message="This sends the report to the office and ends the inspection visit."
+          tone="brand"
+          icon="info"
+          confirmLabel="Complete inspection"
+          cancelLabel="Keep editing"
+          onCancel={() => setReviewOpen(false)}
+          onConfirm={handleSubmit}
+        >
+          <ul className="space-y-1 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+            <li><span className="font-semibold">Recommendation:</span> {RECOMMENDATIONS.find((option) => option.value === recommendation)?.label}</li>
+            <li><span className="font-semibold">Checks answered “No”:</span> {[siteAccessible, electricalAdequate, safetyEquipment].filter((value) => value === false).length + serviceChecks.filter((check) => serviceAnswers[check.key]?.answer === false).length} of {3 + serviceChecks.length}</li>
+            <li><span className="font-semibold">Site photos:</span> {photos.length}</li>
+          </ul>
+        </ConfirmationDialog>
+      ) : null}
+
+      {leaveOpen ? (
+        <ConfirmationDialog
+          title="Leave the inspection?"
+          message="Your answers stay saved on this device, but the selected site photos will be removed. Attach them again when you come back."
+          tone="warning"
+          icon="warning"
+          confirmLabel="Leave"
+          cancelLabel="Stay"
+          onCancel={() => setLeaveOpen(false)}
+          onConfirm={() => { setLeaveOpen(false); setPhotos([]); navigate('/technician/my-jobs'); }}
+        />
+      ) : null}
     </Layout>
   );
 }

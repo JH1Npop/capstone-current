@@ -45,6 +45,19 @@ def notification_channels():
         return True, True
 
 
+def in_app_notifications_enabled():
+    """Admin Settings: the Notifications switch and the In-app Alerts switch are both on."""
+    return notification_channels()[0]
+
+
+def email_notifications_enabled():
+    """Admin Settings: the Notifications switch and the Email Alerts switch are both on.
+
+    Account emails (verification, password reset) are not alerts and do not use this switch.
+    """
+    return notification_channels()[1]
+
+
 def create_in_app_notification(*, user, title, body, notification_type='info', ticket=None, request=None):
     from .models import Notification
 

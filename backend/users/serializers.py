@@ -405,13 +405,43 @@ class ActivityLogSerializer(serializers.ModelSerializer):
     def get_field_name(self, obj):
         return (obj.metadata or {}).get('field_name', '')
 
-    def get_old_value(self, obj):
+    # Columns that hold a user id. The list shows who it was, with the same id style the app uses
+    # elsewhere (SA-0001, ADM-0002, TECH-0004, CL-0005), so it is clear whether it was the owner or an admin.
+    USER_ID_FIELDS = {
+        'technician_id', 'assigned_admin_id', 'client_id', 'assigned_to_id', 'updated_by_id', 'reopened_by_id',
+        'confirmed_by_id', 'voided_by_id', 'performed_by_id', 'generated_by_id', 'finalized_by_id',
+        'prepared_by_id', 'reviewed_by_id',
+    }
+    ROLE_ID_PREFIXES = {'superadmin': 'SA', 'admin': 'ADM', 'technician': 'TECH', 'client': 'CL'}
+
+    def _person_label(self, raw_value, display_value):
+        try:
+            user_id = int(raw_value)
+        except (TypeError, ValueError):
+            return display_value
+        cache = self.context.setdefault('_user_cache', {})
+        if user_id not in cache:
+            cache[user_id] = User.objects.filter(pk=user_id).only('id', 'role', 'first_name', 'last_name', 'username').first()
+        user = cache[user_id]
+        if not user:
+            return display_value
+        code = f"{self.ROLE_ID_PREFIXES.get(user.role, 'USR')}-{user.pk:04d}"
+        name = user.get_full_name().strip() or user.username
+        return f'{name} ({code})'
+
+    def _field_value(self, obj, side):
         metadata = obj.metadata or {}
-        return metadata.get('old_display_value', metadata.get('old_value'))
+        raw = metadata.get(f'{side}_value')
+        display = metadata.get(f'{side}_display_value', raw)
+        if str(metadata.get('field_name') or '') in self.USER_ID_FIELDS and raw not in (None, '', 'None'):
+            return self._person_label(raw, display)
+        return display
+
+    def get_old_value(self, obj):
+        return self._field_value(obj, 'old')
 
     def get_new_value(self, obj):
-        metadata = obj.metadata or {}
-        return metadata.get('new_display_value', metadata.get('new_value'))
+        return self._field_value(obj, 'new')
 
     def get_service_context(self, obj):
         target_model = str(obj.target_model or '').lower()
@@ -696,6 +726,26 @@ class SelfUserUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('This email address is already waiting for verification.')
         return normalized_email
     company_name = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
+    # Names print on quotations and purchase records and the phone is how technicians reach the
+    # customer, so a value already on the account cannot be saved blank.
+    KEEP_FILLED = {
+        'first_name': 'Enter your first name.',
+        'last_name': 'Enter your last name.',
+        'phone': 'Enter your mobile number.',
+    }
+
+    def validate(self, attrs):
+        errors = {
+            field: message
+            for field, message in self.KEEP_FILLED.items()
+            if field in attrs
+            and not str(attrs[field] or '').strip()
+            and str(getattr(self.instance, field, '') or '').strip()
+        }
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
     class Meta:
         model = User

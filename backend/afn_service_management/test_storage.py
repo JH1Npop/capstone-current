@@ -51,3 +51,21 @@ class AFNMediaCloudinaryStorageTests(SimpleTestCase):
     def test_routes_images_and_video_to_their_cloudinary_resource_types(self):
         self.assertEqual(self.storage._get_resource_type('proof.JPG'), 'image')
         self.assertEqual(self.storage._get_resource_type('recording.mp4'), 'video')
+
+    def test_routes_extensionless_profile_public_ids_to_image_storage(self):
+        self.assertEqual(
+            self.storage._get_resource_type('media/profiles/ITPS415-Aviles-Emmanuel_mx3pnk'),
+            'image',
+        )
+        self.assertEqual(self.storage._get_resource_type('other/extensionless-file'), 'raw')
+
+    @patch('afn_service_management.storage.cloudinary.utils.cloudinary_url')
+    def test_extensionless_profile_url_uses_cloudinary_image_delivery(self, cloudinary_url):
+        cloudinary_url.return_value = ('https://example.test/profile', {})
+
+        self.assertEqual(
+            self.storage._get_url('profiles/ITPS415-Aviles-Emmanuel_mx3pnk'),
+            'https://example.test/profile',
+        )
+        self.assertEqual(cloudinary_url.call_args.kwargs['resource_type'], 'image')
+        self.assertEqual(cloudinary_url.call_args.kwargs['type'], 'upload')

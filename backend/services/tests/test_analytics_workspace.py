@@ -332,7 +332,8 @@ class AnalyticsWorkspaceTests(APITestCase):
     def test_workspace_query_counts_are_bounded(self):
         moment = timezone.now()
         self.create_ticket(moment=moment, technician=self.tech)
-        ceilings = {'technicians': 20, 'demand': 28, 'sales': 25, 'inventory': 32, 'after_sales': 40, 'forecasting': 12}
+        # Sales has one fixed extra query for deposits kept after a cancelled job (2026-11-09).
+        ceilings = {'technicians': 20, 'demand': 28, 'sales': 26, 'inventory': 32, 'after_sales': 40, 'forecasting': 12}
         for workspace, ceiling in ceilings.items():
             with self.subTest(workspace=workspace):
                 with CaptureQueriesContext(connection) as queries:
@@ -369,4 +370,5 @@ class AnalyticsWorkspaceTests(APITestCase):
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(self.url, {'days': 30})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertLessEqual(len(queries), 20)
+        # Long-job SLA evaluation adds one live settings read and one bounded history prefetch.
+        self.assertLessEqual(len(queries), 22)

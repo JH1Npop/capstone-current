@@ -5,7 +5,9 @@ from ._imports import *  # noqa: F403,F405
 
 class SLAEvaluationTests(TestCase):
     def setUp(self):
-        self.now = timezone.make_aware(datetime(2026, 3, 22, 10, 0, 0))
+        # 10:00 business time (UTC+8): appointment dates and times are local, like the real data.
+        from services.business_time import business_timezone
+        self.now = datetime(2026, 3, 22, 10, 0, 0, tzinfo=business_timezone())
         self.client_user = User.objects.create_user(
             username='sla-client',
             password='pass',
@@ -107,13 +109,18 @@ class SLAEvaluationTests(TestCase):
         self.assertEqual(evaluation['action_required'], 'Start work')
 
     def test_in_progress_ticket_uses_execution_delay_rule(self):
+        # Tuesday 24 March 2026, 12:00 in the business timezone (UTC+8); work started at 09:20.
+        # The 60-minute job may run 90 more minutes before a warning and 120 before overdue,
+        # counted in working time: 160 working minutes have passed, so it is a warning, 20 to go.
+        from datetime import timezone as dt_timezone
+        now = datetime(2026, 3, 24, 4, 0, 0, tzinfo=dt_timezone.utc)
         self._update_ticket(
             status='In Progress',
-            start_time=self.now - timedelta(minutes=100),
+            start_time=now - timedelta(minutes=160),
             technician=self.technician_user,
         )
 
-        evaluation = evaluate_service_ticket_sla(self.ticket, now=self.now)
+        evaluation = evaluate_service_ticket_sla(self.ticket, now=now)
 
         self.assertEqual(evaluation['rule'], 'execution_delay')
         self.assertEqual(evaluation['state'], 'warning')

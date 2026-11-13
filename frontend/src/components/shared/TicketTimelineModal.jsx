@@ -93,13 +93,28 @@ export default function TicketTimelineModal({ ticket, events = [], loading = fal
                   )}
                   <article className="rounded-3xl border border-surface-200 bg-white p-4 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <StatusBadge status={event.status} size="sm" />
+                      {event.kind === 'progress' ? (
+                        <span className="inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-200">
+                          Progress update{event.percent !== null && event.percent !== undefined ? ` · ${event.percent}% done` : ''}
+                        </span>
+                      ) : (
+                        <StatusBadge status={event.status} size="sm" />
+                      )}
                       <span className="text-xs font-medium text-slate-500">{formatTimelineDate(event.timestamp)}</span>
                     </div>
                     <p className="mt-3 text-sm font-semibold text-slate-900">{event.actor}</p>
                     {event.notes && (
                       <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-600">{event.notes}</p>
                     )}
+                    {event.kind === 'progress' && event.photos?.length ? (
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        {event.photos.map((url, photoIndex) => (
+                          <a key={url} href={url} target="_blank" rel="noopener noreferrer" aria-label={`Open progress photo ${photoIndex + 1}`} className="block aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                            <img src={url} alt={`Progress photo ${photoIndex + 1}`} className="h-full w-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
                   </article>
                 </li>
               ))}

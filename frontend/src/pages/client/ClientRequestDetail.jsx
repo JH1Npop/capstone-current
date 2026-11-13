@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton, PanelSkeleton } from '../../components/ui/LoadingSkeleton';
 import StatusBadge from '../../components/ui/StatusBadge';
 import TicketTimelineModal from '../../components/shared/TicketTimelineModal';
-import { FiArrowLeft, FiClock, FiImage, FiStar, FiX } from 'react-icons/fi';
-import { api, fetchRequestDetail, fetchTicketTimeline, requestTicketReschedule, submitRequestRating } from '../../api/api';
+import { FiArrowLeft, FiClock, FiImage, FiShoppingBag, FiStar, FiX } from 'react-icons/fi';
+import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
+import { api, canClientDismissRequest, cancelServiceRequest, fetchRequestDetail, fetchSalesRecords, fetchTicketTimeline, requestTicketReschedule, submitRequestRating } from '../../api/api';
 import { getLocalDateInputValue } from '../../utils/date';
 import { clientTechnicianDisplayString } from '../../utils/clientTechnicianDisplay';
 import { formatRequestId, formatTicketId } from '../../utils/roleIds';
@@ -38,6 +39,7 @@ export default function ClientRequestDetail() {
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTimeSlot, setRescheduleTimeSlot] = useState('');
   const [rescheduleReason, setRescheduleReason] = useState('');
+  const [rescheduleError, setRescheduleError] = useState('');
   const [proofImages, setProofImages] = useState([]);
   const [loadingProofImages, setLoadingProofImages] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -46,6 +48,11 @@ export default function ClientRequestDetail() {
   const [timelineEvents, setTimelineEvents] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineError, setTimelineError] = useState('');
+  const [purchaseRecord, setPurchaseRecord] = useState(null);
+  const [dismissOpen, setDismissOpen] = useState(false);
+  const [dismissReason, setDismissReason] = useState('');
+  const [dismissError, setDismissError] = useState('');
+  const [dismissing, setDismissing] = useState(false);
   const entityType = searchParams.get('entity') || 'request';
 
   useEffect(() => {
@@ -73,8 +80,10 @@ export default function ClientRequestDetail() {
     }
   }, [selectedImage]);
 
-  const loadRequest = async () => {
-    setLoading(true);
+  // Reloads after an action keep the page on screen (no skeleton), so messages and the
+  // quotation/handover panel stay where the client is looking.
+  const loadRequest = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const data = await fetchRequestDetail(requestId, { entityType });
       setRequest(data);
@@ -86,13 +95,19 @@ export default function ClientRequestDetail() {
       if (!rescheduleFormOpenRef.current) {
         setRescheduleDate(data.preferred_date || data.scheduled_date || '');
         setRescheduleTimeSlot(data.preferred_time_slot || data.scheduled_time_slot || '');
-        setRescheduleReason(data.reschedule_reason || data.scheduling_notes || '');
+        setRescheduleReason('');
       }
       setError(null);
 
       // Load proof images if ticket is completed
       if (data.status === 'completed' && data.ticket_id) {
         loadProofImages(data.ticket_id);
+        // A confirmed purchase record for this job, if the office has made one.
+        fetchSalesRecords()
+          .then((rows) => setPurchaseRecord(rows.find((row) => Number(row.ticket) === Number(data.ticket_id)) || null))
+          .catch(() => setPurchaseRecord(null));
+      } else {
+        setPurchaseRecord(null);
       }
     } catch (err) {
       setError(err.message || 'Failed to load request details');
@@ -123,14 +138,13 @@ export default function ClientRequestDetail() {
       return;
     }
 
+    // Problems are shown inside the form, next to the fields (the page notice is off screen on a phone).
     if (!rescheduleDate || !rescheduleTimeSlot || !rescheduleReason.trim()) {
-      setNotice({
-        tone: 'warning',
-        message: 'Please choose a date, time slot, and reason for the schedule change.'
-      });
+      setRescheduleError('Please choose a date, time window, and reason for the schedule change.');
       return;
     }
 
+    setRescheduleError('');
     setRescheduleSubmitting(true);
     try {
       await requestTicketReschedule(request.ticket_id, {
@@ -139,13 +153,10 @@ export default function ClientRequestDetail() {
         reason: rescheduleReason.trim()
       });
       setShowRescheduleForm(false);
-      setNotice({ tone: 'success', message: 'Schedule change request sent.' });
-      await loadRequest();
+      setNotice({ tone: 'success', message: 'Schedule change request sent. The office will confirm the new date.' });
+      await loadRequest({ silent: true });
     } catch (err) {
-      setNotice({
-        tone: 'error',
-        message: `Failed to request reschedule: ${err.message}`
-      });
+      setRescheduleError(err.message || 'Could not send the schedule change request.');
     } finally {
       setRescheduleSubmitting(false);
     }
@@ -174,9 +185,8 @@ export default function ClientRequestDetail() {
       });
       setRatingSubmitted(true);
       setShowRatingForm(false);
-      setNotice({ tone: 'success', message: 'Thank you. Your rating was submitted.' });
-      // Reload to show updated data
-      await loadRequest();
+      setNotice({ tone: 'success', message: ratingSubmitted ? 'Your rating was updated.' : 'Thank you. Your rating was submitted.' });
+      await loadRequest({ silent: true });
     } catch (err) {
       setNotice({
         tone: 'error',
@@ -204,6 +214,26 @@ export default function ClientRequestDetail() {
     }
   };
 
+  const confirmDismiss = async () => {
+    if (!dismissReason.trim()) {
+      setDismissError('Please give a short reason so the office knows why.');
+      return;
+    }
+    setDismissing(true);
+    setDismissError('');
+    try {
+      await cancelServiceRequest(request.request_id || request.id, dismissReason.trim());
+      setDismissOpen(false);
+      setDismissReason('');
+      setNotice({ tone: 'success', message: `${formatRequestId(request.request_id || request.id)} was dismissed. The office has been told.` });
+      await loadRequest({ silent: true });
+    } catch (err) {
+      setDismissError(err.message || 'Failed to dismiss request');
+    } finally {
+      setDismissing(false);
+    }
+  };
+
   const getPriorityColor = (priority) => {
     const colors = {
       low: 'text-blue-600 bg-blue-50',
@@ -226,13 +256,14 @@ export default function ClientRequestDetail() {
     });
   };
 
-  const formatTime = (dateString) => {
-    if (!dateString) return 'TBD';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  // Calendar dates (visit, preferred, warranty end) have no time of day: show the date only,
+  // read as a local date so it never shifts by a day.
+  const formatDay = (value) => {
+    if (!value) return 'N/A';
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   const formatTimeSlot = (value) => TIME_SLOT_LABELS[value] || value || 'No specific window';
@@ -262,6 +293,13 @@ export default function ClientRequestDetail() {
   }
 
   const isCompleted = request.status === 'completed';
+  const canDismiss = canClientDismissRequest(request);
+  const showPriorityBadge = request.priority && String(request.priority).toLowerCase() !== 'normal';
+  const closeRatingForm = () => {
+    setShowRatingForm(false);
+    setRating(request.client_rating || 0);
+    setFeedback(request.client_feedback || '');
+  };
   const normalizedRequestStatus = String(request.status || '').toLowerCase().replace(/\s+/g, '_');
   const canRequestReschedule = Boolean(request.ticket_id) && !['in_progress', 'completed', 'cancelled'].includes(normalizedRequestStatus);
   const technicianLabel = clientTechnicianDisplayString(request);
@@ -275,7 +313,7 @@ export default function ClientRequestDetail() {
     <Layout>
       <div className="space-y-5 pb-8">
         {notice && (
-          <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${noticeClassName}`}>
+          <div role={notice.tone === 'error' ? 'alert' : 'status'} className={`rounded-xl border px-4 py-3 text-sm font-medium ${noticeClassName}`}>
             {notice.message}
           </div>
         )}
@@ -283,20 +321,19 @@ export default function ClientRequestDetail() {
         <div className="flex items-start gap-3">
           <button
             onClick={() => navigate('/client/requests')}
-            className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
-            title="Back to requests"
+            type="button"
+            aria-label="Back to My Requests"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+            title="Back to My Requests"
           >
-            <FiArrowLeft className="w-5 h-5" />
+            <FiArrowLeft className="w-5 h-5" aria-hidden="true" />
           </button>
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold text-slate-900">
+              <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">
                 Service Request {formatRequestId(request.request_id || request.id)}
               </h1>
               <StatusBadge status={request.rejected ? 'rejected' : request.status} size="lg" />
-              <span className="rounded-full bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">
-                {request.request_source_label}
-              </span>
             </div>
             <p className="text-slate-600">
               {request.service_type_name || request.service_type}
@@ -309,7 +346,7 @@ export default function ClientRequestDetail() {
           </div>
         </div>
 
-        {request.ticket_id ? <ClientJobDecisions ticketId={request.ticket_id} onChanged={loadRequest} /> : null}
+        {request.ticket_id ? <ClientJobDecisions ticketId={request.ticket_id} jobCancelled={normalizedRequestStatus === 'cancelled'} onChanged={() => loadRequest({ silent: true })} /> : null}
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-4 md:grid-cols-3">
@@ -317,7 +354,7 @@ export default function ClientRequestDetail() {
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Status</p>
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={request.rejected ? 'rejected' : request.status} size="lg" />
-                <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${
+                {showPriorityBadge && <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${
                   request.priority?.toLowerCase() === 'urgent'
                     ? 'bg-red-100 text-red-700'
                     : request.priority?.toLowerCase() === 'high'
@@ -327,7 +364,7 @@ export default function ClientRequestDetail() {
                     : 'bg-yellow-100 text-yellow-700'
                 }`}>
                   {request.priority?.toUpperCase()} PRIORITY
-                </span>
+                </span>}
               </div>
               {request.operational_status && request.operational_status !== request.status && (
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600">
@@ -378,9 +415,9 @@ export default function ClientRequestDetail() {
                   <button
                     onClick={openTimeline}
                     type="button"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-brand-600"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-brand-600"
                   >
-                    <FiClock className="h-3.5 w-3.5 text-brand-500" />
+                    <FiClock className="h-4 w-4 text-brand-500" aria-hidden="true" />
                     View Timeline
                   </button>
                 )}
@@ -391,7 +428,7 @@ export default function ClientRequestDetail() {
                   <FiClock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
                   <span>
                     <strong className="font-semibold">{request.sla.label}</strong>
-                    {request.sla.due_at && ` • Due: ${formatDate(request.sla.due_at)}`}
+                    {request.sla.due_at && ` • Due ${formatDate(request.sla.due_at)}`}
                   </span>
                 </div>
               )}
@@ -436,7 +473,7 @@ export default function ClientRequestDetail() {
               </div>
               <div>
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Scheduled Date</p>
-                <p className="text-sm text-slate-800">{request.scheduled_date ? formatDate(request.scheduled_date) : 'Not scheduled'}</p>
+                <p className="text-sm text-slate-800">{request.scheduled_date ? formatDay(request.scheduled_date) : 'Not scheduled'}</p>
               </div>
               <div>
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Time Window</p>
@@ -446,7 +483,7 @@ export default function ClientRequestDetail() {
                 <div>
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Preferred Appointment</p>
                   <p className="text-sm text-slate-800">
-                    {request.preferred_date ? formatDate(request.preferred_date) : 'No date selected'}
+                    {request.preferred_date ? formatDay(request.preferred_date) : 'No date selected'}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">{formatTimeSlot(request.preferred_time_slot)}</p>
                 </div>
@@ -454,13 +491,13 @@ export default function ClientRequestDetail() {
               {request.start_time && (
                 <div>
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Started</p>
-                  <p className="text-sm text-slate-800">{formatTime(request.start_time)}</p>
+                  <p className="text-sm text-slate-800">{formatDate(request.start_time)}</p>
                 </div>
               )}
               {request.end_time && (
                 <div>
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Ended</p>
-                  <p className="text-sm text-slate-800">{formatTime(request.end_time)}</p>
+                  <p className="text-sm text-slate-800">{formatDate(request.end_time)}</p>
                 </div>
               )}
               {request.completed_date && (
@@ -473,7 +510,7 @@ export default function ClientRequestDetail() {
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Warranty</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={request.warranty_status} size="sm" />
-                  {request.warranty_end_date && <span className="text-xs text-slate-500">Ends {formatDate(request.warranty_end_date)}</span>}
+                  {request.warranty_end_date && <span className="text-xs text-slate-500">Ends {formatDay(request.warranty_end_date)}</span>}
                 </div>
                 {request.warranty_notes && <p className="mt-1 text-xs text-slate-500">{request.warranty_notes}</p>}
               </div>
@@ -484,21 +521,32 @@ export default function ClientRequestDetail() {
                 </div>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 px-5 py-4">
-              {request.ticket_id ? (
-                <button
-                  type="button"
-                  onClick={openTimeline}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  <FiClock size={16} /> View Ticket Timeline
-                </button>
-              ) : (
-                <span className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-                  This request is still waiting for a linked service ticket.
-                </span>
-              )}
-            </div>
+            {(!request.ticket_id && request.status === 'pending') || purchaseRecord || canDismiss ? (
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 px-5 py-4">
+                {!request.ticket_id && request.status === 'pending' ? (
+                  <span className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                    Our office is reviewing this request. You will be notified once it is approved.
+                  </span>
+                ) : null}
+                {purchaseRecord ? (
+                  <Link
+                    to={`/client/purchase-records?ticketId=${request.ticket_id}`}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <FiShoppingBag size={16} aria-hidden="true" /> View purchase record {purchaseRecord.record_number}
+                  </Link>
+                ) : null}
+                {canDismiss ? (
+                  <button
+                    type="button"
+                    onClick={() => { setDismissOpen(true); setDismissReason(''); setDismissError(''); }}
+                    className="ml-auto inline-flex min-h-11 items-center rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                  >
+                    Dismiss request
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
             {canRequestReschedule && (
@@ -506,13 +554,17 @@ export default function ClientRequestDetail() {
                 <h3 className="mb-4 text-base font-semibold text-slate-900">Schedule Changes</h3>
                 {request.reschedule_requested ? (
                   <div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                    <p className="font-medium">A schedule change request is already pending.</p>
-                    {request.reschedule_reason && <p className="mt-2">{request.reschedule_reason}</p>}
+                    <p className="font-medium">Your schedule change request is waiting for the office.</p>
+                    {request.preferred_date && (
+                      <p className="mt-2">Requested: {formatDay(request.preferred_date)}{request.preferred_time_slot ? `, ${formatTimeSlot(request.preferred_time_slot)}` : ''}</p>
+                    )}
+                    {request.reschedule_reason && <p className="mt-1">Reason: {request.reschedule_reason}</p>}
                   </div>
                 ) : !showRescheduleForm ? (
                   <button
+                    type="button"
                     onClick={() => setShowRescheduleForm(true)}
-                    className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    className="min-h-11 w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
                   >
                     Request Reschedule
                   </button>
@@ -520,21 +572,23 @@ export default function ClientRequestDetail() {
                   <div className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="block text-sm text-slate-600 mb-2">New Date</label>
+                        <label htmlFor="reschedule-date" className="block text-sm text-slate-600 mb-2">New Date</label>
                         <input
+                          id="reschedule-date"
                           type="date"
                           value={rescheduleDate}
                           min={getLocalDateInputValue()}
                           onChange={(e) => setRescheduleDate(e.target.value)}
-                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                          className="min-h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-base sm:text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm text-slate-600 mb-2">Time Window</label>
+                        <label htmlFor="reschedule-slot" className="block text-sm text-slate-600 mb-2">Time Window</label>
                         <select
+                          id="reschedule-slot"
                           value={rescheduleTimeSlot}
                           onChange={(e) => setRescheduleTimeSlot(e.target.value)}
-                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                          className="min-h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-base sm:text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
                         >
                           <option value="">Select time window</option>
                           {BOOKABLE_TIME_SLOT_OPTIONS.map(([value, label]) => (
@@ -545,28 +599,33 @@ export default function ClientRequestDetail() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm text-slate-600 mb-2">Reason</label>
+                      <label htmlFor="reschedule-reason" className="block text-sm text-slate-600 mb-2">Reason</label>
                       <textarea
+                        id="reschedule-reason"
                         value={rescheduleReason}
                         onChange={(e) => setRescheduleReason(e.target.value)}
                         rows="3"
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                        maxLength={500}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-base sm:text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
                         placeholder="Tell the team why you need another appointment window."
                       />
                     </div>
+                    {rescheduleError ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{rescheduleError}</p> : null}
                     <div className="flex gap-2">
                       <button
+                        type="button"
                         onClick={handleRequestReschedule}
                         disabled={rescheduleSubmitting}
-                        className="flex-1 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50"
+                        className="min-h-11 flex-1 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50"
                       >
                         {rescheduleSubmitting ? 'Submitting...' : 'Send Request'}
                       </button>
                       <button
-                        onClick={() => setShowRescheduleForm(false)}
-                        className="flex-1 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
+                        type="button"
+                        onClick={() => { setShowRescheduleForm(false); setRescheduleError(''); }}
+                        className="min-h-11 flex-1 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
                       >
-                        Dismiss
+                        Cancel
                       </button>
                     </div>
                   </div>
@@ -626,6 +685,7 @@ export default function ClientRequestDetail() {
                           key={idx}
                           type="button"
                           onClick={() => setSelectedImage(imageUrl)}
+                          aria-label={`Preview proof file ${idx + 1}`}
                           className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition hover:border-brand-300"
                         >
                           {imageUrl.toLowerCase().includes('.mp4') || imageUrl.toLowerCase().includes('.webm') ? (
@@ -663,28 +723,32 @@ export default function ClientRequestDetail() {
                 )}
 
                 {selectedImage && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-                    <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={() => setSelectedImage(null)}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="proof-preview-title" className="w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
                       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">Proof preview</h3>
+                          <h3 id="proof-preview-title" className="text-lg font-bold text-slate-900">Proof preview</h3>
                           <p className="text-sm text-slate-500">Completion media</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <a
                             href={selectedImage}
                             download
-                            className="rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex min-h-11 items-center rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600"
                           >
                             Download
                           </a>
                           <button
                             type="button"
                             onClick={() => setSelectedImage(null)}
-                            className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+                            autoFocus
+                            aria-label="Close preview"
+                            className="grid h-11 w-11 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
                             title="Close"
                           >
-                            <FiX size={18} />
+                            <FiX size={18} aria-hidden="true" />
                           </button>
                         </div>
                       </div>
@@ -715,7 +779,7 @@ export default function ClientRequestDetail() {
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="mb-4 text-base font-semibold text-slate-900">Rate This Service</h3>
 
-                {ratingSubmitted ? (
+                {ratingSubmitted && !showRatingForm ? (
                   <div className="rounded-xl border border-green-200 bg-green-50 p-4">
                     <p className="text-sm text-green-700 font-medium mb-2">Rating submitted</p>
                     <div className="flex items-center gap-1 mb-3">
@@ -730,8 +794,9 @@ export default function ClientRequestDetail() {
                       <p className="text-sm text-slate-700 mt-2">{feedback}</p>
                     )}
                     <button
+                      type="button"
                       onClick={() => setShowRatingForm(true)}
-                      className="mt-2 text-sm font-medium text-brand-600 hover:underline"
+                      className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-brand-600 hover:underline"
                     >
                       Edit Rating
                     </button>
@@ -740,8 +805,9 @@ export default function ClientRequestDetail() {
                   <>
                     {!showRatingForm && (
                       <button
+                        type="button"
                         onClick={() => setShowRatingForm(true)}
-                        className="w-full rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
+                        className="min-h-11 w-full rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
                       >
                         Leave Feedback
                       </button>
@@ -759,7 +825,7 @@ export default function ClientRequestDetail() {
                                 onClick={() => setRating(star)}
                                 aria-label={`Rate ${star} out of 5`}
                                 aria-pressed={star === rating}
-                                className="transition"
+                                className="grid h-11 w-11 place-items-center transition"
                               >
                                 <FiStar
                                   className={`w-8 h-8 ${
@@ -774,35 +840,35 @@ export default function ClientRequestDetail() {
                         </div>
 
                         <div>
-                          <label className="block text-sm text-slate-600 mb-2">
+                          <label htmlFor="rating-feedback" className="block text-sm text-slate-600 mb-2">
                             Additional Feedback (Optional)
                           </label>
                           <textarea
+                            id="rating-feedback"
+                            maxLength={1000}
                             value={feedback}
                             onChange={(e) => setFeedback(e.target.value)}
                             placeholder="Share your experience..."
-                            className="w-full rounded-xl border border-slate-300 px-3 py-2 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-base sm:text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                             rows="3"
                           />
                         </div>
 
                         <div className="flex gap-2">
                           <button
+                            type="button"
                             onClick={handleSubmitRating}
                             disabled={submitting || rating === 0}
-                            className="flex-1 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="min-h-11 flex-1 rounded-xl bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {submitting ? 'Submitting...' : 'Submit Rating'}
+                            {submitting ? 'Submitting...' : ratingSubmitted ? 'Save Rating' : 'Submit Rating'}
                           </button>
                           <button
-                            onClick={() => {
-                              setShowRatingForm(false);
-                              setRating(0);
-                              setFeedback('');
-                            }}
-                            className="flex-1 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
+                            type="button"
+                            onClick={closeRatingForm}
+                            className="min-h-11 flex-1 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
                           >
-                            Dismiss
+                            Cancel
                           </button>
                         </div>
                       </div>
@@ -813,6 +879,35 @@ export default function ClientRequestDetail() {
             )}
           </div>
         </div>
+      {dismissOpen && (
+        <ConfirmationDialog
+          title="Dismiss service request?"
+          message={`${formatRequestId(request.request_id || request.id)} will be closed and removed from active processing if work has not started. AFN will be notified, and the request will remain in its history.`}
+          tone="danger"
+          icon="warning"
+          confirmLabel="Dismiss request"
+          cancelLabel="Keep request"
+          loading={dismissing}
+          onCancel={() => { setDismissOpen(false); setDismissReason(''); setDismissError(''); }}
+          onConfirm={confirmDismiss}
+        >
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Reason <span className="text-rose-600">*</span></span>
+            <textarea
+              value={dismissReason}
+              required
+              aria-invalid={Boolean(dismissError) && !dismissReason.trim()}
+              onChange={(event) => { setDismissReason(event.target.value); if (dismissError) setDismissError(''); }}
+              rows={3}
+              maxLength={240}
+              placeholder="Briefly explain why this request should be dismissed."
+              className="mt-2 w-full resize-none rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-base text-slate-900 outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-100 sm:text-sm"
+            />
+            <span className="mt-1 block text-right text-xs text-slate-400">{dismissReason.length}/240</span>
+          </label>
+          {dismissError ? <p role="alert" className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{dismissError}</p> : null}
+        </ConfirmationDialog>
+      )}
       <TicketTimelineModal
         ticket={timelineOpen ? request : null}
         events={timelineEvents}

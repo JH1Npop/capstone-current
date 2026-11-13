@@ -163,9 +163,20 @@ MODEL_LABELS = {
     'QuotationRecord': 'quotation record',
     'InstallationContract': 'installation contract',
     'SalesRecord': 'sales record',
+    'CalendarClosure': 'calendar availability',
+    'TechnicalDataSheet': 'technical data sheet',
+    'TurnoverAcceptance': 'turnover and acceptance record',
+    'GeneratedDocument': 'generated document',
+    'SolarProjectProfile': 'solar project profile',
+    'InstalledEquipment': 'installed equipment',
 }
 
 FIELD_LABELS = {
+    'reopened_at': 'reopening time',
+    'reopened_by_id': 'person who reopened it',
+    'updated_by_id': 'last editor',
+    'availability_status': 'availability',
+    'time_slot': 'time slot',
     'is_available': 'availability',
     'skill_level': 'skill level',
     'max_daily_assignments': 'daily assignment limit',
@@ -318,6 +329,19 @@ def _display_change_value(instance, field_name, value):
         except Exception:
             pass
 
+    # A stored moment ("2026-11-09 02:17:59.929426+00:00") reads as the business's local time.
+    text = str(value)
+    if len(text) >= 19 and text[4] == '-' and text[10] in ' T' and text[13] == ':':
+        from django.utils.dateparse import parse_datetime
+
+        moment = parse_datetime(text)
+        if moment is not None and moment.tzinfo is not None:
+            from services.business_time import business_timezone
+
+            local_moment = moment.astimezone(business_timezone())
+            hour = local_moment.strftime('%I').lstrip('0') or '12'
+            return f"{local_moment:%b} {local_moment.day}, {local_moment.year}, {hour}:{local_moment:%M %p}"
+
     return value
 
 
@@ -338,6 +362,15 @@ def _friendly_update_message(instance, actor_name, field_name, new_value):
 
     if model_name == 'SLARule':
         return f'{actor_name} updated {field_label} for {target_label}.'
+
+    if model_name == 'CalendarClosure':
+        if field_name == 'reopened_at' or (field_name == 'is_active' and str(new_value).lower() in {'false', '0'}):
+            return f'{actor_name} reopened {target_label}.'
+        if field_name == 'is_active':
+            return f'{actor_name} closed {target_label}.'
+        if field_name == 'availability_status':
+            return f'{actor_name} changed the availability for {target_label} to {new_value}.'
+        return f'{actor_name} updated {target_label}.'
 
     if model_name in {'QuotationRecord', 'InstallationContract'}:
         if field_name == 'status':
@@ -416,9 +449,9 @@ def notify_admin_security_alert(*, title, message, metadata=None, notification_t
     try:
         from django.contrib.auth import get_user_model
         from notifications.models import Notification
-        from notifications.notification_utils import notifications_enabled
+        from notifications.notification_utils import in_app_notifications_enabled
 
-        if not notifications_enabled():
+        if not in_app_notifications_enabled():
             return
 
         User = get_user_model()

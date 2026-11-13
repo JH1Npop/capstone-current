@@ -133,8 +133,36 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await page.getByRole('button', { name: 'Previous', exact: true }).click();
       await expect(pageLabel).toContainText('Page 1 of');
 
+      // ── Calendar changes read as plain sentences, not raw model and column names ──
+      const day = localKey(new Date(Date.now() + 40 * 86400000));
+      const closureCall = (data) => request.post('/api/admin/calendar/closures/', { headers, data: { date: day, time_slot: 'all_day', ...data } });
+      expect((await closureCall({ action: 'close', reason: 'E2E log wording' })).ok()).toBeTruthy();
+      expect((await closureCall({ action: 'reopen' })).ok()).toBeTruthy();
+      await search.fill(day);
+      const calendarEvent = page.locator('article').filter({ hasText: 'Calendar availability' }).first();
+      await expect(calendarEvent).toBeVisible();
+      await expect(calendarEvent).toContainText(`reopened ${day}`);
+      await expect(page.locator('article').filter({ hasText: /Calendarclosure|Reopened At/ })).toHaveCount(0);
+      // Open every calendar event: values read as dates and plain words, never raw timestamps or ids.
+      const calendarEvents = page.locator('article').filter({ hasText: 'Calendar availability' });
+      for (let index = (await calendarEvents.count()) - 1; index >= 0; index -= 1) {
+        await calendarEvents.nth(index).getByRole('button', { name: /^View details for/ }).click();
+      }
+      await expect(calendarEvents.first().getByText(/^Calendar availability #\d+$/)).toBeVisible();
+      await expect(calendarEvents.getByText('reopening time').first()).toBeVisible();
+      const calendarText = (await calendarEvents.allTextContents()).join(' ');
+      expect(calendarText).not.toMatch(/\d{2}:\d{2}:\d{2}\.\d+\+00:00/);
+      expect(calendarText).not.toMatch(/Ticket \d+/);
+      // Ids use the app's own style and say which kind of account: SA-0001 for the owner, ADM-0002 for an admin.
+      expect(calendarText).toMatch(/(SA|ADM)-\d{4}/);
+      expect(calendarText).not.toMatch(/USR-/);
+      await search.fill('');
+      // Let the cleared search reload the full list before exporting.
+      await expect(page.getByText(/^Showing 1-10 of \d+ events$/)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Export CSV' })).toBeEnabled();
+
       // ── CSV export ──
-      const download = page.waitForEvent('download');
+      const download = page.waitForEvent('download', { timeout: 30000 });
       await page.getByRole('button', { name: 'Export CSV' }).click();
       expect((await download).suggestedFilename()).toMatch(/^activity-logs-\d{4}-\d{2}-\d{2}\.csv$/);
       await expect(page.getByRole('status')).toContainText('Exported activity-logs-');

@@ -212,6 +212,18 @@ class SalesRecordFlowTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_in_app_alerts_off_means_no_purchase_record_notice(self):
+        from notifications.models import Notification
+        from users.models import AdminSettings
+
+        row = AdminSettings.objects.order_by('id').first() or AdminSettings.objects.create()
+        row.enable_notifications, row.enable_in_app_notifications = True, False
+        row.save()
+        record_id = self.prepare().data['id']
+        confirmed = self.client.post(f'/api/services/sales-records/{record_id}/confirm/', {}, format='json')
+        self.assertEqual(confirmed.status_code, status.HTTP_200_OK, confirmed.data)
+        self.assertFalse(Notification.objects.filter(user=self.client_user, title='Purchase record available').exists())
+
     def test_confirmation_is_immutable_and_client_scoped(self):
         prepared = self.prepare()
         record_id = prepared.data['id']
@@ -236,7 +248,8 @@ class SalesRecordFlowTests(APITestCase):
         self.assertEqual(own_records.status_code, status.HTTP_200_OK)
         own_rows = own_records.data.get('results', own_records.data)
         self.assertEqual([row['id'] for row in own_rows], [record_id])
-        self.assertNotIn('payment_status', own_rows[0])
+        self.assertNotIn('payments', own_rows[0])
+        self.assertEqual(own_rows[0]['payment_status'], 'unpaid')
 
         self.client.force_authenticate(self.other_client)
         other_records = self.client.get('/api/services/sales-records/')
@@ -269,3 +282,61 @@ class SalesRecordFlowTests(APITestCase):
         self.assertEqual(replacement.status_code, status.HTTP_201_CREATED)
         self.assertEqual(replacement.data['replaces'], record_id)
         self.assertNotEqual(replacement.data['record_number'], prepared.data['record_number'])
+
+    def test_client_cannot_read_payments_or_change_their_purchase_record(self):
+        record_id = self.prepare().data['id']
+        self.client.post(f'/api/services/sales-records/{record_id}/confirm/', {}, format='json')
+        paid = self.client.post(
+            f'/api/services/sales-records/{record_id}/payments/',
+            {'amount': '1000.00', 'paid_on': '2026-01-05', 'method': 'cash', 'reference': 'OR-123', 'notes': 'Staff-only note'},
+            format='json',
+        )
+        self.assertEqual(paid.status_code, status.HTTP_201_CREATED, paid.data)
+
+        self.client.force_authenticate(self.client_user)
+        detail = self.client.get(f'/api/services/sales-records/{record_id}/')
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail.data['request_id'], self.request.id)
+        # The client sees the totals of their own record, not the payment entries.
+        self.assertNotIn('payments', detail.data)
+        self.assertEqual(detail.data['amount_paid'], '1000.00')
+        self.assertEqual(detail.data['balance_due'], '99000.00')
+        self.assertEqual(detail.data['payment_status'], 'partial')
+        self.assertNotIn('Staff-only note', str(detail.data))
+        # The payments list holds staff names, references and notes; clients do not see it.
+        payments = self.client.get(f'/api/services/sales-records/{record_id}/payments/')
+        self.assertEqual(payments.status_code, status.HTTP_403_FORBIDDEN, payments.data)
+        self.assertNotIn('Staff-only note', str(payments.data))
+        for method, path in (
+            ('post', '/api/services/sales-records/prepare/'),
+            ('patch', f'/api/services/sales-records/{record_id}/'),
+            ('post', f'/api/services/sales-records/{record_id}/confirm/'),
+            ('post', f'/api/services/sales-records/{record_id}/void/'),
+            ('post', f'/api/services/sales-records/{record_id}/payments/'),
+        ):
+            response = getattr(self.client, method)(path, {'ticket_id': self.ticket.id, 'reason': 'x', 'notes': 'x', 'amount': '1'}, format='json')
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, f'{method} {path}: {response.data}')
+
+    def test_sale_date_is_the_business_day_the_work_was_completed(self):
+        from datetime import datetime, timezone as dt_timezone
+        from unittest import mock
+
+        # 23:30 UTC on 8 November is 07:30 on 9 November in the business timezone.
+        finished = datetime(2026, 11, 8, 23, 30, tzinfo=dt_timezone.utc)
+        self.ticket.completed_date = finished
+        self.ticket.save(update_fields=['completed_date'])
+        record_id = self.prepare().data['id']
+
+        confirmed = self.client.post(f'/api/services/sales-records/{record_id}/confirm/', {}, format='json')
+        self.assertEqual(confirmed.data['sale_date'], '2026-11-09')
+
+        # Without a completion time the record takes today's business date, not the UTC date.
+        record = SalesRecord.objects.get(pk=record_id)
+        record.status = 'voided'
+        record.save(update_fields=['status'])
+        self.ticket.completed_date = None
+        self.ticket.save(update_fields=['completed_date'])
+        replacement_id = self.prepare().data['id']
+        with mock.patch('django.utils.timezone.now', return_value=finished):
+            replacement = self.client.post(f'/api/services/sales-records/{replacement_id}/confirm/', {}, format='json')
+        self.assertEqual(replacement.data['sale_date'], '2026-11-09')

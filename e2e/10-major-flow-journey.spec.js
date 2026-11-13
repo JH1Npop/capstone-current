@@ -25,6 +25,9 @@ const mockGeolocation = async (page) => {
       },
     });
   }, SITE);
+  // "Use My Location" fills the address from an internet street lookup when it answers. Keep the
+  // journey independent of that outside service: the lookup is unavailable, so the typed address stays.
+  await page.route('**/api/geocode/reverse/**', (route) => route.fulfill({ status: 503, json: { lookup_status: 'unavailable' } }));
 };
 
 const apiGet = (page, path) => page.evaluate(async (url) => {
@@ -125,7 +128,7 @@ test.describe('Major flow journey through the real UI', () => {
     await mockGeolocation(techPage);
     await seedAuthState(techPage, techAuth);
     await techPage.goto(`/technician/map-navigation?ticketId=${ticket.id}`);
-    await techPage.getByRole('button', { name: 'Start location sharing', exact: true }).click();
+    await techPage.getByRole('button', { name: 'Start trip' }).click();
     await expect(techPage.getByRole('button', { name: 'Mark Arrived' })).toBeEnabled({ timeout: 30000 });
     await techPage.getByRole('button', { name: 'Mark Arrived' }).click();
     await expect.poll(async () => (await apiGet(techPage, `/api/technician/jobs/${ticket.id}/`)).status).toBe('Arrived on Site');
@@ -302,7 +305,7 @@ test.describe('Major flow journey through the real UI', () => {
     await seedAuthState(techPage, techAuth);
     const travelAndArrive = async () => {
       await techPage.goto(`/technician/map-navigation?ticketId=${ticket.id}`);
-      await techPage.getByRole('button', { name: 'Start location sharing', exact: true }).click();
+      await techPage.getByRole('button', { name: 'Start trip' }).click();
       await expect(techPage.getByRole('button', { name: 'Mark Arrived' })).toBeEnabled({ timeout: 30000 });
       await techPage.getByRole('button', { name: 'Mark Arrived' }).click();
       await expect.poll(async () => (await apiGet(techPage, `/api/technician/jobs/${ticket.id}/`)).status).toBe('Arrived on Site');
@@ -320,12 +323,13 @@ test.describe('Major flow journey through the real UI', () => {
     await techPage.getByRole('button', { name: /Ready for service/ }).click();
     await techPage.locator('input[type="file"][accept*="image/jpeg"]').setInputFiles({ name: 'site.png', mimeType: 'image/png', buffer: PNG });
     await techPage.getByRole('button', { name: 'Review and complete inspection' }).click();
-    await expect(techPage.getByText('Inspection submitted successfully.')).toBeVisible();
+    await techPage.getByRole('dialog').getByRole('button', { name: 'Complete inspection' }).click();
+    await expect(techPage.getByText('Inspection submitted. The office will review it and plan the work.')).toBeVisible();
     await expect.poll(ticketStatus).toBe('Inspection Completed');
 
     // 5. Office prices the job in Documents and sends the quotation to the client.
     await adminPage.goto('/admin/documents');
-    await adminPage.getByRole('button', { name: 'Quotation Proposal' }).click();
+    await adminPage.getByRole('combobox', { name: 'Document', exact: true }).selectOption('quotation_proposal');
     await adminPage.getByPlaceholder(/search ticket by id/i).fill(ticketCode);
     await adminPage.getByRole('button', { name: new RegExp(ticketCode) }).first().click();
     await expect(adminPage.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
@@ -398,7 +402,7 @@ test.describe('Major flow journey through the real UI', () => {
 
     // 10. Office finalizes the handover in Documents.
     await adminPage.goto('/admin/documents');
-    await adminPage.getByRole('button', { name: 'Turnover / Acceptance Form' }).click();
+    await adminPage.getByRole('combobox', { name: 'Document', exact: true }).selectOption('turnover_acceptance');
     await adminPage.getByPlaceholder(/search ticket by id/i).fill(ticketCode);
     await adminPage.getByRole('button', { name: new RegExp(ticketCode) }).first().click();
     await expect(adminPage.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });

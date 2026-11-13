@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 from django.utils import timezone
+from services.business_time import business_today
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from users.models import AdminSettings, LandingPageAsset, User, UserCapabilityGrant
@@ -202,7 +203,7 @@ class LandingPageSettingsTests(APITestCase):
         self.assertEqual(write_response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_public_endpoint_filters_scheduled_expired_and_inactive_promotions(self):
-        today = timezone.localdate()
+        today = business_today()  # promotions run by the business day (UTC+8)
         settings = AdminSettings.objects.create(
             landing_page_promotions=[
                 {'id': 'current', 'name': 'Current offer', 'active': True, 'startDate': str(today), 'endDate': str(today)},

@@ -14,7 +14,7 @@ import Layout from '../../components/layout/Layout';
 import ProfileIdentityCard, { ProfileField } from '../../components/shared/ProfileIdentityCard';
 import ProfileSecuritySection from '../../components/shared/ProfileSecuritySection';
 import { useAuth } from '../../context/AuthContext';
-import { PROFILE_IMAGE_ACCEPT, releaseObjectPreview, validateProfileImageFile } from '../../utils/profile';
+import { PROFILE_IMAGE_ACCEPT, profileSaveOutcome, releaseObjectPreview, validateProfileImageFile } from '../../utils/profile';
 
 const emptyProfile = {
   first_name: '',
@@ -105,17 +105,13 @@ export default function AdminProfile() {
         ...(emailChanged ? { current_password: emailChangePassword } : {}),
         ...(profileImageFile ? { profile_image: profileImageFile } : {}),
       });
+      const { savedUser, message: outcome } = profileSaveOutcome(updatedProfile, emailChanged);
       releaseObjectPreview(profileImagePreview);
-      updateCurrentUser(updatedProfile);
+      updateCurrentUser(savedUser);
       setEmailChangePassword('');
       setProfileImageFile(null);
       setIsEditing(false);
-      setMessage({
-        type: 'success',
-        text: emailChanged && updatedProfile.pending_email
-          ? `Profile saved. Verify ${updatedProfile.pending_email} before it replaces your current email.`
-          : 'Profile updated successfully.',
-      });
+      setMessage(outcome);
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to update profile.' });
     } finally {

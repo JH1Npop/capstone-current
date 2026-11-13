@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
@@ -61,16 +61,14 @@ const validateProofFiles = (photoFiles, videoFiles) => {
   if (allFiles.reduce((total, file) => total + Number(file?.size || 0), 0) > MAX_PROOF_BATCH_BYTES) {
     return 'The combined photo and video upload must be 50 MB or smaller.';
   }
-  const invalidPhoto = photoFiles.find((file) => file?.type && !SUPPORTED_PHOTO_TYPES.has(file.type));
-  if (invalidPhoto) return 'Photos must be JPEG, PNG, or WebP files.';
-  if (photoFiles.some((file) => Number(file?.size || 0) > MAX_PHOTO_BYTES)) {
-    return 'Each photo must be 10 MB or smaller.';
-  }
-  const invalidVideo = videoFiles.find((file) => file?.type && !SUPPORTED_VIDEO_TYPES.has(file.type));
-  if (invalidVideo) return 'Videos must be MP4, WebM, or MOV files.';
-  if (videoFiles.some((file) => Number(file?.size || 0) > MAX_VIDEO_BYTES)) {
-    return 'Each video must be 50 MB or smaller.';
-  }
+  const invalidPhoto = photoFiles.find((file) => !SUPPORTED_PHOTO_TYPES.has(file?.type));
+  if (invalidPhoto) return `${invalidPhoto.name} was not added: photos must be JPEG, PNG, or WebP.`;
+  const largePhoto = photoFiles.find((file) => Number(file?.size || 0) > MAX_PHOTO_BYTES);
+  if (largePhoto) return `${largePhoto.name} was not added: each photo must be 10 MB or smaller.`;
+  const invalidVideo = videoFiles.find((file) => !SUPPORTED_VIDEO_TYPES.has(file?.type));
+  if (invalidVideo) return `${invalidVideo.name} was not added: videos must be MP4, WebM, or MOV.`;
+  const largeVideo = videoFiles.find((file) => Number(file?.size || 0) > MAX_VIDEO_BYTES);
+  if (largeVideo) return `${largeVideo.name} was not added: each video must be 50 MB or smaller.`;
   return '';
 };
 
@@ -241,7 +239,12 @@ export default function TechnicianChecklist() {
   const [followUpDueDate, setFollowUpDueDate] = useState('');
   const [followUpSummary, setFollowUpSummary] = useState('');
   const [followUpDetails, setFollowUpDetails] = useState('');
-  const [message, setMessage] = useState('');
+  const [message, setMessageText] = useState('');
+  const [messageTone, setMessageTone] = useState('error');
+  const setMessage = (text, tone = 'error') => {
+    setMessageText(text);
+    setMessageTone(tone);
+  };
   const [activeTab, setActiveTab] = useState('standard');
   const [submitting, setSubmitting] = useState(false);
   const [currentWizardStep, setCurrentWizardStep] = useState(0);
@@ -255,6 +258,10 @@ export default function TechnicianChecklist() {
   const serviceType = job?.serviceType || job?.service || '';
   const jobStatus = String(job?.status || '').toLowerCase().replace(/\s+/g, '_');
   const checklistLocked = ['completed', 'cancelled'].includes(jobStatus);
+  // The checklist records work already done, so it is submitted after Start Job (as My Jobs shows).
+  const jobStarted = jobStatus === 'in_progress';
+  const alreadySubmitted = Boolean(job?.checklistCompleted);
+  const todayKey = getLocalDateInputValue();
 
   // Resolve steps: dynamic procedures > fallback > generic
   const steps = (() => {
@@ -453,6 +460,20 @@ export default function TechnicianChecklist() {
     followUpCaseType, followUpDueDate, followUpSummary, followUpDetails, currentWizardStep,
   ]);
 
+  const photoPreviews = useMemo(() => new Map(photos.map((file) => [file, URL.createObjectURL(file)])), [photos]);
+  useEffect(() => () => photoPreviews.forEach((url) => URL.revokeObjectURL(url)), [photoPreviews]);
+
+  // Photos and videos are not kept in the draft; warn before leaving with files selected.
+  useEffect(() => {
+    if (!photos.length && !videos.length) return undefined;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [photos.length, videos.length]);
+
   const toggleStep = (index) => {
     setCompleted((previousState) => ({
       ...previousState,
@@ -587,6 +608,10 @@ export default function TechnicianChecklist() {
       setMessage('Enable warranty coverage before creating a warranty handoff.');
       return false;
     }
+    if (currentWizardStep === followUpWizardStep && followUpRequired && !isWarrantyFollowUp && followUpDueDate && followUpDueDate < todayKey) {
+      setMessage('The follow-up due date cannot be in the past.');
+      return false;
+    }
     setMessage('');
     return true;
   };
@@ -609,6 +634,10 @@ export default function TechnicianChecklist() {
     }
     if (checklistLocked) {
       setMessage('This job is already closed, so its checklist can no longer be edited.');
+      return;
+    }
+    if (!jobStarted) {
+      setMessage('Start the job on My Jobs before submitting its checklist.');
       return;
     }
     if (steps.some((_, index) => !completed[index])) {
@@ -649,7 +678,7 @@ export default function TechnicianChecklist() {
     }
 
     setSubmitting(true);
-    setMessage('Submitting checklist...');
+    setMessage('Submitting checklist…', 'info');
 
     try {
       await submitChecklist({
@@ -690,14 +719,17 @@ export default function TechnicianChecklist() {
 
       setMessage(
         followUpRequired
-          ? 'Checklist submitted. The after-sales team will receive a handoff when this ticket completes.'
-          : 'Checklist submitted successfully!'
+          ? 'Checklist submitted. The after-sales team will receive a handoff when this job completes. Opening the job so you can finish it…'
+          : 'Checklist submitted. Opening the job so you can finish it…',
+        'success',
       );
       localStorage.removeItem(checklistDraftKey(ticketId));
       setPhotos([]);
       setVideos([]);
+      setStepPhotos({});
+      // Next is Finish Job, on this job.
       setTimeout(() => {
-        navigate('/technician/my-jobs');
+        navigate(`/technician/my-jobs?ticketId=${ticketId}`);
       }, 2000);
     } catch (submitError) {
       setMessage(submitError.message || 'Failed to submit checklist.');
@@ -707,7 +739,7 @@ export default function TechnicianChecklist() {
   };
 
   const progress = steps.length > 0
-    ? (Object.keys(completed).filter((key) => completed[key]).length / steps.length) * 100
+    ? (steps.filter((_, index) => completed[index]).length / steps.length) * 100
     : 0;
 
   if (!ticketId) {
@@ -792,7 +824,7 @@ export default function TechnicianChecklist() {
       <input
         ref={photoInputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
         multiple
         className="hidden"
         onChange={handlePhotoSelection}
@@ -800,7 +832,7 @@ export default function TechnicianChecklist() {
       <input
         ref={videoInputRef}
         type="file"
-        accept="video/*"
+        accept="video/mp4,video/webm,video/quicktime"
         multiple
         className="hidden"
         onChange={handleVideoSelection}
@@ -838,6 +870,17 @@ export default function TechnicianChecklist() {
             This ticket does not have a custom checklist template yet, so the general completion checklist is being used.
           </p>
         )}
+        {!jobStarted ? (
+          <div role="status" className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
+            <span className="font-semibold">This job has not started yet.</span> You can read through the steps now; submit the checklist after you tap Start Job.
+            <Link to={`/technician/my-jobs?ticketId=${ticketId}`} className="ml-1 font-semibold underline">Open the job</Link>
+          </div>
+        ) : alreadySubmitted ? (
+          <div role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+            <span className="font-semibold">This checklist was already submitted.</span> Submitting again replaces it.
+            <Link to={`/technician/my-jobs?ticketId=${ticketId}`} className="ml-1 font-semibold underline">Go to Finish Job</Link>
+          </div>
+        ) : null}
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
           <span className="font-semibold">Draft reminder:</span> answers, notes, decisions, and completed steps are saved on this device.
           Selected photos and videos are not saved after a refresh, so attach them again before submitting.
@@ -846,6 +889,8 @@ export default function TechnicianChecklist() {
 
             <div className="mb-6 flex space-x-2 border-b border-slate-200">
         <button
+          type="button"
+          aria-pressed={activeTab === 'standard'}
           onClick={() => setActiveTab('standard')}
           className={`pb-3 px-1 font-medium text-sm transition ${
             activeTab === 'standard' 
@@ -857,6 +902,8 @@ export default function TechnicianChecklist() {
         </button>
         {(serviceType || '').toLowerCase().includes('solar') && ['in_progress', 'pending_completion', 'completed'].includes(jobStatus) && (
           <button
+            type="button"
+            aria-pressed={activeTab === 'commissioning'}
             onClick={() => setActiveTab('commissioning')}
             className={`pb-3 px-1 font-medium text-sm transition ${
               activeTab === 'commissioning' 
@@ -869,6 +916,8 @@ export default function TechnicianChecklist() {
         )}
         {['repair', 'maintenance', 'warranty', 'after-sales', 'after sales', 'follow-up', 'follow up'].some(kw => (serviceType || '').toLowerCase().includes(kw)) && (
           <button
+            type="button"
+            aria-pressed={activeTab === 'fsr'}
             onClick={() => setActiveTab('fsr')}
             className={`pb-3 px-1 font-medium text-sm transition ${
               activeTab === 'fsr' 
@@ -1010,9 +1059,12 @@ export default function TechnicianChecklist() {
                       {attachedPhotos.length > 0 && (
                         <div className="mt-2 space-y-2">
                           {attachedPhotos.map((photo, photoIndex) => (
-                            <div key={`${photo.name}-${photo.lastModified}-${photoIndex}`} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 ring-1 ring-emerald-100">
-                              <span className="min-w-0 truncate">{photo.name}</span>
-                              <button type="button" onClick={() => removeStepPhoto(stepIndex, photoIndex)} className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Remove</button>
+                            <div key={`${photo.name}-${photo.lastModified}-${photoIndex}`} className="flex items-center justify-between gap-3 rounded-lg bg-white px-2 py-2 text-sm text-slate-700 ring-1 ring-emerald-100">
+                              <span className="flex min-w-0 items-center gap-2">
+                                {photoPreviews.get(photo) ? <img src={photoPreviews.get(photo)} alt={`Photo for step ${stepIndex + 1}`} className="h-12 w-12 shrink-0 rounded-md object-cover" /> : null}
+                                <span className="min-w-0 truncate">{photo.name}</span>
+                              </span>
+                              <button type="button" aria-label={`Remove ${photo.name}`} onClick={() => removeStepPhoto(stepIndex, photoIndex)} className="min-h-10 shrink-0 rounded-md px-3 text-xs font-semibold text-red-600 hover:bg-red-50">Remove</button>
                             </div>
                           ))}
                         </div>
@@ -1085,8 +1137,9 @@ export default function TechnicianChecklist() {
 
             <div className="mt-5 grid gap-4 lg:grid-cols-[220px_1fr]">
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-900">Override Interval</label>
+                <label htmlFor="maintenance-interval" className="mb-2 block text-sm font-semibold text-slate-900">Override Interval</label>
                 <input
+                  id="maintenance-interval"
                   type="number"
                   min="1"
                   value={maintenanceIntervalDays}
@@ -1096,8 +1149,9 @@ export default function TechnicianChecklist() {
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-900">Maintenance Notes</label>
+                <label htmlFor="maintenance-notes" className="mb-2 block text-sm font-semibold text-slate-900">Maintenance Notes</label>
                 <textarea
+                  id="maintenance-notes"
                   value={maintenanceNotes}
                   onChange={(event) => setMaintenanceNotes(event.target.value)}
                   placeholder="Add why this cadence fits the site, seasonal concerns, dust level, customer constraints, or access notes."
@@ -1182,8 +1236,9 @@ export default function TechnicianChecklist() {
 
           <div className={`mt-5 grid gap-4 lg:grid-cols-[220px_220px_1fr] ${warrantyProvided ? 'opacity-100' : 'pointer-events-none opacity-50'}`}>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-900">Warranty End Date</label>
+              <label htmlFor="warranty-end-date" className="mb-2 block text-sm font-semibold text-slate-900">Warranty End Date</label>
               <input
+                  id="warranty-end-date"
                 type="date"
                 min={addDaysToLocalDate(1)}
                 value={automaticWarrantyDueDate}
@@ -1192,8 +1247,9 @@ export default function TechnicianChecklist() {
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-900">Coverage Days</label>
+              <label htmlFor="warranty-days" className="mb-2 block text-sm font-semibold text-slate-900">Coverage Days</label>
               <input
+                  id="warranty-days"
                 type="number"
                 min="1"
                 value={warrantyPeriodDays}
@@ -1205,8 +1261,9 @@ export default function TechnicianChecklist() {
               </p>
             </div>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-900">Warranty Notes</label>
+              <label htmlFor="warranty-notes" className="mb-2 block text-sm font-semibold text-slate-900">Warranty Notes</label>
               <textarea
+                  id="warranty-notes"
                 value={warrantyNotes}
                 onChange={(event) => setWarrantyNotes(event.target.value)}
                 rows={3}
@@ -1227,7 +1284,12 @@ export default function TechnicianChecklist() {
             </div>
           </div>
 
-          <div className={`mt-5 ${followUpRequired ? 'opacity-100' : 'pointer-events-none opacity-50'}`}>
+          {!followUpRequired ? (
+            <p role="status" className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              No follow-up task: you chose &ldquo;{afterSalesDecisionOptions.find((option) => option.value === afterSalesDecision)?.label || 'no after-sales result'}&rdquo; on the previous step. Go Back to change it.
+            </p>
+          ) : null}
+          <div className={`mt-5 ${followUpRequired ? 'opacity-100' : 'pointer-events-none opacity-50'}`} aria-hidden={!followUpRequired}>
             <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {followUpCaseOptions.map((option) => {
                 const active = followUpCaseType === option.value;
@@ -1264,9 +1326,11 @@ export default function TechnicianChecklist() {
                 </div>
               ) : (
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-900">Due Date</label>
+                  <label htmlFor="follow-up-due-date" className="mb-2 block text-sm font-semibold text-slate-900">Due Date</label>
                   <input
+                    id="follow-up-due-date"
                     type="date"
+                    min={todayKey}
                     value={followUpDueDate}
                     onChange={(event) => setFollowUpDueDate(event.target.value)}
                     className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200"
@@ -1275,8 +1339,9 @@ export default function TechnicianChecklist() {
                 </div>
               )}
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-900">Handoff Summary</label>
+                <label htmlFor="follow-up-summary" className="mb-2 block text-sm font-semibold text-slate-900">Handoff Summary</label>
                 <input
+                  id="follow-up-summary"
                   value={followUpSummary}
                   onChange={(event) => setFollowUpSummary(event.target.value)}
                   placeholder="Example: Client requested a callback to confirm system performance."
@@ -1286,8 +1351,9 @@ export default function TechnicianChecklist() {
             </div>
 
             <div className="mt-4">
-              <label className="mb-2 block text-sm font-semibold text-slate-900">After-Sales Details</label>
+              <label htmlFor="follow-up-details" className="mb-2 block text-sm font-semibold text-slate-900">After-Sales Details</label>
               <textarea
+                  id="follow-up-details"
                 value={followUpDetails}
                 onChange={(event) => setFollowUpDetails(event.target.value)}
                 rows={4}
@@ -1316,8 +1382,9 @@ export default function TechnicianChecklist() {
       {currentWizardStep === proofWizardStep && (
         <div className="mb-8 grid gap-6 lg:grid-cols-2">
           <div>
-            <label className="mb-3 block text-sm font-semibold text-slate-900">Technician Notes</label>
+            <label htmlFor="technician-notes" className="mb-3 block text-sm font-semibold text-slate-900">Technician Notes</label>
             <textarea
+                  id="technician-notes"
               value={techNotes}
               onChange={(event) => setTechNotes(event.target.value)}
               placeholder="Describe work performed, issues found, materials used..."
@@ -1332,30 +1399,33 @@ export default function TechnicianChecklist() {
             </label>
             <div className="mb-4 space-y-2">
               {photos.map((photo, index) => (
-                <div key={`${photo.name}-${index}`} className="flex min-h-16 w-full items-center justify-between gap-3 overflow-hidden rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 px-4 py-3 text-sm text-slate-600">
-                  <span className="min-w-0 truncate">{photo.name}</span>
-                  <button type="button" onClick={() => removePhotoFile(photo)} className="shrink-0 rounded-md bg-white/80 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-white">Remove</button>
+                <div key={`${photo.name}-${index}`} className="flex min-h-16 w-full items-center justify-between gap-3 overflow-hidden rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 px-3 py-2 text-sm text-slate-600">
+                  <span className="flex min-w-0 items-center gap-2">
+                    {photoPreviews.get(photo) ? <img src={photoPreviews.get(photo)} alt={`Proof photo ${index + 1}`} className="h-12 w-12 shrink-0 rounded-md object-cover" /> : null}
+                    <span className="min-w-0 truncate">{photo.name}</span>
+                  </span>
+                  <button type="button" aria-label={`Remove ${photo.name}`} onClick={() => removePhotoFile(photo)} className="min-h-10 shrink-0 rounded-md bg-white/80 px-3 text-xs font-semibold text-red-600 hover:bg-white">Remove</button>
                 </div>
               ))}
               {videos.map((video, index) => (
                 <div key={`${video.name}-${index}`} className="flex min-h-16 w-full items-center justify-between gap-3 overflow-hidden rounded-lg bg-gradient-to-br from-sky-100 to-slate-200 px-4 py-3 text-sm text-slate-600">
                   <span className="min-w-0 truncate">{video.name}</span>
-                  <button type="button" onClick={() => removeVideoFile(video)} className="shrink-0 rounded-md bg-white/80 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-white">Remove</button>
+                  <button type="button" aria-label={`Remove ${video.name}`} onClick={() => removeVideoFile(video)} className="min-h-10 shrink-0 rounded-md bg-white/80 px-3 text-xs font-semibold text-red-600 hover:bg-white">Remove</button>
                 </div>
               ))}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={addPhoto}
-                className="flex w-full items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-100 px-4 py-3 font-medium transition hover:border-slate-400 hover:bg-slate-200"
+                onClick={() => addPhoto(null)}
+                className="flex min-h-12 w-full items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-100 px-4 py-3 font-medium transition hover:border-slate-400 hover:bg-slate-200"
               >
                 <FiImage /> Add Photo
               </button>
               <button
                 type="button"
                 onClick={addVideo}
-                className="flex w-full items-center gap-2 rounded-xl border-2 border-dashed border-sky-300 bg-sky-50 px-4 py-3 font-medium transition hover:border-sky-400 hover:bg-sky-100"
+                className="flex min-h-12 w-full items-center gap-2 rounded-xl border-2 border-dashed border-sky-300 bg-sky-50 px-4 py-3 font-medium transition hover:border-sky-400 hover:bg-sky-100"
               >
                 <FiVideo /> Add Video
               </button>
@@ -1396,10 +1466,12 @@ export default function TechnicianChecklist() {
 
       {message && (
         <div
-          role="alert"
-          className={`mb-4 rounded-xl p-4 text-sm font-medium ${message.toLowerCase().includes('success') || message.toLowerCase().includes('submitted')
+          role={messageTone === 'error' ? 'alert' : 'status'}
+          className={`mb-4 rounded-xl p-4 text-sm font-medium ${messageTone === 'success'
               ? 'border border-emerald-300 bg-emerald-100 text-emerald-800'
-              : 'border border-red-300 bg-red-100 text-red-800'
+              : messageTone === 'info'
+                ? 'border border-blue-200 bg-blue-50 text-blue-800'
+                : 'border border-red-300 bg-red-100 text-red-800'
             }`}
         >
           {message}
@@ -1426,8 +1498,9 @@ export default function TechnicianChecklist() {
         )}
         {currentWizardStep === reviewWizardStep && (
           <button
+            type="button"
             onClick={handleSubmit}
-            disabled={submitting || steps.some((_, index) => !completed[index])}
+            disabled={submitting || !jobStarted || steps.some((_, index) => !completed[index])}
             className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-8 py-4 font-semibold text-white shadow-lg transition-all duration-200 hover:from-emerald-600 hover:to-green-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? (

@@ -4,9 +4,7 @@ from services.models import QuotationRecord
 from users.models import ActivityLog
 
 
-class QuotationRevisionAfterDeclineTests(APITestCase):
-    """A declined quotation can be revised and re-sent; an accepted one stays locked."""
-
+class QuotationFixture(APITestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(username='quote-admin', email='qa@example.com', password='x', role='admin')
         self.client_user = User.objects.create_user(username='quote-client', password='x', role='client')
@@ -24,10 +22,18 @@ class QuotationRevisionAfterDeclineTests(APITestCase):
         self.client.force_authenticate(self.client_user)
         return self.client.post(f'/api/services/quotations/{quotation_id}/respond/', {'decision': decision, 'note': note}, format='json')
 
+
+class QuotationRevisionAfterDeclineTests(QuotationFixture):
+    """A declined quotation can be revised and re-sent; an accepted one stays locked."""
+
     def test_declined_quotation_is_revised_resent_and_then_locked_once_accepted(self):
         first = self.send('PHP 80,000.00')
         self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
         self.assertEqual(first.data['quotation_number'], f'QUO-{self.ticket.id:04d}')
+        # The client's notice is titled and opens the request, where Accept and Decline are.
+        notice = Notification.objects.get(user=self.client_user, message__icontains=f'QUO-{self.ticket.id:04d} ')
+        self.assertEqual(notice.title, f'Quotation QUO-{self.ticket.id:04d} ready')
+        self.assertEqual((notice.ticket_id, notice.request_id), (self.ticket.id, self.ticket.request_id))
         self.assertEqual(self.respond(first.data['id'], 'decline', 'Too expensive.').status_code, status.HTTP_200_OK)
 
         revised = self.send('PHP 60,000.00')
@@ -60,3 +66,67 @@ class QuotationRevisionAfterDeclineTests(APITestCase):
         quotation = QuotationRecord.objects.get(pk=first.data['id'])
         self.assertEqual(quotation.status, 'Rejected')
         self.assertEqual(quotation.client_response_note, 'No thanks.')
+
+
+class QuotationValidityTests(QuotationFixture):
+    """A sent quotation can be accepted only within its validity period; resending restarts it."""
+
+    def test_expired_quotation_cannot_be_accepted_until_the_office_resends_it(self):
+        from datetime import datetime, timezone as dt_timezone
+        from unittest import mock
+
+        # Sent at 23:30 UTC on 7 November = 07:30 on 8 November in the business timezone.
+        sent = datetime(2026, 11, 7, 23, 30, tzinfo=dt_timezone.utc)
+        with mock.patch('django.utils.timezone.now', return_value=sent):
+            quotation = self.send('PHP 50,000.00').data
+        self.assertEqual(quotation['valid_until'], '2026-12-08')
+        self.assertFalse(quotation['is_expired'])
+
+        # The last valid day (8 December, Philippine time) still accepts... checked without saving:
+        last_day = datetime(2026, 12, 8, 15, 0, tzinfo=dt_timezone.utc)  # 23:00 on 8 December, UTC+8
+        with mock.patch('django.utils.timezone.now', return_value=last_day):
+            self.client.force_authenticate(self.client_user)
+            self.assertFalse(self.client.get(f"/api/services/quotations/{quotation['id']}/").data['is_expired'])
+
+        # ...and from 9 December it is expired: accept is refused, decline still works later.
+        day_after = datetime(2026, 12, 8, 16, 30, tzinfo=dt_timezone.utc)  # 00:30 on 9 December, UTC+8
+        with mock.patch('django.utils.timezone.now', return_value=day_after):
+            self.client.force_authenticate(self.client_user)
+            self.assertTrue(self.client.get(f"/api/services/quotations/{quotation['id']}/").data['is_expired'])
+            refused = self.respond(quotation['id'], 'accept')
+        self.assertEqual(refused.status_code, status.HTTP_409_CONFLICT, refused.data)
+        self.assertIn('expired on December 8, 2026', refused.data['error'])
+        self.assertEqual(QuotationRecord.objects.get(pk=quotation['id']).status, 'Sent')
+
+        # The office sends an updated quotation: a fresh period, and the client can accept.
+        with mock.patch('django.utils.timezone.now', return_value=day_after):
+            resent = self.send('PHP 52,000.00').data
+            self.assertEqual(resent['valid_until'], '2027-01-08')
+            self.assertFalse(resent['is_expired'])
+            accepted = self.respond(quotation['id'], 'accept')
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK, accepted.data)
+
+    def test_an_expired_quotation_can_still_be_declined(self):
+        from datetime import datetime, timezone as dt_timezone
+        from unittest import mock
+
+        with mock.patch('django.utils.timezone.now', return_value=datetime(2026, 1, 1, 2, 0, tzinfo=dt_timezone.utc)):
+            quotation = self.send('PHP 50,000.00').data
+        with mock.patch('django.utils.timezone.now', return_value=datetime(2026, 6, 1, 2, 0, tzinfo=dt_timezone.utc)):
+            declined = self.respond(quotation['id'], 'decline', 'Prices have changed; please send a new one.')
+        self.assertEqual(declined.status_code, status.HTTP_200_OK, declined.data)
+
+    def test_the_validity_setting_applies_each_time_the_office_sends(self):
+        from users.models import AdminSettings
+
+        settings_row = AdminSettings.objects.order_by('id').first() or AdminSettings.objects.create()
+        settings_row.quotation_validity_days = 14
+        settings_row.save()
+        first = self.send('PHP 50,000.00').data
+        self.assertEqual(first['validity_days'], 14)
+
+        # A changed setting applies to the next send (an updated quotation).
+        settings_row.quotation_validity_days = 45
+        settings_row.save()
+        resent = self.send('PHP 51,000.00').data
+        self.assertEqual(resent['validity_days'], 45)

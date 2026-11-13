@@ -21,3 +21,15 @@ def business_timezone():
 
 def business_today():
     return timezone.now().astimezone(business_timezone()).date()
+
+
+def business_day_start(day):
+    """The moment the business day ``day`` begins (midnight UTC+8), for filtering stored moments.
+
+    A ``__date`` lookup on a stored moment uses the server's UTC date, so a job finished at 07:00 local
+    time would count on the day before. Filter with ``>= business_day_start(first)`` and
+    ``< business_day_start(last + 1 day)`` instead.
+    """
+    from datetime import datetime, time
+
+    return datetime.combine(day, time.min, tzinfo=business_timezone())

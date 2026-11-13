@@ -28,7 +28,7 @@ for (const username of ['admin_test', 'superadmin_test']) {
         window.localStorage.setItem('afn:analytics-assistant-position', JSON.stringify({ x: 12, y: 12 }));
       });
       await page.goto('/admin/documents');
-      await page.getByRole('button', { name: 'Field Service Report', exact: true }).click();
+      await page.getByRole('combobox', { name: 'Document', exact: true }).selectOption('field_service_report');
     });
 
     test(`24.1 - ${username}: changing ticket with unsaved edits asks first; Keep editing keeps them`, async ({ page }) => {
@@ -77,12 +77,11 @@ for (const username of ['admin_test', 'superadmin_test']) {
     test(`24.3 - ${username}: an edit in another document type is also protected, and leaving the page warns`, async ({ page }) => {
       await pickTicket(page, 0);
       await expect(page.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
-      // With a ticket chosen, stage buttons also announce their status ("...: Not started").
-      await page.getByRole('button', { name: /^TDS - Technical Data Sheet/ }).click();
+      await page.getByRole('combobox', { name: 'Document', exact: true }).selectOption('technical_data_sheet');
       const lastName = page.locator('label:has(> span:text-is("Last Name")) textarea, label:has(> span:text-is("Last Name")) input').first();
       await expect(lastName).toBeVisible();
       await lastName.fill('E2E Surname');
-      await page.getByRole('button', { name: /^Field Service Report/ }).click();
+      await page.getByRole('combobox', { name: 'Document', exact: true }).selectOption('field_service_report');
       await pickTicket(page, 1);
       const ask = page.getByRole('dialog', { name: 'Discard unsaved document changes?' });
       await expect(ask).toContainText('TDS - Technical Data Sheet');

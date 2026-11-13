@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   FiCamera,
   FiBriefcase,
@@ -14,7 +14,7 @@ import Layout from '../../components/layout/Layout';
 import ProfileIdentityCard, { ProfileField } from '../../components/shared/ProfileIdentityCard';
 import ProfileSecuritySection from '../../components/shared/ProfileSecuritySection';
 import { useAuth } from '../../context/AuthContext';
-import { PROFILE_IMAGE_ACCEPT, releaseObjectPreview, validateProfileImageFile } from '../../utils/profile';
+import { PROFILE_IMAGE_ACCEPT, profileSaveOutcome, releaseObjectPreview, validateProfileImageFile } from '../../utils/profile';
 
 const emptyProfile = {
   first_name: '',
@@ -47,6 +47,12 @@ export default function ClientProfile() {
   const [profileImagePreview, setProfileImagePreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [cancellingEmail, setCancellingEmail] = useState(false);
+  // Save and password messages show at the top; on a phone the buttons are far below, so bring it into view.
+  const messageRef = useRef(null);
+  useEffect(() => {
+    if (message.text) messageRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [message]);
 
   useEffect(() => {
     if (!user) return;
@@ -97,17 +103,13 @@ export default function ClientProfile() {
         ...(emailChanged ? { current_password: emailChangePassword } : {}),
         ...(profileImageFile ? { profile_image: profileImageFile } : {}),
       });
+      const { savedUser, message: outcome } = profileSaveOutcome(updatedProfile, emailChanged);
       releaseObjectPreview(profileImagePreview);
-      updateCurrentUser(updatedProfile);
+      updateCurrentUser(savedUser);
       setEmailChangePassword('');
       setProfileImageFile(null);
       setIsEditing(false);
-      setMessage({
-        type: 'success',
-        text: emailChanged && updatedProfile.pending_email
-          ? `Profile saved. Verify ${updatedProfile.pending_email} before it replaces your current email.`
-          : 'Profile updated successfully.',
-      });
+      setMessage(outcome);
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to update profile.' });
     } finally {
@@ -115,14 +117,29 @@ export default function ClientProfile() {
     }
   };
 
-  const inputClass = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
+  // Saving the current email again clears the pending change on the server.
+  const cancelPendingEmail = async () => {
+    setCancellingEmail(true);
+    try {
+      const saved = await updateUserProfile({ email: user.email });
+      updateCurrentUser(profileSaveOutcome(saved, false).savedUser);
+      setProfileData((current) => ({ ...current, email: user.email }));
+      setMessage({ type: 'success', text: `Email change cancelled. You still sign in with ${user.email}.` });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Unable to cancel the email change.' });
+    } finally {
+      setCancellingEmail(false);
+    }
+  };
+
+  const inputClass = 'min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-base outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:text-sm';
 
   return (
     <Layout>
       <div className="py-2">
         <div className="mx-auto max-w-5xl">
           {message.text ? (
-            <div role="status" aria-live="polite" className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+            <div ref={messageRef} role={message.type === 'error' ? 'alert' : 'status'} aria-live="polite" className={`mb-4 scroll-mt-24 rounded-lg border px-4 py-3 text-sm ${
               message.type === 'success'
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                 : 'border-rose-200 bg-rose-50 text-rose-700'
@@ -134,6 +151,9 @@ export default function ClientProfile() {
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <p className="font-semibold">Email verification pending</p>
               <p className="mt-1">Check {user.pending_email}. Your sign-in email remains {user.email} until verification is complete.</p>
+              <button type="button" onClick={cancelPendingEmail} disabled={cancellingEmail} className="mt-2 inline-flex min-h-11 items-center rounded-lg border border-amber-300 bg-white px-3 py-2 font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60">
+                {cancellingEmail ? 'Cancelling…' : `Keep ${user.email}`}
+              </button>
             </div>
           ) : null}
 
@@ -150,20 +170,20 @@ export default function ClientProfile() {
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Contact Information</h3>
-                <p className="mt-1 text-sm text-slate-500">Contact and company details used for service documents.</p>
+                <p className="mt-1 text-sm text-slate-500">Used on your quotations and purchase records, and by technicians to reach you. Each service request has its own site address.</p>
               </div>
 
             {isEditing ? (
               <form onSubmit={saveProfile} className="mt-6 space-y-4">
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
+                <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition focus-within:ring-2 focus-within:ring-brand-300 hover:bg-slate-100">
                   <FiCamera size={18} />
-                  <span>{profileImageFile ? profileImageFile.name : 'Choose a new profile photo'}</span>
-                  <input type="file" accept={PROFILE_IMAGE_ACCEPT} onChange={handleProfileImageChange} className="hidden" />
+                  <span className="min-w-0 truncate">{profileImageFile ? profileImageFile.name : 'Choose a new profile photo'}</span>
+                  <input type="file" accept={PROFILE_IMAGE_ACCEPT} onChange={handleProfileImageChange} aria-label="Choose a new profile photo" className="sr-only" />
                 </label>
                 <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                   <span>JPEG, PNG, WebP, or GIF. Maximum 2 MB.</span>
                   {profileImageFile ? (
-                    <button type="button" onClick={() => { releaseObjectPreview(profileImagePreview); setProfileImageFile(null); setProfileImagePreview(user?.profile_image_url || ''); }} className="font-semibold text-slate-700 hover:text-slate-900">
+                    <button type="button" onClick={() => { releaseObjectPreview(profileImagePreview); setProfileImageFile(null); setProfileImagePreview(user?.profile_image_url || ''); }} className="min-h-11 self-start font-semibold text-slate-700 hover:text-slate-900 sm:self-auto">
                       Clear selected photo
                     </button>
                   ) : null}
@@ -184,7 +204,7 @@ export default function ClientProfile() {
                 </div>
                 <label className="block text-sm font-medium text-slate-700">
                   Email Address
-                  <input type="email" name="email" value={profileData.email} onChange={handleProfileChange} autoComplete="email" className={`${inputClass} mt-1`} />
+                  <input type="email" name="email" value={profileData.email} onChange={handleProfileChange} autoComplete="email" required className={`${inputClass} mt-1`} />
                   <span className="mt-1 block text-xs font-normal text-slate-500">A new address must be verified before it replaces your current email.</span>
                 </label>
                 {profileData.email.trim().toLowerCase() !== String(user?.email || '').trim().toLowerCase() ? (
@@ -205,7 +225,7 @@ export default function ClientProfile() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block text-sm font-medium text-slate-700">
                     Phone Number
-                    <input type="tel" name="phone" value={profileData.phone} onChange={handleProfileChange} autoComplete="tel" placeholder="09123456789" className={`${inputClass} mt-1`} />
+                    <input type="tel" name="phone" value={profileData.phone} onChange={handleProfileChange} autoComplete="tel" inputMode="tel" placeholder="09123456789" className={`${inputClass} mt-1`} />
                   </label>
                   <label className="block text-sm font-medium text-slate-700">
                     Landline (Optional)
@@ -223,11 +243,11 @@ export default function ClientProfile() {
                   </label>
                 </div>
                 <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-                  <button type="submit" disabled={loading} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
+                  <button type="submit" disabled={loading} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
                     <FiSave size={16} />
-                    Save Changes
+                    {loading ? 'Saving…' : 'Save Changes'}
                   </button>
-                  <button type="button" onClick={cancelProfileEdit} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300">
+                  <button type="button" onClick={cancelProfileEdit} disabled={loading} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-300">
                     <FiX size={16} />
                     Dismiss
                   </button>

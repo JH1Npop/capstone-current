@@ -22,6 +22,7 @@ from ..sla import (
     serialize_sla_evaluation,
 )
 from ..business_time import business_today
+from ..quotation_validity import default_validity_days, quotation_is_expired, quotation_valid_until
 from ..user_display import client_technician_label
 from ..deposits import (
     calculate_required_deposit,
@@ -77,6 +78,21 @@ class QuotationRecordSerializer(serializers.ModelSerializer):
     deposit_remaining_amount = serializers.SerializerMethodField()
     deposit_status = serializers.SerializerMethodField()
     deposit_payments = serializers.SerializerMethodField()
+    # After a cancelled job: what the office recorded for the deposit (refunded or kept), and whether
+    # a decision is still needed.
+    ticket_status = serializers.SerializerMethodField()
+    deposit_outcome = serializers.SerializerMethodField()
+    deposit_decision_needed = serializers.SerializerMethodField()
+    # Last day a sent quotation can be accepted, and whether that day has passed.
+    valid_until = serializers.SerializerMethodField()
+    is_expired = serializers.SerializerMethodField()
+
+    def get_valid_until(self, obj):
+        valid_until = quotation_valid_until(obj)
+        return valid_until.isoformat() if valid_until else None
+
+    def get_is_expired(self, obj):
+        return quotation_is_expired(obj)
 
     def _deposit_summary(self, obj):
         return quotation_deposit_summary(obj)
@@ -90,9 +106,39 @@ class QuotationRecordSerializer(serializers.ModelSerializer):
     def get_deposit_status(self, obj):
         return self._deposit_summary(obj)['deposit_status']
 
+    def get_ticket_status(self, obj):
+        return getattr(obj.ticket, 'status', None)
+
+    def _is_office_viewer(self):
+        from users.rbac import is_admin_workspace_role
+
+        request = self.context.get('request')
+        return bool(request and is_admin_workspace_role(getattr(request.user, 'role', None)))
+
+    def get_deposit_outcome(self, obj):
+        from services.deposits import deposit_outcome
+
+        outcome = deposit_outcome(obj)
+        if outcome and not self._is_office_viewer():
+            # Clients and technicians see the decision and its note, not which staff member saved it.
+            outcome = {key: value for key, value in outcome.items() if key != 'recorded_by'}
+        return outcome
+
+    def get_deposit_decision_needed(self, obj):
+        from services.deposits import deposit_decision_needed
+
+        return deposit_decision_needed(obj)
+
+    # What a client or technician may see of each deposit payment (no staff names, receipt
+    # references, office notes or void reasons), as on Purchase Records.
+    PUBLIC_PAYMENT_FIELDS = ('id', 'paid_on', 'method', 'method_label', 'amount', 'is_voided')
+
     def get_deposit_payments(self, obj):
         payments = obj.deposit_payments.select_related('recorded_by').all()
-        return SalesPaymentSerializer(payments, many=True).data
+        data = SalesPaymentSerializer(payments, many=True).data
+        if self._is_office_viewer():
+            return data
+        return [{key: row.get(key) for key in self.PUBLIC_PAYMENT_FIELDS} for row in data]
 
     @staticmethod
     def _apply_deposit_snapshot(validated_data, instance=None):
@@ -123,8 +169,16 @@ class QuotationRecordSerializer(serializers.ModelSerializer):
             validated_data['balance_amount'] = f'PHP {total:,.2f}' if total is not None else None
         return validated_data
 
+    @staticmethod
+    def _apply_validity_setting(validated_data):
+        # Each send uses the office's current "Quotation Validity (days)" setting unless the
+        # request names its own period.
+        if validated_data.get('status') == 'Sent' and 'validity_days' not in validated_data:
+            validated_data['validity_days'] = default_validity_days()
+        return validated_data
+
     def create(self, validated_data):
-        return super().create(self._apply_deposit_snapshot(validated_data))
+        return super().create(self._apply_deposit_snapshot(self._apply_validity_setting(validated_data)))
 
     @staticmethod
     def _next_revision_number(number):
@@ -137,7 +191,7 @@ class QuotationRecordSerializer(serializers.ModelSerializer):
         revising = instance.status == 'Rejected'
         previous_number = instance.quotation_number
         previous_note = instance.client_response_note
-        quotation = super().update(instance, self._apply_deposit_snapshot(validated_data, instance))
+        quotation = super().update(instance, self._apply_deposit_snapshot(self._apply_validity_setting(validated_data), instance))
         if revising:
             # The revised offer awaits a fresh client decision; the decline stays in the audit log.
             quotation.client_responded_at = None
@@ -167,7 +221,27 @@ class QuotationRecordSerializer(serializers.ModelSerializer):
                     "This quotation was declined. Revise it and send it again, or keep it as declined."
                 )
             attrs['quotation_number'] = self._next_revision_number(self.instance.quotation_number)
+        current_status = getattr(self.instance, 'status', None)
+        requested_status = attrs.get('status', current_status or 'Draft')
+        # The office drafts, sends, updates and records an offline acceptance; only the client
+        # declines (with a reason, through respond).
+        if requested_status == 'Rejected' and current_status != 'Rejected':
+            raise serializers.ValidationError({
+                'status': 'Only the client can decline a quotation; they give a reason in their request details.',
+            })
+        if current_status is None and requested_status == 'Accepted':
+            raise serializers.ValidationError({
+                'status': 'Save or send the quotation first, then record the client acceptance.',
+            })
+        if current_status == 'Sent' and requested_status == 'Draft':
+            raise serializers.ValidationError({
+                'status': 'The client already has this quotation. Update it and send it again instead of turning it back into a draft.',
+            })
         ticket = attrs.get('ticket', getattr(self.instance, 'ticket', None))
+        if ticket is not None and ticket.status == 'Cancelled' and requested_status in ('Sent', 'Accepted'):
+            raise serializers.ValidationError({
+                'ticket': 'This job was cancelled, so a quotation cannot be sent or accepted for it.',
+            })
         client = attrs.get('client', getattr(self.instance, 'client', None))
         if ticket and client and ticket.request.client_id != client.id:
             raise serializers.ValidationError({
@@ -304,14 +378,16 @@ class SalesRecordSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get('request')
         if request is not None and getattr(request.user, 'role', None) == 'client':
-            # Payments are settled outside the system; clients see purchase records, not collection status.
-            for field in ('payments', 'amount_paid', 'balance_due', 'payment_status'):
-                data.pop(field, None)
+            # Clients see how much is paid and still due on their own record, but not the individual
+            # payment entries (staff names, receipt references and office notes).
+            data.pop('payments', None)
         return data
     client_name = serializers.SerializerMethodField()
     ticket_code = serializers.SerializerMethodField()
     service_summary = serializers.SerializerMethodField()
     quotation_number = serializers.CharField(source='quotation.quotation_number', read_only=True)
+    # Lets the client page link a purchase record back to its service request.
+    request_id = serializers.IntegerField(source='ticket.request_id', read_only=True)
     created_by_name = serializers.SerializerMethodField()
     confirmed_by_name = serializers.SerializerMethodField()
     voided_by_name = serializers.SerializerMethodField()
@@ -367,7 +443,7 @@ class SalesRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesRecord
         fields = [
-            'id', 'record_number', 'ticket', 'ticket_code', 'client', 'client_name',
+            'id', 'record_number', 'ticket', 'ticket_code', 'request_id', 'client', 'client_name',
             'quotation', 'quotation_number', 'service_summary', 'status', 'sale_date',
             'currency_code', 'agreed_total', 'agreed_total_source', 'notes', 'source_snapshot', 'line_items',
             'created_by', 'created_by_name', 'confirmed_by', 'confirmed_by_name',

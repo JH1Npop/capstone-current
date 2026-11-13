@@ -80,3 +80,17 @@ explicitly authorized before application to the Aiven PostgreSQL database.
 - Payment and deposit dates cannot be later than the business day
   (`BUSINESS_DISPLAY_TIMEZONE`, UTC+8), so office staff can record a payment dated today
   at any hour. Recorded payments are voided with a reason, never edited.
+
+## 2026-11-08 additions (client Purchase Records audit)
+
+- Clients still read only their own confirmed records. At the owner's request (2026-11-08) they now
+  see `amount_paid`, `balance_due` and `payment_status` for those records, but never the `payments`
+  entries. The payments list
+  (`GET /api/services/sales-records/{id}/payments/`) is now office-only: clients receive 403, because
+  entries carry staff names, receipt references and office notes.
+- `sale_date` is the business (UTC+8) day the work was completed, or today's business day when the
+  ticket has no completion time; before 08:00 local the UTC date is still the day before.
+- The record response includes `request_id` (the ticket's service request) so the client page can link
+  back to the request.
+- Record notes, including the manual-value reason, are visible to the client once the record is
+  confirmed; the admin draft form says so.

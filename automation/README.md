@@ -54,5 +54,11 @@ Configure two scheduler jobs using the Django commands above. Ensure each job
 uses the same environment variables and virtual environment as the backend.
 Never put secrets directly in cron command text or source control.
 
+For a free capstone-scale daily reminder schedule, the repository also includes
+`.github/workflows/daily-operational-automations.yml`. Its required secret setup,
+staging-first activation procedure, and limitations are documented in
+`docs/deployment/GITHUB_ACTIONS_AUTOMATION_SETUP.md`. It covers the `daily`
+group only; it does not claim the 30-minute `frequent` production SLA.
+
 After deployment, monitor the last successful run and alert on non-zero exit
 codes. Do not run overlapping copies of the same mode.

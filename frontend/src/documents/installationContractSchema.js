@@ -1,9 +1,10 @@
+import { getLocalDateInputValue } from '../utils/date.js';
 import { schemaAction, schemaField, stampDocumentDraft, updateDocumentField } from './documentSchemaHelpers.js';
 
 const SCHEMA_CODE = 'installation_contract';
 const SCHEMA_VERSION = 1;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => getLocalDateInputValue();
 
 export const INSTALLATION_CONTRACT_SCHEMA = Object.freeze({
   code: SCHEMA_CODE,

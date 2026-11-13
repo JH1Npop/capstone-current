@@ -16,8 +16,11 @@ import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import Layout from '../../components/layout/Layout';
 import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 
-const inputClass = 'mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
-const tableInputClass = 'block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100';
+const inputClass = 'mt-1 block min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-base text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:text-sm';
+const tableInputClass = 'block min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-base text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:text-sm';
+// Overtime limits the page offers; a stored value outside this list (the server allows 8-16 hours)
+// is added so the select shows what is really saved.
+const OVERTIME_OPTIONS = [540, 600, 660, 720];
 const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 // SLA times are picked as days + hours + minutes, from minutes up to a year.
 const MAX_SLA_DAYS = 365;
@@ -115,6 +118,11 @@ export default function AdminSettings() {
   const [savedSlaSnapshot, setSavedSlaSnapshot] = useState('');
   const [holidayText, setHolidayText] = useState('');
   const [confirmRefresh, setConfirmRefresh] = useState(false);
+  // Settings and SLA rules load separately: someone who may manage settings but not view the
+  // service catalog (SLA rules) still gets a working settings form, and the form stays locked
+  // instead of showing built-in defaults (such as Notifications off) when settings cannot load.
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [slaError, setSlaError] = useState('');
 
   const activeRules = useMemo(
     () => slaRules.filter((rule) => rule.is_active).length,
@@ -125,22 +133,30 @@ export default function AdminSettings() {
     setLoading(true);
     setMessage({ type: '', text: '' });
 
-    try {
-      const [settingsData, rulesData] = await Promise.all([fetchAdminSettings(), fetchSlaRules()]);
-      const loadedRules = Array.isArray(rulesData) ? rulesData : [];
+    const [settingsResult, rulesResult] = await Promise.allSettled([fetchAdminSettings(), fetchSlaRules()]);
+    if (settingsResult.status === 'fulfilled') {
       setSettings((current) => {
-        const merged = { ...current, ...settingsData };
+        const merged = { ...current, ...settingsResult.value };
         setSavedSettingsSnapshot(JSON.stringify(merged));
         setHolidayText((merged.holidayDates || []).join(', '));
         return merged;
       });
+      setSettingsLoaded(true);
+    } else {
+      setSettingsLoaded(false);
+      setMessage({ type: 'error', text: `Unable to load settings. ${settingsResult.reason?.message || ''}`.trim() });
+    }
+    if (rulesResult.status === 'fulfilled') {
+      const loadedRules = Array.isArray(rulesResult.value) ? rulesResult.value : [];
       setSlaRules(loadedRules);
       setSavedSlaSnapshot(JSON.stringify(loadedRules));
-    } catch (error) {
-      setMessage({ type: 'error', text: error.message || 'Unable to load settings.' });
-    } finally {
-      setLoading(false);
+      setSlaError('');
+    } else {
+      setSlaRules([]);
+      setSavedSlaSnapshot(JSON.stringify([]));
+      setSlaError(rulesResult.reason?.message || 'Unable to load SLA rules.');
     }
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -208,21 +224,23 @@ export default function AdminSettings() {
     setMessage({ type: '', text: '' });
 
     try {
-      const payload = {
-        ...settings,
-        overtimeDailyCapacityMinutes: overtimeMinutes,
-        maintenanceReminderDays: Number(settings.maintenanceReminderDays),
-        arrivalRadiusMeters: Number(settings.arrivalRadiusMeters),
-        ...(settings.canManageOrganizationSettings ? {
-          quotationValidityDays: Number(settings.quotationValidityDays),
-          defaultWarrantyDays: Number(settings.defaultWarrantyDays),
-        } : {}),
-      };
+      // Only the values changed since the last load or save are sent. Sending everything back
+      // made a save fail for anyone allowed to view but not publish the public site (its fields
+      // came along), could overwrite public-site edits made meanwhile, and recorded the saver as
+      // having changed arrival validation.
+      const saved = savedSettingsSnapshot ? JSON.parse(savedSettingsSnapshot) : {};
+      const numberFields = ['overtimeDailyCapacityMinutes', 'maintenanceReminderDays', 'arrivalRadiusMeters', 'quotationValidityDays', 'defaultWarrantyDays'];
+      const payload = {};
+      Object.keys(settings).forEach((key) => {
+        if (JSON.stringify(settings[key]) === JSON.stringify(saved[key])) return;
+        payload[key] = numberFields.includes(key) ? Number(settings[key]) : settings[key];
+      });
       if (!settings.canManageOrganizationSettings) {
         ['companyName', 'companyAddress', 'documentFooter', 'currencyCode', 'quotationValidityDays', 'defaultWarrantyDays', 'externalPaymentNotice']
           .forEach((key) => delete payload[key]);
       }
-      delete payload.canManageOrganizationSettings;
+      ['canManageOrganizationSettings', 'locationValidationUpdatedAt', 'locationValidationUpdatedByName', 'locationValidationUpdatedById', 'overtimeDailyCapacityHours']
+        .forEach((key) => delete payload[key]);
       const response = await updateAdminSettings(payload);
       setSettings((current) => {
         const merged = { ...current, ...(response?.settings || {}) };
@@ -363,13 +381,14 @@ export default function AdminSettings() {
                   type="button"
                   onClick={requestRefresh}
                   disabled={loading}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                 >
                   <FiRefreshCw className={loading ? 'animate-spin' : ''} size={16} />
                   Refresh
                 </button>
               </div>
 
+              <fieldset disabled={!loading && !settingsLoaded} className="m-0 min-w-0 border-0 p-0">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">System Name</span>
@@ -404,7 +423,7 @@ export default function AdminSettings() {
                 <SwitchCard
                   icon={FiBell}
                   title="Notifications"
-                  description="Allow system notifications for service updates, reminders, and alerts."
+                  description="Master switch. Off stops every in-app notice and alert email for all roles (account emails such as verification still go out)."
                   checked={Boolean(settings.enableNotifications)}
                   onChange={(checked) => updateSetting('enableNotifications', checked)}
                   disabled={loading}
@@ -412,7 +431,7 @@ export default function AdminSettings() {
                 <SwitchCard
                   icon={FiBell}
                   title="In-app Alerts"
-                  description="Show operational alerts inside the system."
+                  description="Notices inside the system for every role, including client notices such as quotation ready and confirm handover."
                   checked={Boolean(settings.enableInAppNotifications)}
                   onChange={(checked) => updateSetting('enableInAppNotifications', checked)}
                   disabled={loading || !settings.enableNotifications}
@@ -420,7 +439,7 @@ export default function AdminSettings() {
                 <SwitchCard
                   icon={FiMail}
                   title="Email Alerts"
-                  description="Send operational alerts through the configured Django email service."
+                  description="Alert emails, such as request updates and maintenance reminders. Account emails still go out."
                   checked={Boolean(settings.enableEmailNotifications)}
                   onChange={(checked) => updateSetting('enableEmailNotifications', checked)}
                   disabled={loading || !settings.enableNotifications}
@@ -457,10 +476,9 @@ export default function AdminSettings() {
                     className={`${inputClass} bg-white`}
                     disabled={loading || !settings.allowOvertimeDispatch}
                   >
-                    <option value={540}>9 hours</option>
-                    <option value={600}>10 hours</option>
-                    <option value={660}>11 hours</option>
-                    <option value={720}>12 hours</option>
+                    {[...new Set([...OVERTIME_OPTIONS, Number(settings.overtimeDailyCapacityMinutes || 600)])]
+                      .sort((left, right) => left - right)
+                      .map((minutes) => <option key={minutes} value={minutes}>{formatCapacityHours(minutes)}</option>)}
                   </select>
                 </label>
               </div>
@@ -476,7 +494,7 @@ export default function AdminSettings() {
                         onClick={() => updateSetting('businessDays', selected
                           ? settings.businessDays.filter((value) => value !== day.value)
                           : [...(settings.businessDays || []), day.value].sort())}
-                        className={`rounded-lg border px-3 py-2 text-sm font-semibold ${selected ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-300 bg-white text-slate-600'}`}>
+                        className={`min-h-11 min-w-11 rounded-lg border px-3 py-2 text-sm font-semibold ${selected ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-300 bg-white text-slate-600'}`}>
                         {day.label}
                       </button>
                     );
@@ -566,6 +584,7 @@ export default function AdminSettings() {
                   </div>
                 </div>
               </div>
+              </fieldset>
 
             </section>
 
@@ -595,6 +614,11 @@ export default function AdminSettings() {
                     <tr key={rule.id} className="border-t border-slate-100 align-top">
                       <td className="px-3 py-3">
                         <p className="font-semibold text-slate-900">{rule.label || rule.key}</p>
+                        {rule.key === 'execution_delay' ? (
+                          <p className="mt-1 max-w-xs text-xs text-slate-500">
+                            Extra time allowed after a job&apos;s own estimated duration, counted in working hours on working days. Time on hold does not count.
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-3 py-3">
                         <DurationSelect
@@ -613,7 +637,7 @@ export default function AdminSettings() {
                         />
                       </td>
                       <td className="px-3 py-3">
-                        <label className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                        <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
                           <input
                             type="checkbox"
                             aria-label={`${rule.label || rule.key} active`}
@@ -638,7 +662,7 @@ export default function AdminSettings() {
                   )) : (
                     <tr>
                       <td colSpan="5" className="px-0 py-0 text-sm text-slate-500">
-                        {loading ? <TableSkeleton rows={4} columns={5} compact /> : <div className="px-3 py-10 text-center">No SLA rules configured.</div>}
+                        {loading ? <TableSkeleton rows={4} columns={5} compact /> : <div className="px-3 py-10 text-center">{slaError ? `SLA rules are not available: ${slaError}` : 'No SLA rules configured.'}</div>}
                       </td>
                     </tr>
                   )}
@@ -678,7 +702,7 @@ export default function AdminSettings() {
                 type="button"
                 onClick={saveAllChanges}
                 disabled={loading || saving || !hasUnsavedChanges}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60"
               >
                 <FiSave size={16} />
                 {saving ? 'Saving...' : 'Save changes'}

@@ -111,15 +111,21 @@ const getMonthRange = (monthDate) => {
   };
 };
 
+// A job longer than one work day appears on each of its days ("Day 3 of 20"); the server lists
+// those days in event.work_days (weekends and holidays skipped). Its later days show the day count.
+const getEventDays = (event) => (Array.isArray(event.work_days) && event.work_days.length
+  ? event.work_days
+  : (event.date ? [{ date: event.date, day: 1, of: 1 }] : []));
+const eventOnDay = (event, dateKey) => getEventDays(event).some((entry) => entry.date === dateKey);
+
 const formatEventTime = (event) => {
+  if (event.workDays > 1 && event.workDay > 1) return `Day ${event.workDay} of ${event.workDays}`;
+  let label = event.time_slot || 'Time TBD';
   if (event.time) {
     const date = new Date(`1970-01-01T${event.time}`);
-    if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    }
-    return event.time;
+    label = Number.isNaN(date.getTime()) ? event.time : date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
-  return event.time_slot || 'Time TBD';
+  return event.workDays > 1 ? `${label} · Day 1 of ${event.workDays}` : label;
 };
 
 const isHexColor = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(String(value || '').trim());
@@ -403,8 +409,9 @@ export default function AdminCalendar() {
   const eventsByDay = useMemo(() => {
     const groups = new Map();
     for (const event of filteredEvents) {
-      if (!event.date) continue;
-      groups.set(event.date, [...(groups.get(event.date) || []), event]);
+      for (const entry of getEventDays(event)) {
+        groups.set(entry.date, [...(groups.get(entry.date) || []), { ...event, workDay: entry.day, workDays: entry.of }]);
+      }
     }
     return groups;
   }, [filteredEvents]);
@@ -422,7 +429,7 @@ export default function AdminCalendar() {
   const technicianOptions = useMemo(() => Array.from(new Set(events.flatMap(getEventTeam))).sort(), [events]);
   const statusOptions = useMemo(() => Array.from(new Set(events.map((event) => normalizeStatus(event.calendar_status)))).sort(), [events]);
   const calendarSummary = useMemo(() => ({
-    today: events.filter((event) => event.date === getLocalDateKey(today)).length,
+    today: events.filter((event) => eventOnDay(event, getLocalDateKey(today))).length,
     unassigned: events.filter((event) => !event.assigned_technician).length,
     pending: events.filter((event) => normalizeStatus(event.calendar_status) === 'pending_approval').length,
     reschedule: events.filter((event) => event.reschedule_requested || normalizeStatus(event.calendar_status) === 'missed_dispatch').length,
@@ -454,7 +461,7 @@ export default function AdminCalendar() {
     );
   }, [events, serviceTypes]);
   const selectedDayEvents = eventsByDay.get(selectedDateKey) || [];
-  const selectedDayAllEvents = events.filter((event) => event.date === selectedDateKey);
+  const selectedDayAllEvents = events.filter((event) => eventOnDay(event, selectedDateKey));
   const selectedDateClosures = closuresByDay.get(selectedDateKey) || [];
   const selectedDateClosedRestrictions = getClosedRestrictions(selectedDateClosures);
   const selectedDateAvailability = availabilityByDay.get(selectedDateKey) || null;

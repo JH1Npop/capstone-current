@@ -5,6 +5,7 @@ import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import { downloadActivityLogs, fetchActivityLogFacets, fetchActivityLogs, fetchActivityLogSummary } from '../../api/api';
 import { getLocalDateInputValue } from '../../utils/date';
+import { formatRoleId } from '../../utils/roleIds';
 import SearchFilterBar from '../../components/shared/SearchFilterBar';
 
 const ITEMS_PER_PAGE = 10;
@@ -91,7 +92,26 @@ const modelLabels = {
   inspectionchecklist: 'Checklist',
   inspection_checklist: 'Checklist',
   maintenanceschedule: 'Maintenance schedule',
-  maintenance_schedule: 'Maintenance schedule'
+  maintenance_schedule: 'Maintenance schedule',
+  calendarclosure: 'Calendar availability',
+  aftersalescase: 'After-sales case',
+  inventoryreservation: 'Inventory reservation',
+  inventorytransaction: 'Inventory transaction',
+  servicetypeinventoryrequirement: 'Service inventory requirement',
+  slarule: 'SLA rule',
+  adminsettings: 'System settings',
+  quotationrecord: 'Quotation',
+  installationcontract: 'Installation contract',
+  technicaldatasheet: 'Technical data sheet',
+  turnoveracceptance: 'Turnover and acceptance',
+  generateddocument: 'Generated document',
+  solarprojectprofile: 'Solar project profile',
+  installedequipment: 'Installed equipment',
+  salesrecord: 'Sales record',
+  documentdefinition: 'Document type',
+  documenttemplate: 'Document template',
+  documenttemplateversion: 'Template version',
+  documentoutput: 'Document output',
 };
 
 const categoryOptions = [
@@ -150,6 +170,8 @@ const formatExactDateTime = (value) => {
   });
 };
 
+const getModelLabel = (value = '') => modelLabels[String(value || '').toLowerCase()] || formatModelLabel(value || 'System record');
+
 const formatModelLabel = (value = '') =>
   String(value)
     .replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -188,10 +210,40 @@ const friendlyFieldLabels = {
   reschedule_requested: 'reschedule request',
   completion_notes: 'completion notes',
   warranty_status: 'warranty status',
-  auto_assigned: 'auto dispatch'
+  auto_assigned: 'auto dispatch',
+  reopened_at: 'reopening time',
+  reopened_by_id: 'person who reopened it',
+  updated_by_id: 'last editor',
+  is_active: 'active status',
+  availability_status: 'availability',
+  time_slot: 'time slot',
+  next_due_date: 'next due date',
+  risk_level: 'risk level',
+  minimum_stock: 'minimum stock',
+  reserved_quantity: 'reserved quantity',
+  warehouse_location: 'warehouse location',
+  unit_price: 'unit price',
+  warning_minutes: 'warning threshold (minutes)',
+  overdue_minutes: 'overdue threshold (minutes)',
+  assigned_to_id: 'assigned owner',
+  resolution_notes: 'resolution notes',
+  confirmed_by_id: 'person who confirmed it',
+  confirmed_at: 'confirmation time',
+  voided_by_id: 'person who voided it',
+  voided_at: 'void time',
+  void_reason: 'void reason',
+  sale_date: 'sale date',
+  agreed_total: 'agreed total',
+  client_rating: 'client rating',
 };
 
-const formatFieldLabel = (value = '') => friendlyFieldLabels[value] || formatModelLabel(value);
+// Known names first; otherwise turn "some_field_id" into "some field" and "…_at" into "… time".
+const formatFieldLabel = (value = '') => {
+  if (friendlyFieldLabels[value]) return friendlyFieldLabels[value];
+  const words = String(value).replace(/_id$/, '').split('_').filter(Boolean);
+  if (words.length > 1 && words[words.length - 1] === 'at') words[words.length - 1] = 'time';
+  return words.join(' ').toLowerCase() || formatModelLabel(value);
+};
 
 const formatValue = (value) => {
   if (value === null || value === undefined || value === '') return '';
@@ -202,7 +254,7 @@ const formatValue = (value) => {
 
 const getActorName = (log) => log.changedByName || 'System';
 
-const getTargetLabel = (log) => log.objectLabel || formatTargetLabel(log.model, log.objectId, log.objectLabel);
+const getTargetLabel = (log) => tidyText(log.objectLabel || formatTargetLabel(log.model, log.objectId, log.objectLabel));
 
 const getRelatedWorkspace = (model = '') => {
   const normalizedModel = String(model || '').toLowerCase();
@@ -221,9 +273,64 @@ const getRelatedWorkspace = (model = '') => {
   return null;
 };
 
+// Ticket numbers are written TKT-0001 everywhere else in the app.
+const tidyText = (text) => String(text ?? '').replace(/\bTicket #?(\d+)\b/g, (_match, id) => `TKT-${id.padStart(4, '0')}`);
+
+const readableList = (items) => {
+  if (items.every((item) => item === null || ['string', 'number', 'boolean'].includes(typeof item))) {
+    return items.map((item) => formatValue(item)).filter(Boolean).join(', ');
+  }
+  return `${items.length} ${items.length === 1 ? 'entry' : 'entries'}`;
+};
+
+// Id columns are shown in the app's own id style (TECH-0004, ADM-0002, TKT-0003). A column that points at
+// "some user" (last editor, confirmed by, ...) cannot tell if that user is an admin or the owner, so it uses USR-.
+const ID_FIELD_STYLE = {
+  technician_id: 'technician',
+  assigned_admin_id: 'admin',
+  client_id: 'client',
+  ticket_id: 'ticket',
+  service_ticket_id: 'ticket',
+  original_ticket_id: 'ticket',
+  request_id: 'request',
+  assigned_to_id: 'USR',
+  updated_by_id: 'USR',
+  reopened_by_id: 'USR',
+  confirmed_by_id: 'USR',
+  voided_by_id: 'USR',
+  performed_by_id: 'USR',
+  generated_by_id: 'USR',
+  finalized_by_id: 'USR',
+  prepared_by_id: 'USR',
+  reviewed_by_id: 'USR',
+};
+
+// Stored values are text: turn lists, objects, timestamps and ids into something a person can read.
 const displayFieldValue = (field, value) => {
-  const formatted = formatValue(value);
+  let working = value;
+  if (typeof working === 'string' && /^[[{]/.test(working.trim())) {
+    try {
+      working = JSON.parse(working);
+    } catch {
+      const simpleList = working.trim().match(/^\[(.*)\]$/);
+      if (simpleList) working = simpleList[1].split(',').map((item) => item.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+    }
+  }
+  if (Array.isArray(working)) return readableList(working);
+  if (working && typeof working === 'object') {
+    const keys = Object.keys(working);
+    return `${keys.length} ${keys.length === 1 ? 'setting' : 'settings'} changed or set`;
+  }
+  const formatted = formatValue(working);
   if (!formatted) return '';
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(formatted)) return formatDateTime(formatted.replace(' ', 'T'));
+  if (/^\d{4}-\d{2}-\d{2}$/.test(formatted)) {
+    const date = new Date(`${formatted}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  if (/_id$/.test(String(field || '')) && /^\d+$/.test(formatted)) {
+    return ID_FIELD_STYLE[field] ? formatRoleId(ID_FIELD_STYLE[field], formatted) : `#${formatted}`;
+  }
   return formatted;
 };
 
@@ -269,10 +376,18 @@ const getEventDescription = (log) => {
       return `${actor} changed ${target} status${newValue ? ` to ${newValue}` : ''}.`;
     }
 
+    if (normalizedModel === 'calendarclosure') {
+      if (field === 'reopened_at' || (field === 'is_active' && newValue === 'No')) return `${actor} reopened ${target}.`;
+      if (field === 'availability_status') return `${actor} changed the availability for ${target}${newValue ? ` to ${newValue}` : ''}.`;
+      if (field === 'is_active' && newValue === 'Yes') return `${actor} closed ${target}.`;
+      if (field === 'reason') return `${actor} changed the reason for ${target}.`;
+      if (['reopened_by_id', 'updated_by_id'].includes(field)) return `${actor} updated ${target}.`;
+    }
+
     return `${actor} updated the ${formatFieldLabel(field)} for ${target}.`;
   }
 
-  return log.message || log.summary || 'An activity was recorded in the system.';
+  return tidyText(log.message || log.summary) || 'An activity was recorded in the system.';
 };
 
 const getActionTaken = (log) => {
@@ -297,6 +412,7 @@ const getFriendlyTitle = (log) => {
   const action = formatActionLabel(log.action);
   const normalizedModel = String(log.model || '').toLowerCase();
   const modelLabel = modelLabels[normalizedModel] || formatModelLabel(log.model || category || 'record');
+  if (normalizedModel === 'calendarclosure' && log.action === 'update') return 'Calendar availability was changed';
   if (log.action === 'login') return 'User logged in';
   if (log.action === 'logout') return 'User logged out';
   if (log.action === 'assign') return 'Work was assigned';
@@ -327,8 +443,12 @@ const detailText = (log) => {
 
 const metadataText = (metadata) => {
   if (!metadata || typeof metadata !== 'object' || Object.keys(metadata).length === 0) return '-';
+  // The readable copies (local dates, names) replace the stored raw values on screen.
+  const shown = { ...metadata };
+  if ('old_display_value' in shown) delete shown.old_value;
+  if ('new_display_value' in shown) delete shown.new_value;
   try {
-    return JSON.stringify(metadata, null, 2);
+    return JSON.stringify(shown, null, 2);
   } catch {
     return String(metadata);
   }
@@ -679,7 +799,7 @@ export default function AdminActivityLogs() {
                           </div>
                           <div className="mt-3 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
                             <DetailItem label="Record affected" value={targetLabel} strong />
-                            <DetailItem label="Record ID" value={`${formatModelLabel(log.model)}${log.objectId ? ` #${log.objectId}` : ''}`} />
+                            <DetailItem label="Record ID" value={`${getModelLabel(log.model)}${log.objectId ? ` #${log.objectId}` : ''}`} />
                             <DetailItem label="Changed item" value={log.fieldName ? formatFieldLabel(log.fieldName) : '-'} />
                             <DetailItem label="Before" value={shortValue(displayFieldValue(log.fieldName, log.oldValue))} />
                             <DetailItem label="After" value={shortValue(displayFieldValue(log.fieldName, log.newValue))} />
@@ -702,7 +822,7 @@ export default function AdminActivityLogs() {
                           <div className="mt-3 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
                             <DetailItem label="Event ID" value={`ACT-${log.id}`} strong />
                             <DetailItem label="Exact time" value={formatExactDateTime(log.changedAt)} />
-                            <DetailItem label="Actor account ID" value={log.changedBy ? `USR-${log.changedBy}` : 'System process'} />
+                            <DetailItem label="Actor account ID" value={log.changedBy ? formatRoleId(log.changedByRole || 'USR', log.changedBy) : 'System process'} />
                             <DetailItem label="IP address" value={log.ipAddress || 'Not captured'} />
                           </div>
                           <div className="mt-4 grid gap-4 lg:grid-cols-2">

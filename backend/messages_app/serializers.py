@@ -1,3 +1,5 @@
+import uuid
+
 from rest_framework import serializers
 from django.utils import timezone
 from .models import CustomerSupportCase, Message
@@ -150,6 +152,16 @@ class MessageSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'room_type': 'Customer support messages must use a group room.'})
             if sender.role == 'client' and sender.id != support_client_id:
                 raise serializers.ValidationError({'group_key': 'Clients can only use their own customer support thread.'})
+            if sender.role == 'client':
+                # A client writes only into one of their own cases that is still open: a thread with
+                # no case would be invisible to the office, and a resolved case is read-only.
+                case = CustomerSupportCase.objects.filter(group_key=group_key, client_id=sender.id).first()
+                if case is None:
+                    raise serializers.ValidationError({'group_key': 'Start a support case before sending a message.'})
+                if case.status in {'resolved', 'closed'}:
+                    raise serializers.ValidationError({
+                        'group_key': 'This support case is closed. Start a new case if you still need help.'
+                    })
             if sender.role not in ADMIN_MESSAGE_ROLES | {'client'}:
                 raise serializers.ValidationError('Only clients, admins, and superadmins can use customer support messages.')
             attrs['receiver'] = None
@@ -238,6 +250,8 @@ class CustomerSupportCaseSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     ticket_id = serializers.IntegerField(source='ticket.id', read_only=True)
     ticket_code = serializers.SerializerMethodField()
+    # Lets the client page show and link the service request (REQ code) the case is about.
+    request_id = serializers.IntegerField(source='ticket.request_id', read_only=True)
     case_code = serializers.SerializerMethodField()
 
     def get_ticket_code(self, obj):
@@ -269,7 +283,8 @@ class CustomerSupportCaseSerializer(serializers.ModelSerializer):
 
         if not self.instance and user.role == 'client':
             attrs['client'] = user
-            attrs['group_key'] = f'{CUSTOMER_SUPPORT_PREFIX}{user.id}_{int(timezone.now().timestamp())}'
+            # A random suffix: a timestamp in seconds collided when two cases were opened in the same second.
+            attrs['group_key'] = f'{CUSTOMER_SUPPORT_PREFIX}{user.id}_{uuid.uuid4().hex[:16]}'
             ticket = attrs.get('ticket')
             if ticket and ticket.request.client_id != user.id:
                 raise serializers.ValidationError({
@@ -300,6 +315,7 @@ class CustomerSupportCaseSerializer(serializers.ModelSerializer):
             'ticket',
             'ticket_id',
             'ticket_code',
+            'request_id',
             'subject',
             'category',
             'priority',
@@ -317,6 +333,7 @@ class CustomerSupportCaseSerializer(serializers.ModelSerializer):
             'group_key',
             'ticket_id',
             'ticket_code',
+            'request_id',
             'message_count',
             'last_message',
             'created_at',

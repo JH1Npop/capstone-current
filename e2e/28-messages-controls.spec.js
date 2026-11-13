@@ -47,6 +47,12 @@ for (const [username, path] of accounts) {
       await expect(page.getByRole('status')).toContainText('Message sent to Staff Group Chat.');
       const bubble = bubbleFor(page, text);
       await expect(bubble).toBeVisible();
+
+      // ── Dates: today's messages sit under a "Today" divider; the time shows the full date on hover ──
+      await expect(page.getByRole('separator', { name: 'Today' })).toBeVisible();
+      const sentAt = page.locator('div.flex').filter({ has: bubble }).last().locator('time');
+      await expect(sentAt).toHaveAttribute('title', new RegExp(`${new Date().getFullYear()}`));
+      await expect(sentAt).toHaveAttribute('datetime', /\d{4}-\d{2}-\d{2}T/);
       await expect(composer).toHaveValue('');
       await expect(composer).toBeFocused();
       await expect(composer).toHaveAttribute('maxlength', '5000');
@@ -66,7 +72,9 @@ for (const [username, path] of accounts) {
       await expect(page.getByRole('status')).toContainText('Message sent to Staff Group Chat.');
 
       // ── Image preview opens and closes with Escape ──
-      await page.getByRole('img', { name: 'Message attachment' }).last().click();
+      const sentImage = page.getByRole('img', { name: 'Message attachment' }).last();
+      const sentImageSrc = await sentImage.getAttribute('src');
+      await sentImage.click();
       const preview = page.getByRole('dialog', { name: 'Message attachment' });
       await expect(preview.getByRole('link', { name: 'Download' })).toBeVisible();
       await page.keyboard.press('Escape');
@@ -108,6 +116,14 @@ for (const [username, path] of accounts) {
       await unsend.getByRole('button', { name: 'Unsend' }).click();
       await expect(page.getByRole('status')).toContainText('Message unsent.');
       await expect(bubbleFor(page, `${text} (edited)`)).toHaveCount(0);
+
+      // ── A picture whose file is missing shows "Image unavailable", not a broken image ──
+      const lostImageUrl = new URL(sentImageSrc, page.url()).href;
+      const isLostImage = (url) => url.href === lostImageUrl;
+      await page.route(isLostImage, (route) => route.fulfill({ status: 404, body: '' }));
+      await page.reload();
+      await expect(page.getByRole('img', { name: 'Image unavailable' }).first()).toBeVisible({ timeout: 30000 });
+      await page.unroute(isLostImage);
     });
   });
 }

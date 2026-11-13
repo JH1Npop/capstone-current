@@ -546,20 +546,29 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.getByRole('heading', { name: 'Active Job Sites' })).toBeVisible();
     await expect(page.getByText(/Direct line · road route unavailable/).first()).toBeVisible();
 
+    await page.getByRole('button', { name: /^Filters/ }).click();
     await page.getByLabel('GPS Health').selectOption('fresh');
     await page.getByLabel('Find technician or job').fill('Test Technician');
     await page.getByRole('button', { name: 'View details' }).first().click();
-    const details = page.getByRole('region', { name: 'Test Technician' });
+    const details = page.getByRole('dialog', { name: 'Test Technician' });
     await expect(details).toBeVisible();
+    await expect(details.getByRole('heading', { name: 'Live location summary' })).toBeVisible();
+    await expect(details.getByRole('heading', { name: 'Current jobs' })).toBeVisible();
+    const desktopModalBox = await details.boundingBox();
+    expect(desktopModalBox).not.toBeNull();
+    expect(desktopModalBox.width).toBeLessThanOrEqual(780);
     await expect(details.getByText(/TECH-\d+/)).toBeVisible();
     await expect(details.getByText('+/-12 m')).toBeVisible();
     await expect(details.getByText(/point.*in 60 min/)).toBeVisible();
     await expect(details.getByText('Current jobs')).toBeVisible();
     await expect(details.getByRole('link', { name: 'Open Service Tickets' })).toHaveAttribute('href', '/admin/service-tickets');
 
+    await details.getByRole('button', { name: 'Close details' }).click();
+    await expect(details).toHaveCount(0);
     await page.route('**/api/tracking/', (route) => route.abort('failed'));
     await page.getByRole('button', { name: 'Refresh' }).click();
     await expect(page.getByText(/Last known locations remain visible/)).toBeVisible();
+    await page.getByRole('button', { name: 'View details' }).first().click();
     await expect(details).toBeVisible();
     await page.unroute('**/api/tracking/');
     await page.screenshot({ path: 'test-results/screenshots/03-admin-technician-tracking-details.png', fullPage: true });
@@ -568,11 +577,25 @@ test.describe('Admin Workspace - All Pages', () => {
   test('3.5b - Technician Tracking detail workflow fits mobile', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await visitWorkspacePage(page, '/admin/technician-tracking');
-    await page.getByRole('button', { name: 'View details' }).first().click();
-    await expect(page.getByRole('region', { name: 'Test Technician' })).toBeVisible();
+    const detailsTrigger = page.getByRole('button', { name: 'View details' }).first();
+    await detailsTrigger.click();
+    const details = page.getByRole('dialog', { name: 'Test Technician' });
+    await expect(details).toBeVisible();
+    await expect(details.getByRole('button', { name: 'Close details' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    expect(await details.evaluate((dialog) => dialog.contains(document.activeElement))).toBe(true);
+    const modalBox = await details.boundingBox();
+    expect(modalBox).not.toBeNull();
+    expect(modalBox.x).toBeGreaterThanOrEqual(0);
+    expect(modalBox.x + modalBox.width).toBeLessThanOrEqual(390);
+    expect(modalBox.y).toBeGreaterThanOrEqual(0);
+    expect(modalBox.y + modalBox.height).toBeLessThanOrEqual(844);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
     await page.screenshot({ path: 'test-results/screenshots/03-admin-technician-tracking-mobile.png', fullPage: true });
+    await page.keyboard.press('Escape');
+    await expect(details).toHaveCount(0);
+    await expect(detailsTrigger).toBeFocused();
   });
 
   test('3.6 - User Management table loads', async ({ page }) => {
@@ -1271,7 +1294,7 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(templateManager.getByRole('button', { name: /E2E Temporary Design/ })).toHaveCount(0);
     await templateManager.getByRole('button', { name: 'Close template manager' }).click();
     await expect(templateManager).toBeHidden();
-    await page.getByRole('button', { name: 'Quotation Proposal' }).click();
+    await page.getByRole('combobox', { name: 'Document', exact: true }).selectOption('quotation_proposal');
     await expect(page.getByText(/payments are collected and verified outside this system/i)).toBeVisible();
 
     const ticketSearch = page.getByPlaceholder(/search ticket by id/i);
@@ -1290,7 +1313,7 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(fillWorkspace.getByText('Final generated layout')).toBeVisible();
     await fillWorkspace.getByRole('button', { name: 'Open interactive editor' }).click();
     await expect(fillWorkspace).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Quotation Proposal' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('combobox', { name: 'Document', exact: true })).toHaveValue('quotation_proposal');
     const generatedResponse = page.waitForResponse((response) => (
       response.url().includes('/generate-document/')
       && response.request().method() === 'POST'
@@ -1328,7 +1351,7 @@ test.describe('Admin Workspace - All Pages', () => {
       expect(pricedItemResponse.ok(), await pricedItemResponse.text()).toBeTruthy();
       pricedItem = await pricedItemResponse.json();
       await page.reload();
-      await page.getByRole('button', { name: 'Quotation Proposal' }).click();
+      await page.getByRole('combobox', { name: 'Document', exact: true }).selectOption('quotation_proposal');
       await page.getByPlaceholder(/search ticket by id/i).fill(selectedTicketCode);
       await page.getByRole('button', { name: new RegExp(selectedTicketCode) }).first().click();
       await expect(page.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
@@ -1363,7 +1386,7 @@ test.describe('Admin Workspace - All Pages', () => {
     // Reloading and reselecting the same ticket proves the draft traversed the
     // browser, API, database, and back into the editor.
     await page.reload();
-    await page.getByRole('button', { name: 'Quotation Proposal' }).click();
+    await page.getByRole('combobox', { name: 'Document', exact: true }).selectOption('quotation_proposal');
     await page.getByPlaceholder(/search ticket by id/i).click();
     await page.getByRole('button', { name: /TKT-\d+/ }).first().click();
     await expect(page.getByRole('status')).toContainText(/loaded saved draft/i, { timeout: 15000 });
@@ -1390,8 +1413,15 @@ test.describe('Admin Workspace - All Pages', () => {
       await ticketButton.click();
       await expect(page.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
     };
+    const stageIds = {
+      'Technical Data Sheet': 'technical_data_sheet',
+      'Solar Installation Contract': 'installation_contract',
+      'PV Solar Site Commissioning Checklist': 'commissioning_checklist',
+      'Turnover / Acceptance Form': 'turnover_acceptance',
+      'Field Service Report': 'field_service_report',
+    };
     const openStage = async (name) => {
-      await page.getByRole('button', { name }).click();
+      await page.getByRole('combobox', { name: 'Document', exact: true }).selectOption(stageIds[name]);
       await expect(page.getByText('Loading the ticket and saved document data...')).toBeHidden({ timeout: 15000 });
     };
 
@@ -1508,7 +1538,7 @@ test.describe('Admin Workspace - All Pages', () => {
 
   test('3.9c - Guided replacement validates, tests, and activates a new design', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/documents');
-    await page.getByRole('button', { name: 'Quotation Proposal' }).click();
+    await page.getByRole('combobox', { name: 'Document', exact: true }).selectOption('quotation_proposal');
     await page.getByPlaceholder(/search ticket by id/i).click();
     await page.getByRole('button', { name: /TKT-\d+/ }).first().click();
     await expect(page.getByRole('link', { name: /Open ticket/ })).toBeVisible({ timeout: 15000 });
@@ -1842,7 +1872,7 @@ test.describe('Admin Workspace - All Pages', () => {
   test('3.14 - Admin Settings form loads', async ({ page }) => {
     await visitWorkspacePage(page, '/admin/settings', 'test-results/screenshots/03-admin-settings.png');
     await expect(page.locator('input, select, textarea, [class*="setting"]').first()).toBeVisible({ timeout: 10000 });
-    const reminderDays = page.getByLabel('Maintenance Reminder');
+    const reminderDays = page.getByRole('spinbutton', { name: /^Maintenance Reminder/ });
     const originalReminderDays = await reminderDays.inputValue();
     await reminderDays.fill('');
     await expect(reminderDays).toHaveValue('');
