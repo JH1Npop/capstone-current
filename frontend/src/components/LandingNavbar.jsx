@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import InstallAppButton from './shared/InstallAppButton';
 
 // Short labels keep the bar light; the logo already links home.
 const publicLinks = [
@@ -34,6 +35,11 @@ export default function LandingNavbar({ companyName = 'AFN Solar Power Engineeri
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <InstallAppButton
+            label="Install app"
+            labelClassName="hidden sm:inline"
+            className="inline-flex h-10 w-10 items-center justify-center gap-1.5 rounded-lg border border-slate-300 sm:w-auto text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-brand-700 sm:px-3"
+          />
           <Link to="/login" className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-brand-700">Log in</Link>
           <Link to="/register" className="hidden rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 sm:inline-flex">Book now</Link>
           <button

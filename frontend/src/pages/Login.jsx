@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FiArrowRight, FiEye, FiEyeOff } from 'react-icons/fi';
 import AuthShell from '../components/AuthShell';
+import InstallAppButton from '../components/shared/InstallAppButton';
 import { useAuth } from '../context/AuthContext';
 
 // Set after the first successful sign-in on this browser. It is not a credential and survives
@@ -218,6 +219,10 @@ export default function Login() {
           Create account
         </Link>
       </p>
+
+      <div className="mt-4 flex justify-center">
+        <InstallAppButton label="Install the app on this device" />
+      </div>
     </AuthShell>
   );
 }
