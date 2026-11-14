@@ -6921,3 +6921,11 @@ Change ledger:
 - Validation: frontend build OK; new `e2e/65-install-app-button.spec.js` 4/4 passed (landing page on a phone shows the steps; login page on an iPhone user agent shows the iPhone steps; top bar on a phone and a computer; hidden when running as an installed app). Not exercised: a real browser install prompt (needs staging over HTTPS on a phone).
 - Not committed or deployed.
 - Change ledger: new `frontend/src/components/shared/InstallAppButton.jsx`, `e2e/65-install-app-button.spec.js`; changed `frontend/src/hooks/usePwaInstallPrompt.js`, `frontend/src/components/layout/Topbar.jsx`, `frontend/src/components/LandingNavbar.jsx`, `frontend/src/pages/Login.jsx`, `frontend/src/main.jsx` and this handoff. No backend, API, schema, migration, permission, dependency or data change.
+
+## Deployment record — Install app button, to Render staging (2026-11-14)
+
+- The user asked to push and deploy. Committed as `1cea6e6` on `feature/analytics-decision-workspace` and pushed. Merged into `origin/staging-deploy` with `--no-ff` from a temporary worktree (merge commit `078d712`, parent `a62d760`); the merged tree is identical to `1cea6e6` (empty diff). Pushed `a62d760..078d712` at 21:47 and removed the worktree.
+- Frontend-only release: no migration, no backend or environment change. Before pushing, the Aiven database host resolved and the backend `/health/ready/` returned 200 (see the earlier incident record).
+- Verified live (21:48): the staging bundle changed (`index-DZY-hmvz.js` to `index-fzf9VJFM.js`) and the `Login` chunk contains "Install the app on this device"; backend `/health/ready/` still 200.
+- Not exercised on staging: the real browser install prompt on a phone (Android Chrome menu, iPhone Share steps); check on a device.
+- Change ledger: this handoff only; commit `1cea6e6` and merge `078d712` pushed; staging frontend redeployed.
