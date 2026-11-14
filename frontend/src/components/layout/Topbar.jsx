@@ -3,13 +3,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   FiAlertCircle,
   FiBell,
-  FiDownload,
   FiMenu
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { getNotificationDestination } from '../../utils/notificationNavigation';
-import usePwaInstallPrompt from '../../hooks/usePwaInstallPrompt';
+import InstallAppButton from '../shared/InstallAppButton';
 const routeMeta = [
   { prefix: '/admin/dashboard', section: 'Home', title: 'Dashboard', subtitle: '' },
   { prefix: '/admin/calendar', section: 'Operations', title: 'Service Calendar', subtitle: '' },
@@ -105,7 +104,6 @@ export default function Topbar({
   const bellRef = useRef(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [markAllError, setMarkAllError] = useState('');
-  const { canInstall, install } = usePwaInstallPrompt();
 
   const activeRoute = useMemo(
     () => routeMeta.find((item) => location.pathname.startsWith(item.prefix)),
@@ -204,16 +202,12 @@ export default function Topbar({
 
         {/* Right: actions */}
         <div className="flex shrink-0 items-center gap-2">
-          {canInstall && (
-            <button
-              type="button"
-              onClick={install}
-              className="hidden h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-brand-50 hover:text-brand-700 sm:inline-flex"
-            >
-              <FiDownload size={16} />
-              Install
-            </button>
-          )}
+          <InstallAppButton
+            label="Install"
+            labelClassName="hidden sm:inline"
+            className="inline-flex h-11 w-11 items-center justify-center gap-1.5 rounded-[12px] border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:bg-brand-50 hover:text-brand-700 sm:h-10 sm:w-auto sm:rounded-lg sm:px-3"
+          />
+          
           {/* Notification bell */}
           <div className="relative" ref={notificationPanelRef}>
             <button
