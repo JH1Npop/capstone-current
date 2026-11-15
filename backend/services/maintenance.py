@@ -414,6 +414,14 @@ OPEN_VISIT_REQUEST_STATUSES = ('Pending', 'Approved', 'In Progress')
 ACTIVE_PLAN_EXCLUDED_STATUSES = ('completed', 'dismissed')
 
 
+def visit_service_type_for(schedule):
+    """The service a maintenance visit is booked as: the plan service's "maintenance visit service"
+    when set in the catalog and still active, otherwise the plan's own service."""
+    service = schedule.service_type
+    target = service.maintenance_service if service.maintenance_service_id else None
+    return target if target is not None and target.is_active else service
+
+
 def open_maintenance_visit(schedule):
     """The plan's booked visit that is not finished yet (a request still pending, approved or in
     progress), or None. Uses the list view's prefetch when present, so lists stay one query."""

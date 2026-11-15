@@ -179,3 +179,35 @@ class MaintenanceVisitTests(APITestCase):
             self.book(self.admin, plan=plan)
         self.client.force_authenticate(user=self.admin)
         self.assertEqual(count_queries(), few)
+
+
+class MaintenanceVisitServiceSettingTests(MaintenanceVisitTests):
+    def test_the_catalog_setting_picks_the_visit_service(self):
+        cleaning = ServiceType.objects.create(name='Solar Panel Cleaning', estimated_duration=60)
+        self.service.maintenance_service = cleaning
+        self.service.save(update_fields=['maintenance_service'])
+
+        self.client.force_authenticate(user=self.admin)
+        row = self.client.get(f'/api/services/maintenance-schedules/{self.plan.id}/').data
+        self.assertEqual(row['visit_service_type'], cleaning.id)
+        self.assertEqual(row['visit_service_type_name'], 'Solar Panel Cleaning')
+
+        response = self.book(self.admin)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(ServiceRequest.objects.get(pk=response.data['request']['id']).service_type_id, cleaning.id)
+
+    def test_an_inactive_setting_falls_back_and_cannot_be_chosen(self):
+        retired = ServiceType.objects.create(name='Old Cleaning', estimated_duration=60, is_active=False)
+        self.service.maintenance_service = retired
+        self.service.save(update_fields=['maintenance_service'])
+        self.client.force_authenticate(user=self.admin)
+        self.assertEqual(self.client.get(f'/api/services/maintenance-schedules/{self.plan.id}/').data['visit_service_type'], self.service.id)
+
+        superadmin = User.objects.create_user(username='visit-super', password='x', role='superadmin')
+        self.client.force_authenticate(user=superadmin)
+        response = self.client.patch(f'/api/services/service-types/{self.service.id}/', {'maintenance_service': retired.id}, format='json')
+        self.assertEqual(response.status_code, 400)
+        active = ServiceType.objects.create(name='Panel Wash', estimated_duration=60)
+        response = self.client.patch(f'/api/services/service-types/{self.service.id}/', {'maintenance_service': active.id}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['maintenance_service_name'], 'Panel Wash')

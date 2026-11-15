@@ -209,6 +209,16 @@ class MaintenanceScheduleSerializer(serializers.ModelSerializer):
     service_address = serializers.SerializerMethodField()
     days_until_due = serializers.SerializerMethodField()
     booked_visit = serializers.SerializerMethodField()
+    visit_service_type = serializers.SerializerMethodField()
+    visit_service_type_name = serializers.SerializerMethodField()
+
+    def get_visit_service_type(self, obj):
+        from services.maintenance import visit_service_type_for
+        return visit_service_type_for(obj).id
+
+    def get_visit_service_type_name(self, obj):
+        from services.maintenance import visit_service_type_for
+        return visit_service_type_for(obj).name
 
     def get_booked_visit(self, obj):
         from services.maintenance import open_maintenance_visit
@@ -254,7 +264,8 @@ class MaintenanceScheduleSerializer(serializers.ModelSerializer):
             'maintenance_notes', 'risk_level', 'risk_score', 'prediction_notes',
             'due_soon_notified_at', 'three_day_notified_at', 'due_notified_at',
             'client_notified_at', 'client_three_day_notified_at',
-            'client_due_notified_at', 'days_until_due', 'booked_visit', 'created_at', 'updated_at',
+            'client_due_notified_at', 'days_until_due', 'booked_visit', 'visit_service_type',
+            'visit_service_type_name', 'created_at', 'updated_at',
         ]
 
 

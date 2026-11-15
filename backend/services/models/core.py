@@ -87,6 +87,14 @@ class ServiceType(models.Model):
         default=0,
         help_text="Percentage or fixed PHP amount, depending on deposit_policy.",
     )
+    maintenance_service = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        help_text="Service booked for this service's maintenance visits (e.g. Solar Installation -> Solar Panel Cleaning).",
+    )
 
     def __str__(self):
         return self.name

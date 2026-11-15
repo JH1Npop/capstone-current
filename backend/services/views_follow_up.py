@@ -19,6 +19,7 @@ from .maintenance import (
     ACTIVE_PLAN_EXCLUDED_STATUSES,
     OPEN_VISIT_REQUEST_STATUSES,
     open_maintenance_visit,
+    visit_service_type_for,
     apply_reminder_window,
     ensure_maintenance_follow_up_case,
     evaluate_schedule_status,
@@ -328,7 +329,7 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
             'service_type',
         ).prefetch_related('serviceticket_set').order_by('-id')
         return MaintenanceSchedule.objects.select_related(
-            'client', 'service_type', 'service_ticket__request__location',
+            'client', 'service_type__maintenance_service', 'service_ticket__request__location',
         ).prefetch_related(Prefetch('maintenance_visits', queryset=open_visits, to_attr='open_visits'))
 
     def get_queryset(self):
@@ -612,7 +613,7 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
         if notes:
             description = f"{description} {notes}"
         payload = {
-            'service_type': request.data.get('service_type') or schedule.service_type_id,
+            'service_type': request.data.get('service_type') or visit_service_type_for(schedule).id,
             'description': description,
             'priority': 'Normal',
             'preferred_date': preferred_date,
@@ -649,7 +650,7 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = self._base_queryset().filter(client=request.user).exclude(status='completed').order_by('next_due_date', 'id')
         serializer = self.get_serializer(queryset, many=True)
         keep = (
-            'id', 'ticket_id', 'ticket_code', 'service_type', 'service_type_name', 'service_address', 'maintenance_profile_label',
-            'interval_days', 'last_service_date', 'next_due_date', 'status', 'days_until_due', 'booked_visit',
+            'id', 'ticket_id', 'ticket_code', 'service_type', 'service_type_name', 'visit_service_type',
+            'visit_service_type_name', 'service_address', 'maintenance_profile_label', 'interval_days', 'last_service_date', 'next_due_date', 'status', 'days_until_due', 'booked_visit',
         )
         return Response([{key: row[key] for key in keep} for row in serializer.data])

@@ -17,7 +17,10 @@ export default function BookMaintenanceVisitDialog({ plan, audience = 'office', 
   const today = getLocalDateInputValue();
   const dueDate = plan?.next_due_date && plan.next_due_date >= today ? plan.next_due_date : today;
   const [serviceTypes, setServiceTypes] = useState([]);
-  const [serviceTypeId, setServiceTypeId] = useState(plan?.service_type ? String(plan.service_type) : '');
+  // The catalog's "maintenance visit service" for the plan's service, else the plan's own service.
+  const defaultServiceId = plan?.visit_service_type || plan?.service_type;
+  const defaultServiceName = plan?.visit_service_type_name || plan?.service_type_name;
+  const [serviceTypeId, setServiceTypeId] = useState(defaultServiceId ? String(defaultServiceId) : '');
   const [preferredDate, setPreferredDate] = useState(dueDate);
   const [timeSlot, setTimeSlot] = useState('');
   const [notes, setNotes] = useState('');
@@ -73,8 +76,8 @@ export default function BookMaintenanceVisitDialog({ plan, audience = 'office', 
         <label className="block text-sm font-semibold text-slate-800">
           Service
           <select value={serviceTypeId} onChange={(event) => setServiceTypeId(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal">
-            {!serviceTypes.some((type) => String(type.id) === serviceTypeId) && plan?.service_type_name ? (
-              <option value={serviceTypeId}>{plan.service_type_name}</option>
+            {!serviceTypes.some((type) => String(type.id) === serviceTypeId) && defaultServiceName ? (
+              <option value={serviceTypeId}>{defaultServiceName}</option>
             ) : null}
             {serviceTypes.map((type) => <option key={type.id} value={String(type.id)}>{type.name}</option>)}
           </select>

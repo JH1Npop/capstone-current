@@ -46,7 +46,7 @@ class ServiceTypeViewSet(viewsets.ModelViewSet):
     serializer_class = ServiceTypeSerializer
 
     def get_queryset(self):
-        queryset = ServiceType.objects.all()
+        queryset = ServiceType.objects.select_related('maintenance_service')
         include_inactive = self.request.query_params.get('include_inactive') == 'true'
         user = getattr(self.request, 'user', None)
         can_view_full_catalog = bool(

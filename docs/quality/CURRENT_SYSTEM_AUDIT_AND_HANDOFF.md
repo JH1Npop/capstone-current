@@ -1343,6 +1343,7 @@ database:
 | `services.0066_document_output_archive` | Adds private generated DOCX output history with template/source provenance, checksums, actor, status, and configured-storage file reference; applied to disposable tests and local development on 2026-11-02; staging/production untouched |
 | `services.0067_dynamic_custom_documents` | Adds definition access restrictions, typed custom fields, source-bound custom document instances, private supporting attachments, instance-linked output provenance, and nullable output tickets for client/project-backed custom documents; applied to disposable tests and local development on 2026-11-02; staging/production untouched |
 | `services.0070_servicerequest_maintenance_plan` | Additive nullable `ServiceRequest.maintenance_plan` (FK to `MaintenanceSchedule`, `SET_NULL`, related name `maintenance_visits`) linking a booked maintenance visit to its plan (2026-11-16). Applied to disposable test and E2E databases only; **not applied to local development SQLite** (needs owner approval); staging applies it on its next deploy start |
+| `services.0071_servicetype_maintenance_service` | Additive nullable `ServiceType.maintenance_service` (self FK, `SET_NULL`): the service a maintenance visit is booked as (2026-11-16). Applied to disposable test and E2E databases only; **not applied to local development SQLite** (needs owner approval); staging applies it on its next deploy start |
 
 Playwright applies migrations only to ignored `backend/db.e2e.sqlite3`, then
 flushes and seeds that isolated database. Any migration of a future separate
@@ -7478,3 +7479,26 @@ Change ledger:
   - E2E: `e2e/27-admin-maintenance-controls.spec.js`, `e2e/67-client-maintenance-booking.spec.js` (new);
   - Docs: `docs/security/ROUTE_API_CAPABILITY_MATRIX.md`, `docs/security/WORKFLOW_STATE_MACHINES.md` and this handoff.
   - No permission-grant or dependency change. Not committed or deployed.
+
+### 2026-11-16 Per-service "Maintenance visit service"
+
+- **Owner request:** set once, in the catalog, which service a maintenance visit is booked as, for example Solar Installation → Solar Panel Cleaning.
+- **Setting:** the new nullable `ServiceType.maintenance_service` (self FK, `SET_NULL`), migration `services.0071_servicetype_maintenance_service`.
+  - It is edited on Admin → Services, in the service form's "Maintenance visit service" field. The default is "Same as this service".
+  - The serializer rejects an inactive choice and returns `maintenance_service_name`.
+- **Booking default:** `visit_service_type_for(plan)` returns the plan service's maintenance service if it is set and active, otherwise the plan's own service.
+  - Plan rows (office list and the client's `mine`) now carry `visit_service_type` and `visit_service_type_name`.
+  - The booking dialog pre-selects that service, and it can still be changed.
+  - `book-visit` with no `service_type` uses it.
+- **Speed:** the catalog lists (`/api/services/service-types/` and `/api/admin/services/`) and the maintenance list load the maintenance service in the same query, with no per-row lookups.
+- **Validation:**
+  - `npm run test:backend`: 998 tests OK (7 skipped), including 2 new setting tests in `test_maintenance_visits.py`.
+  - `npm run build:frontend`: OK.
+  - `makemigrations --check`: no changes.
+  - Playwright 22 (Services form saves the setting) and 27: 4 passed, and 67 passed.
+- **Schema:** `services.0071` (additive, nullable). Like `0070`, it is **not applied to local development SQLite**; staging applies it on deploy.
+- **Change ledger:**
+  - Backend: `backend/services/models/core.py`, `backend/services/migrations/0071_servicetype_maintenance_service.py` (new), `backend/services/serializers/requests.py`, `backend/services/serializers/after_sales.py`, `backend/services/maintenance.py`, `backend/services/views_follow_up.py`, `backend/services/views/service_types.py`, `backend/users/views/admin_services.py`, `backend/services/tests/test_maintenance_visits.py`;
+  - Frontend: `frontend/src/pages/admin/AdminServices.jsx`, `frontend/src/api/admin.js`, `frontend/src/components/shared/BookMaintenanceVisitDialog.jsx`;
+  - E2E: `e2e/22-admin-services-controls.spec.js`;
+  - Docs: this handoff.

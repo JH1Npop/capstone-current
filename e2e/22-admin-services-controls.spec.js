@@ -99,6 +99,10 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await form.getByLabel('Inspection check 1', { exact: true }).fill('Roof can carry the array');
       await form.getByLabel('Pre-service deposit').selectOption('percentage');
       await form.getByLabel('Deposit percentage').fill('150');
+      const maintenanceService = form.getByLabel('Maintenance visit service');
+      await expect(maintenanceService).toHaveValue('');
+      await maintenanceService.selectOption({ index: 1 });
+      const chosenMaintenanceService = await maintenanceService.inputValue();
       await form.getByRole('button', { name: 'Create Service' }).click();
       await expect(form.getByRole('alert')).toHaveText('Deposit percentage must be greater than 0 and no more than 100.');
       await form.getByLabel('Deposit percentage').fill('50');
@@ -113,6 +117,8 @@ for (const username of ['admin_test', 'superadmin_test']) {
       });
       expect(Number(created.estimated_cost)).toBe(2500);
       expect(Number(created.deposit_value)).toBe(50);
+      expect(String(created.maintenance_service)).toBe(chosenMaintenanceService);
+      expect(created.maintenance_service_name).toBeTruthy();
       expect(created.procedures.map((step) => [step.step, step.title, step.requires_photo])).toEqual([[1, 'Inspect the array', true], [2, 'Test the output', false]]);
       expect(created.required_equipment).toEqual([{ name: 'Multimeter', quantity: 2 }]);
       expect(created.inspection_procedures.map((check) => check.title)).toEqual(['Roof can carry the array']);
