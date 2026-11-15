@@ -7370,3 +7370,34 @@ Change ledger:
 - Run #2 (manual, `main`) finished green in 58 s. Run #1 (scheduled, 2:37 PM, before the secrets existed) failed after 9 s, as expected.
 - Not checked: the final step text of run #2 and whether any reminder rows or emails were produced (zero is valid when nothing is due).
 - Change ledger: this handoff only. No code, schema, permission, dependency or data change.
+
+### 2026-11-15 Maintenance plans continue: "Mark completed" starts the next cycle
+
+- **Owner request:** "we need to fix the cycle". Marking maintenance done used to end the plan for good (`completed`), so the client was never reminded again.
+- **Now:**
+  - `complete` (Maintenance page) and resolving the maintenance case (After-Sales page) start the next cycle. The new helper is `start_next_maintenance_cycle` in `services/maintenance.py`:
+    - `last_service_date` = the date the work was done;
+    - `next_due_date` = that date + `interval_days`;
+    - `notify_on_date` is recalculated;
+    - all six reminder timestamps are cleared;
+    - the status is recomputed (normally `scheduled`);
+    - the client gets an in-app "Next Maintenance Scheduled" notice.
+  - The Maintenance page's "Mark completed" dialog now asks "Date the work was done" (default today). The server checks `performed_on`: not in the future, and not before the last service date.
+  - Resolving a maintenance case advances the plan only the first time that case is resolved, using the case's event history. Reopening and resolving again does not skip another cycle.
+  - "Stop reminders" is now the only way to end a plan.
+- **Also fixed:** `sync_maintenance_schedule` re-saves the plan from the original job on every inspection or turnover save. It no longer overwrites dates that have moved on, either through a later cycle or a manual reschedule. Before this, a later inspection or turnover edit silently undid a reschedule.
+- **Validation:**
+  - `npm run test:backend`: 971 tests OK (7 skipped). There are 4 new tests in `services/tests/test_maintenance_workflow.py`, and `test_after_sales_rules` was updated.
+  - `npm run build:frontend`: OK.
+  - Playwright 27 and 61 (both updated): 3 passed.
+- **Known limits:**
+  - Schedules already marked `completed` (legacy) stay completed. Restarting them needs an owner-approved data fix.
+  - The "Completed" filter will stay empty for new work.
+  - The "Due soon" status label still uses the 7-day window, while the first reminder follows the Maintenance Reminder setting. This is not changed.
+- **Change ledger:**
+  - `backend/services/maintenance.py`, `backend/services/views_follow_up.py`;
+  - `backend/services/tests/test_maintenance_workflow.py`, `backend/services/tests/test_after_sales_rules.py`;
+  - `frontend/src/pages/admin/AdminMaintenance.jsx`, `frontend/src/api/services.js`;
+  - `e2e/27-admin-maintenance-controls.spec.js`, `e2e/61-maintenance-case-schedule.spec.js`;
+  - `docs/security/WORKFLOW_STATE_MACHINES.md` and this handoff.
+  - No schema, migration, permission or dependency change. Committed and merged to `staging-deploy` on 2026-11-15 at the owner's request.

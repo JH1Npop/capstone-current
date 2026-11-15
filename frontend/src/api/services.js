@@ -1013,8 +1013,8 @@ export const rescheduleMaintenanceSchedule = (scheduleId, { nextDueDate, reason 
   runMaintenanceAction(scheduleId, 'reschedule', { next_due_date: nextDueDate, reason })
 );
 
-export const completeMaintenanceSchedule = (scheduleId, reason) => (
-  runMaintenanceAction(scheduleId, 'complete', { reason })
+export const completeMaintenanceSchedule = (scheduleId, { reason, performedOn } = {}) => (
+  runMaintenanceAction(scheduleId, 'complete', { reason, ...(performedOn ? { performed_on: performedOn } : {}) })
 );
 
 export const fetchFollowUpCaseSummary = async (filters = {}) => {

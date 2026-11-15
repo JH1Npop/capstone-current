@@ -443,7 +443,129 @@ class MaintenanceWorkflowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         schedule.refresh_from_db()
         case.refresh_from_db()
-        self.assertEqual(schedule.status, 'completed')
+        # The plan continues: the next cycle counts from today.
+        self.assertEqual(schedule.status, 'scheduled')
+        self.assertEqual(schedule.last_service_date, business_today())
+        self.assertEqual(schedule.next_due_date, business_today() + timedelta(days=90))
         self.assertEqual(case.status, 'resolved')
         self.assertIsNotNone(case.resolved_at)
         self.assertIn('performed and verified', case.resolution_notes)
+
+    def _due_schedule_with_sent_reminders(self, interval_days=10):
+        now = timezone.now()
+        return MaintenanceSchedule.objects.create(
+            service_ticket=self.ticket,
+            client=self.client_user,
+            service_type=self.service_type,
+            maintenance_profile='commercial_area',
+            interval_days=interval_days,
+            last_service_date=business_today() - timedelta(days=interval_days),
+            next_due_date=business_today(),
+            notify_on_date=business_today() - timedelta(days=7),
+            status='due',
+            due_soon_notified_at=now, three_day_notified_at=now, due_notified_at=now,
+            client_notified_at=now, client_three_day_notified_at=now, client_due_notified_at=now,
+        )
+
+    def test_completed_maintenance_starts_the_next_cycle_and_reminders_fire_again(self):
+        schedule = self._due_schedule_with_sent_reminders(interval_days=10)
+        self.client.force_authenticate(user=self.admin_user)
+        performed_on = business_today() - timedelta(days=2)
+
+        response = self.client.post(
+            f'/api/services/maintenance-schedules/{schedule.id}/complete/',
+            {'reason': 'Cleaned panels.', 'performed_on': performed_on.isoformat()},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.last_service_date, performed_on)
+        self.assertEqual(schedule.next_due_date, performed_on + timedelta(days=10))
+        self.assertEqual(schedule.notify_on_date, schedule.next_due_date - timedelta(days=7))
+        for field_name in ('due_soon_notified_at', 'three_day_notified_at', 'due_notified_at',
+                           'client_notified_at', 'client_three_day_notified_at', 'client_due_notified_at'):
+            self.assertIsNone(getattr(schedule, field_name), field_name)
+        self.assertTrue(Notification.objects.filter(user=self.client_user, title='Next Maintenance Scheduled').exists())
+
+        # The scheduler reminds again in the new cycle and opens a fresh case for it.
+        with patch('services.maintenance.send_mail'):
+            summary = process_maintenance_alerts(reference_date=schedule.next_due_date - timedelta(days=5))
+        self.assertEqual(summary['seven_day'], 1)
+        open_cases = FollowUpCase.objects.filter(service_ticket=self.ticket, case_type='maintenance', status='open')
+        self.assertEqual(open_cases.count(), 1)
+        self.assertEqual(open_cases.get().due_date, schedule.next_due_date)
+
+    def test_complete_rejects_a_future_or_too_early_performed_date(self):
+        schedule = self._due_schedule_with_sent_reminders()
+        self.client.force_authenticate(user=self.admin_user)
+        url = f'/api/services/maintenance-schedules/{schedule.id}/complete/'
+        future = self.client.post(url, {'reason': 'x', 'performed_on': (business_today() + timedelta(days=1)).isoformat()}, format='json')
+        early = self.client.post(url, {'reason': 'x', 'performed_on': (schedule.last_service_date - timedelta(days=1)).isoformat()}, format='json')
+        self.assertEqual(future.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(early.status_code, status.HTTP_400_BAD_REQUEST)
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.next_due_date, business_today())
+
+    def test_resolving_a_maintenance_case_starts_the_next_cycle_only_once(self):
+        ServiceTicket.objects.filter(pk=self.ticket.pk).update(status='Completed', completed_date=timezone.now())
+        schedule = self._due_schedule_with_sent_reminders(interval_days=30)
+        case = FollowUpCase.objects.create(
+            service_ticket=self.ticket,
+            client=self.client_user,
+            case_type='maintenance',
+            status='open',
+            priority='high',
+            summary='Maintenance due',
+            due_date=schedule.next_due_date,
+            creation_source='maintenance_alert',
+        )
+        self.client.force_authenticate(user=self.admin_user)
+        url = f'/api/services/follow-up-cases/{case.id}/'
+
+        resolved = self.client.patch(url, {'status': 'resolved', 'resolution_notes': 'Done on site.'}, format='json')
+        self.assertEqual(resolved.status_code, status.HTTP_200_OK, resolved.data)
+        schedule.refresh_from_db()
+        first_due = schedule.next_due_date
+        self.assertEqual(first_due, business_today() + timedelta(days=30))
+        self.assertEqual(schedule.status, 'scheduled')
+
+        # Reopening and resolving the same case again must not skip another cycle.
+        self.client.patch(url, {'status': 'open'}, format='json')
+        again = self.client.patch(url, {'status': 'resolved', 'resolution_notes': 'Done on site.'}, format='json')
+        self.assertEqual(again.status_code, status.HTTP_200_OK, again.data)
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.next_due_date, first_due)
+
+    def test_later_inspection_or_turnover_sync_keeps_the_current_cycle(self):
+        from services.maintenance import sync_maintenance_schedule
+        InspectionChecklist.objects.create(
+            ticket=self.ticket,
+            maintenance_required=True,
+            maintenance_profile='commercial_area',
+        )
+        self.ticket.status = 'Completed'
+        self.ticket.completed_date = timezone.now() - timedelta(days=100)
+        self.ticket.save()
+        schedule = sync_maintenance_schedule(self.ticket)
+        job_cycle_due = schedule.next_due_date
+
+        # A later cycle was recorded; re-syncing from the job must not put the old dates back.
+        from services.maintenance import start_next_maintenance_cycle
+        start_next_maintenance_cycle(schedule, performed_on=business_today())
+        sync_maintenance_schedule(self.ticket)
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.next_due_date, business_today() + timedelta(days=90))
+        self.assertNotEqual(schedule.next_due_date, job_cycle_due)
+
+        # Same for a manual reschedule.
+        new_date = business_today() + timedelta(days=20)
+        self.client.force_authenticate(user=self.admin_user)
+        self.client.post(
+            f'/api/services/maintenance-schedules/{schedule.id}/reschedule/',
+            {'reason': 'Client asked.', 'next_due_date': new_date.isoformat()},
+            format='json',
+        )
+        sync_maintenance_schedule(self.ticket)
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.next_due_date, new_date)
