@@ -13,7 +13,12 @@ from rest_framework.response import Response
 
 from users.permissions import CanAccessAfterSales, CanManageAfterSalesCases
 
-from .maintenance import ensure_maintenance_follow_up_case, evaluate_schedule_status, process_maintenance_alerts
+from .maintenance import (
+    ensure_maintenance_follow_up_case,
+    evaluate_schedule_status,
+    process_maintenance_alerts,
+    start_next_maintenance_cycle,
+)
 from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent, MaintenanceSchedule, ServiceTicket
 from .serializers import FollowUpCaseSerializer, MaintenanceScheduleSerializer
 from .views.helpers import _display_name, _notify_admin_superadmin
@@ -157,13 +162,18 @@ class FollowUpCaseViewSet(viewsets.ModelViewSet):
             case.save(update_fields=['resolved_at'])
 
         # A maintenance case drives its schedule only while the schedule is active: "resolved" means
-        # the maintenance was done (schedule completed); "closed" ends the case without the work, so
-        # reminders continue. A completed (final) or stopped schedule is never changed from a case;
-        # use the schedule's own Resume / Complete actions for those.
+        # the maintenance was done (the next cycle starts); "closed" ends the case without the work, so
+        # reminders continue. A stopped (or legacy completed) schedule is never changed from a case;
+        # use the schedule's own Resume action for that.
         schedule_is_active = maintenance_schedule is not None and maintenance_schedule.status not in {'completed', 'dismissed'}
         if schedule_is_active and case.case_type == 'maintenance' and case.status != 'closed':
             if case.status == 'resolved':
-                maintenance_schedule.status = 'completed'
+                # Done: start the next cycle, but only the first time this case is resolved
+                # (reopening and resolving it again must not skip another cycle ahead).
+                resolved_before = AfterSalesCaseEvent.objects.filter(case=case, to_status='resolved').exists()
+                if previous_status != 'resolved' and not resolved_before:
+                    maintenance_schedule._activity_reason = case.resolution_notes or 'Maintenance case resolved.'
+                    start_next_maintenance_cycle(maintenance_schedule)
             else:
                 today = business_today()
                 if today >= maintenance_schedule.next_due_date:
@@ -452,15 +462,26 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
         if schedule.status == 'completed':
             raise ValidationError({'status': 'Maintenance is already completed.'})
 
-        schedule._activity_reason = reason
-        schedule.status = 'completed'
-        schedule.save(update_fields=['status', 'updated_at'])
+        performed_on = business_today()
+        raw_performed_on = str(request.data.get('performed_on') or '').strip()
+        if raw_performed_on:
+            performed_on = parse_date(raw_performed_on)
+            if performed_on is None:
+                raise ValidationError({'performed_on': 'Choose a valid date for when the maintenance was done.'})
+            if performed_on > business_today():
+                raise ValidationError({'performed_on': 'The maintenance date cannot be in the future.'})
+            if performed_on < schedule.last_service_date:
+                raise ValidationError({'performed_on': 'The maintenance date cannot be before the last service date.'})
+
         self._close_linked_cases(
             schedule,
             actor=request.user,
             status_value='resolved',
             reason=f'Maintenance completed: {reason}',
         )
+        # The plan continues: the next cycle starts from the day the work was done.
+        schedule._activity_reason = reason
+        start_next_maintenance_cycle(schedule, performed_on=performed_on)
         return Response(self.get_serializer(schedule).data)
 
     @action(detail=False, methods=['get'])

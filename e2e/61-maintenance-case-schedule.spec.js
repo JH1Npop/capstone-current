@@ -6,8 +6,8 @@ import { loadAuthStateFromBackend, seedAuthState } from './helpers';
 
 // A maintenance case and its schedule (server rules: MaintenanceCaseScheduleLinkTests in
 // backend/services/tests/test_after_sales_rules.py). On the After-Sales page the office marks the
-// maintenance case done: the schedule becomes completed. Reopening the case keeps the completed
-// schedule completed (it used to be put back to "due").
+// maintenance case done: the schedule starts its next cycle (due one interval after today).
+// Reopening the case keeps that cycle; it does not jump another cycle ahead.
 
 const runShell = (script) => {
   const repoRoot = process.cwd();
@@ -20,7 +20,7 @@ const runShell = (script) => {
 test.describe('Maintenance case and schedule', () => {
   test.describe.configure({ timeout: 300000 });
 
-  test('61 - marking a maintenance case done completes the schedule; reopening keeps it completed', async ({ browser, request }) => {
+  test('61 - marking a maintenance case done starts the next cycle; reopening keeps that cycle', async ({ browser, request }) => {
     const superAuth = loadAuthStateFromBackend('superadmin_test');
     const headers = { Authorization: `Token ${superAuth.token}` };
     const stamp = Date.now();
@@ -43,6 +43,8 @@ test.describe('Maintenance case and schedule', () => {
     ].join('; '));
     const [scheduleId, caseId] = output.match(/IDS (\d+) (\d+)/).slice(1).map(Number);
     const scheduleStatus = async () => (await (await request.get(`/api/services/maintenance-schedules/${scheduleId}/?status=all`, { headers })).json()).status;
+    const scheduleDue = async () => (await (await request.get(`/api/services/maintenance-schedules/${scheduleId}/?status=all`, { headers })).json()).next_due_date;
+    const firstDue = await scheduleDue();
     const caseStatus = async () => (await (await request.get(`/api/services/follow-up-cases/${caseId}/`, { headers })).json()).status;
     const caseCode = `ASC-${String(caseId).padStart(4, '0')}`;
 
@@ -64,15 +66,18 @@ test.describe('Maintenance case and schedule', () => {
       await decision.getByLabel('Resolution notes').fill('Panels cleaned and inverter checked on site.');
       await decision.getByRole('button', { name: 'Resolve Case' }).click();
       await expect(page.getByRole('status')).toContainText(`${caseCode} is marked as done.`);
-      await expect.poll(scheduleStatus).toBe('completed');
+      // The next cycle starts: due 90 days after today.
+      await expect.poll(scheduleStatus).toBe('scheduled');
+      const nextDue = await scheduleDue();
+      expect(nextDue).not.toBe(firstDue);
 
-      // ── Reopen: the case reopens; the completed schedule stays completed ──
+      // ── Reopen: the case reopens; the new cycle is kept (no second jump) ──
       await row.getByRole('button', { name: `Reopen ${caseCode}` }).click();
       const reopen = page.getByRole('dialog', { name: /Reopen case/i });
       await reopen.getByLabel('Reason for reopening').fill('Client reports dust on one string again.');
       await reopen.getByRole('button', { name: 'Reopen Case' }).click();
       await expect.poll(caseStatus).toBe('open');
-      expect(await scheduleStatus()).toBe('completed');
+      expect(await scheduleDue()).toBe(nextDue);
     } finally {
       await context.close();
     }

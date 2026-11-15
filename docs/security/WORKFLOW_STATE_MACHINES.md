@@ -250,8 +250,15 @@ of at most 2,000 characters.
 | `scheduled`, `due_soon`, `due` | `dismissed` | `dismiss`; stops future automation and closes any active linked maintenance case |
 | `dismissed` | Date-derived `scheduled`, `due_soon`, or `due` | `resume`; keeps already-sent reminder timestamps so the same stage is not duplicated |
 | `scheduled`, `due_soon`, `due` | Date-derived active state | `reschedule`; changes the due/notification dates and resets delivery timestamps for the new reminder cycle |
-| `scheduled`, `due_soon`, `due` | `completed` | `complete`; only for work actually performed and resolves any active linked maintenance case |
-| `completed` | none | Terminal |
+| `scheduled`, `due_soon`, `due` | Next cycle, date-derived (normally `scheduled`) | `complete`; only for work actually performed. Optional `performed_on` (default today; not in the future, not before the last service date). Resolves any active linked maintenance case, sets `last_service_date` to the performed date and `next_due_date` to one interval later, and resets every reminder timestamp so the next cycle is reminded again. The client gets an in-app "Next Maintenance Scheduled" notice |
+| `completed` | none | Legacy terminal state from before cycles continued; no action produces it now |
+
+Resolving an active schedule's maintenance case on the After-Sales page has the
+same effect as `complete` (performed today), but only the first time that case
+is resolved; reopening and resolving it again does not advance another cycle.
+Closing the case without the work keeps the current cycle and its reminders.
+Re-saving the original job's inspection or turnover does not overwrite a cycle
+that has moved on (a later cycle or a manual reschedule).
 
 Rescheduling cannot use a past date. A future reschedule closes the obsolete
 active maintenance case; a due or due-soon schedule ensures a current linked

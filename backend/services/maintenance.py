@@ -343,6 +343,53 @@ def sync_completion_warranty_case(ticket, reference_date=None):
     return case
 
 
+MAINTENANCE_REMINDER_FIELDS = (
+    'due_soon_notified_at', 'three_day_notified_at', 'due_notified_at',
+    'client_notified_at', 'client_three_day_notified_at', 'client_due_notified_at',
+)
+
+
+def start_next_maintenance_cycle(schedule, performed_on=None):
+    """Maintenance was done: the plan continues. The next due date counts from the day the work was
+    performed, and every reminder stage starts over for the new cycle. Stopping reminders is the only
+    way to end a plan."""
+    performed_on = _normalize_to_date(performed_on or business_today())
+    schedule.last_service_date = performed_on
+    schedule.next_due_date = performed_on + timedelta(days=schedule.interval_days)
+    schedule.notify_on_date = schedule.next_due_date - timedelta(days=schedule.follow_up_window_days)
+    for field_name in MAINTENANCE_REMINDER_FIELDS:
+        setattr(schedule, field_name, None)
+    schedule.status = 'scheduled'
+    schedule.status = evaluate_schedule_status(schedule, reference_date=business_today())
+    schedule.save(update_fields=[
+        'last_service_date', 'next_due_date', 'notify_on_date', 'status',
+        *MAINTENANCE_REMINDER_FIELDS, 'updated_at',
+    ])
+
+    if in_app_notifications_enabled():
+        service_name = schedule.service_type.name if schedule.service_type else 'service'
+        Notification.objects.create(
+            user=schedule.client,
+            ticket=schedule.service_ticket,
+            request=schedule.service_ticket.request,
+            title='Next Maintenance Scheduled',
+            message=(
+                f"Thank you, your {service_name} maintenance on {performed_on} is recorded. "
+                f"Next maintenance is due on {schedule.next_due_date} ({schedule.interval_days}-day interval)."
+            ),
+            type='info',
+        )
+    return schedule
+
+
+def _schedule_has_moved_on(schedule, job_service_date):
+    """True when the plan's dates no longer come from the original job: a later cycle was recorded
+    or an admin rescheduled it. Re-saving the job's inspection or turnover must not undo that."""
+    if schedule.last_service_date > job_service_date:
+        return True
+    return schedule.next_due_date != schedule.last_service_date + timedelta(days=schedule.interval_days)
+
+
 def sync_maintenance_schedule(ticket, reference_date=None):
     try:
         inspection = ticket.inspection
@@ -376,22 +423,29 @@ def sync_maintenance_schedule(ticket, reference_date=None):
         reference_date=reference_date,
     )
 
+    defaults = {
+        'client': ticket.request.client,
+        'service_type': ticket.request.service_type,
+        'maintenance_profile': inspection.maintenance_profile,
+        'interval_days': interval_days,
+        'follow_up_window_days': follow_up_window_days,
+        'last_service_date': last_service_date,
+        'next_due_date': next_due_date,
+        'notify_on_date': notify_on_date,
+        'maintenance_notes': inspection.maintenance_notes or inspection.additional_notes,
+        'risk_level': risk_data['risk_level'],
+        'risk_score': risk_data['risk_score'],
+        'prediction_notes': risk_data['prediction_notes'],
+    }
+    existing = MaintenanceSchedule.objects.filter(service_ticket=ticket).first()
+    if existing and _schedule_has_moved_on(existing, last_service_date):
+        # Keep the current cycle's dates (and the interval they were built from).
+        for field_name in ('interval_days', 'follow_up_window_days', 'last_service_date', 'next_due_date', 'notify_on_date'):
+            defaults.pop(field_name)
+
     schedule, created = MaintenanceSchedule.objects.update_or_create(
         service_ticket=ticket,
-        defaults={
-            'client': ticket.request.client,
-            'service_type': ticket.request.service_type,
-            'maintenance_profile': inspection.maintenance_profile,
-            'interval_days': interval_days,
-            'follow_up_window_days': follow_up_window_days,
-            'last_service_date': last_service_date,
-            'next_due_date': next_due_date,
-            'notify_on_date': notify_on_date,
-            'maintenance_notes': inspection.maintenance_notes or inspection.additional_notes,
-            'risk_level': risk_data['risk_level'],
-            'risk_score': risk_data['risk_score'],
-            'prediction_notes': risk_data['prediction_notes'],
-        },
+        defaults=defaults,
     )
 
     schedule.status = evaluate_schedule_status(schedule, reference_date=reference_date)

@@ -167,9 +167,14 @@ for (const username of ['admin_test', 'superadmin_test']) {
       const complete = page.getByRole('dialog', { name: 'Mark maintenance completed?' });
       await complete.getByLabel('Reason').fill('Cleaned panels and checked connections.');
       await complete.getByRole('button', { name: 'Mark completed' }).click();
-      await expect(page.getByRole('status')).toContainText('Maintenance marked completed.');
-      await expect.poll(async () => (await scheduleFor()).status).toBe('completed');
-      await page.getByRole('button', { name: 'Completed', exact: true }).click();
+      await expect(page.getByRole('status')).toContainText('The next maintenance cycle is scheduled');
+      // The plan continues: the next cycle counts from the date the work was done (today).
+      await expect.poll(async () => (await scheduleFor()).status).toBe('scheduled');
+      const nextCycle = await scheduleFor();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const cycleDays = (Date.parse(nextCycle.next_due_date) - Date.parse(nextCycle.last_service_date)) / dayMs;
+      expect(cycleDays).toBe(nextCycle.interval_days);
+      expect(nextCycle.client_notified_at).toBeNull();
       await expect(row).toBeVisible();
     });
   });

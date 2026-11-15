@@ -101,13 +101,15 @@ class CaseStatusRuleTests(AfterSalesFixture):
 
 
 class MaintenanceCaseScheduleLinkTests(AfterSalesFixture):
-    def test_resolving_the_case_completes_an_active_schedule(self):
+    def test_resolving_the_case_starts_the_next_cycle(self):
         ticket = self.ticket()
         schedule = self.schedule('due', ticket=ticket)
         case = self.case('open', case_type='maintenance', ticket=ticket)
         self.assertEqual(self.patch_case(case, {'status': 'resolved', 'resolution_notes': 'Panels cleaned and tested.'}).status_code, 200)
         schedule.refresh_from_db()
-        self.assertEqual(schedule.status, 'completed')
+        self.assertEqual(schedule.status, 'scheduled')
+        self.assertEqual(schedule.last_service_date, business_today())
+        self.assertEqual(schedule.next_due_date, business_today() + timedelta(days=schedule.interval_days))
 
     def test_closing_the_case_without_the_work_keeps_reminders_going(self):
         ticket = self.ticket()

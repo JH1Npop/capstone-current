@@ -123,7 +123,7 @@ export default function AdminMaintenance() {
     setActionMode(mode);
     setActionReason('');
     setActionError('');
-    setActionDate(mode === 'reschedule' ? (selected?.next_due_date || '') : '');
+    setActionDate(mode === 'reschedule' ? (selected?.next_due_date || '') : mode === 'complete' ? localDateValue() : '');
   };
 
   const closeAction = () => {
@@ -136,7 +136,7 @@ export default function AdminMaintenance() {
 
   const submitAction = async () => {
     if (!selected || !actionMode || !actionReason.trim()) return;
-    if (actionMode === 'reschedule' && !actionDate) return;
+    if (['reschedule', 'complete'].includes(actionMode) && !actionDate) return;
     const submittedMode = actionMode;
     setActionLoading(true);
     setActionError('');
@@ -150,7 +150,12 @@ export default function AdminMaintenance() {
           reason: actionReason.trim(),
         });
       }
-      if (actionMode === 'complete') await completeMaintenanceSchedule(selected.id, actionReason.trim());
+      if (actionMode === 'complete') {
+        await completeMaintenanceSchedule(selected.id, {
+          reason: actionReason.trim(),
+          performedOn: actionDate,
+        });
+      }
     } catch (requestError) {
       setActionError(requestError.message || 'Unable to update maintenance.');
       setActionLoading(false);
@@ -161,7 +166,7 @@ export default function AdminMaintenance() {
       dismiss: 'Maintenance reminders stopped. The record remains available under Stopped.',
       resume: 'Maintenance reminders resumed.',
       reschedule: 'Maintenance date updated and reminder stages reset.',
-      complete: 'Maintenance marked completed.',
+      complete: 'Maintenance marked completed. The next maintenance cycle is scheduled and reminders start over.',
     }[submittedMode]);
     setSelected(null);
     setActionMode('');
@@ -207,7 +212,7 @@ export default function AdminMaintenance() {
     },
     complete: {
       title: 'Mark maintenance completed?',
-      message: 'Use this only when the maintenance work was actually performed.',
+      message: 'Use this only when the maintenance work was actually performed. The next cycle starts from the date the work was done, and the client is reminded again before it. To end the plan, use Stop reminders instead.',
       confirmLabel: 'Mark completed',
       tone: 'success',
       placeholder: 'Record how the maintenance was completed.',
@@ -333,7 +338,7 @@ export default function AdminMaintenance() {
           icon={actionMode === 'complete' ? 'success' : actionMode === 'dismiss' ? 'warning' : 'info'}
           confirmLabel={actionDialogCopy.confirmLabel}
           loading={actionLoading}
-          disabled={!actionReason.trim() || (actionMode === 'reschedule' && !actionDate)}
+          disabled={!actionReason.trim() || (['reschedule', 'complete'].includes(actionMode) && !actionDate)}
           onConfirm={submitAction}
           onCancel={closeAction}
         >
@@ -342,6 +347,13 @@ export default function AdminMaintenance() {
               <label className="block text-sm font-semibold text-slate-800">
                 New maintenance date
                 <input type="date" value={actionDate} min={localDateValue()} onChange={(event) => setActionDate(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" />
+              </label>
+            ) : null}
+            {actionMode === 'complete' ? (
+              <label className="block text-sm font-semibold text-slate-800">
+                Date the work was done
+                <input type="date" value={actionDate} min={selected?.last_service_date || undefined} max={localDateValue()} onChange={(event) => setActionDate(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" />
+                <span className="mt-1 block text-xs font-normal text-slate-500">Next maintenance is due {selected?.interval_days || 0} days after this date.</span>
               </label>
             ) : null}
             <label className="block text-sm font-semibold text-slate-800">
