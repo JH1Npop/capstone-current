@@ -11,6 +11,7 @@ from services.serializers import SolarCommissioningChecklistSerializer, Turnover
 from services.views.helpers import *  # noqa: F401,F403
 from django.shortcuts import get_object_or_404
 from services.tracking_config import get_tracking_config
+from services import location_quality, route_tracking
 
 class TechnicianSkillViewSet(viewsets.ModelViewSet):
     queryset = TechnicianSkill.objects.select_related('technician', 'service_type')
@@ -607,31 +608,45 @@ class TechnicianLocationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'error': 'Longitude must be between -180 and 180'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            accuracy = float(raw_accuracy or 0)
+            accuracy = max(float(raw_accuracy or 0), 0.0)
         except (TypeError, ValueError):
             accuracy = 0
 
-        updated_at = timezone.now()
+        # Ignore cached leftovers, and rough readings while a precise one is recent
+        # (services/location_quality.py). Ignored readings are not saved anywhere.
+        now = timezone.now()
+        measured_at, too_old = location_quality.reading_time(request.data.get('reading_age_ms'), now=now)
+        if too_old:
+            return Response({'status': 'Reading ignored', 'accepted': False, 'reason': 'stale_reading'})
+        if location_quality.should_keep_previous_position(technician, accuracy, now=now):
+            return Response({'status': 'Reading ignored', 'accepted': False, 'reason': 'rough_reading'})
+
         profile = technician._get_or_create_technician_profile()
         profile.current_latitude = latitude
         profile.current_longitude = longitude
-        profile.last_location_update = updated_at
+        profile.last_location_update = measured_at
         profile.save(update_fields=['current_latitude', 'current_longitude', 'last_location_update', 'updated_at'])
 
-        # Save to history
-        TechnicianLocationHistory.objects.create(
+        # Save to history, stamped with when the phone measured it (auto_now_add sets "now").
+        history = TechnicianLocationHistory.objects.create(
             technician=technician,
             latitude=latitude,
             longitude=longitude,
             accuracy=accuracy
         )
+        if measured_at != history.timestamp:
+            TechnicianLocationHistory.objects.filter(pk=history.pk).update(timestamp=measured_at)
+
+        # Navigating: keep the road route current, rerouting when off it (services/route_tracking.py).
+        route_tracking.maybe_reroute(technician, latitude, longitude, accuracy)
 
         return Response({
             'status': 'Location updated',
+            'accepted': True,
             'latitude': float(latitude),
             'longitude': float(longitude),
             'accuracy': accuracy,
-            'last_update': updated_at,
+            'last_update': measured_at,
         })
 
     @action(detail=False, methods=['get'])

@@ -1,6 +1,8 @@
 """Tests split mechanically from the former services.tests module."""
 
 from ._imports import *  # noqa: F403,F405
+from django.conf import settings
+from django.test import SimpleTestCase
 
 
 class CoverageHeatmapTests(APITestCase):
@@ -246,6 +248,51 @@ class CoverageHeatmapAccuracyTests(APITestCase):
         self.assertEqual([(row['area_name'], row['count']) for row in levels['province']], [('Laguna', 3)])
         self.assertAlmostEqual(levels['province'][0]['lat'], (14.2786 + 14.2986 + 14.3286) / 3)
 
+    def test_municipality_level_places_jobs_by_coordinates_not_typed_city(self):
+        # Sta. Rosa and Calamba centres; the first city is typed wrongly on purpose.
+        self._completed(self.first_client, [self.solar], 14.2840, 121.0920, city='Typo City', province='Laguna')
+        self._completed(self.second_client, [self.battery], 14.2770, 121.0990, city='', province='')
+        self._completed(self.first_client, [self.solar], 14.2000, 121.1600, city='Calamba', province='Laguna')
+        # Manila Bay, outside every CALABARZON outline.
+        self._completed(self.first_client, [self.solar], 14.5500, 120.8000, city='Sea', province='Sea')
+
+        data = self._get()
+        rows = data['geographic_levels']['municipality']
+        self.assertEqual([(row['area_name'], row['count']) for row in rows], [
+            ('City of Santa Rosa', 2),
+            ('City of Calamba', 1),
+        ])
+        self.assertTrue(all(len(row['psgc']) == 10 for row in rows))
+        self.assertEqual(rows[0]['address'], 'City of Santa Rosa, Laguna')
+        self.assertEqual(data['jobs_outside_boundaries'], 1)
+        self.assertEqual(data['total_jobs'], 4)
+        # Each hotspot is drawn at the average position of its jobs (not its ~1 km grid corner)
+        # and carries the outline where its jobs are, for the selected-area heat points.
+        hotspot_areas = {
+            (round(point['lat'], 4), round(point['lng'], 4)): point['area_psgc'] for point in data['heatmap_data']
+        }
+        self.assertEqual(hotspot_areas[(14.284, 121.092)], rows[0]['psgc'])
+        self.assertEqual(hotspot_areas[(14.2, 121.16)], rows[1]['psgc'])
+        self.assertIsNone(hotspot_areas[(14.55, 120.8)])
+
+        # Barangay drill-down: each job is placed in a barangay outline inside its town.
+        barangays = {row['psgc']: row for row in data['geographic_levels']['barangay_boundary']}
+        self.assertEqual(
+            {(row['area_name'], row['municipality_psgc'], row['count']) for row in barangays.values()},
+            {('Balibago', rows[0]['psgc'], 1), ('Dita', rows[0]['psgc'], 1), ('Lecheria', rows[1]['psgc'], 1)},
+        )
+        self.assertEqual(barangays['0403428002']['address'], 'Balibago, City of Santa Rosa')
+        self.assertEqual([row['unplaced_barangay_jobs'] for row in rows], [0, 0])
+        hotspot_barangays = {
+            (round(point['lat'], 4), round(point['lng'], 4)): point['barangay_psgc'] for point in data['heatmap_data']
+        }
+        # The grid corner of this Balibago job (14.28, 121.09) lies in another barangay; the
+        # heat point still belongs to Balibago because its job is there.
+        self.assertEqual(hotspot_barangays[(14.284, 121.092)], '0403428002')
+        self.assertEqual(hotspot_barangays[(14.277, 121.099)], '0403428005')
+        self.assertEqual(hotspot_barangays[(14.2, 121.16)], '0403405020')
+        self.assertIsNone(hotspot_barangays[(14.55, 120.8)])
+
     def test_every_service_of_a_multi_service_request_counts(self):
         self._completed(self.first_client, [self.solar, self.battery], 14.2786, 121.1250)
         point = self._get()['heatmap_data'][0]
@@ -279,3 +326,61 @@ class CoverageHeatmapAccuracyTests(APITestCase):
                 self.assertEqual(self._get(**params)['total_jobs'], 1)
         coverage = self.client.get('/api/services/coverage-heatmap/technician_coverage/', {'technician': 'abc'})
         self.assertEqual(coverage.status_code, status.HTTP_200_OK)
+
+
+class CityMunicipalityBoundaryTests(SimpleTestCase):
+    def test_backend_and_frontend_boundary_files_are_identical(self):
+        from pathlib import Path
+        from services.geo_boundaries import BOUNDARY_FILE
+
+        frontend_copy = Path(settings.BASE_DIR).parent / 'frontend' / 'src' / 'data' / 'calabarzonCityMunicipalities.json'
+        if not frontend_copy.exists():
+            self.skipTest('frontend folder is not deployed with the backend')
+        self.assertEqual(BOUNDARY_FILE.read_bytes(), frontend_copy.read_bytes())
+
+    def test_backend_and_frontend_barangay_outlines_match(self):
+        import json
+        from pathlib import Path
+        from services.geo_boundaries import BARANGAY_FILE
+
+        frontend_dir = Path(settings.BASE_DIR).parent / 'frontend' / 'src' / 'data' / 'barangays'
+        if not frontend_dir.exists():
+            self.skipTest('frontend folder is not deployed with the backend')
+        backend = json.loads(BARANGAY_FILE.read_text(encoding='utf-8'))['municipalities']
+        frontend = {
+            path.stem: json.loads(path.read_text(encoding='utf-8'))['features']
+            for path in frontend_dir.glob('*.json')
+        }
+        self.assertEqual(set(backend), set(frontend))
+        for municipality_psgc, features in backend.items():
+            self.assertEqual(features, frontend[municipality_psgc], municipality_psgc)
+
+    def test_every_barangay_belongs_to_a_loaded_town(self):
+        from services.geo_boundaries import load_barangay_areas, load_city_municipality_areas
+
+        grouped = load_barangay_areas()
+        towns = {area['psgc'] for area in load_city_municipality_areas()}
+        self.assertEqual(set(grouped), towns)
+        self.assertEqual(sum(len(areas) for areas in grouped.values()), 3992)
+        self.assertTrue(all(
+            area['municipality_psgc'] == town for town, areas in grouped.items() for area in areas
+        ))
+
+    def test_all_calabarzon_cities_and_municipalities_are_loaded(self):
+        from services.geo_boundaries import load_city_municipality_areas
+
+        areas = load_city_municipality_areas()
+        self.assertEqual(len(areas), 142)
+        self.assertEqual(
+            {area['province'] for area in areas},
+            {'Batangas', 'Cavite', 'Laguna', 'Quezon', 'Rizal'},
+        )
+
+    def test_points_resolve_to_the_containing_area(self):
+        from services.geo_boundaries import find_city_municipality
+
+        self.assertEqual(find_city_municipality(14.2840, 121.0920)['name'], 'City of Santa Rosa')
+        self.assertEqual(find_city_municipality(14.5866, 121.1760)['name'], 'City of Antipolo')
+        self.assertEqual(find_city_municipality(13.7565, 121.0583)['province'], 'Batangas')
+        self.assertIsNone(find_city_municipality(14.5995, 120.9842))  # Manila, outside the region
+        self.assertIsNone(find_city_municipality(None, 121.0))

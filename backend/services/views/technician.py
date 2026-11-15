@@ -4,6 +4,7 @@ from services.user_display import client_technician_label
 from services.views.document_locks import cancelled_job_message
 from django.utils.dateparse import parse_date
 from services.ticket_status import COMPLETED_TICKET_STATUSES
+from services import route_tracking
 
 
 def _serialize_ticket_service_checklists(ticket):
@@ -484,6 +485,12 @@ class TechnicianJobsView(viewsets.ViewSet):
             admin_recipients = admin_recipients | User.objects.filter(pk=ticket.assigned_admin_id)
         for recipient in admin_recipients.distinct():
             create_notification(recipient, admin_message, 'info')
+
+        # The route saved at assignment may start somewhere else (hours earlier): reroute from
+        # the technician's last known position if it is missing or off it.
+        profile = request.user._get_or_create_technician_profile()
+        if profile.current_latitude is not None and profile.current_longitude is not None:
+            route_tracking.maybe_reroute(request.user, profile.current_latitude, profile.current_longitude)
 
         return Response({'status': 'notified', 'ticket_id': ticket.id})
 

@@ -55,7 +55,7 @@ export default function SearchFilterBar({
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder={searchPlaceholder}
                 disabled={disabled}
-                className={`${fieldClass} pl-10 ${normalizedSearch ? 'pr-10' : 'pr-3'}`}
+                className={`afn-search-input ${fieldClass} pl-10 ${normalizedSearch ? 'pr-10' : 'pr-3'}`}
               />
               {normalizedSearch ? (
                 <button

@@ -32,6 +32,16 @@ import {
 import { formatTicketId } from '../../utils/roleIds';
 import { startDashboardRefresh } from '../../utils/dashboardRefresh';
 
+const LOCATION_SEND_MS = 10000;
+const LOCATION_SEND_DISTANCE_KM = 0.02;
+const calculateDistanceKm = (lat1, lng1, lat2, lng2) => {
+  const toRadians = (value) => (Number(value) * Math.PI) / 180;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 const EMPTY_DASHBOARD = {
   technician: { is_available: false, current_location: null },
   stats: { total_assigned: 0, completed_today: 0, pending_jobs: 0, active_jobs: 0 },
@@ -101,6 +111,7 @@ export default function TechnicianDashboard() {
   const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
 
   const techName = dashboard.technician?.full_name || user?.username || 'Technician';
+  const lastLocationSentRef = useRef(null);
 
   const {
     location,
@@ -109,11 +120,17 @@ export default function TechnicianDashboard() {
     watching: gpsWatching,
     startWatching,
   } = useGPSTracking({
-    updateInterval: 20000,
     autoStart: false,
     onLocationUpdate: async (loc) => {
+      // Same pace as the Navigation page: at most every 10 s, or sooner after moving 20 m.
+      // Phones can report several readings a second; sending each one floods the history.
+      const now = Date.now();
+      const previous = lastLocationSentRef.current;
+      const movedKm = previous ? calculateDistanceKm(previous.lat, previous.lng, loc.latitude, loc.longitude) : Infinity;
+      if (previous && now - previous.at < LOCATION_SEND_MS && movedKm < LOCATION_SEND_DISTANCE_KM) return;
+      lastLocationSentRef.current = { at: now, lat: loc.latitude, lng: loc.longitude };
       try {
-        await updateTechnicianLocation({ techName, lat: loc.latitude, lng: loc.longitude, accuracy: loc.accuracy, speed: loc.speed, heading: loc.heading });
+        await updateTechnicianLocation({ lat: loc.latitude, lng: loc.longitude, accuracy: loc.accuracy, measuredAt: loc.timestamp });
       } catch (err) { console.error('Failed to update location:', err); }
     }
   });

@@ -6,6 +6,7 @@ import { loadAuthStateFromBackend, seedAuthState } from './helpers';
 // (assigned, started, finished) so the map has a known hotspot; every number on the page is then
 // compared with /api/services/coverage-heatmap/service_density/ for the same filters.
 
+const getFirstService = (row) => row.service_breakdown?.[0]?.name || '';
 const list = (payload) => (Array.isArray(payload) ? payload : payload?.results || []);
 const localKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const dayKey = (offset) => localKey(new Date(Date.now() + offset * 86400000));
@@ -144,8 +145,10 @@ for (const username of ['admin_test', 'superadmin_test']) {
       const geographicLevel = page.getByRole('combobox', { name: 'Geographic level' });
       await expect(geographicLevel.locator('option')).toHaveCount(4);
       for (const [value, key, cardTitle, singular, plural] of [
-        ['barangay', 'barangay', 'Mapped barangays', 'barangay', 'barangays'],
-        ['city', 'city', 'Mapped cities / municipalities', 'city / municipality', 'cities / municipalities'],
+        // Barangay is map-based too: jobs placed inside official barangay outlines by coordinates.
+        ['barangay', 'barangay_boundary', 'Mapped barangays', 'barangay', 'barangays'],
+        // City / municipality uses the boundary-based level (jobs placed inside official outlines).
+        ['city', 'municipality', 'Mapped cities / municipalities', 'city / municipality', 'cities / municipalities'],
         ['province', 'province', 'Mapped provinces', 'province', 'provinces'],
       ]) {
         await geographicLevel.selectOption(value);
@@ -153,6 +156,55 @@ for (const username of ['admin_test', 'superadmin_test']) {
         await expect(card(cardTitle)).toContainText(String(rows.length));
         const label = rows.length === 1 ? singular : plural;
         await expect(page.getByText(new RegExp(`grouped into ${rows.length} mapped ${label}`))).toBeVisible();
+        if (value === 'city') {
+          // All 142 CALABARZON outlines are drawn (plus any technician circles), and the source is credited.
+          await expect.poll(() => page.locator('.leaflet-overlay-pane path').count(), { timeout: 15000 }).toBeGreaterThanOrEqual(142);
+          await expect(page.getByText('Each outline is shaded by its completed jobs; gray areas have none yet.')).toBeVisible();
+          await expect(page.locator('.leaflet-control-attribution')).toContainText('philippines-json-maps');
+          // Clicking (or tapping) an outline selects it: the details panel replaces the list.
+          // The busiest area is always shaded red; check the panel against the API row.
+          await page.locator('.leaflet-overlay-pane path.leaflet-interactive[fill="#dc2626"]').first().dispatchEvent('click');
+          const areaPanel = page.locator('section[aria-labelledby="selected-area-heading"]');
+          await expect(areaPanel).toBeVisible();
+          // Several areas can tie for busiest; match the panel to whichever one was clicked.
+          const clickedName = (await areaPanel.locator('#selected-area-heading').textContent()).trim();
+          const busiest = rows.find((row) => row.area_name === clickedName && row.count === rows[0].count);
+          expect(busiest, `clicked ${clickedName}`).toBeTruthy();
+          await expect(areaPanel).toContainText('City / municipality');
+          await expect(areaPanel.getByText('Completed jobs')).toBeVisible();
+          await expect(areaPanel).toContainText(String(busiest.count));
+          await expect(areaPanel).toContainText('Services done here');
+          await expect(areaPanel).toContainText(getFirstService(busiest));
+          await expect(areaPanel).toContainText('Heat points in this area');
+          await expect(page.getByRole('region', { name: 'Busiest cities / municipalities' })).toHaveCount(0);
+          // Back returns to the list; the list rows also select (keyboard route).
+          await areaPanel.getByRole('button', { name: 'Back to all areas' }).click();
+          const areaList = page.getByRole('region', { name: 'Busiest cities / municipalities' });
+          await expect(areaList).toBeVisible();
+          await areaList.getByRole('button', { name: `Show details for ${busiest.address}` }).click();
+          await expect(areaPanel.locator('#selected-area-heading')).toHaveText(busiest.area_name);
+
+          // Barangay drill-down: the town's barangay outlines load and its barangays with jobs are listed.
+          const townBarangays = all.geographic_levels.barangay_boundary
+            .filter((row) => row.municipality_psgc === busiest.psgc)
+            .sort((a, b) => b.count - a.count || a.area_name.localeCompare(b.area_name));
+          await expect(areaPanel).toContainText(new RegExp(`Barangays with jobs \\(${townBarangays.length} of \\d+\\)`));
+          await expect.poll(() => page.locator('.leaflet-overlay-pane path.leaflet-interactive').count(), { timeout: 15000 }).toBeGreaterThan(142);
+          if (townBarangays.length) {
+            const barangay = townBarangays[0];
+            await areaPanel.getByRole('button', { name: `Show barangay ${barangay.area_name}` }).click();
+            await expect(areaPanel.locator('#selected-area-heading')).toHaveText(barangay.area_name);
+            await expect(areaPanel).toContainText(`${busiest.area_name}, `);
+            await expect(areaPanel.getByRole('button', { name: `Back to ${busiest.area_name}` })).toBeVisible();
+            await expect(areaPanel).toContainText(String(barangay.count));
+            await expect(areaPanel).toContainText('Share of town');
+            // Escape steps back one level: barangay to town, then town to the list.
+            await page.keyboard.press('Escape');
+            await expect(areaPanel.locator('#selected-area-heading')).toHaveText(busiest.area_name);
+          }
+          await page.keyboard.press('Escape');
+          await expect(areaList).toBeVisible();
+        }
       }
       await geographicLevel.selectOption('hotspot');
       await expectNumbers(all);

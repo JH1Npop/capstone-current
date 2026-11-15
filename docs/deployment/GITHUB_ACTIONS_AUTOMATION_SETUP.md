@@ -9,6 +9,18 @@ The workflow is inert until it exists on the repository's default branch and
 all required secrets are configured. Never copy secret values into this file,
 the workflow, an issue, or a commit.
 
+The workflow file lives on `main` (the default branch, where GitHub reads
+schedules), but its checkout step pulls `staging-deploy`, so the job always runs
+the same code as the deployed staging backend. A change to the workflow itself
+must be committed to `main`; a change to the automation code only needs the
+normal staging deploy.
+
+The job does not use Redis. The staging Redis on Render accepts only
+Render-internal connections, so the workflow sets `USE_REDIS=False` with
+`ALLOW_INMEMORY_CHANNEL_LAYER_IN_PRODUCTION=True`. The job only writes database
+rows and sends email; open screens see new notifications on their next refresh
+instead of instantly.
+
 ## What it runs
 
 ```text
@@ -45,7 +57,6 @@ values on the intended deployed backend. Use staging values for the first test.
 | `AUTOMATION_CLOUDINARY_CLOUD_NAME` | Deployed Cloudinary cloud name |
 | `AUTOMATION_CLOUDINARY_API_KEY` | Deployed Cloudinary API key |
 | `AUTOMATION_CLOUDINARY_API_SECRET` | Deployed Cloudinary API secret |
-| `AUTOMATION_REDIS_URL` | Intended deployed Redis TLS URL |
 | `AUTOMATION_BREVO_API_KEY` | Deployed Brevo API key |
 | `AUTOMATION_DEFAULT_FROM_EMAIL` | Verified deployed sender, including name if used |
 
@@ -60,13 +71,16 @@ certificate only to the runner's temporary directory.
 2. Push them to the repository's **default branch**. GitHub scheduled workflows
    do not run from a feature branch.
 3. Add all secrets above, initially pointing to staging.
-4. Open **Actions -> Daily operational automations -> Run workflow**.
-5. Confirm `Validate Django configuration` passes.
-6. Confirm the final step ends with `Completed daily operational automations`.
-7. Confirm the run is green, then inspect the staging application for eligible
+4. In Aiven, confirm the database is **Running** (the free plan powers off when
+   idle) and that its IP allowlist accepts any address (`0.0.0.0/0`), because
+   GitHub runner addresses change on every run.
+5. Open **Actions -> Daily operational automations -> Run workflow**.
+6. Confirm `Validate Django configuration` passes.
+7. Confirm the final step ends with `Completed daily operational automations`.
+8. Confirm the run is green, then inspect the staging application for eligible
    maintenance reminders/follow-up cases. A zero-reminder result is valid when
    no maintenance schedule is at a reminder boundary.
-8. Keep GitHub Actions failure notifications enabled and review the workflow's
+9. Keep GitHub Actions failure notifications enabled and review the workflow's
    run history regularly.
 
 Do not use a production database for the first run. Moving from staging to

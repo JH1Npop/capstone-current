@@ -12,6 +12,7 @@ from .serializers import CustomerSupportCaseSerializer, MessageSerializer
 from notifications.models import Notification
 from notifications.notification_utils import in_app_notifications_enabled
 from users.models import User
+from users.profile_images import profile_image_url
 from users.permissions import CanAccessClientSupport, CanAccessMessages
 from users.rbac import (
     COMMUNICATIONS_STAFF_VIEW_CAPABILITIES,
@@ -356,6 +357,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                 'username': user.username,
                 'role': user.role,
                 'phone': user.phone or '',
+                'profile_image_url': profile_image_url(user),
             }
             for user in users
         ])

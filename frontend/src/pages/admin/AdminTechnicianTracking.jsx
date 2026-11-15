@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FiAlertTriangle, FiClock, FiExternalLink, FiMail, FiMapPin, FiPhone, FiRefreshCw, FiWifi, FiWifiOff, FiX } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { PanelSkeleton } from '../../components/ui/LoadingSkeleton';
-import { MapContainer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
+import { Circle, MapContainer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fetchTechnicianLocationHistory, fetchTrackingData } from '../../api/api';
@@ -11,8 +11,10 @@ import { resolveServiceRegion } from '../../utils/mapRegion';
 import { formatTicketId } from '../../utils/roleIds';
 import MapTileLayer from '../../components/maps/MapTileLayer';
 import SearchFilterBar from '../../components/shared/SearchFilterBar';
+import UserAvatar from '../../components/shared/UserAvatar';
 import useEscapeKey from '../../hooks/useEscapeKey';
 import { startVisibleInterval } from '../../utils/visibleInterval';
+import { getRouteProgress } from '../../utils/routeProgress';
 
 const TECH_PIN_COLORS = ['#2563eb', '#16a34a', '#f97316', '#8b5cf6', '#0891b2', '#e11d48'];
 const TECH_STATUS_RING = {
@@ -48,18 +50,33 @@ const keepFocusInsideDialog = (event) => {
   }
 };
 
-const createTechIcon = (name = '', status = 'offline', movementState = 'unknown') => {
+const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (char) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
+));
+
+// Only plain http(s) or same-site photo URLs go into the pin's CSS; anything else falls back to initials.
+const safeImageUrl = (value = '') => {
+  const url = String(value || '').trim();
+  return /^(https?:\/\/|\/)[^\s"'()\\<>]+$/.test(url) ? url : '';
+};
+
+const createTechIcon = (name = '', status = 'offline', movementState = 'unknown', imageUrl = '') => {
   const color = TECH_PIN_COLORS[getNameHash(name) % TECH_PIN_COLORS.length];
   const statusColor = TECH_STATUS_RING[status] || TECH_STATUS_RING.offline;
-  const initials = getTechInitials(name);
+  const initials = escapeHtml(getTechInitials(name));
+  const photo = safeImageUrl(imageUrl);
+  // The photo sits over the initials as a background, so a photo that fails to load shows the initials.
+  const photoLayer = photo
+    ? `<span style="position:absolute;inset:0;border-radius:9999px;background:url('${photo}') center/cover no-repeat;"></span>`
+    : '';
 
   return L.divIcon({
     className: '',
     html: `
       <div style="position:relative;width:42px;height:42px;">
         <div class="${movementState === 'moving' ? 'tracking-tech-moving-pulse' : ''}" style="position:absolute;inset:0;border-radius:9999px;background:${color};opacity:.18;box-shadow:0 0 0 8px ${color}22;"></div>
-        <div style="position:absolute;inset:5px;display:flex;align-items:center;justify-content:center;border-radius:9999px;background:linear-gradient(135deg,${color},#0f172a);color:#fff;border:3px solid ${statusColor};box-shadow:0 10px 22px rgba(15,23,42,0.28);font-size:12px;font-weight:800;">
-          ${initials}
+        <div style="position:absolute;inset:5px;display:flex;align-items:center;justify-content:center;border-radius:9999px;background:linear-gradient(135deg,${color},#0f172a);color:#fff;border:3px solid ${statusColor};box-shadow:0 10px 22px rgba(15,23,42,0.28);font-size:12px;font-weight:800;overflow:hidden;">
+          ${initials}${photoLayer}
         </div>
       </div>
     `,
@@ -88,6 +105,17 @@ const createTicketIcon = (crewCount = 0) => {
 };
 
 const TRACKING_REFRESH_MS = 15000;
+// Matches ROUGH_ACCURACY_METERS in backend/services/location_quality.py.
+const ROUGH_ACCURACY_METERS = 100;
+const ACCURACY_CIRCLE_STYLES = {
+  precise: { color: '#2563eb', weight: 1, opacity: 0.6, fillColor: '#3b82f6', fillOpacity: 0.12 },
+  rough: { color: '#d97706', weight: 1.5, opacity: 0.8, fillColor: '#f59e0b', fillOpacity: 0.12, dashArray: '6 4' },
+  stale: { color: '#64748b', weight: 1, opacity: 0.6, fillColor: '#94a3b8', fillOpacity: 0.08, dashArray: '3 5' },
+};
+const getAccuracyTone = (tech) => {
+  if (tech.gpsState !== 'fresh') return 'stale';
+  return Number(tech.gpsAccuracy) > ROUGH_ACCURACY_METERS ? 'rough' : 'precise';
+};
 
 // Field work has started once the technician sets off: en route, on site, or working.
 const STARTED_TICKET_STATUSES = new Set(['navigating', 'arrived_on_site', 'in_progress']);
@@ -111,13 +139,6 @@ const ticketStatusPresentation = {
 const getTicketStatusPresentation = (status) => ticketStatusPresentation[status] || {
   label: String(status || 'Active').replaceAll('_', ' '),
   className: 'border-blue-200 bg-blue-50 text-blue-700',
-};
-
-const formatDuration = (seconds) => {
-  const value = Number(seconds);
-  if (!Number.isFinite(value) || value <= 0) return 'ETA unavailable';
-  const minutes = Math.max(Math.round(value / 60), 1);
-  return `${minutes} min ETA`;
 };
 
 const formatDistance = (meters) => {
@@ -177,6 +198,29 @@ const formatLastSeen = (value) => {
   return `Updated ${years} year${years === 1 ? '' : 's'} ago`;
 };
 
+const formatRemainingEta = (seconds) => {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return 'ETA unavailable';
+  return `about ${Math.max(Math.round(value / 60), 1)} min left`;
+};
+
+// "Updated just now · 2:15 AM" (time only for today, otherwise the date too).
+const formatLastUpdate = (value) => {
+  if (!value) return 'Never received';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  const sameDay = date.toDateString() === new Date().toDateString();
+  const clock = sameDay
+    ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return `${formatLastSeen(value)} · ${clock}`;
+};
+
+const formatRerouted = (progress) => {
+  if (progress?.rerouteReason !== 'off_route' || !progress.reroutedAt) return '';
+  return formatLastSeen(progress.reroutedAt).replace('Updated', 'Rerouted');
+};
+
 const formatTimestamp = (value) => {
   if (!value) return 'Never received';
   const date = new Date(value);
@@ -194,27 +238,6 @@ const formatJobSchedule = (job) => {
     month: 'short', day: 'numeric', year: 'numeric',
     ...(job.scheduledTime ? { hour: 'numeric', minute: '2-digit' } : {}),
   });
-};
-
-const getRouteCoords = (ticket, tech) => {
-  const coordinates = ticket?.routeGeometry?.coordinates;
-  if (Array.isArray(coordinates) && coordinates.length > 1) {
-    return {
-      coords: coordinates
-      .map((coord) => [Number(coord[1]), Number(coord[0])])
-      .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng)),
-      isFallback: false,
-    };
-  }
-  if (
-    Number.isFinite(tech?.lat) &&
-    Number.isFinite(tech?.lng) &&
-    Number.isFinite(ticket?.lat) &&
-    Number.isFinite(ticket?.lng)
-  ) {
-    return { coords: [[tech.lat, tech.lng], [ticket.lat, ticket.lng]], isFallback: true };
-  }
-  return { coords: [], isFallback: false };
 };
 
 function TrackingMapController({ onReady }) {
@@ -352,17 +375,24 @@ export default function AdminTechnicianTracking() {
       .filter((group) => group.assignedTechs.length > 0),
     [ticketsWithCoords, techById]
   );
+  const ticketById = useMemo(
+    () => new Map(trackData.ticketMarkers.map((ticket) => [Number(ticket.id), ticket])),
+    [trackData.ticketMarkers]
+  );
   const routeLines = useMemo(
     () => activeRouteGroups.flatMap((group) =>
       group.assignedTechs
         .map((tech) => {
-          const route = getRouteCoords(group.ticket, tech);
+          // The saved route is the lead's; crew members are measured against it too.
+          const isLead = !group.ticket.technicianId || Number(group.ticket.technicianId) === Number(tech.id);
+          const progress = getRouteProgress(group.ticket, tech, { isLead });
           return {
             id: `${group.ticket.id}-${tech.id}`,
             ticket: group.ticket,
             tech,
-            coords: route.coords,
-            isFallback: route.isFallback,
+            coords: progress.coords,
+            isFallback: progress.isFallback,
+            progress,
             color: group.color
           };
         })
@@ -399,17 +429,27 @@ export default function AdminTechnicianTracking() {
     };
   }, [selectedTech]);
 
+  // Whose recent trail is drawn: the technician in the details window, otherwise the one the
+  // map is centered on (the details window covers the map, so centering is how you see it).
+  const trailTechId = selectedTechId || (focusedTarget?.kind === 'tech' ? focusedTarget.id : null);
+  const trailTech = trackData.techMarkers.find((tech) => Number(tech.id) === Number(trailTechId)) || null;
+  // Reload the trail with every live refresh, so it grows while the technician drives.
+  const trailRefreshKey = lastSuccessfulSync ? lastSuccessfulSync.getTime() : 0;
+  const trailLoadedForRef = useRef(null);
+
   useEffect(() => {
-    if (!selectedTechId) {
+    if (!trailTechId) {
       setLocationTrail([]);
       setTrailError('');
       return undefined;
     }
 
     let active = true;
-    setTrailLoading(true);
+    // "Loading" only when switching technicians, not on every 15-second refresh.
+    if (trailLoadedForRef.current !== trailTechId) setTrailLoading(true);
+    trailLoadedForRef.current = trailTechId;
     setTrailError('');
-    fetchTechnicianLocationHistory(selectedTechId, { minutes: trailMinutes })
+    fetchTechnicianLocationHistory(trailTechId, { minutes: trailMinutes })
       .then((rows) => {
         if (active) setLocationTrail(rows.slice().reverse());
       })
@@ -425,7 +465,7 @@ export default function AdminTechnicianTracking() {
     return () => {
       active = false;
     };
-  }, [selectedTechId, trailMinutes]);
+  }, [trailTechId, trailMinutes, trailRefreshKey]);
 
   useEffect(() => {
     if (!mapInstance) return;
@@ -605,7 +645,8 @@ export default function AdminTechnicianTracking() {
             <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Available</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-sky-400" />On job</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-slate-400" />Offline</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-0 w-5 border-t-2 border-dashed border-amber-600" />Direct line</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-0 w-5 border-t-[3px] border-solid border-sky-600" />Road route</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-0 w-5 border-t-2 border-dashed border-amber-600" />Direct line / off route</span>
           </div>
         </div>
         <div className={`map-wrapper relative shadow-none ${mapPoints.length ? 'h-[62vh] min-h-[500px]' : 'h-[360px] min-h-[360px]'}`}>
@@ -651,13 +692,18 @@ export default function AdminTechnicianTracking() {
                           <p className="font-semibold text-slate-900">{formatDistance(directDistance)}</p>
                         </div>
                         <div>
-                          <p className="text-xs uppercase text-slate-400">Road route</p>
-                          <p className="font-semibold text-slate-900">{route.isFallback ? 'Unavailable' : formatDistance(route.ticket.routeDistance)}</p>
+                          <p className="text-xs uppercase text-slate-400">Road left</p>
+                          <p className="font-semibold text-slate-900">{route.isFallback ? 'Unavailable' : formatDistance(route.progress.remainingMeters)}</p>
                         </div>
                       </div>
                       <p className="mt-2 text-slate-500">
-                        {route.isFallback ? 'Dashed line is a direct connection.' : formatDuration(route.ticket.routeDuration)}
+                        {route.progress.offRoute
+                          ? 'Off the planned route. A new route is calculated from the next location update.'
+                          : route.progress.separate
+                            ? "Travelling separately from the lead's route. Dashed line is a direct connection."
+                            : route.isFallback ? 'Dashed line is a direct connection.' : formatRemainingEta(route.progress.remainingSeconds)}
                       </p>
+                      {formatRerouted(route.progress) ? <p className="mt-1 font-semibold text-blue-700">{formatRerouted(route.progress)}</p> : null}
                       <button
                         type="button"
                         onClick={(event) => openTechnicianDetails(route.tech.id, event.currentTarget)}
@@ -680,16 +726,31 @@ export default function AdminTechnicianTracking() {
                 .map((job) => getDirectDistanceMeters(tech, job))
                 .filter(Number.isFinite);
               const nearestJobDistance = activeJobDistances.length ? Math.min(...activeJobDistances) : null;
+              const accuracyMeters = Number(tech.gpsAccuracy) || 0;
+              const accuracyTone = getAccuracyTone(tech);
               return (
+                <Fragment key={`tech-${tech.id}`}>
+                {/* How far off the position may be: the technician is somewhere inside this circle. */}
+                {accuracyMeters > 0 ? (
+                  <Circle
+                    center={[tech.lat, tech.lng]}
+                    radius={accuracyMeters}
+                    interactive={false}
+                    className="tech-accuracy-circle"
+                    pathOptions={ACCURACY_CIRCLE_STYLES[accuracyTone]}
+                  />
+                ) : null}
                 <Marker
-                  key={`tech-${tech.id}`}
                   position={[tech.lat, tech.lng]}
-                  icon={createTechIcon(tech.name, tech.status, tech.movementState)}
+                  icon={createTechIcon(tech.name, tech.status, tech.movementState, tech.profileImageUrl)}
                 >
                   <Popup minWidth={210} maxWidth={240}>
                     <div className="w-[210px] text-xs text-slate-700">
                       <div className="flex items-center justify-between gap-2">
-                        <strong className="truncate text-sm text-slate-950">{tech.name}</strong>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <UserAvatar name={tech.name} imageUrl={tech.profileImageUrl} fallback="T" className="h-8 w-8 rounded-full bg-slate-700 text-[11px] font-bold text-white" />
+                          <strong className="truncate text-sm text-slate-950">{tech.name}</strong>
+                        </span>
                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${tech.movementState === 'moving' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                           {formatMovement(tech)}
                         </span>
@@ -697,7 +758,10 @@ export default function AdminTechnicianTracking() {
                       <div className="mt-2 space-y-1 border-t border-slate-200 pt-2">
                         <p>{formatLastSeen(tech.lastLocationUpdate)}</p>
                         <p>{nearestJobDistance == null ? 'No active job distance' : `${formatDistance(nearestJobDistance)} direct to nearest job`}</p>
-                        <p>GPS accuracy: {Number(tech.gpsAccuracy) > 0 ? `±${Math.round(Number(tech.gpsAccuracy))} m` : 'Unavailable'}</p>
+                        <p>GPS accuracy: {accuracyMeters > 0 ? `±${Math.round(accuracyMeters)} m` : 'Unavailable'}</p>
+                        {accuracyTone === 'rough' ? (
+                          <p className="font-semibold text-amber-700">Rough position: GPS has not locked, so the technician may be anywhere in the amber circle.</p>
+                        ) : null}
                       </div>
                       <button
                         type="button"
@@ -709,6 +773,7 @@ export default function AdminTechnicianTracking() {
                     </div>
                   </Popup>
                 </Marker>
+                </Fragment>
               );
             })}
 
@@ -752,10 +817,16 @@ export default function AdminTechnicianTracking() {
               );
             })}
           </MapContainer>
-          <div className="absolute left-4 top-4 rounded-lg border bg-white/90 px-3 py-2 text-sm shadow-lg backdrop-blur">
+          <div className="pointer-events-none absolute left-14 top-3 z-[500] rounded-lg border bg-white/90 px-3 py-2 text-sm shadow-lg backdrop-blur">
             <div className="font-medium text-slate-900">Live tracking</div>
             <div className="text-slate-600">{filteredTechs.length}/{trackData.techMarkers.length} technicians visible</div>
             <div className="text-slate-600">{activeRouteGroups.length} job site{activeRouteGroups.length === 1 ? '' : 's'} active</div>
+            {trailTech && !selectedTech ? (
+              <div className="mt-1 flex items-center gap-1.5 text-violet-800">
+                <span className="h-0 w-4 border-t-2 border-dotted border-violet-600" />
+                {trailCoords.length > 1 ? `${trailTech.name}: last ${trailMinutes} min` : `${trailTech.name}: no movement in ${trailMinutes} min`}
+              </div>
+            ) : null}
           </div>
           {!loading && mapPoints.length === 0 ? (
             <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center bg-slate-100/75 p-4">
@@ -788,6 +859,8 @@ export default function AdminTechnicianTracking() {
           className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
         >
           <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-6 sm:py-4">
+            <div className="flex min-w-0 items-start gap-3">
+            <UserAvatar name={selectedTech.name} imageUrl={selectedTech.profileImageUrl} fallback="T" className="mt-1 h-12 w-12 rounded-full bg-slate-700 text-sm font-bold text-white" />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Technician details</p>
@@ -797,6 +870,7 @@ export default function AdminTechnicianTracking() {
               </div>
               <h3 id="selected-technician-heading" className="mt-1 text-lg font-semibold text-slate-950">{selectedTech.name}</h3>
               <p className="mt-1 text-sm font-medium text-slate-500">TECH-{String(selectedTech.id).padStart(4, '0')}</p>
+            </div>
             </div>
             <button ref={detailsCloseButtonRef} type="button" aria-label="Close details" title="Close details" onClick={closeTechnicianDetails} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><FiX aria-hidden="true" size={20} /></button>
           </div>
@@ -813,7 +887,7 @@ export default function AdminTechnicianTracking() {
               </div>
               <div className="grid grid-cols-2 gap-2.5 text-sm sm:grid-cols-4">
               <TrackingFact label="GPS health" value={selectedTech.gpsState === 'fresh' ? 'Fresh' : selectedTech.gpsState === 'stale' ? 'Stale' : 'Missing'} />
-              <TrackingFact label="Last GPS update" value={formatTimestamp(selectedTech.lastLocationUpdate)} />
+              <TrackingFact label="Last GPS update" value={formatLastUpdate(selectedTech.lastLocationUpdate)} />
               <TrackingFact label="GPS accuracy" value={Number(selectedTech.gpsAccuracy) > 0 ? `+/-${Math.round(Number(selectedTech.gpsAccuracy))} m` : 'Not captured'} />
               <TrackingFact label="Movement" value={formatMovement(selectedTech)} />
               <TrackingFact label="Active workload" value={`${selectedTech.activeJobs?.length || 0} job${selectedTech.activeJobs?.length === 1 ? '' : 's'}`} />
@@ -850,11 +924,7 @@ export default function AdminTechnicianTracking() {
                       </div>
                       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
                         <p className="inline-flex items-center gap-1.5"><FiClock />{formatJobSchedule(job)} · {job.priority || 'Normal'} priority</p>
-                        <p className="font-semibold text-blue-700">
-                          {getDirectDistanceMeters(selectedTech, job) == null
-                            ? 'Distance unavailable'
-                            : `${formatDistance(getDirectDistanceMeters(selectedTech, job))} direct distance`}
-                        </p>
+                        <RouteSummary progress={getRouteProgress(ticketById.get(Number(job.id)) || job, selectedTech)} />
                       </div>
                     </div>
                   ))}
@@ -869,6 +939,19 @@ export default function AdminTechnicianTracking() {
           </div>
           <footer className="flex shrink-0 flex-col gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex flex-wrap gap-2">
+              {hasCoords(selectedTech) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tech = selectedTech;
+                    closeTechnicianDetails();
+                    focusLocation({ kind: 'tech', id: tech.id, label: tech.name, lat: tech.lat, lng: tech.lng, zoom: 15 });
+                  }}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-3 text-sm font-semibold text-violet-800 transition hover:bg-violet-100"
+                >
+                  <FiMapPin aria-hidden="true" />Show trail on map
+                </button>
+              ) : null}
               {selectedTech.phone ? (
                 <a href={`tel:${selectedTech.phone}`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"><FiPhone aria-hidden="true" />Call</a>
               ) : null}
@@ -896,7 +979,8 @@ export default function AdminTechnicianTracking() {
           <div className="divide-y divide-slate-200">
             {activeRouteGroups.map(({ ticket, assignedTechs, crewCount }) => {
               const leadName = ticket.leadTechnician || ticket.technicianName || assignedTechs[0]?.name || 'Unassigned';
-              const hasRoadRoute = Array.isArray(ticket.routeGeometry?.coordinates) && ticket.routeGeometry.coordinates.length > 1;
+              const leadTech = assignedTechs.find((tech) => Number(tech.id) === Number(ticket.technicianId)) || assignedTechs[0];
+              const progress = getRouteProgress(ticket, leadTech);
               return (
                 <div
                   key={`active-route-${ticket.id}`}
@@ -912,15 +996,8 @@ export default function AdminTechnicianTracking() {
                       {crewCount || assignedTechs.length} tech{(crewCount || assignedTechs.length) === 1 ? '' : 's'} | {assignedTechs.map((tech) => tech.name).join(', ')}
                     </div>
                   </div>
-                  <div className="flex min-w-0 flex-wrap gap-2 text-xs">
-                    {hasRoadRoute ? (
-                      <>
-                        <span className="rounded-full bg-blue-50 px-2 py-1 font-medium text-blue-700">{formatDistance(ticket.routeDistance)}</span>
-                        <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">{formatDuration(ticket.routeDuration)}</span>
-                      </>
-                    ) : (
-                      <span className="rounded-full bg-amber-50 px-2 py-1 font-medium text-amber-800">Direct line · road route unavailable</span>
-                    )}
+                  <div className="min-w-0">
+                    <RouteSummary progress={progress} />
                   </div>
                   <button
                     type="button"
@@ -959,7 +1036,8 @@ export default function AdminTechnicianTracking() {
                     className={`rounded-lg border px-3 py-2 ${isFocused || isSelected ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-300' : 'border-slate-200'}`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <UserAvatar name={tech.name} imageUrl={tech.profileImageUrl} fallback="T" className="h-9 w-9 rounded-full bg-slate-700 text-xs font-bold text-white" />
+                      <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-slate-900">{tech.name}</div>
                         <div className="text-xs text-slate-500">{tech.status.replaceAll('_', ' ')} · {formatMovement(tech)} · {formatLastSeen(tech.lastLocationUpdate)} · {tech.activeJobs?.length || 0} active job{tech.activeJobs?.length === 1 ? '' : 's'}</div>
                       </div>
@@ -999,6 +1077,30 @@ export default function AdminTechnicianTracking() {
         </div>
       </div>
     </Layout>
+  );
+}
+
+// Road distance and ETA still to go, with off-route and reroute notes.
+function RouteSummary({ progress }) {
+  const rerouted = formatRerouted(progress);
+  return (
+    <div className="flex flex-wrap gap-2 text-xs">
+      {progress.offRoute ? (
+        <span className="rounded-full bg-amber-50 px-2 py-1 font-semibold text-amber-800">Off planned route · rerouting</span>
+      ) : null}
+      {!progress.isFallback ? (
+        <>
+          <span className="rounded-full bg-blue-50 px-2 py-1 font-medium text-blue-700">{formatDistance(progress.remainingMeters)} to go</span>
+          <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">{formatRemainingEta(progress.remainingSeconds)}</span>
+        </>
+      ) : (
+        <span className="rounded-full bg-amber-50 px-2 py-1 font-medium text-amber-800">
+          {progress.remainingMeters ? `${formatDistance(progress.remainingMeters)} direct` : 'Distance unavailable'}
+          {progress.offRoute ? '' : ' · road route unavailable'}
+        </span>
+      )}
+      {rerouted ? <span className="rounded-full bg-sky-50 px-2 py-1 font-medium text-sky-800">{rerouted}</span> : null}
+    </div>
   );
 }
 

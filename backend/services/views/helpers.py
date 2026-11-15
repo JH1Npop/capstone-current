@@ -159,10 +159,11 @@ def _calculate_route_async(ticket_id, start_coords, end_coords):
     if getattr(settings, 'IS_TEST', False):
         return
     try:
-        from services.ors_utils import get_route
+        from services.ors_utils import get_route, is_road_route
         route = get_route(start_coords, end_coords)
 
-        if route and 'features' in route and route['features']:
+        # Never save the straight-line stand-in as the ticket's road route.
+        if is_road_route(route):
             # Re-fetch ticket to avoid stale objects
             ticket = ServiceTicket.objects.get(id=ticket_id)
             geom = route['features'][0].get('geometry')

@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
+import UserAvatar from '../../components/shared/UserAvatar';
 import {
   fetchMessageParticipants,
   fetchMessages,
@@ -158,6 +159,7 @@ export default function TechnicianMessages() {
       name: participant.name || participant.username || 'Staff',
       subtitle: roleLabel(participant.role),
       avatar: initials(participant.name || participant.username),
+      imageUrl: participant.profile_image_url || '',
     }));
     const groupRooms = messages
       .filter((message) => (
@@ -192,9 +194,11 @@ export default function TechnicianMessages() {
 
       return {
         ...room,
-        lastMessage: latestMessage?.isDeleted
-          ? 'Message unsent'
-          : (latestMessage?.text || (latestMessage?.imageUrl ? 'Image attachment' : room.subtitle)),
+        // No preview without a message: the subtitle already says who the room is.
+        lastMessage: !latestMessage ? ''
+          : latestMessage.isDeleted
+            ? 'Message unsent'
+            : (latestMessage.text || (latestMessage.imageUrl ? 'Image attachment' : '')),
         timestamp: latestMessage?.timestamp || '',
         count: roomMessages.length,
       };
@@ -445,17 +449,20 @@ export default function TechnicianMessages() {
                       }`}
                   >
                     <div className="flex gap-3">
-                      <div className={`grid h-12 w-12 flex-none place-items-center rounded-full text-sm font-bold text-white ${room.roomType === 'group' ? 'bg-slate-900' : 'bg-gradient-to-br from-sky-500 to-blue-700'
-                        }`}>
-                        {room.roomType === 'group' ? <FiUsers size={19} /> : room.avatar}
-                      </div>
+                      {room.roomType === 'group' ? (
+                        <div className="grid h-12 w-12 flex-none place-items-center rounded-full bg-slate-900 text-sm font-bold text-white">
+                          <FiUsers size={19} />
+                        </div>
+                      ) : (
+                        <UserAvatar name={room.name} imageUrl={room.imageUrl} fallback="S" className="h-12 w-12 rounded-full bg-gradient-to-br from-sky-500 to-blue-700 text-sm font-bold text-white" />
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="truncate text-sm font-semibold text-slate-950">{room.name}</div>
                           {room.timestamp ? <time dateTime={room.timestamp} title={formatFullDateTime(room.timestamp)} className="block text-xs text-slate-400">{formatRoomStamp(room.timestamp)}</time> : null}
                         </div>
                         <div className="mt-0.5 truncate text-xs text-slate-500">{room.subtitle}</div>
-                        <div className="mt-1 truncate text-sm text-slate-500">{room.lastMessage}</div>
+                        {room.lastMessage ? <div className="mt-1 truncate text-sm text-slate-500">{room.lastMessage}</div> : null}
                       </div>
                     </div>
                   </button>
@@ -475,10 +482,13 @@ export default function TechnicianMessages() {
                 >
                   <FiArrowLeft size={17} />
                 </button>
-                <div className={`grid h-10 w-10 flex-none place-items-center rounded-full text-sm font-bold text-white sm:h-11 sm:w-11 ${activeRoom.roomType === 'group' ? 'bg-slate-900' : 'bg-gradient-to-br from-sky-500 to-blue-700'
-                  }`}>
-                  {activeRoom.roomType === 'group' ? <FiUsers size={19} /> : activeRoom.avatar}
-                </div>
+                {activeRoom.roomType === 'group' ? (
+                  <div className="grid h-10 w-10 flex-none place-items-center rounded-full bg-slate-900 text-sm font-bold text-white sm:h-11 sm:w-11">
+                    <FiUsers size={19} />
+                  </div>
+                ) : (
+                  <UserAvatar name={activeRoom.name} imageUrl={activeRoom.imageUrl} fallback="S" className="h-10 w-10 rounded-full bg-gradient-to-br from-sky-500 to-blue-700 text-sm font-bold text-white sm:h-11 sm:w-11" />
+                )}
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-semibold text-slate-950 sm:text-base">{activeRoom.name}</h3>
                   <p className="truncate text-xs text-slate-500">{activeRoom.subtitle}</p>
@@ -510,9 +520,7 @@ export default function TechnicianMessages() {
                     <div className={`flex ${sentByCurrentUser ? 'justify-end' : 'justify-start'} ${sameSender ? 'mt-1' : 'mt-4'}`}>
                       <div className={`flex max-w-[88%] items-end gap-2 sm:max-w-lg ${sentByCurrentUser ? 'flex-row-reverse' : ''}`}>
                         {!sentByCurrentUser && !sameSender ? (
-                          <div className="grid h-8 w-8 flex-none place-items-center rounded-full bg-slate-700 text-xs font-bold text-white">
-                            {initials(message.senderName)}
-                          </div>
+                          <UserAvatar name={message.senderName} imageUrl={message.senderImageUrl} fallback="S" className="h-8 w-8 rounded-full bg-slate-700 text-xs font-bold text-white" />
                         ) : (
                           !sentByCurrentUser && <div className="h-8 w-8 flex-none" />
                         )}

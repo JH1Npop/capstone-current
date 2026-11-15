@@ -29,13 +29,21 @@ const apiAs = (request, auth) => {
 const phonePage = async (browser, auth, position) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
-  await page.addInitScript((fix) => {
+  await page.addInitScript((start) => {
     window.localStorage.setItem('afn:analytics-assistant-position', JSON.stringify({ x: 12, y: 12 }));
+    let fix = start;
+    const watchers = new Map();
     const reading = () => ({ coords: { ...fix, accuracy: 8, altitude: null, altitudeAccuracy: null, heading: null, speed: null }, timestamp: Date.now() });
     Object.defineProperty(navigator, 'geolocation', {
       configurable: true,
-      value: { getCurrentPosition: (ok) => ok(reading()), watchPosition: (ok) => { ok(reading()); return 1; }, clearWatch: () => {} },
+      value: {
+        getCurrentPosition: (ok) => ok(reading()),
+        watchPosition: (ok) => { const id = watchers.size + 1; watchers.set(id, ok); ok(reading()); return id; },
+        clearWatch: (id) => { watchers.delete(id); },
+      },
     });
+    // Tests "drive" the phone: a new position is pushed to every active watcher.
+    window.__e2eMoveTo = (next) => { fix = next; watchers.forEach((ok) => ok(reading())); };
   }, position);
   await seedAuthState(page, auth);
   return { context, page };
@@ -173,11 +181,52 @@ test.describe('Technician navigation controls', () => {
       }],
     };
     const preview = await phonePage(browser, techAuth, { latitude: 14.275, longitude: 121.11 });
-    await preview.page.route('**/api/services/ors/route/**', (call) => call.fulfill({ json: route }));
+    let routeRequests = 0;
+    await preview.page.route('**/api/services/ors/route/**', (call) => {
+      routeRequests += 1;
+      return call.fulfill({ json: route });
+    });
     await preview.page.goto(`/technician/map-navigation?ticketId=${otherJob}`);
     await preview.page.getByRole('button', { name: 'Start location sharing', exact: true }).click();
     await expect(preview.page.getByText('Next: Turn left onto Rizal Street')).toBeVisible({ timeout: 30000 });
     await expect(preview.page.getByText(/Turn-by-Turn Directions \(2\/3\)/)).toBeVisible();
+
+    // ── Routing quota: driving along the route asks for no new route; leaving it asks once ──
+    const afterFirstRoute = routeRequests;
+    expect(afterFirstRoute).toBeGreaterThanOrEqual(1);
+    const driveTo = (point) => preview.page.evaluate((next) => window.__e2eMoveTo(next), point);
+    // Standing on the Rizal Street turn: that turn is now.
+    const banner = preview.page.locator('div.border-l-4').first();
+    await expect(banner).toContainText('Now');
+    const distanceLeft = async () => Number((await preview.page.getByText('Distance left').locator('..').innerText()).match(/([\d.]+) km/)?.[1]);
+    const startKm = await distanceLeft();
+    // Halfway along Rizal Street: the banner moves on to the next turn with a live distance, the
+    // step list follows, the distance left counts down, and no new route is requested.
+    await driveTo({ latitude: 14.2765, longitude: 121.115 });
+    await expect(banner).toContainText('Next: Arrive at the site');
+    await expect(banner).toContainText(/In \d+ m/);
+    await expect(preview.page.getByText(/Turn-by-Turn Directions \(2\/3\)/)).toBeVisible();
+    await expect.poll(distanceLeft).toBeLessThan(startKm);
+    await driveTo({ latitude: 14.2775, longitude: 121.118 });
+    await preview.page.waitForTimeout(2500);
+    expect(routeRequests, 'no new route while on the planned route').toBe(afterFirstRoute);
+    // Off the route: one new request, no sooner than 30 s after the last one (a real phone keeps
+    // reporting; the stub reports only when moved, so keep reporting until it is asked).
+    const OFF = { latitude: 14.30, longitude: 121.08 };
+    await driveTo(OFF);
+    await expect(preview.page.getByText('You are off the planned route')).toBeVisible();
+    await expect(preview.page.getByText('Distance · off route')).toBeVisible();
+    await expect.poll(async () => {
+      await driveTo(OFF);
+      return routeRequests;
+    }, { timeout: 60000, intervals: [5000] }).toBe(afterFirstRoute + 1);
+    // The mocked route never passes here, so every reading still looks off route; it must not
+    // turn into one request per reading.
+    for (let reading = 0; reading < 4; reading += 1) {
+      await driveTo(OFF);
+      await preview.page.waitForTimeout(1500);
+    }
+    expect(routeRequests, 'off-route readings do not flood the routing service').toBe(afterFirstRoute + 1);
     await preview.context.close();
     } finally {
       await admin.put(`/api/admin/clients/${clientRecord.id}/`, { first_name: 'Test', last_name: 'Client', phone: originalPhone, status: 'active' });

@@ -11,6 +11,7 @@ from django.conf import settings
 from django.db.models import Prefetch
 from rest_framework.throttling import ScopedRateThrottle
 from services.ticket_status import COMPLETED_TICKET_STATUSES
+from services.geo_boundaries import find_barangay, find_city_municipality
 
 
 def _bounded_days(request, default=30, minimum=1, maximum=365):
@@ -127,6 +128,17 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
             | Q(request_items__request_id__in=service_option_requests)
         ).distinct().order_by('name')
 
+        # Each job's city/municipality and barangay outline, looked up once by its saved
+        # coordinates and shared by the hotspot and boundary groupings below.
+        job_boundaries = {}
+
+        def boundaries_for(req, latitude, longitude):
+            if req.id not in job_boundaries:
+                town = find_city_municipality(latitude, longitude)
+                barangay = find_barangay(latitude, longitude, town['psgc']) if town else None
+                job_boundaries[req.id] = (town, barangay)
+            return job_boundaries[req.id]
+
         # Group by location and count requests
         density_data = {}
         for req in service_requests:
@@ -141,6 +153,9 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
                         density_data[key] = {
                             'lat': lat_val,
                             'lng': lng_val,
+                            'latitude_total': 0.0,
+                            'longitude_total': 0.0,
+                            'area_votes': {},
                             'count': 0,
                             'service_breakdown': {},
                             'status_breakdown': {},
@@ -154,6 +169,11 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
                         if item.service_type_id
                     ] or [req.service_type.name if req.service_type else 'Unknown Service']
                     density_data[key]['count'] += 1
+                    density_data[key]['latitude_total'] += float(loc.latitude)
+                    density_data[key]['longitude_total'] += float(loc.longitude)
+                    town, barangay = boundaries_for(req, loc.latitude, loc.longitude)
+                    vote = (town['psgc'] if town else None, barangay['psgc'] if barangay else None)
+                    density_data[key]['area_votes'][vote] = density_data[key]['area_votes'].get(vote, 0) + 1
                     for service_name in service_names:
                         density_data[key]['service_breakdown'][service_name] = (
                             density_data[key]['service_breakdown'].get(service_name, 0) + 1
@@ -200,12 +220,30 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
                 {'id': person_id, 'name': name}
                 for person_id, name in sorted(point['technicians'].items(), key=lambda item: item[1])
             ]
+            # Grouping stays on the ~1 km grid, but the point is drawn at the average position of
+            # its jobs (not the grid corner), and it belongs to the town and barangay where most of
+            # its jobs are, so a selected area's heat points really sit inside it. Area totals come
+            # from geographic_levels (per job).
+            point['lat'] = point.pop('latitude_total') / point['count']
+            point['lng'] = point.pop('longitude_total') / point['count']
+            votes = point.pop('area_votes')
+            area_psgc, barangay_psgc = max(votes.items(), key=lambda item: (item[1], item[0][0] or '', item[0][1] or ''))[0]
+            point['area_psgc'] = area_psgc
+            point['barangay_psgc'] = barangay_psgc
             heatmap_points.append(point)
 
         # Administrative summaries use the saved location text and coordinate centroid. They are
         # summary markers, not official boundary polygons. Barangay is parsed from common
         # "Brgy."/"Barangay" address forms because the current schema has no barangay column.
-        geographic_groups = {'barangay': {}, 'city': {}, 'province': {}}
+        # `municipality` is the boundary-based level: each job is placed inside the official
+        # city/municipality outline that contains its coordinates (see services/geo_boundaries.py).
+        # `barangay_boundary` does the same with the barangay outlines inside that town.
+        geographic_groups = {
+            'barangay': {}, 'city': {}, 'province': {}, 'municipality': {}, 'barangay_boundary': {},
+        }
+        jobs_outside_boundaries = 0
+        # Per town: jobs inside the town outline that miss every (separately simplified) barangay.
+        unplaced_barangay_jobs = {}
         for req in service_requests:
             loc = req.location
             latitude = float(loc.latitude)
@@ -230,10 +268,26 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
                 'city': ((city.casefold(), province.casefold()), city, f'{city}, {province}'),
                 'province': ((province.casefold(),), province, province),
             }
+            boundary, boundary_barangay = boundaries_for(req, latitude, longitude)
+            if boundary:
+                area_specs['municipality'] = (
+                    (boundary['psgc'],), boundary['name'], f"{boundary['name']}, {boundary['province']}",
+                )
+                if boundary_barangay:
+                    area_specs['barangay_boundary'] = (
+                        (boundary_barangay['psgc'],), boundary_barangay['name'],
+                        f"{boundary_barangay['name']}, {boundary['name']}",
+                    )
+                else:
+                    unplaced_barangay_jobs[boundary['psgc']] = unplaced_barangay_jobs.get(boundary['psgc'], 0) + 1
+            else:
+                jobs_outside_boundaries += 1
             for level, (key, name, label) in area_specs.items():
                 area = geographic_groups[level].setdefault(key, {
                     'area_level': level,
                     'area_name': name,
+                    'psgc': key[0] if level in ('municipality', 'barangay_boundary') else None,
+                    'municipality_psgc': boundary['psgc'] if level == 'barangay_boundary' else None,
                     'address': label,
                     'count': 0,
                     'latitude_total': 0.0,
@@ -255,7 +309,7 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
             rows = []
             for area in groups.values():
                 count = area['count']
-                rows.append({
+                row = {
                     'area_level': area['area_level'],
                     'area_name': area['area_name'],
                     'address': area['address'],
@@ -276,7 +330,14 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
                         {'id': person_id, 'name': name}
                         for person_id, name in sorted(area['technicians'].items(), key=lambda item: item[1])
                     ],
-                })
+                }
+                if area['psgc']:
+                    row['psgc'] = area['psgc']
+                if area['municipality_psgc']:
+                    row['municipality_psgc'] = area['municipality_psgc']
+                if level == 'municipality':
+                    row['unplaced_barangay_jobs'] = unplaced_barangay_jobs.get(area['psgc'], 0)
+                rows.append(row)
             geographic_levels[level] = sorted(rows, key=lambda row: (-row['count'], row['address']))
 
         return Response({
@@ -285,6 +346,8 @@ class CoverageHeatmapViewSet(viewsets.ViewSet):
             'total_jobs': sum(point['count'] for point in heatmap_points),
             'heatmap_data': heatmap_points,
             'geographic_levels': geographic_levels,
+            # Completed jobs whose coordinates fall outside every CALABARZON city/municipality outline.
+            'jobs_outside_boundaries': jobs_outside_boundaries,
             'max_density': max([p['count'] for p in heatmap_points]) if heatmap_points else 0,
             'client_options': sorted(client_options, key=lambda item: item['name'].lower()),
             'technician_options': sorted(technician_options, key=lambda item: item['name'].lower()),

@@ -37,15 +37,23 @@ jobs:
       CLOUDINARY_CLOUD_NAME: ${{ secrets.AUTOMATION_CLOUDINARY_CLOUD_NAME }}
       CLOUDINARY_API_KEY: ${{ secrets.AUTOMATION_CLOUDINARY_API_KEY }}
       CLOUDINARY_API_SECRET: ${{ secrets.AUTOMATION_CLOUDINARY_API_SECRET }}
-      USE_REDIS: 'True'
-      REDIS_URL: ${{ secrets.AUTOMATION_REDIS_URL }}
+      # The staging Redis on Render only accepts Render-internal connections, so
+      # a GitHub runner cannot reach it. This batch job only writes database rows
+      # and sends email; it needs no WebSocket fan-out, so it uses the in-memory
+      # channel layer. Live screens pick up the new rows on their next refresh.
+      USE_REDIS: 'False'
+      ALLOW_INMEMORY_CHANNEL_LAYER_IN_PRODUCTION: 'True'
       EMAIL_BACKEND: afn_service_management.email_backends.BrevoEmailBackend
       BREVO_API_KEY: ${{ secrets.AUTOMATION_BREVO_API_KEY }}
       BREVO_API_TIMEOUT_SECONDS: '15'
       DEFAULT_FROM_EMAIL: ${{ secrets.AUTOMATION_DEFAULT_FROM_EMAIL }}
       AIVEN_CA_PEM: ${{ secrets.AUTOMATION_AIVEN_CA_PEM }}
     steps:
+      # Scheduled workflows must live on the default branch (main), but the code
+      # that runs must match what is deployed, so check out the deploy branch.
       - uses: actions/checkout@v4
+        with:
+          ref: staging-deploy
 
       - uses: actions/setup-python@v5
         with:
@@ -64,7 +72,7 @@ jobs:
           required=(
             SECRET_KEY ALLOWED_HOSTS CORS_ALLOWED_ORIGINS CSRF_TRUSTED_ORIGINS
             FRONTEND_BASE_URL DATABASE_URL CLOUDINARY_CLOUD_NAME CLOUDINARY_API_KEY
-            CLOUDINARY_API_SECRET REDIS_URL BREVO_API_KEY DEFAULT_FROM_EMAIL AIVEN_CA_PEM
+            CLOUDINARY_API_SECRET BREVO_API_KEY DEFAULT_FROM_EMAIL AIVEN_CA_PEM
           )
           for key in "${required[@]}"; do
             if [[ -z "${!key:-}" ]]; then
