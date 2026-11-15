@@ -2,6 +2,7 @@ import uuid
 
 from rest_framework import serializers
 from django.utils import timezone
+from users.profile_images import profile_image_url
 from .models import CustomerSupportCase, Message
 
 
@@ -53,6 +54,8 @@ class MessageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     sender_name = serializers.SerializerMethodField()
     receiver_name = serializers.SerializerMethodField()
+    sender_profile_image_url = serializers.SerializerMethodField()
+    receiver_profile_image_url = serializers.SerializerMethodField()
     sender_phone = serializers.CharField(source='sender.phone', read_only=True)
     receiver_phone = serializers.CharField(source='receiver.phone', read_only=True)
     ticket_address = serializers.SerializerMethodField()
@@ -75,6 +78,12 @@ class MessageSerializer(serializers.ModelSerializer):
             return ''
         full_name = obj.receiver.get_full_name().strip()
         return full_name or obj.receiver.username
+
+    def get_sender_profile_image_url(self, obj):
+        return profile_image_url(obj.sender) if obj.sender else ''
+
+    def get_receiver_profile_image_url(self, obj):
+        return profile_image_url(obj.receiver) if obj.receiver else ''
 
     def get_ticket_address(self, obj):
         try:
@@ -197,9 +206,11 @@ class MessageSerializer(serializers.ModelSerializer):
             'group_key',
             'sender',
             'sender_name',
+            'sender_profile_image_url',
             'sender_phone',
             'receiver',
             'receiver_name',
+            'receiver_profile_image_url',
             'receiver_phone',
             'text',
             'image',
@@ -219,8 +230,10 @@ class MessageSerializer(serializers.ModelSerializer):
             'ticket_longitude',
             'sender',
             'sender_name',
+            'sender_profile_image_url',
             'sender_phone',
             'receiver_name',
+            'receiver_profile_image_url',
             'receiver_phone',
             'image_url',
             'is_deleted',

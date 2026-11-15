@@ -14,6 +14,7 @@ const normalizeMessage = (message) => ({
   senderId: message.sender,
   senderName: message.sender_name || String(message.sender || ''),
   senderPhone: message.sender_phone || '',
+  senderImageUrl: message.sender_profile_image_url || '',
   receiverId: message.receiver,
   receiverName: message.receiver_name || String(message.receiver || ''),
   receiverPhone: message.receiver_phone || '',

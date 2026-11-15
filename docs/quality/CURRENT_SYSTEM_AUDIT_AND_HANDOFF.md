@@ -1,7 +1,73 @@
 # Current System Audit and Handoff
 
 Status: **Current contract / living document**
-Last updated: **2026-11-13 (Technician Tracking readable update age) Asia/Singapore**
+Last updated: **2026-11-15 (end of session: Coverage Heatmap boundaries and drill-down, tracking accuracy, rerouting, Navigation countdown) Asia/Manila**
+Current objective (latest): **Session of 2026-11-14/15 is committed and merged to `staging-deploy` (see "2026-11-15 Commit and staging deployment" at the end). Start with "Session summary 2026-11-14/15" directly below.**
+
+## Session summary 2026-11-14/15 (read this first)
+
+Everything below was committed on `feature/analytics-decision-workspace` and merged to `staging-deploy` on 2026-11-15 (the local catalog data stays in the local SQLite only). Details and validation for each item are in the dated entries at the end of this file.
+
+1. **Daily scheduler.** The workflow was moved to `main` (commit `fc8b262`, pushed). It checks out `staging-deploy` and runs without Redis. **Owner still to do:** add the 13 `AUTOMATION_*` GitHub secrets, confirm Aiven is Running and allows `0.0.0.0/0`, and start the first manual run (`docs/deployment/GITHUB_ACTIONS_AUTOMATION_SETUP.md`).
+2. **Coverage Heatmap** (admin and superadmin):
+   - glow and count bubbles;
+   - official CALABARZON city/municipality (142) and barangay (3,992) outlines, from `faeldon/philippines-json-maps` (MIT);
+   - click a town, then its barangays, then a barangay, with a details panel and a spotlight;
+   - jobs and heat points are placed by coordinates (`services/geo_boundaries.py`), and heat points sit at the average of their jobs;
+   - the phone toolbar is compact, and "View by: Barangay" is map-based.
+3. **Tracking accuracy** (`services/location_quality.py`):
+   - rough readings (over 100 m) do not replace a recent precise one;
+   - cached readings over 2 minutes old are ignored, and readings are stamped with measured time (`reading_age_ms`);
+   - two rough readings give movement `unknown`;
+   - the technician Dashboard is throttled;
+   - the admin map shows accuracy circles.
+4. **Rerouting** (`services/route_tracking.py`):
+   - a navigating technician more than 200 m off the route is rerouted from where they are, at most once a minute per ticket;
+   - assignment routes now run technician to job (they were reversed);
+   - an ORS failure now tries OSRM, and straight lines are never saved as road routes (`ors_utils.is_road_route`);
+   - the admin map trims the route and shows "X to go · about N min left · Rerouted …".
+5. **Technician Navigation page:**
+   - route requests are made every 2 minutes or when off route, never more than once per 30 s (about 15 ORS calls per trip instead of about 150);
+   - distance, time, current step and the "Next: … In N m" banner follow the live position;
+   - an off-route notice is shown.
+6. **Admin Technician Tracking page:**
+   - Center shows the 60-minute trail, which refreshes live; details has a "Show trail on map" button;
+   - crew members away from the lead's route are shown as "separate";
+   - the zoom buttons are uncovered, the legend gains "Road route", and the last update reads "Updated just now · 2:45 AM";
+   - the shared search bar no longer shows a double clear button.
+7. **Arrival validation** was reviewed; the owner chose to leave it as is (see the decision entry).
+8. **Local database catalog filled** (2026-11-15, local SQLite only, no repo code change).
+   - The 2026-11-12 reset had left only users. Local now has:
+     - 9 services, each with steps, tools and inspection checks;
+     - 35 inventory items, with opening stock posted through the ledger;
+     - 32 links between services and items;
+     - Tech1 skills;
+     - SLA rules and core document definitions.
+   - See the entry "2026-11-15 Local catalog data".
+
+**Last validation (actually run):**
+- full backend `manage.py test`: 965 OK (7 skipped), after the routing fallback change;
+- `services.test_route_tracking` and `services.test_location_quality`: 17 OK after the last backend change;
+- frontend build OK;
+- Playwright: specs 66 (3), 20 (2), 19 (2), 40, 63, 35 and 3.5 passed in their latest runs.
+
+The full 370-scenario Playwright suite was **not** rerun this session.
+
+**Worktree manifest (this session):**
+- **Backend changed:** `backend/api/views.py`, `backend/services/ors_utils.py`, `backend/services/tests/test_coverage_heatmap.py`, `backend/services/views/{helpers,inspection,reports,technician,tickets}.py`.
+- **Backend new:** `backend/services/{geo_boundaries,location_quality,route_tracking,test_location_quality,test_route_tracking}.py`, `backend/services/data/{calabarzon_city_municipalities,calabarzon_barangays}.json`.
+- **Frontend changed:** `frontend/src/api/services.js`, `frontend/src/components/shared/SearchFilterBar.jsx`, `frontend/src/index.css`, `frontend/src/pages/admin/{AdminTechnicianTracking,CoverageHeatmap}.jsx`, `frontend/src/pages/technician/{TechnicianDashboard,TechnicianMapNavigation}.jsx`.
+- **Frontend new:** `frontend/src/utils/routeProgress.js`, `frontend/src/data/calabarzonCityMunicipalities.json`, `frontend/src/data/barangays/` (142 files).
+- **E2E:** changed `e2e/{03,19,20,40}-*.spec.js`; new `e2e/66-admin-coverage-heatmap-drilldown.spec.js`.
+- **Docs:** `.github/workflows/daily-operational-automations.yml`, `docs/deployment/GITHUB_ACTIONS_AUTOMATION_SETUP.md`, `docs/security/ROUTE_API_CAPABILITY_MATRIX.md`, this handoff.
+- No schema, migration, permission or dependency change.
+
+**Next actions:**
+1. **Commit and deploy** to staging when the owner asks. This includes backend changes and about 2.2 MB of boundary data. Before deploying, power Aiven on and confirm the backend `/health/ready/` returns 200. Optionally rerun the full Playwright suite first.
+2. **Scheduler:** the owner adds the secrets, then does the first manual run.
+3. **Staging hand check on phones:** GPS precision, driving with rerouting and ETA, arrival radius, email, Cloudinary, installed app, live updates between two phones.
+4. **Open owner decisions:** the arrival radius (default 30 m, allowance for GPS precision declined for now); whether the heatmap stat cards should follow the selected area (not done).
+
 Current objective (latest): **Replace Technician Tracking's unbounded minute-only GPS age label with readable elapsed units. Fresh updates retain `just now` and minute precision; older positions now progress through hours, days, weeks, months, and years, so the reported `Updated 1097 min ago` becomes `Updated 18 hours ago`. The complete administrator/superadmin Technician Tracking control journeys passed 2/2 with that exact injected age, and the Vite 8.3.5 production build passed with 2,571 modules. No backend, API, schema, migration, permission, dependency, persistent data, commit, push, or deployment changed.**
 Current objective (latest): **Preserve the Admin Documents solar-commissioning success confirmation when the successful save refreshes ticket prefill data. The checklist loader now preserves that specific confirmed-save message during its background reload while still clearing stale non-success feedback; ticket and document changes and the beginning of a later save retain their existing explicit resets. The focused all-document save/reload journey passed three post-fix times in fresh isolated E2E invocations, including the final narrowed rule, and the final Vite 8.3.5 production build passed with 2,571 modules. The full 370-scenario Playwright gate remains incomplete because an approximately 8.8-hour host suspension invalidated its later results. No backend, API, schema, migration, permission, dependency, persistent data, commit, push, or deployment changed.**
 Current objective (latest): **Align the Technician Tracking details modal with the system's established dialog hierarchy and remove the wide empty layout visible for technicians without jobs. The modal now uses the standard compact `max-w-3xl` shell, a status-led identity header with icon-only close, a full-width four-column live-location summary, explicit GPS and active-job badges, a dedicated current-jobs section with a concise no-assignment state, and a stable footer for Call, Email, and Open Service Tickets. Coordinates span the remaining summary width instead of leaving an orphan card. Desktop/mobile superadmin tracking journeys passed 2/2 with a new <=780px desktop-width assertion; exhaustive admin/superadmin tracking-control journeys passed 2/2; a final desktop screenshot run passed 1/1 and visual inspection confirmed balanced spacing, readable job cards, and stable actions. The Vite 8.3.5 production build passed with 2,571 modules. No backend, API, schema, migration, permission, dependency, data, commit, push, or deployment changed.**
@@ -6921,3 +6987,372 @@ Change ledger:
 - Validation: frontend build OK; new `e2e/65-install-app-button.spec.js` 4/4 passed (landing page on a phone shows the steps; login page on an iPhone user agent shows the iPhone steps; top bar on a phone and a computer; hidden when running as an installed app). Not exercised: a real browser install prompt (needs staging over HTTPS on a phone).
 - Not committed or deployed.
 - Change ledger: new `frontend/src/components/shared/InstallAppButton.jsx`, `e2e/65-install-app-button.spec.js`; changed `frontend/src/hooks/usePwaInstallPrompt.js`, `frontend/src/components/layout/Topbar.jsx`, `frontend/src/components/LandingNavbar.jsx`, `frontend/src/pages/Login.jsx`, `frontend/src/main.jsx` and this handoff. No backend, API, schema, migration, permission, dependency or data change.
+
+## Deployment record — Install app button, to Render staging (2026-11-14)
+
+- The user asked to push and deploy. Committed as `1cea6e6` on `feature/analytics-decision-workspace` and pushed. Merged into `origin/staging-deploy` with `--no-ff` from a temporary worktree (merge commit `078d712`, parent `a62d760`); the merged tree is identical to `1cea6e6` (empty diff). Pushed `a62d760..078d712` at 21:47 and removed the worktree.
+- Frontend-only release: no migration, no backend or environment change. Before pushing, the Aiven database host resolved and the backend `/health/ready/` returned 200 (see the earlier incident record).
+- Verified live (21:48): the staging bundle changed (`index-DZY-hmvz.js` to `index-fzf9VJFM.js`) and the `Login` chunk contains "Install the app on this device"; backend `/health/ready/` still 200.
+- Not exercised on staging: the real browser install prompt on a phone (Android Chrome menu, iPhone Share steps); check on a device.
+- Change ledger: this handoff only; commit `1cea6e6` and merge `078d712` pushed; staging frontend redeployed.
+
+### 2026-11-14 Install button: why it sometimes shows steps instead of installing (investigation, no code change)
+
+- Report: on the phone the owner could install through the Chrome menu, but tapping "Install app" showed the steps box, not the install dialog. The owner wants the button to install with no browser menu.
+- Finding: the button already installs in one tap when Chrome has sent its `beforeinstallprompt` signal. A website cannot install itself with no browser confirmation; Chrome always shows its own dialog after the tap. The steps box appears only when the signal has not arrived.
+- Checked on staging: manifest, both icons and the service worker (with a fetch handler) are served. A headed Chromium run with CDP `Page.getAppManifest` and `Page.getInstallabilityErrors` found no manifest errors and one installability error, `in-incognito`, which comes from the test window itself. So the server side is installable. The manifest is served as `binary/octet-stream` instead of `application/manifest+json` (Render default); Chrome accepted it, so it is not the cause, and no header change was made.
+- Likely causes on the device (unconfirmed, needs the browser and phone model): the tap came before Chrome sent the signal (it arrives a few seconds after load), Chrome is withholding the prompt after earlier dismissals or an earlier install, or the page was in an in-app browser (Facebook, Messenger) or iPhone Safari, which never send it.
+- Possible follow-up if it keeps happening: show on the button whether the signal has arrived ("Ready to install" or "Waiting for the browser"), so a too-early tap is visible. Not built.
+- Change ledger: this handoff only. No code, backend, schema, migration, permission, dependency, data, commit, push or deployment changed. The test script lived in the session scratchpad, not the repo.
+
+## Deployment record — daily scheduler activated on the default branch (2026-11-14)
+
+- Goal: make the daily operational automations (maintenance reminders, follow-up cases, daily analytics, location purge, forecasts) run against deployed staging.
+- Blockers found: (1) GitHub runs schedules only from the default branch `main`, which was still the initial commit `142ecad` with no workflow; (2) the workflow required `AUTOMATION_REDIS_URL`, but the Render staging Redis has `ipAllowList: []` (Render-internal only), so a GitHub runner cannot reach it; (3) a plain checkout on `main` would have run the old initial code against the staging database.
+- Change to `.github/workflows/daily-operational-automations.yml`: checkout now uses `ref: staging-deploy` so the job runs the deployed code; `USE_REDIS=False` with `ALLOW_INMEMORY_CHANNEL_LAYER_IN_PRODUCTION=True` (the job only writes rows and sends email; open screens see new notifications on refresh); `REDIS_URL` removed from the required-secret list. `docs/deployment/GITHUB_ACTIONS_AUTOMATION_SETUP.md` updated to match (Redis secret removed, Aiven Running/allowlist step added, branch layout explained).
+- With the user's approval, committed only those two files onto `origin/main` from a temporary worktree (`fc8b262`, parent `142ecad`) and pushed `142ecad..fc8b262`; worktree removed. `main` is otherwise unchanged; no merge of the feature branch.
+- Validation (actually run): `manage.py check` under the workflow's production environment with dummy values and the in-memory channel layer reported no issues; `manage.py test services.test_operational_automations` 3 OK; confirmed `origin/staging-deploy` (`078d712`) contains `run_operational_automations`.
+- Not yet done (owner): add the 13 `AUTOMATION_*` repository secrets with staging values; confirm Aiven is Running and allows `0.0.0.0/0`; start the first manual run from Actions and confirm it ends with `Completed daily operational automations`. SLA checks and auto-dispatch (30-minute group) are still not scheduled.
+- Change ledger: `.github/workflows/daily-operational-automations.yml`, `docs/deployment/GITHUB_ACTIONS_AUTOMATION_SETUP.md` (also on `main` as `fc8b262`) and this handoff (uncommitted on the feature branch). No backend code, schema, migration, permission, dependency or data change.
+
+### 2026-11-14 Coverage Heatmap: livelier map and real city/municipality boundaries
+
+- Reason: the owner found the map plain and asked for a separation per city/municipality (barangay deferred).
+- Map look (frontend only, no dependency): the street map is desaturated on this page only (`.coverage-map .leaflet-tile-pane`), so the density colours stand out. Hotspots draw as numbered count bubbles (`L.divIcon`, fixed pixel size, coloured by density, keyboard-focusable with a title) over a soft glow of three stacked translucent `CircleMarker` rings. A CSS blur on a custom Leaflet pane was tried first and never painted in Chromium, so it was dropped. Technician coverage circles get an initials pin. The legend shows real numbers (1, middle, busiest) instead of "Lower / Higher"; its aria-label is unchanged. Fixed: `boundedHeatmapData` was a fresh array every render, so toggling a layer re-ran `fitBounds` and reset the zoom (now memoised).
+- City / municipality boundaries: added `backend/services/data/calabarzon_city_municipalities.json` and an identical `frontend/src/data/calabarzonCityMunicipalities.json`, holding 142 outlines (56 KB, 11.5 KB gzipped). They come from `faeldon/philippines-json-maps` (MIT, Copyright (c) James Faeldon, PSA/NAMRIA-derived, `latest/geojson/provdists/lowres`), trimmed to Batangas, Cavite, Laguna, Quezon and Rizal, with coordinates rounded to 4 decimals. The source is credited in the map's attribution. New module `backend/services/geo_boundaries.py` uses a ray-casting point-in-polygon test with bounding-box prefilter and holes; it has no dependency. `service_density` adds `geographic_levels.municipality`: each job is placed by its saved coordinates, not the typed city, and rows carry a 10-digit `psgc`. It also adds `jobs_outside_boundaries`. Existing `city` and other levels are unchanged. On the page, "City / municipality" now uses the boundary rows. It lazy-loads the outlines and shades every outline by completed jobs, with gray for none. A hover tooltip gives the name, province and count, and a note reports jobs outside CALABARZON.
+- Validation (actually run): `manage.py test services.tests.test_coverage_heatmap` 13 OK. New tests cover jobs placed by coordinates despite a wrong or blank typed city, an outside-region job counted, all 142 areas loaded, known points resolving, and backend/frontend boundary files byte-identical. Frontend build OK (2,573 modules; boundaries in their own chunk). Spec 20 now also checks for 142 or more outline paths, the shading note and the attribution. Spec 20 (admin and superadmin) plus the 3.20 and 09 heatmap checks: 5 passed after the final change. Visual check with a temporary mocked-data Playwright spec (desktop hotspot, city, popup, phone page) and inspected screenshots; the temporary spec was deleted.
+- Route matrix: `docs/security/ROUTE_API_CAPABILITY_MATRIX.md` coverage row records the new payload fields. No permission change.
+- Known risks: the outlines are low-resolution (simplified), so a job within roughly 100 m of a border can land in the neighbouring area. Barangay outlines are not added (several MB; would need load-on-zoom).
+- Change ledger: `frontend/src/pages/admin/CoverageHeatmap.jsx`, `frontend/src/index.css`, new `frontend/src/data/calabarzonCityMunicipalities.json`, new `backend/services/geo_boundaries.py`, new `backend/services/data/calabarzon_city_municipalities.json`, `backend/services/views/reports.py`, `backend/services/tests/test_coverage_heatmap.py`, `e2e/20-admin-coverage-heatmap-controls.spec.js`, `docs/security/ROUTE_API_CAPABILITY_MATRIX.md` and this handoff. No schema, migration, permission, dependency, commit, push or deployment.
+
+### 2026-11-14 Coverage Heatmap: city/municipality outlines are clickable
+
+- Report: the owner could not click an area. Outlines had only a hover tooltip (nothing on phones), and the interactive 10 km technician circles sat on top and caught clicks inside them.
+- Change: each outline now opens a popup on click/tap: name, province and job count. For shaded areas it also lists services completed, clients and technicians; gray areas say "No completed jobs here yet". All text is HTML-escaped. Technician circles are now non-interactive. Their initials pin still opens the technician popup.
+- Validation: frontend build OK. Spec 20 now clicks the busiest (red) outline and checks the popup. Spec 20 for admin and superadmin: 2 passed.
+- Change ledger: `frontend/src/pages/admin/CoverageHeatmap.jsx`, `e2e/20-admin-coverage-heatmap-controls.spec.js` and this handoff. No backend, API, permission or dependency change; not committed or deployed.
+
+### 2026-11-14 Coverage Heatmap: select a city/municipality to drill down (pass 1 of 2)
+
+- Request: the owner expected clicking an area to highlight it and show a compilation of its data (services, etc.) with the heat points, down to barangay level. Built in two passes; this is pass 1 (city/municipality). Pass 2 (barangay outlines inside the selected town) is not started and waits for the owner's review.
+- Backend: each `heatmap_data` hotspot now carries `area_psgc` (the city/municipality outline containing the hotspot centre, via `services/geo_boundaries.py`; null outside CALABARZON). Area totals still come from `geographic_levels.municipality` (per-job placement), so panel numbers match the API.
+- Frontend (`CoverageHeatmap.jsx`), City / municipality view:
+  - Shows the real hotspot heat points (glow plus numbered bubbles) inside the shaded outlines. The previous single bubble per town is gone, so there are no conflicting numbers.
+  - Click or tap an outline, or a row in the "Busiest cities / municipalities" list (now buttons, the keyboard route), to select it. The selected outline gets a thick dark border, the other outlines fade, and the map flies to its bounds. The panel beside the map (below it on phones) replaces the list with `AreaDetailsPanel`: completed jobs, share of all jobs, rank, services with bars, technicians, clients (first 8 plus "N more"), and the heat points inside, with a note that 1 km points near a border can belong to the next town.
+  - Clear the selection with "Back to all areas", Escape, a click on empty map, or another click on the same area. On phones a summary card on the map links to the panel. Hover shows a tooltip.
+  - Outlines restyle in place through a ref, and the hover handlers read the selection from refs. `MapResizeController` pauses while an area is selected so it does not undo the zoom.
+  - The click popup on outlines from the previous entry is replaced by the panel.
+- Validation (actually run): `manage.py test services.tests.test_coverage_heatmap` 13 OK (municipality test also checks `area_psgc`). Frontend build OK. Spec 20 now selects the busiest outline by clicking and checks the panel against the API row, including ties. It also covers Back, a list-row button, and Escape. Spec 20 (admin and superadmin) plus 3.20 and the 09 heatmap checks plus a temporary mocked-data screenshot spec: 7 passed. Desktop and phone screenshots were inspected; the summary card was moved off the zoom buttons. The temporary spec was deleted.
+- Known risks: the selected outline is brought to the front, so its fill partly covers the heat glow under it (the bubbles stay on top). Barangay drill-down is pending: about 2.2 MB of outlines, one file per town to load on selection. Town and barangay outlines were simplified separately, so a job can fall in no barangay.
+- Change ledger: `backend/services/views/reports.py`, `backend/services/tests/test_coverage_heatmap.py`, `frontend/src/pages/admin/CoverageHeatmap.jsx`, `e2e/20-admin-coverage-heatmap-controls.spec.js`, `docs/security/ROUTE_API_CAPABILITY_MATRIX.md` and this handoff. No schema, migration, permission, dependency, commit, push or deployment.
+
+### 2026-11-15 Coverage Heatmap: barangay drill-down inside the selected town (pass 2 of 2)
+
+- The owner approved pass 2 after reviewing pass 1.
+- Data: 3,992 CALABARZON barangay outlines come from the same MIT dataset (`latest/geojson/municities/lowres`, one source file per town), trimmed and rounded to 4 decimals.
+  - Backend: `backend/services/data/calabarzon_barangays.json` (1.07 MB), grouped by town PSGC.
+  - Frontend: 142 files, `frontend/src/data/barangays/<town psgc>.json` (about 7 KB each, 1.07 MB total). They are loaded through `import.meta.glob` only when that town is opened. Each becomes its own build chunk. The hand-written service worker caches on request only, so nothing extra is pre-downloaded.
+- Backend:
+  - `geo_boundaries.py` adds `load_barangay_areas` and `find_barangay(lat, lng, town_psgc)`, which searches only that town's barangays.
+  - `service_density` adds `geographic_levels.barangay_boundary` (rows with `psgc` and `municipality_psgc`, `address` "Barangay, Town") and `barangay_psgc` on each hotspot.
+  - Municipality rows add `unplaced_barangay_jobs`: jobs inside the town outline that miss every barangay, because the town and barangay outlines were simplified separately.
+  - The existing text-parsed `barangay` level is unchanged.
+- Frontend (`CoverageHeatmap.jsx`):
+  - **Opening a town:** clicking a town now opens it (no toggle). Its barangay outlines draw on top, shaded by their own jobs on a per-town scale; the town fill fades and its border stays bold.
+  - **Opening a barangay:** click a barangay on the map, or use the panel's new "Barangays with jobs (N of M)" list (buttons), to select it. The barangay gets a blue border, the map flies to it, and the panel shows the barangay: "Barangay · Town" eyebrow, jobs, share of town, rank in town, services, technicians, clients, and heat points inside it. "Back to <town>" returns.
+  - **Escape** steps back one level (barangay, then town).
+  - **Legend:** follows the barangay scale ("jobs per barangay") inside a town.
+  - **Phone card:** shows the barangay when one is selected.
+  - **Panel component:** `AreaDetailsPanel` is now generic (eyebrow, subtitle, share label, back label, empty text, children); `BarangayList` is new.
+- Validation (actually run): `manage.py test services.tests.test_coverage_heatmap` 15 OK. New: jobs placed in Balibago, Dita and Lecheria by coordinates; hotspot `barangay_psgc`; `unplaced_barangay_jobs`; backend and frontend barangay features identical per town; all 3,992 barangays belong to the 142 towns. `manage.py test services` 636 OK (7 skipped). Frontend build OK (2,715 modules).
+- Spec 20: now opens the busiest town and checks the barangay list count against the API. It waits for more than 142 outline paths, opens the top barangay and checks its panel, and checks that Escape steps back. Spec 20 (admin and superadmin) plus 3.20 and the 09 heatmap checks plus a temporary mocked-data screenshot spec: 7 passed. Desktop and phone screenshots of town and barangay views were inspected; the temporary spec was deleted.
+- Known risks: the outlines are simplified, so jobs near borders can land in a neighbouring barangay or none; the latter are counted and shown. The repo grows by about 2.2 MB of boundary data. On phones, a tapped outline's sticky tooltip can stay visible until the next tap.
+- Change ledger: `backend/services/geo_boundaries.py`, new `backend/services/data/calabarzon_barangays.json`, `backend/services/views/reports.py`, `backend/services/tests/test_coverage_heatmap.py`, `frontend/src/pages/admin/CoverageHeatmap.jsx`, new `frontend/src/data/barangays/` (142 files), `e2e/20-admin-coverage-heatmap-controls.spec.js`, `docs/security/ROUTE_API_CAPABILITY_MATRIX.md` and this handoff. No schema, migration, permission, dependency, commit, push or deployment.
+
+### 2026-11-15 Coverage Heatmap: spotlight on the selected area
+
+- Request: when an area is clicked, darken the other areas and highlight the chosen one.
+- Change: new `AreaSpotlight` in `CoverageHeatmap.jsx` draws several non-interactive layers, so clicks still reach the outlines underneath:
+  - **Veil:** a dark veil (`#0f172a`, 45%) covering the region except the selected area, which is a hole in the veil (even-odd fill).
+  - **Glow:** a blurred white glow along the selected edge.
+  - **Edge:** a crisp dark edge line.
+  - **Town edge:** when a barangay is selected it gets the spotlight, and its town edge stays visible as a dashed line.
+  - **Animation:** the veil and glow fade in over 280 ms (`index.css`, disabled for reduced motion).
+  - **Other outlines:** town and barangay outlines outside the selection no longer fade themselves; the veil darkens them.
+- Validation: frontend build OK; spec 20 (admin and superadmin) plus 3.20 and the 09 heatmap checks, 5 passed. Desktop and phone screenshots of town and barangay spotlight came from a temporary mocked-data spec (2 passed) and were inspected; the spec was deleted.
+- Change ledger: `frontend/src/pages/admin/CoverageHeatmap.jsx`, `frontend/src/index.css` and this handoff. No backend, API, permission or dependency change; not committed or deployed.
+
+### 2026-11-15 Coverage Heatmap: real-data end-to-end check, hotspot placement fix, UI fixes
+
+- Request: fix the UI and make sure the drill-down works end to end.
+- New spec `e2e/66-admin-coverage-heatmap-drilldown.spec.js` (serial, real data, no mocks):
+  - **66.0** completes four real jobs (two in Brgy. Balibago and one in Brgy. Dita, City of Santa Rosa; one in Brgy. Lecheria, City of Calamba) and checks the API placement.
+  - **66.1, computer:**
+    - Opens Santa Rosa from the ranked list and checks the panel (jobs, share, rank, barangay list with counts) against the API.
+    - Checks the spotlight veil, that more than 160 outlines are drawn, and the legend on the barangay scale.
+    - Opens the busiest barangay by clicking its outline and checks share of town and heat points.
+    - Checks Escape to the town, then "Back to all areas", that the veil is removed, and no sideways scroll or page errors.
+  - **66.2, phone:** the summary card, "View details" bringing the panel into view, the barangay summary, and no overflow.
+  - Screenshots are written to `test-results/screenshots/66-*.png`.
+- **Bug found by 66.0 and fixed (backend):**
+  - Hotspots sat at their ~1 km grid corner, and their `area_psgc` and `barangay_psgc` were looked up from that corner. The Balibago jobs (14.284, 121.092) have their corner (14.28, 121.09) in Brgy. Pulong Santa Cruz, so Balibago's panel showed no heat points and the bubble was drawn in the wrong barangay.
+  - Hotspots now keep the same grid grouping but are positioned at the average of their jobs' coordinates. They take the town and barangay where most of their jobs are, with ties broken deterministically by PSGC.
+  - Each job's outlines are looked up once (`boundaries_for`) and shared by the hotspot and boundary groupings.
+  - The backend test now asserts the Balibago and Dita heat points by job position.
+- **UI fixes (`CoverageHeatmap.jsx`):**
+  - **Service Mix:** moved below the map, so the map and its panel start higher on the page.
+  - **Barangay panel heading:** now "Barangay", then the name, then "Town, Province". The repeated town in the eyebrow is gone.
+  - **Legend on phones:** narrower, with the "Fewer jobs / Busiest" row hidden, and lifted above the wrapping map credit line (`bottom-10` on phones, `sm:bottom-7`).
+  - Specs 20 and 66 were updated for the new heading.
+- Validation (actually run): `manage.py test services.tests.test_coverage_heatmap` 15 OK; `manage.py test services` 636 OK (7 skipped). Frontend build OK. Specs 66 (3) plus 20 (2) plus 3.20 and the 09 heatmap checks (3): 8 passed. The real-data desktop and phone screenshots were inspected after the fixes.
+- Known risks: the screenshots can catch tiles mid-load right after the fly-to zoom, which looks blurry for a moment; this is not a defect. A tapped outline's tooltip can stay open on phones until the next tap.
+- Change ledger: `backend/services/views/reports.py`, `backend/services/tests/test_coverage_heatmap.py`, `frontend/src/pages/admin/CoverageHeatmap.jsx`, new `e2e/66-admin-coverage-heatmap-drilldown.spec.js`, `e2e/20-admin-coverage-heatmap-controls.spec.js`, `docs/security/ROUTE_API_CAPABILITY_MATRIX.md` and this handoff. No schema, migration, permission, dependency, commit, push or deployment.
+
+### 2026-11-15 Coverage Heatmap: top bar, one barangay source, card wording
+
+- Request: adjust the top bar where the filters are (options 1, 2 and 4 of the review; option 3, cards that follow the selection, not done).
+- Top bar (`CoverageHeatmap.jsx` toolbar content only; the shared `SearchFilterBar` used by 8 other pages is unchanged):
+  - **Phones:** "View by" fills one row, and the two layer toggles share the next row (grid). The "Layers" text label is hidden. The technician toggle reads "Technicians" (aria-label stays "Technician coverage"). This roughly halves the bar height.
+  - **Wider screens:** unchanged single line.
+  - The toggles sit in a `role="group"` labelled "Map layers".
+- One barangay source: "View by: Barangay" now uses `geographic_levels.barangay_boundary` (jobs placed inside official outlines by coordinates), the same data as the town drill-down. The old text-parsed `barangay` rows remain in the API but the page no longer shows them. Card subtitle "Placed inside official boundaries" for both boundary-based levels.
+- Wording: the busiest card now says "Most completed jobs in one ~1 km area" (hotspots) or "Most completed jobs in one <level>". Previously it said "Completed jobs in one mapped group".
+- Tests:
+  - Spec 20's barangay level check now reads `barangay_boundary`.
+  - Spec 66.1 also switches to View by: Barangay, finds Balibago in "Busiest barangays", and checks the new card wording.
+  - Spec 66.2 checks the phone layout: the layer toggles share a row below "View by". It also takes a toolbar screenshot (`66-phone-0-toolbar.png`, inspected).
+- Validation: frontend build OK; specs 66 (3), 20 (2), and 3.20 plus 09 heatmap (3): 8 passed after the final change.
+- Change ledger: `frontend/src/pages/admin/CoverageHeatmap.jsx`, `e2e/20-admin-coverage-heatmap-controls.spec.js`, `e2e/66-admin-coverage-heatmap-drilldown.spec.js` and this handoff. No backend, API, permission or dependency change; not committed or deployed.
+
+### 2026-11-15 Technician tracking accuracy fixes
+
+- Request: is technician tracking accurate? Review found:
+  1. Rough Wi-Fi/cell fallback readings, sometimes kilometres off, replaced good positions.
+  2. The map gave no sign of how precise a position was.
+  3. Positions were stamped with arrival time, not measurement time; the fallback could reuse a reading up to 60 s old.
+  4. Two rough readings could show as "moving".
+  5. The technician Dashboard posted every GPS reading unthrottled.
+  6. Background/locked phones stop browser GPS. This is a web limit; such technicians correctly show "stale" after 5 min.
+  The owner approved fixing 1–5.
+- Backend:
+  - **Rules module:** new `backend/services/location_quality.py`.
+    - Rough = accuracy over 100 m.
+    - Readings measured more than 120 s ago are ignored.
+    - A rough reading is ignored while a precise reading (accuracy 1–100 m) from the last 180 s exists.
+    - Accuracy 0 ("not reported") stays usable as before.
+  - **Location endpoint:** `update_location` (`services/views/inspection.py`) takes optional `reading_age_ms`. The phone sends its own "now minus reading time", so phone clock errors cancel. Ignored readings return 200 `{accepted: false, reason}` and are not stored. Accepted readings stamp `last_location_update` and the history row with the measured time.
+  - **Movement:** `_movement_snapshot` (`api/views.py`) returns `unknown` when either reading is rough. The movement threshold is now the full combined accuracy (minimum 12 m) instead of being capped at 60 m.
+- Frontend:
+  - **Sending:** `updateTechnicianLocation` (`api/services.js`) sends `reading_age_ms` from the GPS reading timestamp; `techName` and the unused speed/heading arguments were dropped. Navigation passes `measuredAt`.
+  - **Dashboard throttle:** the technician Dashboard now sends at most every 10 s or after 20 m of movement, the same pace as Navigation.
+  - **Admin map:** each technician pin gets an accuracy circle (`tech-accuracy-circle`): blue when precise, amber dashed when rough, gray dashed when stale. The popup warns "Rough position…" when accuracy is over 100 m.
+- Validation (actually run):
+  - **Backend:** new `services.test_location_quality` (7 tests: precise saved; rough kept out while precise is recent; rough used when no recent precise reading; cached over 2 min ignored; measured-time stamp; invalid age means now; rough pair gives movement `unknown`). With staff tracking, location retention and `users.tests`: 117 OK. Full `manage.py test`: 955 OK (7 skipped).
+  - **Frontend build:** OK.
+  - **Browser specs:** spec 19 now checks a rough reading kept out, a cached reading ignored, the API position unchanged, and an accuracy circle per technician with accuracy. Spec 19 (admin and superadmin) plus 35 (technician dashboard) and 40 (navigation): 4 passed.
+- Known risks: real-phone behaviour (GPS lock times, background suspension, browser differences) is still unverified until the staging hand check on phones. The 100 m rough threshold and 180 s hold are judgement values.
+- Change ledger: new `backend/services/location_quality.py`, new `backend/services/test_location_quality.py`, `backend/services/views/inspection.py`, `backend/api/views.py`, `frontend/src/api/services.js`, `frontend/src/pages/technician/TechnicianDashboard.jsx`, `frontend/src/pages/technician/TechnicianMapNavigation.jsx`, `frontend/src/pages/admin/AdminTechnicianTracking.jsx`, `e2e/19-admin-technician-tracking-controls.spec.js`, `docs/security/ROUTE_API_CAPABILITY_MATRIX.md` and this handoff. No schema, migration, permission, dependency, commit, push or deployment.
+
+### 2026-11-15 Technician tracking: live route progress and rerouting
+
+- Request: check the UI for following technicians to their clients; the owner approved the fixes and asked for rerouting too.
+- Problems found:
+  - **Frozen route:** the road route and "min ETA" were computed once at assignment and never refreshed. For example, the job card said "7.3 km · 13 min ETA" while the technician was 3.1 km away, and the line started where the technician had been.
+  - **Backwards route:** the assignment route was requested from the job to the technician (two places in `tickets.py`).
+  - **Covered buttons:** the "Live tracking" box covered the zoom buttons.
+  - **Legend:** it did not explain the solid road line.
+  - **Last update:** shown only as a full date.
+  - **Search box:** pre-existing double clear button (the browser's plus ours).
+- Backend:
+  - **Route tracking:** new `backend/services/route_tracking.py`.
+    - `distance_to_route_meters` (point to polyline, local projection).
+    - `reroute_reason`: `no_route`, or `off_route` when more than 200 m (or 1.5x GPS accuracy) off the route; Navigating tickets only.
+    - `maybe_reroute`: one reroute per ticket per 60 s through `cache.add`; runs in a background thread after commit, synchronously in tests.
+    - `store_route`: saves geometry, distance and duration, with `computed_at` and `reason` kept inside `route_geometry`.
+  - **Triggers:** accepted locations in `update_location` and `start_navigation` (from the last known position) call `maybe_reroute`.
+  - **Direction:** assignment routes now run technician to job.
+  - No schema change; the reroute limit uses the Django cache.
+- Frontend:
+  - **Route progress:** new `frontend/src/utils/routeProgress.js` (`getRouteProgress`). It turns legacy job-to-technician routes around, snaps the technician to the nearest point on the route, and trims the part already driven. Remaining distance includes the gap to the road. The remaining ETA is the route duration times the remaining share. Off route (beyond the same tolerance) shows a dashed direct line.
+  - **`AdminTechnicianTracking.jsx`:**
+    - Route lines start at the technician.
+    - Route popup shows "Road left", "about N min left", an off-route note, and "Rerouted … ago".
+    - Shared `RouteSummary` chips ("X to go", "about N min left", "Off planned route · rerouting", "Rerouted just now") are used in both Active Job Sites and the details sheet. The details sheet previously showed a different straight-line number.
+    - Legend adds "Road route" and "Direct line / off route".
+    - The "Live tracking" box moved right of the zoom buttons and ignores clicks.
+    - "Last GPS update" reads "Updated just now · 2:45 AM".
+    - The unused `getRouteCoords` and `formatDuration` were removed.
+  - **Search bar:** `SearchFilterBar` input gets `afn-search-input`, and `index.css` hides the browser's own search clear button for it (all pages using the shared bar).
+- Validation (actually run):
+  - **Backend:** new `services.test_route_tracking`, 7 tests: distance to route; on-route location keeps the route; off-route reroutes technician to job with `reason`/`computed_at`; the one-minute limit; a missing route is created; only Navigating tickets reroute; wide GPS error does not reroute. Together with location quality: 14 OK. Full `manage.py test`: 962 OK (7 skipped).
+  - **Frontend build:** OK.
+  - **Browser specs:**
+    - Spec 19 now drives the technician about 3 km off route (repeating until the per-minute limit allows it). It checks the API reroute runs from the technician's position to the job, and that the job card shows "to go", "about N min left" and "Rerouted …". The details sheet must show the same chips.
+    - Spec 3.5 accepts "to go" or "road route unavailable".
+    - Specs 19 (both roles), 3.5, 35 and 40 passed (6 tests, including 3.19 matched by the filter); after the search-bar fix, 19 and 3.5 passed again (4).
+    - A temporary real-data screenshot spec (desktop and phone) was inspected and deleted.
+- Known risks:
+  - The remaining ETA is proportional to the planned duration, not live traffic.
+  - The reroute limit uses the per-process cache. With several server processes, each could reroute once a minute; staging runs one.
+  - Reroutes use the external routing service (ORS, falling back to public OSRM). Staging quota is unverified.
+  - Crew members are measured against the lead's route.
+- Change ledger: new `backend/services/route_tracking.py`, new `backend/services/test_route_tracking.py`, `backend/services/views/inspection.py`, `backend/services/views/technician.py`, `backend/services/views/tickets.py`, new `frontend/src/utils/routeProgress.js`, `frontend/src/pages/admin/AdminTechnicianTracking.jsx`, `frontend/src/components/shared/SearchFilterBar.jsx`, `frontend/src/index.css`, `e2e/19-admin-technician-tracking-controls.spec.js`, `e2e/03-admin-workspace.spec.js`, `docs/security/ROUTE_API_CAPABILITY_MATRIX.md` and this handoff. No schema, migration, permission, dependency, commit, push or deployment.
+
+### 2026-11-15 Routing fallback: ORS failure tries OSRM; straight lines are never saved as road routes
+
+- Context: the owner confirmed an ORS key is configured, so the ORS free limits apply. The figures, from memory and unverified against the provider, are about 2,000 directions a day and 40 a minute.
+- Bug found:
+  - When ORS failed (quota HTTP 429, timeout, bad key), `get_route` skipped OSRM and returned the synthetic straight line.
+  - The assignment route (`tickets.py` inline and `_calculate_route_async`) and the new reroute (`route_tracking.store_route`) then saved that line as the ticket's road route. The admin map would show a straight "road route" with an invented ETA.
+- Fix:
+  - `ors_utils.get_route` now tries OSRM after an ORS failure before the straight line.
+  - New `ors_utils.is_road_route(route)` is False for the synthetic line, except where external routing is off on purpose (tests, the E2E server).
+  - All three save paths only store road routes. A failed reroute keeps the previous route, and the admin map shows the dashed direct line until a later retry.
+  - The technician's own `/services/ors/route/` response is unchanged: it can still return the straight line, with its existing fallback flags.
+- Validation: `services.test_route_tracking` gains `RoutingFallbackTests` (3 tests: ORS failure uses OSRM; all failing gives a non-road route; a failed reroute keeps the old route); with location quality, 17 OK. Full `manage.py test`: 965 OK (7 skipped). Specs 19 (both roles) and 40: 3 passed.
+- Known risks: the technician Navigation page still recalculates every 30 s or 100 m (up to about 5–6 ORS calls a minute while driving, about 150 per 30-minute trip). That is the main quota consumer; reducing it was offered, not done.
+- Change ledger: `backend/services/ors_utils.py`, `backend/services/route_tracking.py`, `backend/services/views/helpers.py`, `backend/services/views/tickets.py`, `backend/services/test_route_tracking.py` and this handoff. No schema, API shape, permission, dependency, commit, push or deployment change.
+
+### 2026-11-15 Technician Navigation: fewer routing (ORS quota) requests
+
+- Request: approved option 2 (lighten the Navigation page's routing calls).
+- Change, `frontend/src/pages/technician/TechnicianMapNavigation.jsx`:
+  - **Before:** the page recalculated the route every 30 s or after every 100 m, up to about 5–6 ORS calls a minute while driving.
+  - **On the route:** now every 2 minutes, to refresh the ETA. The driven part was already shown as travelled.
+  - **Off the route:** recalculates when the technician is more than 200 m (or 1.5x GPS accuracy) off it, the same rule as the server.
+  - **No route yet / failed request:** retried, but never more than once every 30 s, even when off route.
+  - The 30 s floor came out of the e2e check: if the routing service snaps the route's start to a road more than 200 m away (for example, inside a large compound), every reading looks off route and would otherwise send one request per reading.
+  - **Manual Recalculate (`force`)** still works immediately.
+  - New export `distanceToRouteMeters` in `frontend/src/utils/routeProgress.js`.
+- Expected volume: about one call every 2 minutes on route (about 15 per 30-minute trip), plus reroutes. Previously up to about 150.
+- Tests:
+  - Spec 40's phone GPS stub can now move (`window.__e2eMoveTo` pushes a new reading to active watchers).
+  - The new segment checks that two on-route moves send no route request, that going off route sends exactly one (no sooner than 30 s), and that four more off-route readings against a route that never passes there send no further requests.
+- Validation: frontend build OK; specs 40, 63 and 19 (both roles): 4 passed.
+- Known risks: real-phone driving behaviour is unverified until the staging hand check. The ETA between recalculations comes from the step distances and the measured speed shown on the page.
+- Change ledger: `frontend/src/pages/technician/TechnicianMapNavigation.jsx`, `frontend/src/utils/routeProgress.js`, `e2e/40-technician-navigation-controls.spec.js` and this handoff. No backend, API, permission or dependency change; not committed or deployed.
+
+### 2026-11-15 Technician Navigation live countdown; admin tracking trail, auto-refresh and crew checks
+
+- Request: check the remaining admin Technician Tracking items (crew, trail, auto-refresh), and adjust the technician Navigation page to match the reduced route requests.
+- **Technician Navigation** (`frontend/src/pages/technician/TechnicianMapNavigation.jsx`):
+  - **Frozen numbers:** distance, time, the job popup and the travelled line came from the last route request, so they would freeze for up to 2 minutes now.
+  - **Stuck steps:** the step only advanced when a reading landed within 30 m of the next turn. At driving speed with 10 s readings (about 140 m apart), steps could stay stuck.
+  - **Wrong turn in the banner:** it said "Next: <the step you are on>", i.e. the turn already taken.
+  - **Fix:**
+    - New `measureAlongRoute` in `frontend/src/utils/routeProgress.js` (snap to route, remaining metres, metres to any route point, travelled part, current segment; ties at a turn point prefer the later segment).
+    - The page derives the current step from the live position; the step state and the 30 m-advance effect are removed.
+    - The banner shows the real upcoming turn with "In 350 m", or "Now" within 30 m of it.
+    - The "Distance left" card, time and job popup count down live; the green travelled line follows the phone.
+    - Off route, an amber "You are off the planned route" notice replaces the banner and the card reads "Distance · off route".
+- **Admin Technician Tracking** (`AdminTechnicianTracking.jsx`):
+  - **Trail:** it was only drawn while the details window was open. That window covers the map, so the trail was never visible, and it never refreshed.
+    - Now the trail is drawn for the technician in the details window or the one the map is centered on (Center).
+    - It reloads with every 15 s refresh, showing "Loading" only when switching technicians.
+    - A map note reads "<name>: last 60 min".
+    - The details window gains "Show trail on map", which closes it and centers.
+  - **Crew:** the saved route is the lead's. `getRouteProgress(ticket, tech, { isLead })` marks a crew member far from it as `separate` (dashed direct line, "Travelling separately from the lead's route") instead of promising a reroute, which only the lead's location triggers.
+  - **Auto-refresh:** already every 15 s while the tab is visible (`startVisibleInterval`); verified below.
+- Validation (actually run):
+  - Frontend build OK.
+  - **Spec 40:** live "Now" at the turn; after moving, "Next: Arrive at the site", "In N m", step 2/3 and a decreasing "Distance left"; no route request on route; the off-route notice; one reroute request no sooner than 30 s; no flood. Specs 40 and 63: 2 passed.
+  - **Spec 19:** Center draws the violet trail and the map note. A new location shows in the trail within one auto-refresh without pressing Refresh. Show all removes it. Details shows the refreshed coordinates, and "Show trail on map" closes and centers. Specs 19 (admin and superadmin) and 3.5: 4 passed.
+  - **Node check of `routeProgress.js`** (scratchpad copy, 9/9 pass): route from technician to job, ETA countdown, reversed legacy routes, lead off route, crew `separate`, segment and distance to the next turn, turn-point tie, distance to route.
+- Known risks: the crew view has no browser test (crew setup is heavy); it is covered by the Node check only. Real driving on phones is unverified until the staging hand check.
+- Change ledger: `frontend/src/pages/technician/TechnicianMapNavigation.jsx`, `frontend/src/pages/admin/AdminTechnicianTracking.jsx`, `frontend/src/utils/routeProgress.js`, `e2e/40-technician-navigation-controls.spec.js`, `e2e/19-admin-technician-tracking-controls.spec.js` and this handoff. No backend, API, permission or dependency change; not committed or deployed.
+
+### 2026-11-15 Decision: arrival validation left as is
+
+- Reviewed `compute_arrival_validation_result` (`services/views/helpers.py`) against the new tracking rules.
+- **Known risk:** the check ignores GPS accuracy, and Mark Arrived sends no accuracy. A precise reading drawn just outside the 30 m default radius is blocked, while a rough reading whose centre falls inside passes.
+- **Offered:** an accuracy-aware check, a refusal for rough readings, and a 50–100 m radius recommendation on Settings.
+- **Decision:** the owner declined ("it's fine"); no change was made. Revisit if real arrivals are blocked in the staging hand check.
+- Change ledger: this handoff only.
+
+### 2026-11-15 Local catalog data (services, inventory, links, steps)
+
+- **Request:** the owner asked for data in inventory and services, connected, including the steps. **Target:** local development SQLite only. `show_environment` confirmed `backend/db.sqlite3`, and the script refuses any other database. E2E, staging and production were not touched.
+- **Snapshot before writing:** `backend/local_backups/db-before-catalog-seed-20261115.sqlite3` (git-ignored).
+  - 20,545,536 bytes, SHA-256 `b7df5e61314f2bebaa78a1f28d0926c770d6c8ebf5cb91134961e8c12331e960`;
+  - integrity `ok`, 0 foreign-key violations.
+- **This supersedes the 2026-11-12 reset note** that the owner must enter the catalog by hand.
+- **What was written.** The idempotent scratchpad script runs through `manage.py shell` and only fills blanks.
+  - **Defaults a flush removes**, restored by replaying the migrations' own functions:
+    - the service catalog (`services` 0058);
+    - SLA rules (0025, 5 rules);
+    - core document definitions and their "Standard" templates (0065, 6 each).
+  - **Services (9).** Saved through `ServiceTypeSerializer`, so steps are normalized.
+    - Every service has tools (`required_equipment`).
+    - Solar Panel Installation and Air Conditioning Installation now need a site inspection and carry 6 and 5 inspection checks. Solar Panel Installation takes a 30% deposit.
+    - Sample estimated costs: ₱800 to ₱25,000.
+  - **Inventory:**
+    - 6 categories and 35 items: the 9 from `inventory` 0008 with the same values, and 26 parts and consumables;
+    - each item is created at 0 and gets an `OPENING-CATALOG` purchase transaction, so the quantity equals the ledger;
+    - no low-stock notifications were sent. CCTV Dome Camera 4MP (3 of a minimum 8, the 0008 values) shows as low stock.
+  - **Links:** 32 `ServiceTypeInventoryRequirement` rows, at least 2 per service. 4 are `auto_reserve=False` because they are reserved only when needed: inverter fan, recorder drive, refrigerant and capacitor.
+  - **Skills:** Tech1 has an `intermediate` skill for all 9 services. Auto-dispatch only considers skilled technicians.
+- **Validation ledger (actually run):**
+  - a dry run inside a rolled-back transaction;
+  - the real run;
+  - a rerun, which created nothing new (35 transactions before and after);
+  - a rolled-back connection check per service:
+    - created a client request and a ticket, assigned Tech1 and ran `sync_ticket_reservations`;
+    - every auto-reserve link reserved, with 0 shortages;
+    - steps, tools and inventory links came back through `ServiceTypeSerializer`, and steps also through the technician job payload (`_serialize_ticket_service_checklists`);
+    - Tech1 was eligible for every service;
+    - after the rollback: 0 requests, 0 tickets, 0 reserved units;
+  - SQLite `integrity_check` `ok`, `foreign_key_check` 0 rows, `manage.py check` no issues.
+- **Known risks:**
+  - prices, stock levels, suppliers and per-job quantities are sample values for the owner to adjust;
+  - `progress.0005_ticketprogress_long_job_reports` is still unapplied locally and was not applied;
+  - the browser was not used for this data entry.
+- **Change ledger:** local `backend/db.sqlite3` data, the ignored snapshot, and this handoff. No source, schema, migration, permission or dependency change; not committed.
+
+### 2026-11-15 Profile photos on Technician Tracking and Messages
+
+- **Report:** the owner changed the technician's profile, but Technician Tracking and Messages still looked the same.
+- **Cause:** not a cache.
+  - The ChangeLog shows Tech1 uploaded a new photo at 04:05 UTC, and the name was unchanged.
+  - Both pages only ever drew initials: `/api/tracking/`, `/api/messages/participants/` and `/api/messages/` sent no photo.
+  - Names are computed live everywhere. The service worker does not cache `/api/` or `/media/`, and the API cache covers only the public landing page.
+- **Fix:**
+  - **Backend:**
+    - new `users/profile_images.py` `profile_image_url(user)`; `UserSerializer.get_profile_image_url` now delegates to it, unchanged;
+    - tracking technician markers and crew members get `profileImageUrl`;
+    - participants get `profile_image_url`;
+    - messages get `sender_profile_image_url` and `receiver_profile_image_url`.
+  - **Frontend:**
+    - new `components/shared/UserAvatar.jsx`: photo, or initials if there is none or it fails to load;
+    - used in the Messages room list, the conversation header and next to incoming messages (`/admin/messages` and `/technician/messages`);
+    - on Tracking: the technician list, the map popup, the details header and the map pin.
+  - **The map pin** layers the photo as a CSS background over the initials. Only plain http(s) or `/` URLs are allowed. The pin's initials are now HTML-escaped; they were inserted unescaped before.
+  - **Refresh:** Messages and Tracking already refresh live, so a new photo shows on their next refresh, with no reload needed.
+- **Validation ledger (actually run):**
+  - Tech1's real Cloudinary URL returns 200 `image/png`; building the URL takes about 0.2 ms;
+  - `manage.py test users.test_profile_image_everywhere users.tests.ProfileImageSerializationTests messages_app services.test_location_quality services.tests.test_staff_workspace_capability_access`: 64 OK;
+  - `npm run build:frontend` OK; `npm run check:backend` no issues;
+  - Playwright specs 19, 28 and 44: 6 passed.
+- **Known risks:**
+  - the browser specs do not assert the photo itself; the API test covers it, but no browser test does;
+  - client Support and other pages still show initials only.
+- **Change ledger:**
+  - `backend/users/profile_images.py` (new), `backend/users/serializers.py`, `backend/api/views.py`, `backend/messages_app/{serializers,views}.py`, `backend/users/test_profile_image_everywhere.py` (new);
+  - `frontend/src/components/shared/UserAvatar.jsx` (new), `frontend/src/api/communications.js`, `frontend/src/pages/technician/TechnicianMessages.jsx`, `frontend/src/pages/admin/AdminTechnicianTracking.jsx`;
+  - `docs/security/ROUTE_API_CAPABILITY_MATRIX.md` and this handoff.
+  - No schema, permission or dependency change. Not committed or deployed.
+- **Follow-up (same day): duplicate role line in the Messages room list.**
+  - **Problem:** a room with no messages used its subtitle as the preview. The list read "Technician / Technician", "Admin / Admin", and the group description twice.
+  - **Fix:** the preview line now appears only when the room has a real last message (`TechnicianMessages.jsx`).
+  - **Validation:** `npm run build:frontend` OK; Playwright specs 28 and 44: 4 passed.
+
+### 2026-11-15 Commit and staging deployment of the 2026-11-14/15 session
+
+- Owner asked to commit and deploy if the checks pass.
+- Validation before commit:
+  - `npm run check:backend`: no issues;
+  - `npm run test:backend`: 967 tests OK (7 skipped);
+  - `npm run build:frontend`: OK;
+  - Playwright 21, 24, 37, 47, 50, 62 rerun alone: 14 passed. They had failed in the owner's full run only through timeouts and timing under load.
+- Aiven host resolved before the push (service powered on).
+- The daily scheduler workflow already matches `origin/main`, so `main` needs no new commit.
+- Change ledger: commit and merge of everything listed in "Session summary 2026-11-14/15", plus this handoff. No migration in this change. Local catalog data and the DB snapshot are not in git.

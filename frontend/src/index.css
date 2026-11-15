@@ -255,6 +255,75 @@ textarea {
   z-index: 0;
 }
 
+/* The shared search bar has its own "Clear search" button; hide the browser's built-in one
+   so there are not two x buttons side by side. */
+.afn-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+/* Coverage Heatmap only: a quieter basemap so the density colours stand out,
+   and count bubbles. */
+.coverage-map .leaflet-tile-pane {
+  filter: saturate(0.3) brightness(1.05) contrast(0.92);
+}
+
+/* Spotlight on the selected area: the veil fades in, the edge glows softly. */
+.coverage-map .area-spotlight-veil {
+  animation: area-spotlight-in 280ms ease-out;
+}
+
+.coverage-map .area-spotlight-glow {
+  filter: blur(3px);
+  animation: area-spotlight-in 280ms ease-out;
+}
+
+@keyframes area-spotlight-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coverage-map .area-spotlight-veil,
+  .coverage-map .area-spotlight-glow {
+    animation: none;
+  }
+}
+
+.coverage-map .heat-bubble {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 2px solid #fff;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+  text-shadow: 0 1px 1px rgba(15, 23, 42, 0.45);
+  transition: transform 120ms ease;
+}
+
+.coverage-map .leaflet-marker-icon:hover .heat-bubble,
+.coverage-map .leaflet-marker-icon:focus-visible .heat-bubble {
+  transform: scale(1.12);
+}
+
+.coverage-map .tech-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  border: 3px solid #fff;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+}
+
 @keyframes tracking-marker-pulse {
   0%, 100% { transform: scale(0.92); opacity: 0.2; }
   50% { transform: scale(1.18); opacity: 0.45; }

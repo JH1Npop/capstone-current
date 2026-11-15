@@ -15,6 +15,7 @@ import {
   resolveServiceRegion
 } from '../../utils/mapRegion';
 import { formatTicketId } from '../../utils/roleIds';
+import { OFF_ROUTE_METERS, distanceToRouteMeters, measureAlongRoute } from '../../utils/routeProgress';
 import MapTileLayer from '../../components/maps/MapTileLayer';
 
 const techIcon = L.divIcon({
@@ -39,8 +40,11 @@ const EMPTY_ROUTE = {
   directions: []
 };
 
-const ROUTE_RECALCULATE_MS = 30000;
-const ROUTE_RECALCULATE_DISTANCE_KM = 0.1;
+// Each recalculation is one routing-service (ORS) request, on a free daily quota. Recalculate
+// only when the technician leaves the route (same rule as backend/services/route_tracking.py),
+// or every 2 minutes to refresh the ETA; the driven part is already greyed out in between.
+const ROUTE_RECALCULATE_MS = 120000;
+const ROUTE_RETRY_MS = 30000;
 const LOCATION_UPDATE_MS = 10000;
 const LOCATION_UPDATE_DISTANCE_KM = 0.02;
 const DEFAULT_TRAVEL_SPEED_KPH = 35;
@@ -211,7 +215,6 @@ export default function TechnicianMapNavigation() {
   const [jobLoading, setJobLoading] = useState(Boolean(ticketId));
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState('');
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [trackingConfig, setTrackingConfig] = useState(null);
   const [liveTravelSpeedKph, setLiveTravelSpeedKph] = useState(null);
   const [error, setError] = useState('');
@@ -265,9 +268,30 @@ export default function TechnicianMapNavigation() {
   const jobLoc = hasJobCoordinates ? [Number(job.latitude), Number(job.longitude)] : null;
   const loading = jobLoading;
   const effectiveTravelSpeedKph = liveTravelSpeedKph || route.travelSpeedKph || DEFAULT_TRAVEL_SPEED_KPH;
-  const displayedTravelTimeMin = route.distanceKm > 0
-    ? Math.max(1, Math.round((route.distanceKm / effectiveTravelSpeedKph) * 60))
+  // Where the phone is along the route right now. The route is requested only every 2 minutes
+  // (or when off it), so distance, time, the current step and the driven part are all counted
+  // from the live position in between, not from the last route request.
+  const routeMeasure = useMemo(
+    () => (gpsLocation ? measureAlongRoute(route.routeCoords, [gpsLocation.latitude, gpsLocation.longitude]) : null),
+    [route.routeCoords, gpsLocation?.latitude, gpsLocation?.longitude]
+  );
+  const isOffRoute = Boolean(routeMeasure)
+    && routeMeasure.offRouteMeters > Math.max(OFF_ROUTE_METERS, 1.5 * (Number(gpsLocation?.accuracy) || 0));
+  const remainingKm = routeMeasure && !isOffRoute
+    ? Number(((routeMeasure.remainingMeters + routeMeasure.offRouteMeters) / 1000).toFixed(1))
+    : route.distanceKm;
+  const displayedTravelTimeMin = remainingKm > 0
+    ? Math.max(1, Math.round((remainingKm / effectiveTravelSpeedKph) * 60))
     : 0;
+  // The step being driven: the last one whose start is at or behind the phone's position.
+  const currentStepIndex = useMemo(() => {
+    if (!routeMeasure || isOffRoute || !route.directions.length) return 0;
+    let index = 0;
+    route.directions.forEach((step, stepIndex) => {
+      if (Number.isInteger(step.startIndex) && step.startIndex <= routeMeasure.segment - 1) index = stepIndex;
+    });
+    return index;
+  }, [routeMeasure, isOffRoute, route.directions]);
   const estimateStepMinutes = (distanceMeters, fallbackDurationSeconds = 0) => {
     if (Number(distanceMeters) > 0) {
       return Math.max(1, Math.round(((Number(distanceMeters) / 1000) / effectiveTravelSpeedKph) * 60));
@@ -275,18 +299,22 @@ export default function TechnicianMapNavigation() {
     return fallbackDurationSeconds > 0 ? Math.max(1, Math.round(fallbackDurationSeconds / 60)) : 0;
   };
 
-  const loadRoute = async (techLat = techLoc[0], techLng = techLoc[1], { force = false } = {}) => {
+  const loadRoute = async (techLat = techLoc[0], techLng = techLoc[1], { force = false, accuracy = 0 } = {}) => {
     if (!jobLoc) {
       return;
     }
 
     const now = Date.now();
     const previous = lastRouteRequestRef.current;
-    const movedKm = previous.lat == null || previous.lng == null
-      ? Infinity
-      : calculateDistanceKm(previous.lat, previous.lng, techLat, techLng);
+    const offRouteMeters = distanceToRouteMeters(route.routeCoords, [techLat, techLng]);
+    const offRoute = offRouteMeters != null
+      && offRouteMeters > Math.max(OFF_ROUTE_METERS, 1.5 * (Number(accuracy) || 0));
+    // On the route: refresh every 2 minutes. Off the route, or no route yet (the last request
+    // failed): ask again, but never more than once every 30 s. A route whose start the routing
+    // service snaps to a road over 200 m away would otherwise look "off route" on every reading.
+    const waitMs = offRoute || offRouteMeters == null ? ROUTE_RETRY_MS : ROUTE_RECALCULATE_MS;
 
-    if (!force && now - previous.at < ROUTE_RECALCULATE_MS && movedKm < ROUTE_RECALCULATE_DISTANCE_KM) {
+    if (!force && previous.lat != null && now - previous.at < waitMs) {
       return;
     }
 
@@ -294,7 +322,6 @@ export default function TechnicianMapNavigation() {
     const requestSeq = routeRequestSeqRef.current + 1;
     routeRequestSeqRef.current = requestSeq;
     setRouteLoading(true);
-    setCurrentStepIndex(0);
 
     try {
       const data = await fetchNavigationRoute(techLat, techLng, jobLoc[0], jobLoc[1]);
@@ -439,7 +466,7 @@ export default function TechnicianMapNavigation() {
       return;
     }
 
-    loadRoute(gpsLocation.latitude, gpsLocation.longitude);
+    loadRoute(gpsLocation.latitude, gpsLocation.longitude, { accuracy: gpsLocation.accuracy });
   }, [ticketId, job?.latitude, job?.longitude, arrived, gpsLocation?.latitude, gpsLocation?.longitude]);
 
   useEffect(() => {
@@ -499,33 +526,19 @@ export default function TechnicianMapNavigation() {
       if (now - previousLocation.at >= LOCATION_UPDATE_MS || movedKm >= LOCATION_UPDATE_DISTANCE_KM) {
         lastLocationUpdateRef.current = { at: now, lat: latitude, lng: longitude };
         try {
-          await updateTechnicianLocation({ techName, lat: latitude, lng: longitude, accuracy });
+          await updateTechnicianLocation({ lat: latitude, lng: longitude, accuracy, measuredAt: gpsLocation.timestamp });
         } catch (updateError) {
           console.warn('Failed to update technician location', updateError);
         }
       }
 
       if (!arrived && jobLoc) {
-        await loadRoute(latitude, longitude);
+        await loadRoute(latitude, longitude, { accuracy });
       }
     };
 
     updateLocationAndRoute();
   }, [gpsLocation, arrived, techName, ticketId, job?.latitude, job?.longitude]);
-
-  useEffect(() => {
-    if (!route.routeCoords || route.routeCoords.length === 0 || !gpsLocation || !jobLoc) {
-      return;
-    }
-
-    // Arrival is never automatic: the technician confirms it with Mark Arrived.
-    // A step is done once you reach the point where the next step begins.
-    const nextStep = route.directions[currentStepIndex + 1];
-    const nextPoint = nextStep && Number.isInteger(nextStep.startIndex) ? route.routeCoords[nextStep.startIndex] : null;
-    if (nextPoint && calculateDistanceKm(gpsLocation.latitude, gpsLocation.longitude, nextPoint[0], nextPoint[1]) <= STEP_REACHED_KM) {
-      setCurrentStepIndex(currentStepIndex + 1);
-    }
-  }, [gpsLocation, route, currentStepIndex, job?.latitude, job?.longitude]);
 
   // Map bounds are now handled by MapBoundsUpdater component
 
@@ -553,8 +566,24 @@ export default function TechnicianMapNavigation() {
   };
 
   const currentStep = route.directions[currentStepIndex] || null;
-  // The part of the line already travelled: up to where the current step begins.
-  const travelledUntil = currentStep && Number.isInteger(currentStep.startIndex) ? currentStep.startIndex : 0;
+  const followingStep = route.directions[currentStepIndex + 1] || null;
+  const atCurrentTurn = Boolean(routeMeasure && currentStep && Number.isInteger(currentStep.startIndex)
+    && currentStepIndex > 0
+    && calculateDistanceKm(
+      gpsLocation.latitude, gpsLocation.longitude,
+      route.routeCoords[currentStep.startIndex][0], route.routeCoords[currentStep.startIndex][1],
+    ) <= STEP_REACHED_KM);
+  const upcomingStep = atCurrentTurn || !followingStep ? currentStep : followingStep;
+  const upcomingMeters = !routeMeasure || !upcomingStep
+    ? null
+    : atCurrentTurn
+      ? 0
+      : upcomingStep === followingStep && Number.isInteger(followingStep.startIndex)
+        ? routeMeasure.metersToIndex(followingStep.startIndex)
+        : routeMeasure.remainingMeters;
+  const formatMetersAhead = (value) => (value >= 1000 ? `${(value / 1000).toFixed(1)} km` : `${Math.max(Math.round(value / 10) * 10, 0)} m`);
+  // The part of the line already travelled, up to where the phone is now.
+  const travelledCoords = routeMeasure && !isOffRoute ? routeMeasure.travelledCoords : [];
 
   if (!ticketId) {
     return (
@@ -629,12 +658,23 @@ export default function TechnicianMapNavigation() {
         {routeError && !loading && (
           <p role="status" className="mt-2 text-sm text-amber-700">{routeError}</p>
         )}
-        {currentStep && (
+        {isOffRoute && !arrived ? (
+          <div role="status" className="mt-3 rounded-lg border-l-4 border-amber-500 bg-amber-50 p-3">
+            <p className="text-sm font-semibold text-amber-900">You are off the planned route</p>
+            <p className="text-xs text-amber-800">
+              {routeLoading ? 'Finding a new route from where you are…' : 'A new route from where you are will load shortly. Head toward the job site.'}
+            </p>
+          </div>
+        ) : upcomingStep && (
           <div className="mt-3 rounded-lg border-l-4 border-blue-500 bg-blue-50 p-3">
-            <p className="text-sm font-semibold text-blue-900">Next: {currentStep.instruction}</p>
+            <p className="text-sm font-semibold text-blue-900">Next: {upcomingStep.instruction}</p>
             <p className="text-xs text-blue-700">
-              {currentStep.distance ? `${(currentStep.distance / 1000).toFixed(1)} km` : ''}
-              {estimateStepMinutes(currentStep.distance, currentStep.duration) ? ` | ${estimateStepMinutes(currentStep.distance, currentStep.duration)} min` : ''}
+              {upcomingMeters == null
+                ? (upcomingStep.distance ? `${(upcomingStep.distance / 1000).toFixed(1)} km` : '')
+                : upcomingMeters <= STEP_REACHED_KM * 1000 ? 'Now' : `In ${formatMetersAhead(upcomingMeters)}`}
+              {upcomingMeters != null && upcomingMeters > STEP_REACHED_KM * 1000 && estimateStepMinutes(upcomingMeters)
+                ? ` | ${estimateStepMinutes(upcomingMeters)} min`
+                : ''}
             </p>
           </div>
         )}
@@ -679,7 +719,7 @@ export default function TechnicianMapNavigation() {
                   <div className="text-center">
                     <strong>Job Site</strong>
                     <br />
-                    {route.distanceKm > 0 ? `${route.distanceKm} km away` : 'Route not calculated'}
+                    {remainingKm > 0 ? `${remainingKm} km away` : 'Route not calculated'}
                     <br />
                     {displayedTravelTimeMin > 0 ? `~${displayedTravelTimeMin} min` : 'Start location sharing first'}
                   </div>
@@ -691,9 +731,9 @@ export default function TechnicianMapNavigation() {
                   {/* Full route in blue */}
                   <Polyline positions={route.routeCoords} color="#3b82f6" weight={5} opacity={0.8} />
                   {/* Completed portion in green */}
-                  {travelledUntil > 0 && travelledUntil < route.routeCoords.length && (
+                  {travelledCoords.length > 1 && (
                     <Polyline
-                      positions={route.routeCoords.slice(0, travelledUntil + 1)}
+                      positions={travelledCoords}
                       color="#10b981"
                       weight={6}
                       opacity={0.95}
@@ -708,8 +748,8 @@ export default function TechnicianMapNavigation() {
         <div className="flex flex-col gap-3 sm:gap-4">
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <div className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 p-3 text-white shadow-lg sm:p-5">
-              <div className="mb-1 text-2xl font-bold sm:text-3xl">{route.distanceKm > 0 ? `${route.distanceKm} km` : '--'}</div>
-              <div className="text-xs text-blue-100 sm:text-base">Distance</div>
+              <div className="mb-1 text-2xl font-bold sm:text-3xl">{remainingKm > 0 ? `${remainingKm} km` : '--'}</div>
+              <div className="text-xs text-blue-100 sm:text-base">{isOffRoute ? 'Distance · off route' : 'Distance left'}</div>
             </div>
 
             <div className="rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 p-3 text-white shadow-lg sm:p-5">

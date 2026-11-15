@@ -1330,12 +1330,14 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
             try:
                 loc = ticket.request.location
                 if loc.latitude and loc.longitude and technician.current_latitude and technician.current_longitude:
-                    from services.ors_utils import get_route
+                    from services.ors_utils import get_route, is_road_route
+                    # From the technician to the job site (the route the technician drives).
                     route = get_route(
-                        (float(loc.longitude), float(loc.latitude)),
-                        (float(technician.current_longitude), float(technician.current_latitude))
+                        (float(technician.current_longitude), float(technician.current_latitude)),
+                        (float(loc.longitude), float(loc.latitude))
                     )
-                    if route and 'features' in route and route['features']:
+                    # Never save the straight-line stand-in as the ticket's road route.
+                    if is_road_route(route):
                         geom = route['features'][0].get('geometry')
                         props = route['features'][0].get('properties', {}).get('segments', [{}])[0]
                         ticket.route_geometry = geom
@@ -1701,8 +1703,9 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
             # compute route details asynchronously to avoid blocking response
             loc = ticket.request.location
             if loc.latitude and loc.longitude and selected_technician.current_latitude and selected_technician.current_longitude:
-                start_coords = (float(loc.longitude), float(loc.latitude))
-                end_coords = (float(selected_technician.current_longitude), float(selected_technician.current_latitude))
+                # From the technician to the job site (the route the technician drives).
+                start_coords = (float(selected_technician.current_longitude), float(selected_technician.current_latitude))
+                end_coords = (float(loc.longitude), float(loc.latitude))
                 # Start route calculation in background thread
                 # Start only after commit: the worker re-saves the whole ticket and
                 # must not read (and later overwrite with) the pre-assignment row.

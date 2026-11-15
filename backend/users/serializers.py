@@ -3,8 +3,8 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.password_validation import validate_password
-from django.core.files.storage import FileSystemStorage
 from django.utils import timezone
+from .profile_images import profile_image_url
 from .models import ActivityLog, AdminSettings, ChangeLog, User, TechnicianProfile, ClientProfile, ManagementProfile
 from .rbac import (
     get_default_admin_scope_for_role,
@@ -48,24 +48,7 @@ class UserSerializer(serializers.ModelSerializer):
         return sorted(get_user_capability_codes(obj))
 
     def get_profile_image_url(self, obj):
-        if not obj.profile_image:
-            return ''
-
-        image = obj.profile_image
-        image_name = str(image.name or '').lstrip('/')
-        while image_name.startswith('media/'):
-            image_name = image_name[len('media/'):]
-        if not image_name:
-            return ''
-
-        storage = image.storage
-        if isinstance(storage, FileSystemStorage) and not storage.exists(image_name):
-            return ''
-
-        try:
-            return storage.url(image_name)
-        except (NotImplementedError, ValueError):
-            return ''
+        return profile_image_url(obj)
 
     def get_technician_profile(self, obj):
         if obj.role == 'technician' and hasattr(obj, 'technician_profile'):

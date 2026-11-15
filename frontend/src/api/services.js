@@ -105,12 +105,17 @@ export const fetchDashboardChanges = async (role) => {
   return data?.token || '';
 };
 
-export const updateTechnicianLocation = async ({ techName, lat, lng, accuracy }) => {
+// `measuredAt` is the GPS reading's own timestamp (phone clock). The server receives the reading's
+// age instead of the timestamp, so a wrong phone clock cannot shift it; it ignores cached
+// readings older than 2 minutes and rough readings while a precise one is recent.
+export const updateTechnicianLocation = async ({ lat, lng, accuracy, measuredAt }) => {
   try {
+    const measured = Number(measuredAt);
     const { data } = await api.post('/services/technician/location/', {
       latitude: lat,
       longitude: lng,
-      accuracy
+      accuracy,
+      ...(Number.isFinite(measured) && measured > 0 ? { reading_age_ms: Math.max(Date.now() - measured, 0) } : {}),
     });
     return data;
   } catch (error) {

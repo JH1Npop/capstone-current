@@ -23,6 +23,7 @@ from rest_framework.throttling import UserRateThrottle
 
 from services.models import ServiceTicket, InspectionChecklist, TechnicianLocationHistory
 from services.tracking_config import get_tracking_config
+from services.location_quality import is_rough
 from services.views.helpers import (
     ACTIVE_TICKET_STATUSES,
     _display_name,
@@ -37,6 +38,7 @@ from services.views.helpers import (
 )
 from services.maintenance import MAINTENANCE_RULES, resolve_interval_days
 from users.models import User, Management, Technician, Client, AdminSettings
+from users.profile_images import profile_image_url
 from users.rbac import (
     SUPERVISOR_TRACKING_CAPABILITIES,
     is_admin_workspace_role,
@@ -86,7 +88,12 @@ def _movement_snapshot(technician, *, now):
 
     latest_accuracy = max(float(technician.latest_history_accuracy or 0), 0)
     previous_accuracy = max(float(technician.previous_history_accuracy or 0), 0)
-    movement_threshold = max(12, min(latest_accuracy + previous_accuracy, 60))
+    # Two rough readings (GPS not locked) can sit hundreds of metres apart while the technician
+    # stands still, so movement is "unknown" rather than a false "moving".
+    if is_rough(latest_accuracy) or is_rough(previous_accuracy):
+        return {'state': 'unknown', 'distance': round(distance, 1), 'speed': None, 'sample_seconds': round(sample_seconds)}
+    # Movement must exceed the combined GPS error of both readings to count.
+    movement_threshold = max(12, latest_accuracy + previous_accuracy)
     speed_kph = distance / sample_seconds * 3.6
     if speed_kph > 160:
         return {'state': 'unknown', 'distance': round(distance, 1), 'speed': None, 'sample_seconds': sample_seconds}
@@ -349,6 +356,7 @@ def tracking_view(request):
         tech_markers.append({
             'id': tech.id,
             'name': _display_name(tech),
+            'profileImageUrl': profile_image_url(tech),
             'email': tech.email or '',
             'phone': tech.phone or '',
             'lat': float(lat) if lat is not None else None,
@@ -391,6 +399,7 @@ def tracking_view(request):
                 crew_members.append({
                     'id': ticket.technician_id,
                     'name': _display_name(ticket.technician),
+                    'profileImageUrl': profile_image_url(ticket.technician),
                     'role': 'lead',
                 })
 
@@ -401,6 +410,7 @@ def tracking_view(request):
                 crew_members.append({
                     'id': technician.id,
                     'name': _display_name(technician),
+                    'profileImageUrl': profile_image_url(technician),
                     'role': 'crew',
                 })
 

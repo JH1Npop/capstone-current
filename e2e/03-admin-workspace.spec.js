@@ -544,7 +544,8 @@ test.describe('Admin Workspace - All Pages', () => {
     await expect(page.getByText('GPS attention')).toBeVisible();
     await expect(page.getByText('CALABARZON · history retained up to 30 days')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Active Job Sites' })).toBeVisible();
-    await expect(page.getByText(/Direct line · road route unavailable/).first()).toBeVisible();
+    // Each job site shows the road still to go, or a direct line when no road route exists.
+    await expect(page.getByText(/ to go$|road route unavailable$/).first()).toBeVisible();
 
     await page.getByRole('button', { name: /^Filters/ }).click();
     await page.getByLabel('GPS Health').selectOption('fresh');

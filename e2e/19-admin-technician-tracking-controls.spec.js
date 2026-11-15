@@ -83,6 +83,31 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await techApi.post(`/api/technician/jobs/${ticket.id}/start-navigation/`);
       await techApi.post('/api/services/technician/location/', { latitude: 14.2721, longitude: 121.1215, accuracy: 9 });
 
+      // ── Tracking accuracy: a rough Wi-Fi/cell reading does not move a precise recent position,
+      // and a cached reading older than 2 minutes is not saved ──
+      const rough = await techApi.post('/api/services/technician/location/', { latitude: 14.33, longitude: 121.2, accuracy: 1800 });
+      expect(rough).toMatchObject({ accepted: false, reason: 'rough_reading' });
+      const cached = await techApi.post('/api/services/technician/location/', { latitude: 14.2722, longitude: 121.1216, accuracy: 9, reading_age_ms: 180000 });
+      expect(cached).toMatchObject({ accepted: false, reason: 'stale_reading' });
+      const kept = (await admin.get('/api/tracking/')).techMarkers.find((marker) => marker.id === tech.id);
+      expect(kept).toMatchObject({ lat: 14.2721, lng: 121.1215, gpsAccuracy: 9, gpsState: 'fresh' });
+
+      // ── Reroute: about 3 km off the planned road, the server plans a new route from the
+      // technician to the job (at most once a minute per job, so keep reporting until it lands) ──
+      const OFF_ROUTE = { latitude: 14.25, longitude: 121.1, accuracy: 9 };
+      const routeOf = async () => (await admin.get('/api/tracking/')).ticketMarkers.find((marker) => marker.id === ticket.id)?.routeGeometry;
+      await expect.poll(async () => {
+        await techApi.post('/api/services/technician/location/', OFF_ROUTE);
+        return (await routeOf())?.reason;
+      }, { timeout: 90000, intervals: [1000, 5000, 10000] }).toBe('off_route');
+      const rerouted = await routeOf();
+      const [firstLng, firstLat] = rerouted.coordinates[0];
+      const [lastLng, lastLat] = rerouted.coordinates[rerouted.coordinates.length - 1];
+      expect(firstLat).toBeCloseTo(OFF_ROUTE.latitude, 3);
+      expect(firstLng).toBeCloseTo(OFF_ROUTE.longitude, 3);
+      expect(lastLat).toBeCloseTo(14.2786, 3);
+      expect(lastLng).toBeCloseTo(121.125, 3);
+
       await page.addInitScript(() => {
         window.localStorage.setItem('afn:analytics-assistant-position', JSON.stringify({ x: 12, y: 12 }));
       });
@@ -93,6 +118,9 @@ for (const username of ['admin_test', 'superadmin_test']) {
       const techs = tracking.techMarkers;
       const shown = page.getByRole('status').getByText(/^\d+\/\d+ shown$/);
       await expect(shown).toHaveText(`${techs.length}/${techs.length} shown`);
+      // Every technician with a position and a reported accuracy gets an accuracy circle on the map.
+      const withAccuracy = techs.filter((t) => t.lat != null && t.lng != null && Number(t.gpsAccuracy) > 0);
+      await expect(page.locator('path.tech-accuracy-circle')).toHaveCount(withAccuracy.length);
 
       // ── Summary tiles agree with /api/tracking/ ──
       const tile = (label) => page.locator('div.rounded-lg.bg-slate-50').filter({ hasText: label });
@@ -126,6 +154,11 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await expect(jobSites.getByText(`${ticketCode(ticket.id)} | ${service.name}`)).toBeVisible();
       await ticketDisplay.selectOption('all');
       await expect(jobSites.getByText(`${ticketCode(ticket.id)} | ${service.name}`)).toBeVisible();
+      // The job card counts down from the technician's position and says the route was replanned.
+      const jobRow = jobSites.locator('div.grid').filter({ hasText: `${ticketCode(ticket.id)} | ${service.name}` });
+      await expect(jobRow.getByText(/ to go$/)).toBeVisible();
+      await expect(jobRow.getByText(/^about \d+ min left$/)).toBeVisible();
+      await expect(jobRow.getByText(/^Rerouted (just now|\d+ min ago)$/)).toBeVisible();
 
       // ── Search by ticket ID, then a search with no match ──
       const search = page.getByRole('searchbox', { name: /Find technician or job/i });
@@ -147,7 +180,9 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await expect(details.getByRole('link', { name: 'Email' })).toHaveAttribute('href', `mailto:${techUsername}@afntest.com`);
       await expect(details.getByText(`${ticketCode(ticket.id)} · ${service.name}`)).toBeVisible();
       await expect(details.getByText('En route', { exact: true })).toBeVisible();
-      await expect(details.getByText(/direct distance$/)).toBeVisible();
+      // The same road distance and ETA still to go as the job card, counted from where the technician is.
+      await expect(details.getByText(/ to go$/)).toBeVisible();
+      await expect(details.getByText(/^about \d+ min left$/)).toBeVisible();
       await expect(techList.getByRole('button', { name: 'Details open' })).toBeVisible();
       await details.getByRole('button', { name: 'Close details' }).click();
       await expect(details).toBeHidden();
@@ -159,6 +194,29 @@ for (const username of ['admin_test', 'superadmin_test']) {
       await expect(details).toHaveCount(0);
       await page.getByRole('button', { name: 'Show all markers' }).click();
       await expect(page.getByText(/^Focused:/)).toHaveCount(0);
+
+      // ── Trail and auto-refresh: centering on a technician draws their last 60 minutes as a violet
+      // dotted line; a new position shows up within one 15-second refresh without pressing Refresh,
+      // and the trail grows with it ──
+      const trailLine = page.locator('.leaflet-overlay-pane path[stroke="#7c3aed"]');
+      await expect(trailLine).toHaveCount(0);
+      await techList.getByRole('button', { name: 'Center', exact: true }).click();
+      await expect(page.getByText(`${techName}: last 60 min`)).toBeVisible();
+      await expect(trailLine).toHaveCount(1);
+      const trailBefore = await trailLine.getAttribute('d');
+      await techApi.post('/api/services/technician/location/', { latitude: 14.2525, longitude: 121.1025, accuracy: 9 });
+      await expect.poll(() => trailLine.getAttribute('d'), { timeout: 25000 }).not.toBe(trailBefore);
+      await page.getByRole('button', { name: 'Show all markers' }).click();
+      await expect(trailLine).toHaveCount(0);
+      await expect(page.getByText(`${techName}: last 60 min`)).toHaveCount(0);
+      // The details window shows the refreshed position, and "Show trail on map" closes it and centers.
+      await techList.getByRole('button', { name: 'View details' }).click();
+      await expect(details.getByText('14.252500, 121.102500')).toBeVisible();
+      await details.getByRole('button', { name: 'Show trail on map' }).click();
+      await expect(details).toHaveCount(0);
+      await expect(page.getByText(`Focused: ${techName}`)).toBeVisible();
+      await expect(trailLine).toHaveCount(1);
+      await page.getByRole('button', { name: 'Show all markers' }).click();
 
       // ── Center on the job site ──
       await jobSites.locator('div.grid').filter({ hasText: ticketCode(ticket.id) }).getByRole('button', { name: 'Center' }).click();

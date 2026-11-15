@@ -95,6 +95,20 @@ def _build_synthetic_route(start_coords, end_coords, profile='driving-car', reas
     }
 
 
+def is_road_route(route):
+    """True for a real ORS/OSRM road route; False for the straight-line stand-in.
+
+    Saved ticket routes must be real roads. Where external routing is switched off on purpose
+    (tests, the E2E server) the straight line is the expected stand-in and may be saved.
+    """
+    if not (route and route.get('features')):
+        return False
+    if getattr(settings, 'IS_TEST', False) or getattr(settings, 'DISABLE_EXTERNAL_ROUTING', False):
+        return True
+    properties = route['features'][0].get('properties') or {}
+    return properties.get('routing_source') != 'synthetic'
+
+
 def get_route(start_coords, end_coords, profile='driving-car'):
     """Return a Smart Routing response for efficient travel paths.
 
@@ -119,8 +133,8 @@ def get_route(start_coords, end_coords, profile='driving-car'):
             }
             return client.directions(**params)
         except Exception as exc:
-            logger.warning("ORS route lookup failed; using synthetic fallback: %s", exc)
-            return _build_synthetic_route(start_coords, end_coords, profile, reason='ors_unavailable')
+            # Quota used up (HTTP 429), timeout or a bad key: try OSRM before a straight line.
+            logger.warning("ORS route lookup failed; trying OSRM: %s", exc)
 
     # OSRM fallback: only supports driving profile and two points
     # Convert OSRM response to ORS GeoJSON format so frontend receives consistent structure
