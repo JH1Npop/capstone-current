@@ -7356,3 +7356,10 @@ Change ledger:
 - Aiven host resolved before the push (service powered on).
 - The daily scheduler workflow already matches `origin/main`, so `main` needs no new commit.
 - Change ledger: commit and merge of everything listed in "Session summary 2026-11-14/15", plus this handoff. No migration in this change. Local catalog data and the DB snapshot are not in git.
+- Deployed: commit `9570478`, merge `3db34d0` pushed to `staging-deploy`.
+- Verified live:
+  - the staging frontend bundle changed from `index-fzf9VJFM.js` to `index-BQM3rQ0M.js`;
+  - the `CoverageHeatmap` chunk contains the barangay drill-down code;
+  - backend `/health/ready/` returns 200.
+- Not verified without signing in: that the backend runs the new release. No route is new and no version endpoint exists. Check the Render deploy page, or sign in and confirm a technician photo shows on Technician Tracking.
+- Still open: the phone hand check, and the scheduler's GitHub secrets and first run.
