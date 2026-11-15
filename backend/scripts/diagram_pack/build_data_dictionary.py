@@ -119,6 +119,7 @@ COLUMN_DESCRIPTIONS = {
     "notification.email_sent": "Indicates whether the email for the notification was sent.",
     # progress and after-sales
     "ticket_progress.progress_status": "Progress status recorded for the ticket.",
+    "ticket_progress.work_date": "Day of work the progress entry belongs to, for jobs that run over several days.",
     "after_sales_case.case_type": "Type of the after-sales case",
     "after_sales_case.status": "Current status of the after-sales case",
     "after_sales_case.priority": "Priority of the after-sales case",
@@ -283,6 +284,7 @@ ROLE_PHRASES = {
     "actor": "who performed the action", "sender": "who sent the message", "receiver": "who received the message",
     "technician": "who acts as the technician", "client": "who is the client", "parent": "that is the parent category",
     "replaces": "that this record replaces", "original_ticket": "from which the project originated",
+    "maintenance_plan": "that this request is the maintenance visit for", "maintenance_service": "used to book this service's maintenance visits",
 }
 
 TYPE_NAMES = {

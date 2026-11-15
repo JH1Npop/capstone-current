@@ -25,83 +25,83 @@ PROCESS = 'rounded=0;whiteSpace=wrap;html=1;fillColor=#C3EFE8;strokeColor=#1FA99
 STORE = 'rounded=0;whiteSpace=wrap;html=1;fillColor=#FFEB99;strokeColor=#B8860B;strokeWidth=2.5;fontSize=13;fontColor=#000000;'
 EDGE = 'edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;endSize=7;strokeColor=#000000;strokeWidth=1.2;fontSize=11;fontColor=#000000;labelBackgroundColor=default;'
 N = {
-    'sadmin': ('Superadministrator', 3800, 1430, 240, 80, 'e'),
-    'admin': ('Administrator', 1910, 1760, 240, 80, 'e'),
-    'tech': ('Technician', 710, 1040, 220, 80, 'e'),
-    'client': ('Client', 2300, 1400, 220, 80, 'e'),
-    'mapping': ('Mapping and Routing Services', 2510, 2600, 280, 80, 'e'),
-    'email': ('Email Delivery Service', 2750, 1280, 260, 80, 'e'),
-    'cloud': ('Cloud File Storage', 3470, 560, 240, 80, 'e'),
-    'gemini': ('AI Assistant Service (optional)', 4040, 1220, 280, 80, 'e'),
-    'p1': ('1.0 Manage User Access', 2690, 1040, 290, 90, 'p'),
-    'p2': ('2.0 Manage Service Requests<br>and Scheduling', 2510, 2120, 290, 90, 'p'),
-    'p3': ('3.0 Manage Ticket Dispatch', 1730, 2420, 290, 90, 'p'),
-    'p4': ('4.0 Manage Field Job<br>Completion', 1280, 410, 290, 90, 'p'),
-    'p5': ('5.0 Manage Inventory and<br>Equipment', 770, 2060, 290, 90, 'p'),
-    'p6': ('6.0 Manage After-Sales and<br>Maintenance', 2960, 2090, 290, 90, 'p'),
-    'p7': ('7.0 Manage Messages and<br>Notifications', 1700, 1220, 290, 90, 'p'),
-    'p8': ('8.0 Generate Reports, Analytics,<br>Logs, and Assisted Responses', 4100, 1940, 330, 90, 'p'),
-    'p9': ('9.0 Manage Quotations, Sales,<br>and Documents', 3590, 1700, 290, 90, 'p'),
-    'd1': ('D1 User, Profile, and Role Records', 3140, 1010, 260, 80, 's'),
-    'd2': ('D2 Service Type, SLA Reference, and Skill<br>Records', 2270, 2390, 280, 80, 's'),
-    'd3': ('D3 Service Request, Location, and<br>Calendar Closure', 2060, 2120, 260, 80, 's'),
-    'd4': ('D4 Ticket, Crew, Schedule, and<br>Assignment', 1730, 2660, 260, 80, 's'),
-    'd5': ('D5 Ticket Progress, Status<br>History, and Location Log', 1160, 860, 260, 80, 's'),
-    'd6': ('D6 Checklist and Proof', 860, 410, 240, 80, 's'),
-    'd7': ('D7 Inventory Item and<br>Requirement', 350, 2060, 240, 80, 's'),
-    'd8': ('D8 Inventory Reservation and<br>Transaction', 770, 2300, 260, 80, 's'),
-    'd9': ('D9 After-Sales Case', 3320, 2330, 240, 80, 's'),
-    'd10': ('D10 Maintenance Schedule', 2900, 2360, 260, 80, 's'),
-    'd11': ('D11 Message Records', 1250, 1280, 240, 80, 's'),
-    'd12': ('D12 Notification and<br>Delivery Log', 1310, 1490, 240, 80, 's'),
-    'd13': ('D13 Activity, Change Log,<br>and Settings', 4100, 2180, 240, 80, 's'),
-    'd14': ('D14 Analytics, Performance,<br>and Trends', 4280, 1700, 240, 80, 's'),
-    'd15': ('D15 Quotation, Sales, and<br>Payment Records', 3500, 2540, 260, 80, 's'),
-    'd16': ('D16 Document, Template, and<br>Generated File', 3350, 1460, 260, 80, 's'),
+    'sadmin': ('Superadministrator', 3410, 1310, 240, 80, 'e'),
+    'admin': ('Administrator', 2480, 1040, 240, 80, 'e'),
+    'tech': ('Technician', 1190, 980, 220, 80, 'e'),
+    'client': ('Client', 2870, 1430, 220, 80, 'e'),
+    'mapping': ('OpenStreetMap and OpenRouteService', 1310, 2210, 280, 80, 'e'),
+    'email': ('Brevo Email Service', 2630, 530, 260, 80, 'e'),
+    'cloud': ('Cloudinary File Storage', 3440, 2000, 240, 80, 'e'),
+    'gemini': ('Google Gemini AI (optional)', 3860, 1940, 280, 80, 'e'),
+    'p1': ('1.0 Manage User Access', 2960, 800, 290, 90, 'p'),
+    'p2': ('2.0 Manage Service Requests<br>and Scheduling', 2600, 2210, 290, 90, 'p'),
+    'p3': ('3.0 Manage Ticket Dispatch', 1820, 1550, 290, 90, 'p'),
+    'p4': ('4.0 Manage Field Job<br>Completion', 1880, 2090, 290, 90, 'p'),
+    'p5': ('5.0 Manage Inventory and<br>Equipment', 740, 1430, 290, 90, 'p'),
+    'p6': ('6.0 Manage After-Sales and<br>Maintenance', 3710, 860, 290, 90, 'p'),
+    'p7': ('7.0 Manage Messages and<br>Notifications', 1850, 410, 290, 90, 'p'),
+    'p8': ('8.0 Generate Reports, Analytics,<br>Logs, and Assisted Responses', 3770, 1700, 330, 90, 'p'),
+    'p9': ('9.0 Manage Quotations, Sales,<br>and Documents', 2990, 2630, 290, 90, 'p'),
+    'd1': ('D1 User, Profile, and Role Records', 3050, 500, 260, 80, 's'),
+    'd2': ('D2 Service Type, SLA Reference, and Skill<br>Records', 2420, 1580, 280, 80, 's'),
+    'd3': ('D3 Service Request, Location, and<br>Calendar Closure', 2480, 2450, 260, 80, 's'),
+    'd4': ('D4 Ticket, Crew, Schedule, and<br>Assignment', 1610, 1070, 260, 80, 's'),
+    'd5': ('D5 Ticket Progress, Status<br>History, and Location Log', 2060, 2330, 260, 80, 's'),
+    'd6': ('D6 Checklist and Proof', 1820, 2540, 240, 80, 's'),
+    'd7': ('D7 Inventory Item and<br>Requirement', 1310, 1490, 240, 80, 's'),
+    'd8': ('D8 Inventory Reservation and<br>Transaction', 740, 1700, 260, 80, 's'),
+    'd9': ('D9 After-Sales Case', 3710, 620, 240, 80, 's'),
+    'd10': ('D10 Maintenance Schedule', 3710, 1100, 260, 80, 's'),
+    'd11': ('D11 Message Records', 1430, 410, 240, 80, 's'),
+    'd12': ('D12 Notification and<br>Delivery Log', 2270, 320, 240, 80, 's'),
+    'd13': ('D13 Activity, Change Log,<br>and Settings', 3830, 1460, 240, 80, 's'),
+    'd14': ('D14 Analytics, Performance,<br>and Trends', 4370, 1700, 240, 80, 's'),
+    'd15': ('D15 Quotation, Sales, and<br>Payment Records', 1400, 2690, 260, 80, 's'),
+    'd16': ('D16 Document, Template, and<br>Generated File', 3620, 2630, 260, 80, 's'),
 }
 F = [
-    ('admin', 'p1', 'login and account updates', 'T', 'B'),
-    ('p1', 'admin', 'account access and user records', 'B', 'T'),
-    ('sadmin', 'p1', 'user, role, capability, and system configuration', 'L', 'R'),
-    ('p1', 'sadmin', 'permissions and system-wide user records', 'R', 'L'),
+    ('admin', 'p1', 'login and account updates', 'R', 'L'),
+    ('p1', 'admin', 'account access and user records', 'L', 'R'),
+    ('sadmin', 'p1', 'user, role, capability, and system configuration', 'T', 'B'),
+    ('p1', 'sadmin', 'permissions and system-wide user records', 'B', 'T'),
     ('tech', 'p1', 'login, profile, and availability updates', 'R', 'L'),
     ('p1', 'tech', 'session and role access', 'L', 'R'),
     ('client', 'p1', 'login, registration, and profile updates', 'T', 'B'),
     ('p1', 'client', 'account access and verification notice', 'B', 'T'),
-    ('p1', 'd1', 'user, profile, and role data', 'R', 'L'),
-    ('d1', 'p1', 'user and role records', 'L', 'R'),
-    ('p1', 'email', 'verification and recovery message request', 'B', 'T'),
-    ('email', 'p1', 'delivery result', 'T', 'B'),
+    ('p1', 'd1', 'user, profile, and role data', 'T', 'B'),
+    ('d1', 'p1', 'user and role records', 'B', 'T'),
+    ('p1', 'email', 'verification and recovery message request', 'T', 'B'),
+    ('email', 'p1', 'delivery result', 'B', 'T'),
     ('client', 'p2', 'service request, location, and schedule preference', 'B', 'T'),
     ('p2', 'client', 'availability and request status', 'T', 'B'),
-    ('p2', 'd3', 'service request and location data', 'L', 'R'),
-    ('d3', 'p2', 'request, location, and closure records', 'R', 'L'),
-    ('d2', 'p2', 'available services and SLA reference', 'T', 'B'),
-    ('p2', 'p3', 'new service request for review', 'L', 'R'),
-    ('p2', 'mapping', 'address and coordinate queries', 'B', 'T'),
-    ('mapping', 'p2', 'geocoding results', 'T', 'B'),
-    ('p1', 'cloud', 'profile photo and landing-page image upload', 'R', 'L'),
-    ('cloud', 'p1', 'image file reference', 'L', 'R'),
-    ('p7', 'cloud', 'message image upload', 'R', 'L'),
-    ('cloud', 'p7', 'message image reference', 'L', 'R'),
-    ('p6', 'email', 'maintenance reminder email request', 'T', 'B'),
+    ('p2', 'd3', 'service request and location data', 'B', 'T'),
+    ('d3', 'p2', 'request, location, and closure records', 'T', 'B'),
+    ('d2', 'p2', 'available services and SLA reference', 'B', 'T'),
+    ('p2', 'p3', 'new service request for review', 'T', 'B'),
+    ('p2', 'mapping', 'address and coordinate queries', 'L', 'R'),
+    ('mapping', 'p2', 'geocoding results', 'R', 'L'),
+    ('p1', 'cloud', 'profile photo and landing-page image upload', 'B', 'T'),
+    ('cloud', 'p1', 'image file reference', 'T', 'B'),
+    ('p7', 'cloud', 'message image upload', 'B', 'T'),
+    ('cloud', 'p7', 'message image reference', 'T', 'B'),
+    ('p6', 'email', 'maintenance and warranty reminder email request', 'L', 'R'),
     ('admin', 'p3', 'approval, dispatch, schedule, and inspection decisions', 'B', 'T'),
     ('p3', 'admin', 'ticket queue and dispatch status', 'T', 'B'),
     ('d2', 'p3', 'SLA rule and technician skill records', 'L', 'R'),
-    ('d3', 'p3', 'request records for review', 'B', 'T'),
-    ('p3', 'd4', 'ticket, crew, schedule, and assignment data', 'B', 'T'),
-    ('d4', 'p3', 'ticket and assignment records', 'T', 'B'),
-    ('d15', 'p3', 'deposit and payment status', 'L', 'R'),
+    ('d3', 'p3', 'request records for review', 'T', 'B'),
+    ('p3', 'd4', 'ticket, crew, schedule, and assignment data', 'T', 'B'),
+    ('d4', 'p3', 'ticket and assignment records', 'B', 'T'),
+    ('d15', 'p3', 'deposit and payment status', 'T', 'B'),
     ('p3', 'tech', 'assigned job and schedule details', 'T', 'B'),
-    ('p3', 'd3', 'request approval status', 'T', 'B'),
+    ('p3', 'd3', 'request approval status', 'B', 'T'),
     ('p3', 'p7', 'escalation notification events', 'T', 'B'),
-    ('p4', 'p3', 'inspection report and findings', 'B', 'T'),
-    ('p3', 'mapping', 'route request', 'R', 'L'),
-    ('mapping', 'p3', 'route and distance estimate', 'L', 'R'),
-    ('tech', 'p4', 'arrival, GPS location, job status, inspection report, checklist, and proof', 'T', 'B'),
-    ('p4', 'client', 'job progress and completion status', 'B', 'T'),
-    ('d6', 'p4', 'checklist requirements', 'R', 'L'),
-    ('p4', 'd6', 'checklist and proof data', 'L', 'R'),
+    ('p4', 'p3', 'inspection report and findings', 'T', 'B'),
+    ('p3', 'mapping', 'route request', 'B', 'T'),
+    ('mapping', 'p3', 'route and distance estimate', 'T', 'B'),
+    ('tech', 'p4', 'arrival, GPS location, job status, inspection report, checklist, and proof', 'B', 'T'),
+    ('p4', 'client', 'job progress and completion status', 'R', 'L'),
+    ('d6', 'p4', 'checklist requirements', 'T', 'B'),
+    ('p4', 'd6', 'checklist and proof data', 'B', 'T'),
     ('p4', 'd5', 'progress, completion, and status history', 'B', 'T'),
     ('d5', 'p4', 'status history records', 'T', 'B'),
     ('p4', 'cloud', 'proof file upload', 'R', 'L'),
@@ -109,53 +109,76 @@ F = [
     ('admin', 'p5', 'inventory, reservation, and return decisions', 'L', 'R'),
     ('p5', 'admin', 'stock levels and low-stock alerts', 'R', 'L'),
     ('tech', 'p5', 'equipment request and usage details', 'B', 'T'),
-    ('p5', 'd7', 'inventory item and requirement data', 'L', 'R'),
-    ('d7', 'p5', 'stock and requirement records', 'R', 'L'),
+    ('p5', 'd7', 'inventory item and requirement data', 'R', 'L'),
+    ('d7', 'p5', 'stock and requirement records', 'L', 'R'),
     ('p5', 'd8', 'reservation and transaction data', 'B', 'T'),
     ('d8', 'p5', 'reservation and transaction records', 'T', 'B'),
-    ('admin', 'p6', 'after-sales and maintenance actions', 'R', 'L'),
-    ('client', 'p6', 'feedback, inquiry, and warranty concern', 'B', 'T'),
-    ('p6', 'client', 'case updates and maintenance reminders', 'T', 'B'),
-    ('p6', 'd9', 'after-sales case data', 'R', 'L'),
-    ('d9', 'p6', 'case records', 'L', 'R'),
+    ('admin', 'p6', 'after-sales, maintenance, and visit booking actions', 'R', 'L'),
+    ('p6', 'admin', 'overdue case and warranty alerts', 'L', 'R'),
+    ('client', 'p6', 'feedback, inquiry, warranty concern, and maintenance visit booking', 'R', 'L'),
+    ('p6', 'client', 'case updates, maintenance reminders, and warranty reminders', 'L', 'R'),
+    ('p6', 'd9', 'after-sales case data', 'T', 'B'),
+    ('d9', 'p6', 'case records', 'B', 'T'),
     ('p6', 'd10', 'maintenance schedule data', 'B', 'T'),
     ('d10', 'p6', 'maintenance schedule records', 'T', 'B'),
+    ('p6', 'd3', 'maintenance visit request', 'B', 'R'),
     ('admin', 'p7', 'messages and notification actions', 'T', 'B'),
     ('p7', 'admin', 'messages and notifications', 'B', 'T'),
-    ('tech', 'p7', 'message and notification actions', 'R', 'L'),
-    ('p7', 'tech', 'messages and notifications', 'L', 'R'),
-    ('client', 'p7', 'message and support actions', 'L', 'R'),
-    ('p7', 'client', 'messages and notifications', 'R', 'L'),
+    ('tech', 'p7', 'message and notification actions', 'T', 'B'),
+    ('p7', 'tech', 'messages and notifications', 'B', 'T'),
+    ('client', 'p7', 'message and support actions', 'T', 'B'),
+    ('p7', 'client', 'messages and notifications', 'B', 'T'),
     ('p7', 'd11', 'message data', 'L', 'R'),
     ('d11', 'p7', 'message records', 'R', 'L'),
-    ('p7', 'd12', 'delivery log entries', 'L', 'R'),
-    ('d12', 'p7', 'delivery log records', 'R', 'L'),
+    ('p7', 'd12', 'delivery log entries', 'R', 'L'),
+    ('d12', 'p7', 'delivery log records', 'L', 'R'),
     ('p7', 'email', 'notification email request', 'R', 'L'),
     ('email', 'p7', 'provider result', 'L', 'R'),
     ('admin', 'p8', 'report, analytics, and audit requests', 'R', 'L'),
     ('p8', 'admin', 'dashboards, reports, and audit results', 'L', 'R'),
     ('sadmin', 'p8', 'system-wide reporting requests', 'B', 'T'),
     ('p8', 'sadmin', 'system-wide reports and logs', 'T', 'B'),
-    ('d13', 'p8', 'activity, change log, and settings records', 'T', 'B'),
-    ('p8', 'd13', 'report and audit log entries', 'B', 'T'),
-    ('d14', 'p8', 'analytics, performance, and trend records', 'B', 'T'),
-    ('p8', 'd14', 'analytics request data', 'T', 'B'),
-    ('p8', 'gemini', 'analytics summary and question', 'T', 'B'),
-    ('gemini', 'p8', 'generated explanation', 'B', 'T'),
-    ('admin', 'p9', 'quotation, deposit, sales, and document decisions', 'R', 'L'),
-    ('p9', 'admin', 'financial and document records', 'L', 'R'),
+    ('d13', 'p8', 'activity, change log, and settings records', 'B', 'T'),
+    ('p8', 'd13', 'report and audit log entries', 'T', 'B'),
+    ('d14', 'p8', 'analytics, performance, and trend records', 'L', 'R'),
+    ('p8', 'd14', 'analytics request data', 'R', 'L'),
+    ('p8', 'gemini', 'analytics summary and question', 'B', 'T'),
+    ('gemini', 'p8', 'generated explanation', 'T', 'B'),
+    ('admin', 'p9', 'quotation, deposit, sales, and document decisions', 'B', 'T'),
+    ('p9', 'admin', 'financial and document records', 'T', 'B'),
     ('sadmin', 'p9', 'document and template management', 'B', 'T'),
-    ('client', 'p9', 'quotation decision', 'R', 'L'),
-    ('p9', 'client', 'quotations, documents, balances, and purchase history', 'L', 'R'),
-    ('p9', 'd15', 'quotation, sales, and payment data', 'B', 'T'),
-    ('d15', 'p9', 'quotation, sales, and payment records', 'T', 'B'),
-    ('p9', 'd16', 'document and template data', 'T', 'B'),
-    ('d16', 'p9', 'document and template records', 'B', 'T'),
+    ('client', 'p9', 'quotation decision', 'B', 'T'),
+    ('p9', 'client', 'quotations, documents, balances, and purchase history', 'T', 'B'),
+    ('p9', 'd15', 'quotation, sales, and payment data', 'L', 'R'),
+    ('d15', 'p9', 'quotation, sales, and payment records', 'R', 'L'),
+    ('p9', 'd16', 'document and template data', 'R', 'L'),
+    ('d16', 'p9', 'document and template records', 'L', 'R'),
     ('p9', 'cloud', 'document file upload and retrieval', 'T', 'B'),
     ('cloud', 'p9', 'private file reference', 'B', 'T'),
-    ('admin', 'p2', 'service catalog, SLA rule, and technician skill configuration', 'R', 'L'),
-    ('p2', 'd2', 'service catalog, SLA rule, and skill data', 'B', 'T'),
+    ('admin', 'p2', 'service catalog, SLA rule, and technician skill configuration', 'B', 'T'),
+    ('p2', 'd2', 'service catalog, SLA rule, and skill data', 'T', 'B'),
 ]
+
+
+# ---- merge request/response pairs into one two-way line (first label = flow into the process, second = flow out of it)
+def _merge_pairs(flows, nodes):
+    index = {(f[0], f[1]): k for k, f in enumerate(flows)}
+    used, merged = set(), []
+    for k, (s_, t_, label, ps, pt) in enumerate(flows):
+        if k in used:
+            continue
+        j = index.get((t_, s_))
+        if j is None or j in used or j == k:
+            merged.append((s_, t_, label, ps, pt))
+            continue
+        a, b = flows[k], flows[j]
+        into, out = (a, b) if nodes[a[1]][5] == 'p' or nodes[b[1]][5] != 'p' else (b, a)
+        merged.append((into[0], into[1], into[2] + '<br>' + out[2], into[3], into[4]))
+        used.update((k, j))
+    return merged
+
+
+F = _merge_pairs(F, N)
 
 def box(n):
     _, cx, cy, w, h, _ = N[n]
@@ -392,7 +415,7 @@ def label_position(i, label, pts):
     segs = list(zip(pts, pts[1:]))
     lengths = [abs(b[0] - a[0]) + abs(b[1] - a[1]) for a, b in segs]
     total = sum(lengths) or 1
-    lw, lh = len(label) * 6.1 + 10, 17
+    _parts = label.split('<br>'); lw, lh = max(len(p) for p in _parts) * 6.1 + 10, 17 * len(_parts)
     others = [p for j, path in paths.items() if j != i for p in path[1:-1]]
     best = None
     for k in sorted(range(len(segs)), key=lambda j: -lengths[j]):
@@ -432,10 +455,14 @@ for i, (s, t, label, _, _) in enumerate(F):
     rel = label_position(i, label, pts)
     style = (EDGE + f'exitX={(sx - bx) / bw:.4f};exitY={(sy - by) / bh:.4f};exitDx=0;exitDy=0;exitPerimeter=0;'
              f'entryX={(tx - ex) / ew:.4f};entryY={(ty - ey) / eh:.4f};entryDx=0;entryDy=0;entryPerimeter=0;')
+    if '<br>' in label:
+        style += 'startArrow=block;startFill=1;startSize=7;'
     way = ''.join(f'<mxPoint x="{x:.0f}" y="{y:.0f}"/>' for x, y in pts[1:-1])
     cells_xml.append(
         f'<mxCell id="f{i}" value="{html.escape(label)}" style="{style}" edge="1" parent="1" source="{s}" target="{t}">'
         f'<mxGeometry x="{rel:.4f}" relative="1" as="geometry"><Array as="points">{way}</Array></mxGeometry></mxCell>')
+
+cells_xml.append('<mxCell id="legend" value="Two-way lines carry two labels: the first is the data flowing into the process, the second is the data flowing out of it." style="text;html=1;align=center;fontSize=14;fontColor=#000000;" vertex="1" parent="1"><mxGeometry x="%d" y="%d" width="1400" height="30" as="geometry"/></mxCell>' % (W / 2 - 700, H - 60))
 
 cells_xml.insert(0, f'<mxCell id="title" value="{html.escape(TITLE)}" style="text;html=1;align=center;fontSize=30;fontStyle=1;fontColor=#0F172A;" vertex="1" parent="1"><mxGeometry x="{W/2-400:.0f}" y="20" width="800" height="60" as="geometry"/></mxCell>')
 Path(OUTFILE).write_text(f'{W} {H}' + chr(10) + ''.join(cells_xml), encoding='utf-8')

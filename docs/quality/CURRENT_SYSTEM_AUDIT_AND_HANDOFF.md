@@ -7502,3 +7502,31 @@ Change ledger:
   - Frontend: `frontend/src/pages/admin/AdminServices.jsx`, `frontend/src/api/admin.js`, `frontend/src/components/shared/BookMaintenanceVisitDialog.jsx`;
   - E2E: `e2e/22-admin-services-controls.spec.js`;
   - Docs: this handoff.
+
+### 2026-11-16 Capstone diagram pack refreshed for maintenance booking and after-sales alerts
+
+- **Owner request:** bring the paper diagrams in line with commits `f4f274a` and `21e0871`, and keep them clean.
+- **Schema and ERD:**
+  - `generate_afn_paper_schema.py` now picks up three columns: `service_request.maintenance_plan_id` (→ `maintenance_schedule`), `service_type.maintenance_service_id` (self link), and `ticket_progress.work_date` (from the earlier `progress.0005`).
+  - Result: 53 tables, 327 columns, 90 relationships.
+  - The Chen ERD now uses the verbs "visit for" and "maintained as" (in `RELATIONSHIP_LABELS`). Its crossings stay at 84.
+  - A 3,000-step `optimize_erd.py` resume search found no better seating; the owner chose to keep the ERD on one page.
+- **Data dictionary:** foreign-key wording added for the two new links, plus a description for `work_date`. The `.docx` was rebuilt.
+- **Context:** the client, administrator and email flow labels now name maintenance visit booking, warranty reminders, and overdue/warranty alerts. It still has 0 crossings and 44 flows.
+- **Level 0:**
+  - New flow 6.0 → D3 "maintenance visit request".
+  - New flow 6.0 → Administrator "overdue case and warranty alerts", merged into the two-way admin line.
+  - The 6.0 client, admin and email labels were updated.
+  - Re-routed on the same layout: 55 lines, 31 crossings (was 28), drawn with line hops.
+  - Grid, annealed and orthogonal-aware re-layouts were tried, and none routed below 29. The owner chose to keep this layout over duplicating actors or splitting the page.
+- **Level 1:** unchanged, because process 3.0's neighbours did not change.
+- **Validation:** `validate.py` on the merged four-page file reported ALL STRUCTURAL CHECKS PASSED, including Context vs L0 entity/flow balance and L1 vs L0 3.0 boundary balance. `check.py`: Context 0 crossings, L0 31 crossings, 0 diagonals, 0 issues.
+- **Change ledger:**
+  - Tooling: `backend/scripts/generate_afn_chen_drawio.py`, `backend/scripts/diagram_pack/{build_context.py, build_data_dictionary.py, spec_level0.py}`;
+  - Generated: `backend/scripts/diagram_pack/{_erd_source.dbml, erd.xml, context.frag, level0.frag, level0.frag.gen.py, data_dictionary.json}`;
+  - Docs: `docs/academic/final_diagrams/{AFN-SERVE-Paper-Schema.dbml, AFN-SERVE-System-Diagrams.drawio, AFN-SERVE-Data-Dictionary.docx}` and this handoff.
+  - No application code changed. Not committed.
+- **Follow-up (same day): provider names match the real stack.**
+  - Renames on Context, L0 and L1: Email Delivery Service → Brevo Email Service; Cloud File Storage → Cloudinary File Storage; Mapping and Routing Services → OpenStreetMap and OpenRouteService; AI Assistant Service (optional) → Google Gemini AI (optional); AFN-SERVE System Database → PostgreSQL Database.
+  - These were checked against the code: `ors_utils.py` (ORS with OSRM fallback), `api/views.py` (Nominatim), `mapRegion.js` (OSM tiles), and Brevo, Cloudinary and Gemini settings.
+  - Renamed in `build_context.py`, `spec_level0.py`, `level0.frag(.gen.py)`, `spec_level1.py` and `level1.frag`. Context was rebuilt and the file re-merged. `validate.py`: ALL STRUCTURAL CHECKS PASSED.

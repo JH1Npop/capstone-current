@@ -38,8 +38,8 @@ CLIENT = [
     ('out', 'Request decision, ticket status, and schedule'),
     ('in', 'Quotation decision and turnover acceptance'),
     ('out', 'Quotations, documents, deposit balance, and purchase history'),
-    ('in', 'Messages, feedback, warranty concern, and support case'),
-    ('out', 'Notifications, case updates, and maintenance reminders'),
+    ('in', 'Messages, feedback, warranty concern, support case, and maintenance visit booking'),
+    ('out', 'Notifications, case updates, maintenance reminders, and warranty reminders'),
 ]
 TECH = [
     ('in', 'Login, profile, and availability'),
@@ -57,8 +57,8 @@ ADMIN = [
     ('out', 'Stock levels, low-stock alerts, and reservations'),
     ('in', 'Quotation, deposit, payment, and document actions'),
     ('out', 'Quotation, payment, and document records'),
-    ('in', 'After-sales, message, report, and audit requests'),
-    ('out', 'Dashboards, SLA indicators, reports, notifications, and audit logs'),
+    ('in', 'After-sales, maintenance visit booking, message, report, and audit requests'),
+    ('out', 'Dashboards, SLA indicators, reports, overdue and warranty alerts, and audit logs'),
 ]
 SADMIN = [
     ('in', 'User, role, and capability configuration'),
@@ -76,7 +76,7 @@ MAPPING = [
 ]
 EMAIL = [
     ('out', 'Verification, recovery, and account email requests'),
-    ('out', 'Service-status and maintenance message requests'),
+    ('out', 'Service-status, maintenance, and warranty reminder message requests'),
     ('in', 'Delivery result and provider failure'),
 ]
 AI = [
@@ -126,19 +126,19 @@ mid = (BL + BR) // 2
 
 group('client', 'Client', 'actor', LX, sum(rows_c) / n_c, 220, CLIENT, 'R', 'top', rows_c, cols_c)
 group('sadmin', 'Superadministrator', 'actor', RX, sum(rows_s) / n_s, 250, SADMIN, 'L', 'top', rows_s, cols_s)
-group('mapping', 'Mapping and Routing Services', 'provider', RX, sum(rows_m) / n_m, 250, MAPPING, 'L', 'top', rows_m, cols_m)
+group('mapping', 'OpenStreetMap and OpenRouteService', 'provider', RX, sum(rows_m) / n_m, 250, MAPPING, 'L', 'top', rows_m, cols_m)
 rows_t = [BT + 24 + 26 * i for i in range(len(TECH))]
 group('tech', 'Technician', 'actor', LX, sum(rows_t) / len(rows_t), 220, TECH, 'R', 'left', rows_t)
 rows_e = [BT + 30 + 26 * i for i in range(len(EMAIL))]
-group('email', 'Email Delivery Service', 'provider', RX, 480, 250, EMAIL, 'L', 'right', rows_e)
+group('email', 'Brevo Email Service', 'provider', RX, 480, 250, EMAIL, 'L', 'right', rows_e)
 rows_a = [BT + 30 + 26 * len(EMAIL) + 34 + 26 * i for i in range(len(AI))]
-group('ai', 'AI Assistant Service (optional)', 'provider', RX, 660, 250, AI, 'L', 'right', rows_a)
+group('ai', 'Google Gemini AI (optional)', 'provider', RX, 660, 250, AI, 'L', 'right', rows_a)
 rows_ad = [BB + 70 + ROW * i for i in range(len(ADMIN))]
 cols_ad = [BL + START + COL * i for i in range(len(ADMIN))]
 group('admin', 'Administrator', 'actor', LX, sum(rows_ad) / len(rows_ad), 220, ADMIN, 'R', 'bottom', rows_ad, cols_ad)
 rows_cl = [BB + 70 + ROW * i for i in range(len(CLOUD))]
 cols_cl = [BR - START - COL * i for i in range(len(CLOUD))]
-group('cloud', 'Cloud File Storage', 'provider', RX, sum(rows_cl) / len(rows_cl), 250, CLOUD, 'L', 'bottom', rows_cl, cols_cl)
+group('cloud', 'Cloudinary File Storage', 'provider', RX, sum(rows_cl) / len(rows_cl), 250, CLOUD, 'L', 'bottom', rows_cl, cols_cl)
 
 DB_BOX = (mid - 130, 1030, 260, 90)
 DB_COLS = [mid - 22, mid + 22]
@@ -271,7 +271,7 @@ def build():
                      f'<mxGeometry x="{x:g}" y="{y:g}" width="{w}" height="{h:g}" as="geometry"/></mxCell>')
     cells.append(f'<mxCell id="system" value="AFN Service Management System" style="{PROCESS}" vertex="1" parent="1">'
                  f'<mxGeometry x="{BX}" y="{BY}" width="{BW}" height="{BH}" as="geometry"/></mxCell>')
-    cells.append(f'<mxCell id="db" value="AFN-SERVE System Database" style="{STORE}" vertex="1" parent="1">'
+    cells.append(f'<mxCell id="db" value="PostgreSQL Database" style="{STORE}" vertex="1" parent="1">'
                  f'<mxGeometry x="{DB_BOX[0]}" y="{DB_BOX[1]}" width="{DB_BOX[2]}" height="{DB_BOX[3]}" as="geometry"/></mxCell>')
     boxes['db'] = DB_BOX
     sysbox = (BX, BY, BW, BH)

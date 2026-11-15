@@ -11,7 +11,7 @@ EDGE = 'edgeStyle=none;rounded=0;html=1;endArrow=block;endFill=1;endSize=7;strok
 N = {
     'admin': ('Administrator', 1210, 1390, 240, 80, 'e'),
     'tech': ('Technician', 1150, 550, 220, 80, 'e'),
-    'mapping': ('Mapping and Routing Services', 2020, 460, 280, 80, 'e'),
+    'mapping': ('OpenStreetMap and OpenRouteService', 2020, 460, 280, 80, 'e'),
     's2': ('2.0 Manage Service Requests<br>and Scheduling', 1030, 1930, 290, 90, 'x'),
     's4': ('4.0 Manage Field Job<br>Completion', 2170, 1690, 290, 90, 'x'),
     's7': ('7.0 Manage Messages and<br>Notifications', 1690, 1570, 290, 90, 'x'),
