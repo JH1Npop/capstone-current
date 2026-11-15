@@ -181,6 +181,7 @@ class AfterSalesRoleTests(AfterSalesFixture):
         'open case':         [403, 403, 403, 201, 403, 201],
         'update case':       [403, 403, 403, 200, 403, 200],
         'list schedules':    [403, 403, 200, 200, 403, 200],
+        'list warranties':   [403, 403, 200, 200, 403, 200],
         'complete schedule': [403, 403, 403, 200, 403, 200],
     }
 
@@ -212,6 +213,8 @@ class AfterSalesRoleTests(AfterSalesFixture):
             return self.as_(user).patch(f'/api/services/follow-up-cases/{case.id}/', {'priority': 'high'}, format='json').status_code
         if action == 'list schedules':
             return client.get('/api/services/maintenance-schedules/').status_code
+        if action == 'list warranties':
+            return client.get('/api/services/maintenance-schedules/warranties/').status_code
         schedule = self.schedule('due')
         return self.as_(user).post(f'/api/services/maintenance-schedules/{schedule.id}/complete/', {'reason': 'Done on site.'}, format='json').status_code
 

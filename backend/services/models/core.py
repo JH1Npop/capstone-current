@@ -150,6 +150,16 @@ class ServiceRequest(models.Model):
     # Auto-ticket will be created when request is approved
     auto_ticket_created = models.BooleanField(default=False)
 
+    # A maintenance visit booked from a maintenance plan. Finishing its job starts the plan's next
+    # cycle instead of creating a second plan.
+    maintenance_plan = models.ForeignKey(
+        'services.MaintenanceSchedule',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='maintenance_visits',
+    )
+
     class Meta:
         indexes = [
             models.Index(fields=['client_id', 'status']),

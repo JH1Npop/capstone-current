@@ -791,9 +791,10 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
             'scheduling_notes', 'request_date', 'updated_at',
             'auto_ticket_created', 'location', 'sla', 'closure', 'service', 'notes', 'lat', 'lng',
             'locationDesc', 'location_address', 'location_city',
-            'location_province', 'latitude', 'longitude'
+            'location_province', 'latitude', 'longitude', 'maintenance_plan',
         ]
-        read_only_fields = ['request_date', 'updated_at', 'auto_ticket_created']
+        # A visit is linked to its plan only through the plan's book-visit action.
+        read_only_fields = ['request_date', 'updated_at', 'auto_ticket_created', 'maintenance_plan']
         extra_kwargs = {
             'client': {'required': False},
             'service_type': {'required': False},

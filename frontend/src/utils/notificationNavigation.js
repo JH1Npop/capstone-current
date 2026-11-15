@@ -12,6 +12,8 @@ const SECTION_LABELS = {
   '/admin/service-tickets': 'Open ticket',
   '/admin/dispatch-board': 'Open Dispatch Board',
   '/admin/job-history': 'Open job history',
+  '/admin/after-sales-cases': 'Open After-Sales',
+  '/admin/maintenance': 'Open warranties',
   '/technician/messages': 'Open messages',
   '/technician/my-jobs': 'Open job',
   '/technician/schedule': 'Open schedule',
@@ -34,6 +36,8 @@ function adminSection(title, message, type) {
       return '/admin/service-tickets';
     }
     if (/job completed|completed ticket/.test(title)) return '/admin/job-history';
+    if (/after-sales case overdue/.test(title)) return '/admin/after-sales-cases';
+    if (/warranty ending soon/.test(title)) return '/admin/maintenance';
     if (/dispatch|assign|ready for service/.test(title)) return '/admin/dispatch-board';
   }
   if (type === 'customer_inquiry') return /after-sales/.test(message) ? '/admin/messages' : '/admin/client-support';
@@ -96,6 +100,9 @@ export const getNotificationDestination = (notification, role) => {
 
   if (section === '/admin/inventory' && ticketId) {
     return { path: `/admin/inventory?ticketId=${ticketId}#pending-equipment-requests`, label: SECTION_LABELS[section] };
+  }
+  if (section === '/admin/maintenance') {
+    return { path: '/admin/maintenance?view=warranties&warranty_status=ending_soon', label: SECTION_LABELS[section] };
   }
   if (section === '/admin/service-tickets' && ticketId) {
     return { path: `/admin/service-tickets?ticketId=${ticketId}`, label: SECTION_LABELS[section] };

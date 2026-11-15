@@ -11,6 +11,8 @@ import { getLocalDateInputValue } from '../../utils/date';
 import { clientTechnicianDisplayString } from '../../utils/clientTechnicianDisplay';
 import { formatRequestId, formatTicketId } from '../../utils/roleIds';
 import ClientJobDecisions from '../../components/client/ClientJobDecisions';
+import BookMaintenanceVisitDialog from '../../components/shared/BookMaintenanceVisitDialog';
+import { fetchMyMaintenancePlans } from '../../api/services';
 
 const TIME_SLOT_LABELS = {
   morning: 'Morning (8 AM - 11 AM)',
@@ -53,6 +55,8 @@ export default function ClientRequestDetail() {
   const [dismissReason, setDismissReason] = useState('');
   const [dismissError, setDismissError] = useState('');
   const [dismissing, setDismissing] = useState(false);
+  const [maintenancePlan, setMaintenancePlan] = useState(null);
+  const [bookingOpen, setBookingOpen] = useState(false);
   const entityType = searchParams.get('entity') || 'request';
 
   useEffect(() => {
@@ -106,8 +110,13 @@ export default function ClientRequestDetail() {
         fetchSalesRecords()
           .then((rows) => setPurchaseRecord(rows.find((row) => Number(row.ticket) === Number(data.ticket_id)) || null))
           .catch(() => setPurchaseRecord(null));
+        // The maintenance plan this finished job started, if any (one small request).
+        fetchMyMaintenancePlans()
+          .then((plans) => setMaintenancePlan(plans.find((plan) => Number(plan.ticket_id) === Number(data.ticket_id)) || null))
+          .catch(() => setMaintenancePlan(null));
       } else {
         setPurchaseRecord(null);
+        setMaintenancePlan(null);
       }
     } catch (err) {
       setError(err.message || 'Failed to load request details');
@@ -514,6 +523,36 @@ export default function ClientRequestDetail() {
                 </div>
                 {request.warranty_notes && <p className="mt-1 text-xs text-slate-500">{request.warranty_notes}</p>}
               </div>
+              {maintenancePlan ? (
+                <div className="md:col-span-2 xl:col-span-3">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Maintenance</p>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    {maintenancePlan.status === 'dismissed' ? (
+                      <p className="text-sm text-slate-600">Maintenance reminders for this job are stopped. Contact us if you would like them back.</p>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-slate-800">
+                          Next maintenance due {formatDay(maintenancePlan.next_due_date)}
+                          <span className="font-normal text-slate-500"> · every {maintenancePlan.interval_days} days</span>
+                        </p>
+                        {maintenancePlan.booked_visit ? (
+                          <p className="mt-2 text-sm text-sky-800">
+                            Visit booked ({maintenancePlan.booked_visit.ticket_code || formatRequestId(maintenancePlan.booked_visit.request_id)})
+                            {maintenancePlan.booked_visit.scheduled_date ? ` for ${formatDay(maintenancePlan.booked_visit.scheduled_date)}` : maintenancePlan.booked_visit.preferred_date ? `, preferred ${formatDay(maintenancePlan.booked_visit.preferred_date)}` : ''}.
+                            {' '}
+                            <Link to={`/client/requests/${maintenancePlan.booked_visit.request_id}?entity=request`} className="font-semibold underline">View visit</Link>
+                          </p>
+                        ) : (
+                          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-slate-500">Book your maintenance visit and the office will confirm the schedule.</p>
+                            <button type="button" onClick={() => setBookingOpen(true)} className="inline-flex shrink-0 items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Book maintenance visit</button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : null}
               {request.latitude && request.longitude && (
                 <div>
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Coordinates</p>
@@ -915,6 +954,20 @@ export default function ClientRequestDetail() {
         error={timelineError}
         onClose={() => setTimelineOpen(false)}
       />
+      {bookingOpen && maintenancePlan ? (
+        <BookMaintenanceVisitDialog
+          plan={maintenancePlan}
+          audience="client"
+          onClose={() => setBookingOpen(false)}
+          onBooked={(result) => {
+            setBookingOpen(false);
+            setNotice({ tone: 'success', message: `${formatRequestId(result?.request?.id)} was sent for review. We will confirm your maintenance schedule.` });
+            fetchMyMaintenancePlans()
+              .then((plans) => setMaintenancePlan(plans.find((plan) => Number(plan.ticket_id) === Number(request.ticket_id)) || null))
+              .catch(() => {});
+          }}
+        />
+      ) : null}
     </Layout>
   );
 }

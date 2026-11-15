@@ -23,6 +23,7 @@ class OperationalAutomationCommandTests(SimpleTestCase):
             [item.args[0] for item in mock_call_command.call_args_list],
             [
                 'send_maintenance_alerts',
+                'send_after_sales_alerts',
                 'generate_daily_analytics',
                 'generate_technician_performance',
                 'purge_technician_locations',

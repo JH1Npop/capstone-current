@@ -4,6 +4,8 @@ import { FiCalendar, FiCheckCircle, FiClock, FiEdit3, FiMail, FiMapPin, FiPhone,
 import Layout from '../../components/layout/Layout';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import StatusBadge from '../../components/ui/StatusBadge';
+import MaintenanceWarranties from './MaintenanceWarranties';
+import BookMaintenanceVisitDialog from '../../components/shared/BookMaintenanceVisitDialog';
 import {
   completeMaintenanceSchedule,
   dismissMaintenanceSchedule,
@@ -50,6 +52,7 @@ export default function AdminMaintenance() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get('view') === 'warranties' ? 'warranties' : 'plans';
   const status = searchParams.get('status') || 'active';
   const appliedSearch = searchParams.get('search') || '';
   const [search, setSearch] = useState(appliedSearch);
@@ -64,19 +67,41 @@ export default function AdminMaintenance() {
   const [actionDate, setActionDate] = useState('');
   const [actionError, setActionError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [bookingPlan, setBookingPlan] = useState(null);
+
+  const reloadPlans = async () => {
+    try {
+      const [page, counts] = await Promise.all([
+        fetchMaintenanceSchedules({ status, search: appliedSearch, ordering: 'next_due_date' }),
+        fetchMaintenanceSummary(),
+      ]);
+      setSchedules(page.results);
+      setSummary(counts);
+    } catch (requestError) {
+      setError(`Maintenance was updated, but the queue could not refresh: ${requestError.message || 'reload the page to see the latest records.'}`);
+    }
+  };
+
+  const handleVisitBooked = async (result) => {
+    const code = result?.request?.id ? `REQ-${String(result.request.id).padStart(4, '0')}` : 'The visit';
+    setBookingPlan(null);
+    setSelected(null);
+    setSuccess(`${code} was created for review. Reminders for this plan are paused until the visit is done.`);
+    await reloadPlans();
+  };
   const canManageMaintenance = hasCapability(user, CAPABILITIES.afterSalesCasesManage);
   // Job History is not in the default admin role; only offer the link when it can open.
   const canOpenJobHistory = hasAnyCapability(user, ADMIN_JOB_HISTORY_CAPABILITIES);
 
   // Escape closes the details (the action dialog handles its own Escape).
   useEffect(() => {
-    if (!selected || actionMode) return undefined;
+    if (!selected || actionMode || bookingPlan) return undefined;
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') setSelected(null);
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selected, actionMode]);
+  }, [selected, actionMode, bookingPlan]);
 
   useEffect(() => {
     setSearch(appliedSearch);
@@ -94,6 +119,7 @@ export default function AdminMaintenance() {
   }, [search, appliedSearch]);
 
   useEffect(() => {
+    if (view !== 'plans') return undefined;
     let active = true;
     setLoading(true);
     setError('');
@@ -110,7 +136,21 @@ export default function AdminMaintenance() {
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [status, appliedSearch]);
+  }, [view, status, appliedSearch]);
+
+  // Plans and warranties keep separate filters; switching drops the other view's.
+  const changeView = (value) => {
+    if (value === view) return;
+    setSearchParams(value === 'warranties' ? new URLSearchParams({ view: 'warranties' }) : new URLSearchParams());
+  };
+
+  const viewSwitch = (
+    <div role="group" aria-label="Maintenance view" className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+      {[['plans', 'Maintenance plans'], ['warranties', 'Warranties']].map(([value, label]) => (
+        <button key={value} type="button" onClick={() => changeView(value)} aria-pressed={view === value} className={`rounded-lg px-4 py-2 text-sm font-semibold ${view === value ? 'bg-brand-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}>{label}</button>
+      ))}
+    </div>
+  );
 
   const changeStatus = (value) => {
     const next = new URLSearchParams(searchParams);
@@ -219,9 +259,21 @@ export default function AdminMaintenance() {
     },
   }[actionMode];
 
+  if (view === 'warranties') {
+    return (
+      <Layout>
+        <div className="space-y-6">
+          {viewSwitch}
+          <MaintenanceWarranties />
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="space-y-6">
+        {viewSwitch}
         <section aria-label="Maintenance summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {[
             ['Active', summary.active || 0, 'active'],
@@ -270,7 +322,10 @@ export default function AdminMaintenance() {
                   <div><p className="font-semibold text-slate-950">{item.client_name}</p><p className="mt-1 text-xs text-slate-500">{item.ticket_code} · {item.service_type_name}</p></div>
                   <div><p className="text-sm font-medium text-slate-800">{formatDate(item.next_due_date)}</p><p className={`mt-1 text-xs font-semibold ${item.days_until_due < 0 ? 'text-rose-600' : item.days_until_due === 0 ? 'text-amber-700' : 'text-slate-500'}`}>{timingLabel(item.days_until_due)}</p></div>
                   <div className="text-xs text-slate-500"><p>{item.maintenance_profile_label}</p><p className="mt-1">Reminder starts {formatDate(item.notify_on_date)}</p></div>
-                  <StatusBadge status={item.status} size="sm" />
+                  <div className="flex flex-wrap items-center gap-2 md:flex-col md:items-end">
+                    <StatusBadge status={item.status} size="sm" />
+                    {item.booked_visit ? <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700 ring-1 ring-sky-200"><FiCalendar />Visit booked</span> : null}
+                  </div>
                 </button>
               ))}
             </div>
@@ -294,6 +349,27 @@ export default function AdminMaintenance() {
                 {selected.client_email ? <p className="flex items-center gap-2"><FiMail className="text-slate-400" />{selected.client_email}</p> : null}
                 {selected.client_phone ? <p className="flex items-center gap-2"><FiPhone className="text-slate-400" />{selected.client_phone}</p> : null}
                 {selected.service_address ? <p className="flex items-start gap-2"><FiMapPin className="mt-0.5 text-slate-400" />{selected.service_address}</p> : null}
+              </div>
+              <div>
+                <h3 className="mb-3 font-semibold text-slate-900">Maintenance visit</h3>
+                {selected.booked_visit ? (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+                    <p className="font-semibold">Visit booked: {selected.booked_visit.ticket_code || selected.booked_visit.request_code} · {selected.booked_visit.ticket_status || selected.booked_visit.status}</p>
+                    <p className="mt-1 text-sky-800">
+                      {selected.booked_visit.service_type_name}
+                      {selected.booked_visit.scheduled_date ? `, scheduled ${formatDate(selected.booked_visit.scheduled_date)}` : selected.booked_visit.preferred_date ? `, preferred ${formatDate(selected.booked_visit.preferred_date)}` : ''}.
+                      {' '}Reminders are paused; finishing the visit starts the next cycle.
+                    </p>
+                    {selected.booked_visit.ticket_id ? (
+                      <button type="button" onClick={() => navigate(`/admin/service-tickets?ticketId=${selected.booked_visit.ticket_id}`)} className="mt-3 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-100">Open visit ticket</button>
+                    ) : <p className="mt-2 text-xs text-sky-800">Waiting for review in Service Requests ({selected.booked_visit.request_code}).</p>}
+                  </div>
+                ) : canManageMaintenance && !['completed', 'dismissed'].includes(selected.status) ? (
+                  <div className="flex flex-col gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-slate-600">No visit booked yet. Book one to send it through review and dispatch.</p>
+                    <button type="button" onClick={() => setBookingPlan(selected)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"><FiCalendar />Book maintenance visit</button>
+                  </div>
+                ) : <p className="text-sm text-slate-500">No visit booked.</p>}
               </div>
               <div><h3 className="mb-3 font-semibold text-slate-900">Client reminder history</h3><div className="grid gap-3 sm:grid-cols-3"><ReminderStage label="Early reminder" sentAt={selected.client_notified_at} /><ReminderStage label="3-day reminder" sentAt={selected.client_three_day_notified_at} /><ReminderStage label="Due-date reminder" sentAt={selected.client_due_notified_at} /></div></div>
               {selected.maintenance_notes ? <div><h3 className="font-semibold text-slate-900">Technician notes</h3><p className="mt-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{selected.maintenance_notes}</p></div> : null}
@@ -363,6 +439,10 @@ export default function AdminMaintenance() {
             {actionError ? <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{actionError}</p> : null}
           </div>
         </ConfirmationDialog>
+      ) : null}
+
+      {bookingPlan ? (
+        <BookMaintenanceVisitDialog plan={bookingPlan} audience="office" onClose={() => setBookingPlan(null)} onBooked={handleVisitBooked} />
       ) : null}
     </Layout>
   );

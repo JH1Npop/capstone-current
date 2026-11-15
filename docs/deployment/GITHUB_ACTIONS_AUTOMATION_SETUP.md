@@ -28,7 +28,9 @@ python manage.py run_operational_automations --mode daily
 ```
 
 This processes maintenance reminder stages, creates due maintenance follow-up
-cases, sends enabled in-app/email reminders, refreshes daily analytics and
+cases, sends enabled in-app/email reminders, reminds the client and the office
+once when a warranty has 30 days or less left, alerts once when an open
+after-sales case (other than maintenance) passes its due date, refreshes daily analytics and
 technician performance, purges expired technician locations, and refreshes
 validated demand forecasts. It does not run migrations.
 
