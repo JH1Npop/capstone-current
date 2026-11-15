@@ -7363,3 +7363,10 @@ Change ledger:
   - backend `/health/ready/` returns 200.
 - Not verified without signing in: that the backend runs the new release. No route is new and no version endpoint exists. Check the Render deploy page, or sign in and confirm a technician photo shows on Technician Tracking.
 - Still open: the phone hand check, and the scheduler's GitHub secrets and first run.
+
+### 2026-11-15 Daily scheduler: secrets added and first manual run succeeded
+
+- Owner added the 13 `AUTOMATION_*` GitHub secrets (staging values) and confirmed Aiven is Running and open to all addresses.
+- Run #2 (manual, `main`) finished green in 58 s. Run #1 (scheduled, 2:37 PM, before the secrets existed) failed after 9 s, as expected.
+- Not checked: the final step text of run #2 and whether any reminder rows or emails were produced (zero is valid when nothing is due).
+- Change ledger: this handoff only. No code, schema, permission, dependency or data change.
