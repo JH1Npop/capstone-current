@@ -7503,3 +7503,11 @@ Change ledger:
   - `npm run build:frontend`: OK.
   - Playwright specs 10 and 32-46 (technician pages and the major flow): 20 passed.
 - Committed only; not deployed to staging.
+
+## Session 2026-11-19: follow-ups 1-4 after the flow explorer
+
+- **Reassign wording:** `assign` from `On Hold` to a different lead now writes "Reassigned from <old> to <new>; dispatched for service" (same lead: "Paused job dispatched again for service"); "Materials ready; dispatched for service" stays for `Awaiting Materials`. Test added to `test_office_stuck_job_actions.py`.
+- **Stuck-visit finder:** `manage.py find_stuck_inspection_visits` (dry-run default) lists (A) inspection visits travelling/on site/working with an already-complete report, and (B) inspection visits in `Ready for Service`/`Awaiting Materials` (review skipped). `--apply` moves A to `Inspection Completed`; B is reported only. Local `backend/db.sqlite3` dry-run: A=0, B=0. Not run on staging (needs a Render shell or the scheduler).
+- **E2E:** `e2e/70-technician-reported-inspection.spec.js`: the server refuses travel on a reported inspection and the map shows "Your inspection report is in..." with no Start button (loads with `domcontentloaded` so slow map tiles do not time it out); 70.2: the client's **Report a problem** on the handover opens Support with a new case filled in (ticket, "Service concern", subject).
+- **Client handover:** `ClientJobDecisions.jsx` adds **Report a problem** (link to `/client/support?ticket=&category=complaint&subject=`); `ClientSupport.jsx` pre-fills a new case from those query parameters.
+- **Validation run:** `test_office_stuck_job_actions` 5 OK; `test_flow_explorer_findings` 6 OK (includes the finder command); `npm run build:frontend` OK; spec 70: 2 passed.

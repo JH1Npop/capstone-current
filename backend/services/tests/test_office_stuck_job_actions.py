@@ -81,6 +81,11 @@ class OfficeStuckJobActionTests(APITestCase):
         self.assertEqual(reassigned.status_code, status.HTTP_200_OK, reassigned.data)
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.technician, self.replacement)
+        handoff = ServiceStatusHistory.objects.filter(
+            ticket=self.ticket, status='Ready for Service', notes__contains='dispatched for service',
+        ).latest('id')
+        self.assertIn('Reassigned from', handoff.notes)
+        self.assertNotIn('Materials ready', handoff.notes)
         # The old lead has no open work left, so the office can now deactivate them.
         self.assertIsNone(_open_assignment_conflict(self.lead))
 

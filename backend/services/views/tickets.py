@@ -1276,6 +1276,7 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
                     return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
             previous_team_ids = get_ticket_team_member_ids(ticket)
+            previous_lead = ticket.technician
             if ticket.assigned_admin_id is None:
                 ticket.assigned_admin = _default_ticket_admin_for_actor(request.user)
             ticket.technician = technician
@@ -1300,16 +1301,24 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
                 assignment_status = 'Ready for Service'
 
             if assignment_status:
+                if assignment_status == 'For Inspection':
+                    dispatch_note = 'Dispatched for site inspection'
+                elif ticket.status == 'On Hold' and previous_lead and previous_lead.pk != technician.pk:
+                    # The office paused the job (for example its lead could not continue) and handed it on.
+                    dispatch_note = (
+                        f'Reassigned from {client_technician_label(previous_lead) or previous_lead.username} '
+                        f'to {client_technician_label(technician) or technician.username}; dispatched for service'
+                    )
+                elif ticket.status == 'On Hold':
+                    dispatch_note = 'Paused job dispatched again for service'
+                else:
+                    dispatch_note = 'Materials ready; dispatched for service'
                 try:
                     apply_ticket_status_change(
                         ticket,
                         assignment_status,
                         changed_by=request.user,
-                        notes=(
-                            'Dispatched for site inspection'
-                            if assignment_status == 'For Inspection'
-                            else 'Materials ready; dispatched for service'
-                        ),
+                        notes=dispatch_note,
                     )
                 except ValueError as exc:
                     transaction.set_rollback(True)

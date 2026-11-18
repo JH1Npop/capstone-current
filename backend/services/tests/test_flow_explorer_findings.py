@@ -73,6 +73,24 @@ class FlowExplorerFindingsTests(JobWalker):
         job['ticket'].refresh_from_db()
         self.assertEqual(job['ticket'].status, 'Inspection Completed')
 
+    def test_the_finder_command_lists_and_repairs_stuck_visits(self):
+        from io import StringIO
+        from django.core.management import call_command
+
+        job = self.inspection_in_progress()
+        InspectionChecklist.objects.create(ticket=job['ticket'], is_completed=True)
+        out = StringIO()
+        call_command('find_stuck_inspection_visits', stdout=out)
+        self.assertIn(f"A  TKT-{job['ticket'].id:04d}", out.getvalue())
+        job['ticket'].refresh_from_db()
+        self.assertEqual(job['ticket'].status, 'In Progress')  # dry-run wrote nothing
+
+        out = StringIO()
+        call_command('find_stuck_inspection_visits', '--apply', stdout=out)
+        self.assertIn('repaired=1', out.getvalue())
+        job['ticket'].refresh_from_db()
+        self.assertEqual(job['ticket'].status, 'Inspection Completed')
+
     def test_completing_an_inspection_report_you_cannot_see_answers_404_not_500(self):
         job = self.reported_inspection()
         report = InspectionChecklist.objects.get(ticket=job['ticket'])

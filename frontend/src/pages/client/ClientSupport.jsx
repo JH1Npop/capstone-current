@@ -65,6 +65,11 @@ export default function ClientSupport() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const linkedCaseId = Number(searchParams.get('case') || 0);
+  // "Report a problem" links (for example from the handover) open a new case already filled in:
+  // ?ticket=<id>&category=<key>&subject=<text>.
+  const prefillTicketId = searchParams.get('ticket') || '';
+  const prefillCategory = searchParams.get('category') || '';
+  const prefillSubject = searchParams.get('subject') || '';
   const [supportCases, setSupportCases] = useState([]);
   const [clientTickets, setClientTickets] = useState([]);
   const [activeSupportCase, setActiveSupportCase] = useState(null);
@@ -114,6 +119,16 @@ export default function ClientSupport() {
 
   const load = async () => {
     if (linkedCaseId) composingNewRef.current = false;
+    if (!linkedCaseId && prefillTicketId) {
+      composingNewRef.current = true;
+      setActiveSupportCase(null);
+      setSupportForm({
+        ...emptyForm(),
+        ticket_id: prefillTicketId,
+        category: supportCategoryLabels[prefillCategory] ? prefillCategory : 'general',
+        subject: prefillSubject.slice(0, 120),
+      });
+    }
     setLoading(true);
     setError('');
     try {
