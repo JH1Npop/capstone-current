@@ -358,6 +358,26 @@ path, is tested by `services/tests/test_job_type_cancel_matrix.py`.
   answer, so nothing about it is revealed.
 - Client reschedule request (`reschedule_requested`): opened by the client (`request_reschedule`, before work starts). The office closes it either with `reschedule` (new date) or with `decline_reschedule` (2026-11-18: reason required; date unchanged; the request's preferred date/slot is reset to the kept appointment; history line and a "Schedule Unchanged" client notification). The client may ask again afterwards.
 
+## Office ways out of stuck field work (2026-11-18)
+
+Dead-end review: a job that had reached `Arrived on Site` or `In Progress` could not be reassigned
+(`ASSIGNABLE_TICKET_STATUSES` stops at `Navigating`/`On Hold`), only the lead could pause it, and the
+office screen had no status action, so its only way out was "Dismiss ticket", and its technician could
+not be deactivated. The office now uses the existing validated `update_status` from Service Tickets:
+
+- **Pause job** (`Navigating`, `Arrived on Site`, `In Progress` → `On Hold`, reason required): the client
+  gets "Ticket #N Paused" (without the internal reason); every lead and crew member gets "Paused by the
+  Office" with the reason. The held job is then reassigned with **Update Assignment** on the Dispatch Board
+  (`assign` from `On Hold` moves it to `Ready for Service`), which also frees the old lead for deactivation.
+- **Confirm arrival** (`Navigating` → `Arrived on Site`, reason required): for a technician blocked by the
+  GPS radius check (wrong pin, weak signal). Writes an `ArrivalValidationLog` row (`arrival_bypassed`,
+  `performed_by` = the office user, remarks "Office confirmed arrival: …").
+- **Dismiss ticket** asks who is cancelling: "Client withdrew" (reason prefix `Client backed out:`, as
+  before) or "Office cancelled (our side)" (prefix `Office cancelled:`), so the history no longer blames
+  the client for the company's decision.
+
+Tests: `services/tests/test_office_stuck_job_actions.py`, `e2e/69-office-stuck-job-actions.spec.js`.
+
 
 ## Quotation guards (2026-11-09)
 

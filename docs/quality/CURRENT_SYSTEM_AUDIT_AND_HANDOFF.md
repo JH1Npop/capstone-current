@@ -7474,3 +7474,15 @@ Change ledger:
   - `manage.py test`: 1003 tests OK (7 skipped).
   - `npm run build:frontend`: OK.
   - Playwright: spec 68 passed (first run failed only on its own notification lookup, fixed: titles come back as TKT-####); 11.5, 13.A4, 13.S4 passed.
+
+## Session 2026-11-18 (later): dead-end review and office ways out of stuck field work
+
+- **Owner request:** check the flows for dead ends, fix them, and cover them in E2E. Reviewed every request, ticket, quotation/deposit, handover, maintenance and reschedule state against the code. Not dead ends (verified): rejected or expired quotation (office revises), scope change after acceptance (draft sales record stays editable), deposit on a cancelled job (`settle-deposit`), equipment holds on cancel (`release_ticket_reservations`), held job (lead resumes or office re-dispatches), handover problem (client opens a Support case linked to the ticket), maintenance plans, client reschedule (fixed earlier today).
+- **Dead end fixed:** a job `Arrived on Site` or `In Progress` whose lead could not continue could not be reassigned (`ASSIGNABLE_TICKET_STATUSES`), could not be paused by the office (no screen action), and its technician could not be deactivated; the only way out was "Dismiss ticket". Service Tickets now offers **Pause job** (`update_status` → `On Hold`, reason required; client told "Paused" without the internal reason, every lead/crew member told with it) and, for held jobs, **Reassign in Dispatch** (Update Assignment).
+- **Gaps fixed:** **Confirm arrival** (`update_status` → `Arrived on Site`, reason required, writes an `arrival_bypassed` `ArrivalValidationLog` with the office user) for a technician blocked by the GPS radius; **Dismiss ticket** now asks "Client withdrew" (prefix `Client backed out:`, unchanged default) or "Office cancelled (our side)" (prefix `Office cancelled:`).
+- **Files:** `backend/services/views/tickets.py` (`update_status` On Hold and Arrived on Site branches), `frontend/src/api/services.js` (`officeUpdateTicketStatus`, cancel cause), `frontend/src/pages/admin/AdminServiceTickets.jsx`; tests `services/tests/test_office_stuck_job_actions.py` (5) and `e2e/69-office-stuck-job-actions.spec.js`; docs `WORKFLOW_STATE_MACHINES.md`, `ROUTE_API_CAPABILITY_MATRIX.md`, `SYSTEM_POSSIBILITY_COVERAGE.md`. No migration.
+- **Validation run:**
+  - `manage.py test services.tests.test_office_stuck_job_actions`: 5 OK. `manage.py test`: 1008 OK (7 skipped).
+  - `npm run build:frontend`: OK.
+  - Playwright: spec 69 passed. Specs 11, 17, 58-63, 68: 15 passed, 2 failed (11.8 click timeout, 63 `page.goto` timeout). 11.8 alone: passed. 63 alone: failed twice more on `page.goto` to `/technician/map-navigation` waiting for "load"; at the same time `curl` to fonts.googleapis.com failed after 25 s and to tile.openstreetmap.org after 40 s. That page is not touched by this change; 63 passed in the earlier full run today. Recheck 63 on a working connection.
+- Committed only (owner asked to proceed); not deployed to staging.

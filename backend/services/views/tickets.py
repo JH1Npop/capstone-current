@@ -50,6 +50,7 @@ from services.views.helpers import (
     preserve_inspection_evidence,
     build_ticket_search_query,
     clear_reschedule_request,
+    record_arrival_validation_log,
     create_notification,
     ensure_ticket_checklist_completed,
     ensure_ticket_completion_proof,
@@ -1841,6 +1842,41 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
                         request=ticket.request,
                     )
             return Response({'success': True, 'message': 'Status updated', 'ticket_id': ticket.id, 'status': resolved_status})
+
+        if resolved_status == 'On Hold':
+            # The office paused started work (for example the lead can no longer continue), so the
+            # job can be reassigned on the Dispatch Board. Everyone on the job hears it.
+            send_user_notification(
+                user=ticket.request.client,
+                title=f"Ticket #{ticket.id} Paused",
+                body=f"Work on ticket #{ticket.id} is paused for now. Our office will confirm when it continues.",
+                notification_type='warning',
+                ticket=ticket,
+                request=ticket.request,
+            )
+            for member in get_ticket_team_members(ticket):
+                if member != request.user:
+                    send_user_notification(
+                        user=member,
+                        title=f"Ticket #{ticket.id} Paused by the Office",
+                        body=f"The office paused ticket #{ticket.id}: {notes}",
+                        notification_type='warning',
+                        ticket=ticket,
+                        request=ticket.request,
+                    )
+            return Response({'success': True, 'message': 'Status updated', 'ticket_id': ticket.id, 'status': resolved_status})
+
+        if resolved_status == 'Arrived on Site':
+            # Office override for a technician whose GPS arrival is blocked (wrong pin, weak signal).
+            record_arrival_validation_log(
+                ticket=ticket,
+                technician=ticket.technician,
+                performed_by=request.user,
+                action='arrival_bypassed',
+                validation_result='bypassed',
+                validation_enabled=True,
+                remarks=f'Office confirmed arrival: {notes}'[:2000],
+            )
 
         send_user_notification(
             user=ticket.request.client,

@@ -220,6 +220,9 @@ checks.
 | Another technician learns nothing about a cancelled job that is not theirs | `refuse_technician_change_on_cancelled_job` (own jobs only) | `CM::test_another_technician_learns_nothing_about_the_cancelled_job` | n/a | Server only |
 | The office says "no" to a client's reschedule request | `decline_reschedule` | `test_reschedule_decline.py` | 68 | Covered (2026-11-18): "Keep Current Date" (`decline_reschedule`) closes the request with a reason and tells the client |
 | The client declines the handover | `client_confirm` (confirm only) | n/a | n/a | Recorded: the client confirms or contacts support; there is no decline |
+| The lead cannot continue a started job (sick, phone dead, left the company) | `update_status` → `On Hold`, then `assign` | `test_office_stuck_job_actions.py` | 69 | Covered (2026-11-18): **dead end fixed**. Before, a job `Arrived on Site`/`In Progress` could not be reassigned or paused by the office; only "Dismiss ticket" was left, and the technician could not be deactivated. Now **Pause job**, then Update Assignment |
+| The technician is at the site but the GPS arrival check blocks them (wrong pin) | `update_status` → `Arrived on Site`, `ArrivalValidationLog` | `test_office_stuck_job_actions.py` | 69 | Covered (2026-11-18): office **Confirm arrival** with a logged reason; before, the only way was turning location checks off for everyone |
+| The company cancels a job (not the client) | dismissal reason prefix | `test_office_stuck_job_actions.py` | 69 | Covered (2026-11-18): "Office cancelled (our side)"; before, every dismissal was recorded as "Client backed out" |
 
 ## 4. Time cases (2026-11-09)
 

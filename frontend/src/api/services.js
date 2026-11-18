@@ -187,19 +187,38 @@ export const fetchServiceTicketSummary = async (filters = {}) => {
   }
 };
 
-export const terminateServiceTicketForClientWithdrawal = async (ticketId, details) => {
+// cause: 'client' (the client withdrew) or 'office' (the company cancelled the job).
+export const terminateServiceTicketForClientWithdrawal = async (ticketId, details, cause = 'client') => {
   const normalizedDetails = String(details || '').trim();
   if (normalizedDetails.length < 5) {
-    throw new Error('Add a short explanation confirming why the client backed out.');
+    throw new Error('Add a short explanation of why this job is cancelled.');
   }
   try {
     const { data } = await api.post(`/services/service-tickets/${ticketId}/update_status/`, {
       status: 'Cancelled',
-      reason: `Client backed out: ${normalizedDetails}`,
+      reason: `${cause === 'office' ? 'Office cancelled' : 'Client backed out'}: ${normalizedDetails}`,
     });
     return data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to dismiss the service ticket.'));
+  }
+};
+
+// Office overrides for started work: 'On Hold' (pause so the job can be reassigned) or
+// 'Arrived on Site' (confirm arrival when the technician's GPS check is blocked).
+export const officeUpdateTicketStatus = async (ticketId, status, reason) => {
+  const normalizedReason = String(reason || '').trim();
+  if (normalizedReason.length < 5) {
+    throw new Error('Add a short reason (at least 5 characters).');
+  }
+  try {
+    const { data } = await api.post(`/services/service-tickets/${ticketId}/update_status/`, {
+      status,
+      reason: normalizedReason,
+    });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to update the job.'));
   }
 };
 
