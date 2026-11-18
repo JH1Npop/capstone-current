@@ -410,7 +410,9 @@ export default function TechnicianMapNavigation() {
   };
 
   const statusKey = normalizeStatusKey(job?.status);
-  const readyToTravel = READY_TO_TRAVEL.has(statusKey) && !navigationStarted;
+  // A reported inspection visit waits for the office review; the server refuses travel on it.
+  const isReportedInspection = statusKey === 'inspection_completed' && job?.ticketType === 'inspection';
+  const readyToTravel = READY_TO_TRAVEL.has(statusKey) && !navigationStarted && !isReportedInspection;
   const isOnHold = statusKey === 'on_hold';
   const isFinished = FINISHED.has(statusKey);
   const clientPhone = job?.client?.phone;
@@ -844,6 +846,11 @@ export default function TechnicianMapNavigation() {
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
                   This job is finished.
                   <Link to="/technician/job-history" className="mt-2 block font-semibold text-brand-700">Open Job History</Link>
+                </div>
+              ) : isReportedInspection ? (
+                <div role="status" className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  Your inspection report is in. The office reviews it next and will dispatch the service work.
+                  <Link to="/technician/my-jobs" className="mt-2 block font-semibold text-brand-700">Open My Jobs</Link>
                 </div>
               ) : isOnHold ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">

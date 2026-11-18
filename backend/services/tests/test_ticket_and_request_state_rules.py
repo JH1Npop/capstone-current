@@ -12,7 +12,7 @@
 from ._imports import *  # noqa: F403,F405
 from services.business_time import business_today
 from services.models import InspectionChecklist
-from services.views.helpers import ALLOWED_TICKET_TRANSITIONS
+from services.views.helpers import ALLOWED_TICKET_TRANSITIONS, FIELD_WORK_STATUSES
 from users.rbac import REPORTS_VIEW
 
 STATUSES = list(ALLOWED_TICKET_TRANSITIONS)
@@ -63,6 +63,13 @@ class TicketTransitionMatrixTests(TicketFixture):
                     elif target == 'Completed':
                         # Completion has its own checks (below); the move is refused here without them.
                         self.assertEqual(response.status_code, 400)
+                        self.assertEqual(ticket.status, source)
+                    elif ticket_type == 'inspection' and source == 'Inspection Completed' and target != 'Cancelled':
+                        # A reported visit leaves only through the office review or a cancel
+                        # (flow explorer finding, 2026-11-18).
+                        self.assertEqual(response.status_code, 400)
+                        expected = 'office reviews it next' if target in FIELD_WORK_STATUSES else 'Use Review Inspection'
+                        self.assertIn(expected, response.data['error'])
                         self.assertEqual(ticket.status, source)
                     else:
                         self.assertEqual(response.status_code, 200, response.data)

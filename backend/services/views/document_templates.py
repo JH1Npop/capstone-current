@@ -3,6 +3,7 @@ import logging
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.http import FileResponse
 from rest_framework import mixins, serializers, status, viewsets
@@ -76,7 +77,7 @@ class DocumentDefinitionViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, 
     def destroy(self, request, *args, **kwargs):
         """Delete a custom document type that has never produced anything. Otherwise it can only be switched off."""
         with transaction.atomic():
-            definition = self.get_queryset().select_for_update(of=('self',)).get(pk=kwargs['pk'])
+            definition = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=kwargs['pk'])
             if definition.category != 'custom':
                 return Response({'detail': 'The six core documents cannot be deleted.'}, status=status.HTTP_409_CONFLICT)
             if definition.outputs.exists() or definition.instances.exists():
@@ -164,7 +165,7 @@ class DocumentTemplateViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mi
 
     def destroy(self, request, *args, **kwargs):
         with transaction.atomic():
-            template = self.get_queryset().select_for_update().get(pk=kwargs['pk'])
+            template = get_object_or_404(self.get_queryset().select_for_update(), pk=kwargs['pk'])
             versions = template.versions.select_for_update()
             blockers = []
             if versions.filter(publication_status='active').exists():
@@ -253,7 +254,7 @@ class DocumentTemplateVersionViewSet(mixins.CreateModelMixin, mixins.ListModelMi
 
     def _activate(self, request, pk, rollback=False):
         with transaction.atomic():
-            target = self.get_queryset().select_for_update(of=('self',)).get(pk=pk)
+            target = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=pk)
             # Competing requests can target different version rows. Lock their
             # shared template so publication changes are serialized per design.
             DocumentTemplate.objects.select_for_update().only('id').get(pk=target.template_id)

@@ -1359,6 +1359,20 @@ def validate_ticket_transition(ticket, new_status, *, allow_same=False):
     if normalized_status in FIELD_WORK_STATUSES and not ticket.technician_id:
         raise ValueError('Assign a technician before moving this ticket into field work.')
 
+    # A reported inspection visit leaves "Inspection Completed" only through the office review
+    # (which turns it into the service job first) or a cancellation. Travelling or working on it
+    # again (a stray "Start travel" tap), or a manual "Ready for Service" / "Awaiting Materials",
+    # skipped the review and left an inspection visit that could never be finished.
+    # Found by the flow explorer, 2026-11-18.
+    if (
+        ticket.ticket_type == 'inspection'
+        and ticket.status == 'Inspection Completed'
+        and normalized_status != 'Cancelled'
+    ):
+        if normalized_status in FIELD_WORK_STATUSES:
+            raise ValueError('This inspection is reported. The office reviews it next, then dispatches the service work.')
+        raise ValueError('Use Review Inspection to decide a reported inspection; it turns the visit into the service job.')
+
     # A service that needs a site inspection cannot leave "Not Started" / "Ready for Service" for
     # service work before the inspection visit has reported, whichever action asks (dispatch, the
     # office's manual status change, ...). Tickets already past those points are not re-checked, so

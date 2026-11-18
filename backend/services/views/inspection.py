@@ -173,8 +173,13 @@ class InspectionChecklistViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.Mo
     @transaction.atomic
     def complete(self, request, pk=None):
         """Mark inspection as completed"""
-        checklist = self.get_queryset().select_for_update(of=('self',)).get(pk=pk)
+        checklist = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=pk)
         if checklist.is_completed:
+            # Already complete; still move an open inspection visit on (repairs visits stuck by a
+            # service checklist saved on them before 2026-11-18).
+            if checklist.ticket.ticket_type == 'inspection' and checklist.ticket.status in {'Arrived on Site', 'In Progress'}:
+                self._require_technician_on_site(checklist.ticket)
+                self._sync_inspection_completion_status(checklist)
             return Response({'status': 'Inspection completed'})
         self._require_technician_on_site(checklist.ticket)
         checklist.is_completed = True
@@ -306,7 +311,7 @@ class SolarCommissioningChecklistViewSet(TechniciansLeaveCancelledJobsMixin, Kee
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def complete(self, request, pk=None):
-        checklist = self.get_queryset().select_for_update(of=('self',)).get(pk=pk)
+        checklist = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=pk)
         if checklist.status == 'finalized':
             return Response(
                 {'error': 'Finalized commissioning checklists are immutable.'},
@@ -371,7 +376,7 @@ class TurnoverAcceptanceViewSet(KeepFinishedDocumentsMixin, viewsets.ModelViewSe
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def finalize(self, request, pk=None):
-        turnover = self.get_queryset().select_for_update(of=('self',)).select_related('ticket').get(pk=pk)
+        turnover = get_object_or_404(self.get_queryset().select_for_update(of=('self',)).select_related('ticket'), pk=pk)
         if turnover.status in {'finalized', 'accepted'}:
             return Response(
                 {'error': 'This turnover acceptance has already been finalized.'},
@@ -503,7 +508,7 @@ class TechnicalDataSheetViewSet(TechniciansLeaveCancelledJobsMixin, KeepFinished
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def submit(self, request, pk=None):
-        tds = self.get_queryset().select_for_update(of=('self',)).get(pk=pk)
+        tds = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=pk)
         if tds.status != 'draft':
             return Response(
                 {'error': f'Only draft technical data sheets can be submitted; this sheet is {tds.status}.'},
@@ -517,7 +522,7 @@ class TechnicalDataSheetViewSet(TechniciansLeaveCancelledJobsMixin, KeepFinished
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def review(self, request, pk=None):
-        tds = self.get_queryset().select_for_update(of=('self',)).get(pk=pk)
+        tds = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=pk)
         if not is_admin_workspace_role(request.user.role):
             raise PermissionDenied("Only admins can review the TDS.")
         if tds.status != 'submitted':

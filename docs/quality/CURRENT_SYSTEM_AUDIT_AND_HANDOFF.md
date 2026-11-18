@@ -7486,3 +7486,20 @@ Change ledger:
   - `npm run build:frontend`: OK.
   - Playwright: spec 69 passed. Specs 11, 17, 58-63, 68: 15 passed, 2 failed (11.8 click timeout, 63 `page.goto` timeout). 11.8 alone: passed. 63 alone: failed twice more on `page.goto` to `/technician/map-navigation` waiting for "load"; at the same time `curl` to fonts.googleapis.com failed after 25 s and to tile.openstreetmap.org after 40 s. That page is not touched by this change; 63 passed in the earlier full run today. Recheck 63 on a working connection.
 - Committed only (owner asked to proceed); not deployed to staging.
+
+## Session 2026-11-18 (later): flow explorer (every event, every role, every job type)
+
+- **Owner request:** "try every bit of flow": test every possible event in any order, not just single steps.
+- **New test:** `backend/services/tests/test_flow_explorer.py`. Seeded random walks over all four job types; at each step either the next forward action or any of 33 events (client, lead, crew, a technician not on the job, office; allowed or not). After every event it checks: no 5xx, refused call changes nothing, request matches ticket, closed stays closed, field work has a lead, technician availability, history note on every status change, no open reschedule on closed tickets, crew/outsiders refused, and no dead end (from every new state the job can still be driven to Completed inside a rolled-back savepoint; on failure it prints the seed, the trail and why each forward action was refused). Default 12 walks x 30 steps (about 2-3 minutes); `FLOW_EXPLORER_WALKS` / `FLOW_EXPLORER_STEPS` / `FLOW_EXPLORER_SEED` widen or replay.
+- **Bugs it found, all fixed:**
+  1. A reported inspection visit could be travelled/worked again (technician "Start travel", or office manual status) or set `Ready for Service` / `Awaiting Materials` by hand. That skipped the office review and left an inspection visit that could never finish. `validate_ticket_transition` now lets a reported inspection visit leave only through Review Inspection or a cancel; the technician map and My Jobs no longer offer "Start travel" on it.
+  2. The service checklist (`POST /api/checklist/`) was accepted on an inspection visit; it marked the shared record complete, after which the inspection report's `complete` returned "Inspection completed" without moving the visit (stuck `In Progress`). Now refused on inspection visits; `complete` on an already-complete record still moves an open inspection visit on (repairs existing ones).
+  3. Locked lookups by id answered 500 for an unknown/hidden id (`views/inspection.py` x5, `views/document_templates.py` x3); now 404.
+- **Files:** `backend/services/views/helpers.py`, `backend/services/views/inspection.py`, `backend/services/views/document_templates.py`, `backend/api/views.py`, `frontend/src/pages/technician/TechnicianMapNavigation.jsx`, `frontend/src/pages/technician/TechnicianJobs.jsx`; tests `test_flow_explorer.py`, `test_flow_explorer_findings.py` (6), updated `test_ticket_and_request_state_rules.py` and `test_business_flow_controls.py` (the reported-inspection pairs are now refused); docs `WORKFLOW_STATE_MACHINES.md` ("Flow explorer"), `SYSTEM_POSSIBILITY_COVERAGE.md`.
+- **Validation run:**
+  - First explorer runs: dead end at seed 20261120 (bug 1), 500 on `inspections/1/complete/` (bug 3); 80 walks x 40 steps from seed 7000: 4 dead ends (seeds 7010, 7031, 7054, 7058: bugs 1 and 2).
+  - After the fixes: seeds 7000+ 80 x 40: OK (2,280 events, 91 states checked for dead ends, every ticket status reached); fresh seeds 91000+ 80 x 45: OK (2,496 events, 85 states).
+  - `manage.py test`: 1014 ran, 1 error (`test_business_flow_controls` used the internal helper to close a reported inspection as Completed, now refused by rule 1; test updated, file rerun: 21 OK).
+  - `npm run build:frontend`: OK.
+  - Playwright specs 10 and 32-46 (technician pages and the major flow): 20 passed.
+- Committed only; not deployed to staging.

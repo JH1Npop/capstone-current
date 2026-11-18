@@ -378,6 +378,35 @@ not be deactivated. The office now uses the existing validated `update_status` f
 
 Tests: `services/tests/test_office_stuck_job_actions.py`, `e2e/69-office-stuck-job-actions.spec.js`.
 
+## Flow explorer (2026-11-18)
+
+`services/tests/test_flow_explorer.py` walks jobs of all four types (direct, direct with deposit,
+inspection first, inspection first with deposit) with seeded random events by every role (client,
+lead, crew, a technician not on the job, office), allowed or not, and checks after every event: no 5xx,
+a refused call changes nothing, request status matches the ticket, closed tickets stay closed, field
+work has a lead, technician availability is right, every status change has a history note, closed
+tickets have no open reschedule request, crew/outsiders are refused, and **no dead end**: from every
+new state the job can still be driven to `Completed` (checked inside a rolled-back savepoint). Default
+12 walks x 30 steps in the normal suite; `FLOW_EXPLORER_WALKS`, `FLOW_EXPLORER_STEPS` and
+`FLOW_EXPLORER_SEED` widen or replay a run. Rules it found and that now hold:
+
+- A reported inspection visit (`inspection` type, `Inspection Completed`) leaves that state only through
+  **Review Inspection** (`inspection_decision`, which turns it into the service job first) or a
+  cancellation. Travel/arrival/work on it (a stray "Start travel"), or a manual `Ready for Service` /
+  `Awaiting Materials`, is refused by `validate_ticket_transition`; before, they skipped the review and
+  left an inspection visit that could never finish. The technician map and My Jobs no longer offer
+  "Start travel" on a reported inspection.
+- The service checklist (`POST /api/checklist/`) is refused on an inspection visit ("Submit the inspection
+  report instead"). It used to mark the shared inspection/checklist record complete, after which the
+  report's `complete` answered "Inspection completed" without moving the visit, which stayed
+  `In Progress` forever. `complete` on an already-complete record now still moves an open inspection
+  visit on (repairs existing stuck visits).
+- Locked lookups by id answer 404 instead of 500 for an unknown or hidden record: inspection report
+  `complete`, commissioning/turnover/data-sheet actions in `views/inspection.py`, and the document
+  definition / template delete and version activation in `views/document_templates.py`.
+
+Pinned as plain tests in `services/tests/test_flow_explorer_findings.py`.
+
 
 ## Quotation guards (2026-11-09)
 
