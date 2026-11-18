@@ -7455,3 +7455,8 @@ Change ledger:
   - Conclusion: no functional failures; all failures were network load timeouts that pass on rerun.
 - **Handoff cleanup:** removed 92 stale duplicate "Current objective (latest)" lines.
 - **Release to staging:** see the result lines below.
+  - Aiven host resolved (168.144.217.119) before the push.
+  - Pushed `feature/analytics-decision-workspace` (`391285b`) and merged to `staging-deploy` as `01da732`, pushed.
+  - Verified: staging `/health/ready/` 200; `POST /api/services/maintenance-schedules/1/book-visit/` went 404 to 401, so the new release is live.
+  - Note: the next daily scheduler run will send a one-time catch-up batch of overdue after-sales alerts and warranty reminder emails.
+  - Still open: owner hand-check on phones.
