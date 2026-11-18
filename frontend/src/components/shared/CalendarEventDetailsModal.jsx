@@ -50,7 +50,8 @@ export default function CalendarEventDetailsModal({ event, statusLabel, timeLabe
 
   if (!event) return null;
 
-  const canReschedule = Boolean(event.ticket_id) && String(event.status || '').toLowerCase() === 'not started';
+  const canReschedule = Boolean(event.ticket_id)
+    && (String(event.status || '').toLowerCase() === 'not started' || Boolean(event.reschedule_requested));
   const crew = Array.isArray(event.crew_members) && event.crew_members.length ? event.crew_members.join(', ') : 'No additional crew';
   const title = event.ticket_id ? formatTicketId(event.ticket_id) : formatRequestId(event.request_id);
 
@@ -78,7 +79,11 @@ export default function CalendarEventDetailsModal({ event, statusLabel, timeLabe
           )}
           {event.reschedule_requested && (
             <div className="mb-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              <FiAlertTriangle className="mt-0.5 shrink-0" /> Client requested a schedule change. Review the request before confirming a new time.
+              <FiAlertTriangle className="mt-0.5 shrink-0" />
+              <div>
+                Client requested a schedule change. Open Reschedule to set a new time or keep the current date.
+                {event.reschedule_reason && <div className="mt-1">Reason: {event.reschedule_reason}</div>}
+              </div>
             </div>
           )}
 
@@ -104,7 +109,7 @@ export default function CalendarEventDetailsModal({ event, statusLabel, timeLabe
               <button type="button" onClick={onOpenDispatch} className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100">Open dispatch</button>
             )}
             {canReschedule && (
-              <button type="button" onClick={onReschedule} className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Reschedule</button>
+              <button type="button" onClick={onReschedule} className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">{event.reschedule_requested ? 'Answer Reschedule Request' : 'Reschedule'}</button>
             )}
           </div>
         </footer>

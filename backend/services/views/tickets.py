@@ -293,7 +293,7 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
             return [CanViewDocuments()]
         if self.action in ['generate_document', 'update_project_details', 'promote_to_project_profile']:
             return [CanManageDocuments()]
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'update_status', 'reschedule', 'inspection_decision']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'update_status', 'reschedule', 'decline_reschedule', 'inspection_decision']:
             return [CanManageServiceTickets()]
         elif self.action in ['start_work', 'complete_work', 'add_progress', 'add_notes', 'upload_photos', 'request_parts', 'contact_client']:
             return [CanViewTechnicianJobs()]
@@ -2529,6 +2529,64 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
 
             return Response({
                 'status': 'Rescheduled',
+                'scheduled_date': ticket.scheduled_date,
+                'scheduled_time_slot': ticket.scheduled_time_slot,
+            })
+
+    @action(detail=True, methods=['post'])
+    def decline_reschedule(self, request, pk=None):
+        """Office answers a client's reschedule request with "keep the current date"."""
+        with transaction.atomic():
+            ticket = self.get_locked_ticket()
+            if not user_can_manage_service_requests(request.user) and not CanManageServiceTickets().has_permission(request, self):
+                raise PermissionDenied('You do not have permission to answer reschedule requests.')
+
+            if not ticket.reschedule_requested:
+                return Response(
+                    {'error': 'This ticket has no open reschedule request.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            notes = str(request.data.get('notes') or '').strip()
+            if not notes:
+                return Response(
+                    {'error': 'Tell the client why the current date stays.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            client_reason = ticket.reschedule_reason or ''
+            clear_reschedule_request(ticket)
+            ticket._activity_reason = notes
+            ticket.save(update_fields=['reschedule_requested', 'reschedule_reason', 'reschedule_requested_at', 'updated_at'])
+
+            # The client's request overwrote the preferred date; put it back in line
+            # with the appointment that is being kept.
+            if ticket.scheduled_date:
+                service_request = ServiceRequest.objects.select_for_update().get(pk=ticket.request_id)
+                service_request.preferred_date = ticket.scheduled_date
+                service_request.preferred_time_slot = ticket.scheduled_time_slot or service_request.preferred_time_slot
+                service_request.save(update_fields=['preferred_date', 'preferred_time_slot', 'updated_at'])
+
+            when = ticket.scheduled_date.isoformat() if ticket.scheduled_date else 'the current date'
+            slot_label = f' ({ticket.scheduled_time_slot})' if ticket.scheduled_time_slot else ''
+            ServiceStatusHistory.objects.create(
+                ticket=ticket,
+                status=ticket.status,
+                changed_by=request.user,
+                notes=f'Reschedule request declined; kept {when}{slot_label}. Client asked: {client_reason or "no reason"}. Office: {notes}',
+            )
+
+            send_user_notification(
+                user=ticket.request.client,
+                title=f"Ticket #{ticket.id} Schedule Unchanged",
+                body=f"Your appointment stays on {when}{slot_label}. {notes}",
+                notification_type='warning',
+                ticket=ticket,
+                request=ticket.request,
+            )
+
+            return Response({
+                'status': 'Reschedule declined',
                 'scheduled_date': ticket.scheduled_date,
                 'scheduled_time_slot': ticket.scheduled_time_slot,
             })

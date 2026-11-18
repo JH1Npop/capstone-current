@@ -356,7 +356,7 @@ path, is tested by `services/tests/test_job_type_cancel_matrix.py`.
   list." (`services/views/document_locks.TechniciansLeaveCancelledJobsMixin`, and the technician job
   actions). Reading the job and its documents still works. Technicians not on the job get the normal
   answer, so nothing about it is revealed.
-- Open: the office has no way to refuse a client's reschedule request except by setting a date.
+- Client reschedule request (`reschedule_requested`): opened by the client (`request_reschedule`, before work starts). The office closes it either with `reschedule` (new date) or with `decline_reschedule` (2026-11-18: reason required; date unchanged; the request's preferred date/slot is reset to the kept appointment; history line and a "Schedule Unchanged" client notification). The client may ask again afterwards.
 
 
 ## Quotation guards (2026-11-09)

@@ -218,7 +218,7 @@ checks.
 | A technician tries to change a job the office cancelled (travel, arrive, start, hold, proof upload, equipment request, finish, inspection report, field forms) | `TechniciansLeaveCancelledJobsMixin`, `TechnicianJobViewSet.cancelled_job_response` | `CM::CancelledJobForTechniciansTests` | 63 | Covered (proof photos and new field service reports were accepted on a cancelled job; travel replies were misleading, e.g. "Start navigation before marking arrival") |
 | The technician's map for a cancelled job | `TechnicianMapNavigation.jsx` | n/a | 63 | Covered (it said "This job is finished" and linked to Job History) |
 | Another technician learns nothing about a cancelled job that is not theirs | `refuse_technician_change_on_cancelled_job` (own jobs only) | `CM::test_another_technician_learns_nothing_about_the_cancelled_job` | n/a | Server only |
-| The office says "no" to a client's reschedule request | `reschedule` (office can only set a date) | n/a | n/a | **Decision**: there is no "keep the current date" action; the request stays open until the office picks a date or work starts |
+| The office says "no" to a client's reschedule request | `decline_reschedule` | `test_reschedule_decline.py` | 68 | Covered (2026-11-18): "Keep Current Date" (`decline_reschedule`) closes the request with a reason and tells the client |
 | The client declines the handover | `client_confirm` (confirm only) | n/a | n/a | Recorded: the client confirms or contacts support; there is no decline |
 
 ## 4. Time cases (2026-11-09)

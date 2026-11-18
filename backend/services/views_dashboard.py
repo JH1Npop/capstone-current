@@ -952,6 +952,7 @@ class AdminCalendarView(APIView):
             'location': _get_request_address(ticket.request),
             'description': ticket.request.description,
             'reschedule_requested': ticket.reschedule_requested,
+            'reschedule_reason': ticket.reschedule_reason if ticket.reschedule_requested else None,
             'is_rescheduled': latest_reschedule is not None,
             'rescheduled_at': latest_reschedule.timestamp.isoformat() if latest_reschedule else None,
             'scheduling_notes': ticket.request.scheduling_notes,

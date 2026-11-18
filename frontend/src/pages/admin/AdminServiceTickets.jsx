@@ -38,6 +38,7 @@ import {
   downloadTicketDocument,
   reverseGeocodeLocation,
   rescheduleServiceTicket,
+  declineRescheduleRequest,
   searchLocations,
   terminateServiceTicketForClientWithdrawal
 } from '../../api/api';
@@ -473,6 +474,13 @@ export default function AdminServiceTickets() {
     await loadData();
     setRescheduleTicket(null);
     setRescheduleMessage(`${formatTicketId(ticketId)} schedule updated.`);
+  };
+
+  const handleKeepCurrentDate = async (ticketId, notes) => {
+    await declineRescheduleRequest(ticketId, notes);
+    await loadData();
+    setRescheduleTicket(null);
+    setRescheduleMessage(`${formatTicketId(ticketId)} keeps its current date. The client was told.`);
   };
 
   const openTerminationDialog = (ticket) => {
@@ -1066,6 +1074,7 @@ export default function AdminServiceTickets() {
         ticket={rescheduleTicket}
         onClose={() => setRescheduleTicket(null)}
         onSubmit={handleRescheduleSubmit}
+        onKeepCurrentDate={handleKeepCurrentDate}
       />
       <InspectionReviewModal
         ticket={inspectionReviewTicket}

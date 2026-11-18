@@ -7460,3 +7460,17 @@ Change ledger:
   - Verified: staging `/health/ready/` 200; `POST /api/services/maintenance-schedules/1/book-visit/` went 404 to 401, so the new release is live.
   - Note: the next daily scheduler run will send a one-time catch-up batch of overdue after-sales alerts and warranty reminder emails.
   - Still open: owner hand-check on phones.
+
+## Session 2026-11-18 (later): office "Keep Current Date" for client reschedule requests
+
+- **Owner request:** the office could only answer a client's reschedule request by setting a new date; add a way to say no.
+- **Backend:** `POST /api/services/service-tickets/{id}/decline_reschedule/` (`services.tickets.manage`, same permission as `reschedule`). It needs an open request and a reason (`notes`). It clears `reschedule_requested/_reason/_requested_at`, keeps the schedule, and resets the request's `preferred_date`/`preferred_time_slot` to the kept appointment (the client's ask had overwritten them). It writes a `ServiceStatusHistory` line ("Reschedule request declined; kept ...") and sends the client a "Schedule Unchanged" notification. The calendar feed (`views_dashboard.py`) now carries `reschedule_reason` while a request is open. No migration.
+- **Frontend:** `RescheduleTicketModal` shows the client's reason and asked-for date, starts with an empty reason when answering a request, and offers **Keep Current Date** (`declineRescheduleRequest` in `api/admin.js`); wired in `AdminServiceTickets` and `AdminCalendar`. `CalendarEventDetailsModal` shows the reason and an "Answer Reschedule Request" button for any ticket with an open request.
+- **Tests:** `services/tests/test_reschedule_decline.py` (5 tests) and `e2e/68-admin-keep-current-date.spec.js`.
+- **Docs:** `ROUTE_API_CAPABILITY_MATRIX.md` (service tickets row), `WORKFLOW_STATE_MACHINES.md` (open item replaced by the rule), `SYSTEM_POSSIBILITY_COVERAGE.md` (row now Covered).
+- **Extra browsers:** a WebKit/Firefox run was tried and dropped: `npx playwright install webkit firefox` failed twice on this connection (download timeout, then stuck at 0 MB). Not configured.
+- **Validation run:**
+  - `manage.py test services.tests.test_reschedule_decline`: 5 OK.
+  - `manage.py test`: 1003 tests OK (7 skipped).
+  - `npm run build:frontend`: OK.
+  - Playwright: spec 68 passed (first run failed only on its own notification lookup, fixed: titles come back as TKT-####); 11.5, 13.A4, 13.S4 passed.
