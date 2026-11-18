@@ -983,6 +983,39 @@ export const fetchMaintenanceSchedules = async (filters = {}) => {
   }
 };
 
+export const bookMaintenanceVisit = async (scheduleId, { serviceTypeId, preferredDate, preferredTimeSlot, notes } = {}) => {
+  try {
+    const payload = { preferred_date: preferredDate };
+    if (serviceTypeId) payload.service_type = Number(serviceTypeId);
+    if (preferredTimeSlot) payload.preferred_time_slot = preferredTimeSlot;
+    if (notes) payload.notes = notes;
+    const { data } = await api.post(`/services/maintenance-schedules/${scheduleId}/book-visit/`, payload);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to book the maintenance visit.'));
+  }
+};
+
+export const fetchMyMaintenancePlans = async () => {
+  try {
+    const { data } = await api.get('/services/maintenance-schedules/mine/');
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load your maintenance plans.'));
+  }
+};
+
+export const fetchWarranties = async (filters = {}) => {
+  try {
+    const params = {};
+    if (filters.warrantyStatus) params.warranty_status = filters.warrantyStatus;
+    if (filters.search) params.search = filters.search;
+    return await fetchAllPages('/services/maintenance-schedules/warranties/', { params });
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load warranties.'));
+  }
+};
+
 export const fetchMaintenanceSummary = async () => {
   try {
     const { data } = await api.get('/services/maintenance-schedules/summary/');

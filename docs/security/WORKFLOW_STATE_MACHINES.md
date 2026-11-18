@@ -260,6 +260,24 @@ Closing the case without the work keeps the current cycle and its reminders.
 Re-saving the original job's inspection or turnover does not overwrite a cycle
 that has moved on (a later cycle or a manual reschedule).
 
+**Maintenance visits.** `book-visit` creates a normal `Pending` service request
+at the plan's site, linked to the plan (`ServiceRequest.maintenance_plan`);
+it then follows the service request and ticket state machines unchanged. A
+plan has at most one open visit (request `Pending`, `Approved` or
+`In Progress`). While a visit is open the daily run keeps the plan's status
+current but sends no reminders. When the visit's ticket is completed, the plan
+starts its next cycle from the completion date (the visit's checklist may set a
+new plan type and interval), its open maintenance case is resolved, and the
+visit gets no plan of its own. A cancelled visit frees the plan: reminders
+resume and it can be booked again. An unlinked job for the same client, service
+and site address also continues the existing active plan instead of creating a
+second one.
+
+`notify_on_date` and the `due_soon` status follow the Maintenance Reminder
+setting (3-30 days before the due date, capped at the interval). They are set
+when a plan is created, rolled to the next cycle or rescheduled, and refreshed
+on every daily automation run, so a setting change applies the next morning.
+
 Rescheduling cannot use a past date. A future reschedule closes the obsolete
 active maintenance case; a due or due-soon schedule ensures a current linked
 case exists. `dismissed` means reminders stopped, not record deleted, and the

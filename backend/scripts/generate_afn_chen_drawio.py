@@ -88,7 +88,7 @@ RELATIONSHIP_LABELS = {
     "return_request": "CONTAINS", "sales_record": "CONTAINS",
     "quotation": "BASED ON", "installed_equipment": "USES EQUIPMENT",
     "generated_document": "USES DOCUMENT", "location": "AT LOCATION",
-    "replaces": "REPLACES",
+    "replaces": "REPLACES", "maintenance_plan": "VISIT FOR", "maintenance_service": "MAINTAINED AS",
     "location_validation_updated_by": "LOCATION SETTINGS UPDATED BY",
     "client_confirmed_by": "CONFIRMED BY",
 }

@@ -176,6 +176,31 @@ for (const username of ['admin_test', 'superadmin_test']) {
       expect(cycleDays).toBe(nextCycle.interval_days);
       expect(nextCycle.client_notified_at).toBeNull();
       await expect(row).toBeVisible();
+
+      // ── Book maintenance visit: a linked request for review; the plan shows it ──
+      await row.click();
+      await details.getByRole('button', { name: 'Book maintenance visit' }).click();
+      const booking = page.getByRole('dialog', { name: 'Book maintenance visit' });
+      await booking.getByLabel('Notes (optional)').fill('Client asked for a morning visit.');
+      await booking.getByRole('button', { name: 'Book visit' }).click();
+      await expect(page.getByRole('status')).toContainText(/REQ-\d+ was created for review/);
+      await expect(row.getByText('Visit booked')).toBeVisible();
+      const booked = await scheduleFor();
+      expect(booked.booked_visit?.status).toBe('Pending');
+      await row.click();
+      await expect(details.getByText(/Visit booked: REQ-\d+/)).toBeVisible();
+      await expect(details.getByRole('button', { name: 'Book maintenance visit' })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+
+      // ── Warranties view: filters work and switching back restores the plans ──
+      await page.getByRole('group', { name: 'Maintenance view' }).getByRole('button', { name: 'Warranties' }).click();
+      await expect(page).toHaveURL(/view=warranties/);
+      await expect(page.getByRole('heading', { name: 'Warranties' })).toBeVisible();
+      await page.getByRole('button', { name: 'Ending in 30 days' }).click();
+      await expect(page).toHaveURL(/warranty_status=ending_soon/);
+      await expect(page.getByText(/Loading warranties/)).toHaveCount(0, { timeout: 30000 });
+      await page.getByRole('group', { name: 'Maintenance view' }).getByRole('button', { name: 'Maintenance plans' }).click();
+      await expect(page.getByRole('heading', { name: 'Maintenance schedules' })).toBeVisible();
     });
   });
 }

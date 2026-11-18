@@ -101,6 +101,7 @@ Table progress_ticketprogress {
   ticket_progress_id bigint [pk, increment]
   ticket_id bigint [not null, ref: > services_serviceticket.service_ticket_id]
   progress_status varchar(100) [not null]
+  work_date date
 }
 
 Table services_aftersalescase {
@@ -282,6 +283,7 @@ Table services_servicerequest {
   preferred_date date
   preferred_time_slot varchar(20)
   request_date timestamp [not null]
+  maintenance_plan_id bigint [ref: > services_maintenanceschedule.maintenance_schedule_id]
 }
 
 Table services_servicerequestservice {
@@ -323,6 +325,7 @@ Table services_servicetype {
   category varchar(100) [not null]
   estimated_cost decimal(10,2) [not null]
   is_active boolean [not null]
+  maintenance_service_id bigint [ref: > services_servicetype.service_type_id]
 }
 
 Table services_slarule {

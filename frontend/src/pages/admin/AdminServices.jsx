@@ -33,6 +33,7 @@ const DEFAULT_SERVICE_FORM = {
   is_active: true,
   requires_site_inspection: false,
   deposit_policy: 'none',
+  maintenance_service: '',
   deposit_value: 0,
   procedures: [],
   required_equipment: [],
@@ -97,6 +98,7 @@ const toServiceFormState = (service) => ({
   is_active: service?.is_active !== false,
   requires_site_inspection: Boolean(service?.requires_site_inspection),
   deposit_policy: service?.deposit_policy || 'none',
+  maintenance_service: service?.maintenance_service ? String(service.maintenance_service) : '',
   deposit_value: Number(service?.deposit_value || 0),
   procedures: normalizeProcedures(service?.procedures),
   required_equipment: normalizeEquipment(service?.required_equipment),
@@ -796,6 +798,7 @@ export default function AdminServices() {
         icon: serviceFormData.icon.trim(),
         display_order: Number(serviceFormData.display_order || 0),
         deposit_value: serviceFormData.deposit_policy === 'none' ? 0 : Number(serviceFormData.deposit_value || 0),
+        maintenance_service: serviceFormData.maintenance_service ? Number(serviceFormData.maintenance_service) : null,
       };
 
       setFormError('');
@@ -1150,6 +1153,23 @@ export default function AdminServices() {
               ) : null}
               <p className="mt-2 text-xs text-slate-500">
                 This rule is copied into each new quotation. If required, the client must accept the quotation and the office must record the full deposit before service dispatch. Site inspection can still happen first.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="service-maintenance-service">Maintenance visit service</label>
+              <select
+                id="service-maintenance-service"
+                value={serviceFormData.maintenance_service}
+                onChange={(event) => setServiceFormData({ ...serviceFormData, maintenance_service: event.target.value })}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">Same as this service</option>
+                {services
+                  .filter((option) => option.is_active !== false || String(option.id) === serviceFormData.maintenance_service)
+                  .map((option) => <option key={option.id} value={String(option.id)}>{option.name}</option>)}
+              </select>
+              <p className="mt-2 text-xs text-slate-500">
+                When this job's maintenance is due, a booked visit uses this service. For example, Solar Installation can be maintained with Solar Panel Cleaning. It can still be changed when booking.
               </p>
             </div>
             <div className="md:col-span-2">

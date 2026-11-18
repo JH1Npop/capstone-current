@@ -30,6 +30,7 @@ class Command(BaseCommand):
         if mode in ('daily', 'all'):
             commands.extend((
                 ('maintenance alerts', 'send_maintenance_alerts'),
+                ('warranty and overdue after-sales alerts', 'send_after_sales_alerts'),
                 ('service analytics', 'generate_daily_analytics'),
                 ('technician performance', 'generate_technician_performance'),
                 ('technician location retention', 'purge_technician_locations'),

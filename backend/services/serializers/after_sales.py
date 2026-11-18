@@ -208,6 +208,36 @@ class MaintenanceScheduleSerializer(serializers.ModelSerializer):
     ticket_code = serializers.SerializerMethodField()
     service_address = serializers.SerializerMethodField()
     days_until_due = serializers.SerializerMethodField()
+    booked_visit = serializers.SerializerMethodField()
+    visit_service_type = serializers.SerializerMethodField()
+    visit_service_type_name = serializers.SerializerMethodField()
+
+    def get_visit_service_type(self, obj):
+        from services.maintenance import visit_service_type_for
+        return visit_service_type_for(obj).id
+
+    def get_visit_service_type_name(self, obj):
+        from services.maintenance import visit_service_type_for
+        return visit_service_type_for(obj).name
+
+    def get_booked_visit(self, obj):
+        from services.maintenance import open_maintenance_visit
+        visit = open_maintenance_visit(obj)
+        if visit is None:
+            return None
+        tickets = list(visit.serviceticket_set.all())
+        ticket = tickets[0] if tickets else None
+        return {
+            'request_id': visit.id,
+            'request_code': f"REQ-{visit.id:04d}",
+            'status': visit.status,
+            'preferred_date': visit.preferred_date,
+            'service_type_name': visit.service_type.name if visit.service_type_id else '',
+            'ticket_id': ticket.id if ticket else None,
+            'ticket_code': f"TKT-{ticket.id:04d}" if ticket else None,
+            'ticket_status': ticket.status if ticket else None,
+            'scheduled_date': ticket.scheduled_date if ticket else None,
+        }
 
     def get_client_name(self, obj):
         return client_technician_label(obj.client) or obj.client.username
@@ -227,14 +257,15 @@ class MaintenanceScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = MaintenanceSchedule
         fields = [
-            'id', 'ticket_id', 'ticket_code', 'client_name', 'client_email',
+            'id', 'ticket_id', 'ticket_code', 'client_name', 'client_email', 'service_type',
             'client_phone', 'service_type_name', 'service_address',
             'maintenance_profile', 'maintenance_profile_label', 'interval_days',
             'last_service_date', 'next_due_date', 'notify_on_date', 'status',
             'maintenance_notes', 'risk_level', 'risk_score', 'prediction_notes',
             'due_soon_notified_at', 'three_day_notified_at', 'due_notified_at',
             'client_notified_at', 'client_three_day_notified_at',
-            'client_due_notified_at', 'days_until_due', 'created_at', 'updated_at',
+            'client_due_notified_at', 'days_until_due', 'booked_visit', 'visit_service_type',
+            'visit_service_type_name', 'created_at', 'updated_at',
         ]
 
 

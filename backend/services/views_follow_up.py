@@ -2,8 +2,10 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404
+from rest_framework import status as http_status
+from rest_framework.exceptions import PermissionDenied
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import filters, permissions, viewsets
@@ -14,12 +16,17 @@ from rest_framework.response import Response
 from users.permissions import CanAccessAfterSales, CanManageAfterSalesCases
 
 from .maintenance import (
+    ACTIVE_PLAN_EXCLUDED_STATUSES,
+    OPEN_VISIT_REQUEST_STATUSES,
+    open_maintenance_visit,
+    visit_service_type_for,
+    apply_reminder_window,
     ensure_maintenance_follow_up_case,
     evaluate_schedule_status,
     process_maintenance_alerts,
     start_next_maintenance_cycle,
 )
-from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent, MaintenanceSchedule, ServiceTicket
+from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent, MaintenanceSchedule, ServiceRequest, ServiceTicket
 from .serializers import FollowUpCaseSerializer, MaintenanceScheduleSerializer
 from .views.helpers import _display_name, _notify_admin_superadmin
 from services.business_time import business_today
@@ -311,13 +318,19 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
     def get_permissions(self):
         if self.action in {'dismiss', 'resume', 'reschedule', 'complete'}:
             return [permissions.IsAuthenticated(), CanManageAfterSalesCases()]
+        if self.action in {'book_visit', 'mine'}:
+            # The plan's own client may book and see their plans; the action checks ownership.
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated(), CanAccessAfterSales()]
 
     @staticmethod
     def _base_queryset():
+        open_visits = ServiceRequest.objects.filter(status__in=OPEN_VISIT_REQUEST_STATUSES).select_related(
+            'service_type',
+        ).prefetch_related('serviceticket_set').order_by('-id')
         return MaintenanceSchedule.objects.select_related(
-            'client', 'service_type', 'service_ticket__request__location',
-        )
+            'client', 'service_type__maintenance_service', 'service_ticket__request__location',
+        ).prefetch_related(Prefetch('maintenance_visits', queryset=open_visits, to_attr='open_visits'))
 
     def get_queryset(self):
         queryset = self._base_queryset()
@@ -429,7 +442,7 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
 
         schedule._activity_reason = reason
         schedule.next_due_date = next_due_date
-        schedule.notify_on_date = next_due_date - timedelta(days=schedule.follow_up_window_days)
+        apply_reminder_window(schedule)
         schedule.status = evaluate_schedule_status(schedule, reference_date=business_today())
         reminder_fields = [
             'due_soon_notified_at', 'three_day_notified_at', 'due_notified_at',
@@ -438,7 +451,7 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
         for field_name in reminder_fields:
             setattr(schedule, field_name, None)
         schedule.save(update_fields=[
-            'next_due_date', 'notify_on_date', 'status', *reminder_fields, 'updated_at',
+            'next_due_date', 'notify_on_date', 'follow_up_window_days', 'status', *reminder_fields, 'updated_at',
         ])
 
         if schedule.status == 'scheduled':
@@ -498,3 +511,146 @@ class MaintenanceScheduleViewSet(viewsets.ReadOnlyModelViewSet):
             'completed': queryset.filter(status='completed').count(),
             'dismissed': queryset.filter(status='dismissed').count(),
         })
+
+    @action(detail=False, methods=['get'])
+    def warranties(self, request):
+        """Every job with a warranty and when it ends. Filters: warranty_status = active (default,
+        includes ending soon), ending_soon (30 days or less), expired, void or all; search."""
+        from .after_sales_alerts import WARRANTY_REMINDER_DAYS
+        from .maintenance import evaluate_warranty_status
+        from .user_display import client_technician_label
+
+        today = business_today()
+        queryset = ServiceTicket.objects.select_related(
+            'request__client', 'request__service_type', 'request__location',
+        ).filter(warranty_end_date__isnull=False, warranty_period_days__isnull=False).order_by('warranty_end_date', 'id')
+        status_filter = request.query_params.get('warranty_status') or 'active'
+        if status_filter == 'active':
+            queryset = queryset.exclude(warranty_status='void').filter(warranty_end_date__gte=today)
+        elif status_filter == 'ending_soon':
+            queryset = queryset.exclude(warranty_status='void').filter(
+                warranty_end_date__gte=today, warranty_end_date__lte=today + timedelta(days=WARRANTY_REMINDER_DAYS),
+            )
+        elif status_filter == 'expired':
+            queryset = queryset.exclude(warranty_status='void').filter(warranty_end_date__lt=today)
+        elif status_filter == 'void':
+            queryset = queryset.filter(warranty_status='void')
+        search = str(request.query_params.get('search') or '').strip()
+        if search:
+            term = Q()
+            for field in ('request__client__username', 'request__client__first_name', 'request__client__last_name',
+                          'request__client__email', 'request__service_type__name', 'request__location__address'):
+                term |= Q(**{f'{field}__icontains': search})
+            if search.upper().startswith('TKT-') and search[4:].isdigit():
+                term |= Q(id=int(search[4:]))
+            queryset = queryset.filter(term)
+
+        def row(ticket):
+            client = ticket.request.client
+            try:
+                address = ticket.request.location.address
+            except Exception:
+                address = client.address or None
+            return {
+                'ticket_id': ticket.id,
+                'ticket_code': f"TKT-{ticket.id:04d}",
+                'client_name': client_technician_label(client) or client.username,
+                'client_email': client.email,
+                'client_phone': getattr(client, 'phone', ''),
+                'service_type_name': ticket.request.service_type.name if ticket.request.service_type else '',
+                'service_address': address,
+                'warranty_period_days': ticket.warranty_period_days,
+                'warranty_start_date': ticket.warranty_start_date,
+                'warranty_end_date': ticket.warranty_end_date,
+                'warranty_status': evaluate_warranty_status(ticket, reference_date=today),
+                'days_left': (ticket.warranty_end_date - today).days,
+                'warranty_notes': ticket.warranty_notes or '',
+            }
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response([row(ticket) for ticket in page])
+        return Response([row(ticket) for ticket in queryset])
+
+    @action(detail=True, methods=['post'], url_path='book-visit')
+    @transaction.atomic
+    def book_visit(self, request, pk=None):
+        """Book the plan's maintenance visit as a normal service request at the plan's site, linked to
+        the plan. It then goes through the usual review, approval and dispatch. The office (after-sales
+        manage) or the plan's own client may book; one open visit per plan."""
+        from services.models import ServiceLocation
+        from services.serializers import ServiceRequestSerializer
+        from services.views.service_requests import notify_service_request_submitted
+
+        schedule = self._get_locked_schedule(pk)
+        user = request.user
+        is_owner = getattr(user, 'role', None) == 'client' and schedule.client_id == user.id
+        if not is_owner and not CanManageAfterSalesCases().has_permission(request, self):
+            raise PermissionDenied("Only the office or the plan's client can book a maintenance visit.")
+        if schedule.status in ACTIVE_PLAN_EXCLUDED_STATUSES:
+            raise ValidationError({'status': 'This maintenance plan is not active. Resume it before booking a visit.'})
+        existing = open_maintenance_visit(schedule)
+        if existing is not None:
+            raise ValidationError({'booked_visit': f'A visit is already booked for this plan: REQ-{existing.id:04d}.'})
+
+        original = schedule.service_ticket.request
+        try:
+            location = original.location
+        except ServiceLocation.DoesNotExist:
+            location = None
+        if location is None or location.latitude is None or location.longitude is None:
+            raise ValidationError({'location': 'This plan has no saved site location. Use New Request instead.'})
+        preferred_date = str(request.data.get('preferred_date') or '').strip()
+        if not preferred_date:
+            raise ValidationError({'preferred_date': 'Choose a preferred visit date.'})
+
+        notes = str(request.data.get('notes') or '').strip()[:2000]
+        service_name = schedule.service_type.name if schedule.service_type else 'service'
+        description = (
+            f"Maintenance visit for the {service_name} maintenance plan of TKT-{schedule.service_ticket_id:04d} "
+            f"(due {schedule.next_due_date})."
+        )
+        if notes:
+            description = f"{description} {notes}"
+        payload = {
+            'service_type': request.data.get('service_type') or visit_service_type_for(schedule).id,
+            'description': description,
+            'priority': 'Normal',
+            'preferred_date': preferred_date,
+            'preferred_time_slot': request.data.get('preferred_time_slot') or None,
+            'scheduling_notes': notes or None,
+            'location_address': location.address,
+            'location_city': location.city or '',
+            'location_province': location.province or '',
+            'latitude': str(location.latitude),
+            'longitude': str(location.longitude),
+        }
+        if not is_owner:
+            payload['client'] = schedule.client_id
+        serializer = ServiceRequestSerializer(data=payload, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        visit = serializer.save(status='Pending', auto_ticket_created=False, maintenance_plan=schedule)
+        transaction.on_commit(lambda: notify_service_request_submitted(visit))
+
+        schedule = self._base_queryset().get(pk=schedule.pk)
+        return Response(
+            {
+                'request': ServiceRequestSerializer(visit, context={'request': request}).data,
+                'plan': self.get_serializer(schedule).data,
+            },
+            status=http_status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=['get'])
+    def mine(self, request):
+        """The signed-in client's own maintenance plans (active and stopped), with any booked visit.
+        Office-only fields (risk scores, reminder history) are left out."""
+        if getattr(request.user, 'role', None) != 'client':
+            raise PermissionDenied('This list is for clients. The office uses the maintenance list.')
+        queryset = self._base_queryset().filter(client=request.user).exclude(status='completed').order_by('next_due_date', 'id')
+        serializer = self.get_serializer(queryset, many=True)
+        keep = (
+            'id', 'ticket_id', 'ticket_code', 'service_type', 'service_type_name', 'visit_service_type',
+            'visit_service_type_name', 'service_address', 'maintenance_profile_label', 'interval_days', 'last_service_date', 'next_due_date', 'status', 'days_until_due', 'booked_visit',
+        )
+        return Response([{key: row[key] for key in keep} for row in serializer.data])

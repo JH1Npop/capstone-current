@@ -10,7 +10,7 @@ from notifications.notification_utils import email_notifications_enabled, in_app
 from services.business_time import business_today
 
 from .models import AfterSalesCase as FollowUpCase, AfterSalesCaseEvent
-from .models import InspectionChecklist, MaintenanceSchedule, ServiceTicket
+from .models import InspectionChecklist, MaintenanceSchedule, ServiceRequest, ServiceTicket
 from services.ticket_status import COMPLETED_TICKET_STATUSES
 
 
@@ -59,6 +59,26 @@ MAINTENANCE_RULES = {
         'interval_days': 120,
     },
 }
+
+
+def maintenance_reminder_days():
+    """The Maintenance Reminder setting (3-30 days before the due date; 7 when unset)."""
+    try:
+        from users.models import AdminSettings
+        settings_obj = AdminSettings.objects.order_by('id').first()
+        if settings_obj:
+            return max(3, min(30, int(settings_obj.maintenance_reminder_days)))
+    except Exception:
+        pass
+    return DEFAULT_FOLLOW_UP_WINDOW_DAYS
+
+
+def apply_reminder_window(schedule, reminder_days=None):
+    """Reminders and the "Due soon" status start the setting's number of days before the due date."""
+    window = min(reminder_days or maintenance_reminder_days(), schedule.interval_days)
+    schedule.follow_up_window_days = window
+    schedule.notify_on_date = schedule.next_due_date - timedelta(days=window)
+    return schedule
 
 
 def get_maintenance_rule(profile):
@@ -356,13 +376,13 @@ def start_next_maintenance_cycle(schedule, performed_on=None):
     performed_on = _normalize_to_date(performed_on or business_today())
     schedule.last_service_date = performed_on
     schedule.next_due_date = performed_on + timedelta(days=schedule.interval_days)
-    schedule.notify_on_date = schedule.next_due_date - timedelta(days=schedule.follow_up_window_days)
+    apply_reminder_window(schedule)
     for field_name in MAINTENANCE_REMINDER_FIELDS:
         setattr(schedule, field_name, None)
     schedule.status = 'scheduled'
     schedule.status = evaluate_schedule_status(schedule, reference_date=business_today())
     schedule.save(update_fields=[
-        'last_service_date', 'next_due_date', 'notify_on_date', 'status',
+        'last_service_date', 'next_due_date', 'notify_on_date', 'follow_up_window_days', 'status',
         *MAINTENANCE_REMINDER_FIELDS, 'updated_at',
     ])
 
@@ -390,7 +410,93 @@ def _schedule_has_moved_on(schedule, job_service_date):
     return schedule.next_due_date != schedule.last_service_date + timedelta(days=schedule.interval_days)
 
 
+OPEN_VISIT_REQUEST_STATUSES = ('Pending', 'Approved', 'In Progress')
+ACTIVE_PLAN_EXCLUDED_STATUSES = ('completed', 'dismissed')
+
+
+def visit_service_type_for(schedule):
+    """The service a maintenance visit is booked as: the plan service's "maintenance visit service"
+    when set in the catalog and still active, otherwise the plan's own service."""
+    service = schedule.service_type
+    target = service.maintenance_service if service.maintenance_service_id else None
+    return target if target is not None and target.is_active else service
+
+
+def open_maintenance_visit(schedule):
+    """The plan's booked visit that is not finished yet (a request still pending, approved or in
+    progress), or None. Uses the list view's prefetch when present, so lists stay one query."""
+    prefetched = getattr(schedule, 'open_visits', None)
+    if prefetched is not None:
+        return prefetched[0] if prefetched else None
+    return schedule.maintenance_visits.filter(status__in=OPEN_VISIT_REQUEST_STATUSES).order_by('-id').first()
+
+
+def _resolve_open_maintenance_cases(schedule, notes):
+    now = timezone.now()
+    for case in FollowUpCase.objects.filter(
+        service_ticket=schedule.service_ticket,
+        case_type='maintenance',
+        status__in=['open', 'in_progress'],
+    ):
+        previous_status = case.status
+        case.status = 'resolved'
+        case.resolution_notes = notes
+        case.resolved_at = now
+        case.save(update_fields=['status', 'resolution_notes', 'resolved_at', 'updated_at'])
+        AfterSalesCaseEvent.objects.create(
+            case=case, actor=None, event_type='status_changed',
+            from_status=previous_status, to_status='resolved', notes=notes,
+        )
+
+
+def continue_plan_from_visit(ticket):
+    """A booked maintenance visit was finished: its plan starts the next cycle from the visit date and
+    the plan's open maintenance case is resolved. Runs once per visit date (later re-saves of the
+    visit's inspection or turnover do nothing). The visit never gets a plan of its own."""
+    plan = ticket.request.maintenance_plan
+    if plan is None or plan.status in ACTIVE_PLAN_EXCLUDED_STATUSES:
+        return plan
+    performed_on = _normalize_to_date(ticket.completed_date or ticket.end_time or business_today())
+    if plan.last_service_date >= performed_on:
+        return plan
+
+    # The visit's checklist may set a new plan type or interval for the site.
+    try:
+        inspection = ticket.inspection
+    except InspectionChecklist.DoesNotExist:
+        inspection = None
+    if inspection and inspection.maintenance_required and inspection.maintenance_profile:
+        plan.maintenance_profile = inspection.maintenance_profile
+        plan.interval_days = resolve_interval_days(inspection.maintenance_profile, inspection.maintenance_interval_days)
+        if inspection.maintenance_notes:
+            plan.maintenance_notes = inspection.maintenance_notes
+        plan.save(update_fields=['maintenance_profile', 'interval_days', 'maintenance_notes', 'updated_at'])
+
+    _resolve_open_maintenance_cases(plan, f"Maintenance visit TKT-{ticket.id:04d} completed on {performed_on}.")
+    plan._activity_reason = f"Maintenance visit TKT-{ticket.id:04d} completed."
+    return start_next_maintenance_cycle(plan, performed_on=performed_on)
+
+
+def _matching_active_plan(ticket):
+    """An active plan for the same client, service and site address from an earlier job. A repeat job
+    there continues that plan instead of starting a second one (which would double the reminders)."""
+    try:
+        address = (ticket.request.location.address or '').strip()
+    except Exception:
+        address = ''
+    if not address:
+        return None
+    return MaintenanceSchedule.objects.filter(
+        client_id=ticket.request.client_id,
+        service_type_id=ticket.request.service_type_id,
+        service_ticket__request__location__address__iexact=address,
+    ).exclude(status__in=ACTIVE_PLAN_EXCLUDED_STATUSES).exclude(service_ticket=ticket).order_by('-last_service_date').first()
+
+
 def sync_maintenance_schedule(ticket, reference_date=None):
+    if ticket.request.maintenance_plan_id:
+        return continue_plan_from_visit(ticket)
+
     try:
         inspection = ticket.inspection
     except InspectionChecklist.DoesNotExist:
@@ -398,6 +504,16 @@ def sync_maintenance_schedule(ticket, reference_date=None):
 
     if not inspection.maintenance_required or not inspection.maintenance_profile:
         return None
+
+    if not MaintenanceSchedule.objects.filter(service_ticket=ticket).exists():
+        earlier_plan = _matching_active_plan(ticket)
+        if earlier_plan is not None:
+            # The completion date (not a later turnover date) so later re-saves do not roll it again.
+            service_date = _normalize_to_date(ticket.completed_date or ticket.end_time or business_today())
+            if earlier_plan.last_service_date < service_date:
+                earlier_plan._activity_reason = f"Repeat job TKT-{ticket.id:04d} at the same site."
+                start_next_maintenance_cycle(earlier_plan, performed_on=service_date)
+            return earlier_plan
 
     reference_date = _normalize_to_date(reference_date or business_today())
     turnover = getattr(ticket, 'turnover_acceptance', None)
@@ -414,7 +530,7 @@ def sync_maintenance_schedule(ticket, reference_date=None):
         inspection.maintenance_profile,
         inspection.maintenance_interval_days,
     )
-    follow_up_window_days = min(DEFAULT_FOLLOW_UP_WINDOW_DAYS, interval_days)
+    follow_up_window_days = min(maintenance_reminder_days(), interval_days)
     next_due_date = last_service_date + timedelta(days=interval_days)
     notify_on_date = next_due_date - timedelta(days=follow_up_window_days)
     risk_data = calculate_maintenance_risk(
@@ -788,12 +904,7 @@ def process_maintenance_alerts(reference_date=None):
     reference_date = reference_date or business_today()
     now = timezone.now()
     summary = {'seven_day': 0, 'three_day': 0, 'due': 0, 'client_notified': 0, 'client_due': 0}
-    try:
-        from users.models import AdminSettings
-        settings_obj = AdminSettings.objects.order_by('id').first()
-        reminder_days = max(3, min(30, int(settings_obj.maintenance_reminder_days))) if settings_obj else 7
-    except Exception:
-        reminder_days = 7
+    reminder_days = maintenance_reminder_days()
 
     schedules = MaintenanceSchedule.objects.select_related(
         'service_ticket__request',
@@ -801,8 +912,21 @@ def process_maintenance_alerts(reference_date=None):
         'service_type',
     ).exclude(status__in=['completed', 'dismissed'])
 
+    # A plan with a visit already booked is being handled: keep its status current, send no reminders.
+    booked_plan_ids = set(
+        ServiceRequest.objects.filter(
+            maintenance_plan__isnull=False, status__in=OPEN_VISIT_REQUEST_STATUSES,
+        ).values_list('maintenance_plan_id', flat=True)
+    )
+
     for schedule in schedules:
+        # Keep "Reminder starts" and "Due soon" in step with the current setting.
+        apply_reminder_window(schedule, reminder_days)
         schedule.status = evaluate_schedule_status(schedule, reference_date=reference_date)
+        if schedule.id in booked_plan_ids:
+            schedule.save()
+            summary['visit_booked'] = summary.get('visit_booked', 0) + 1
+            continue
         stage = None
         days_until_due = (schedule.next_due_date - reference_date).days
 

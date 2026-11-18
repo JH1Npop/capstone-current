@@ -613,7 +613,8 @@ export const createService = async (service) => {
             .filter((item) => item.name)
         : [],
       inspection_procedures: toInspectionChecksPayload(service.inspection_procedures),
-      ...toDepositPayload(service)
+      ...toDepositPayload(service),
+      maintenance_service: service.maintenance_service ? Number(service.maintenance_service) : null
     };
     const { data } = await api.post('/admin/services/', payload);
     return {
@@ -665,7 +666,8 @@ export const updateService = async (id, updates) => {
             .filter((item) => item.name)
         : [],
       inspection_procedures: toInspectionChecksPayload(updates.inspection_procedures),
-      ...toDepositPayload(updates)
+      ...toDepositPayload(updates),
+      ...('maintenance_service' in updates ? { maintenance_service: updates.maintenance_service ? Number(updates.maintenance_service) : null } : {})
     };
     const { data } = await api.put(`/admin/services/${id}/`, payload);
     return {

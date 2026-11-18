@@ -28,6 +28,10 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
     procedures = serializers.JSONField(required=False)
     required_equipment = serializers.JSONField(required=False)
     inspection_procedures = serializers.JSONField(required=False)
+    maintenance_service = serializers.PrimaryKeyRelatedField(
+        queryset=ServiceType.objects.all(), required=False, allow_null=True,
+    )
+    maintenance_service_name = serializers.CharField(source='maintenance_service.name', read_only=True, default='')
     inventory_requirements_count = serializers.SerializerMethodField()
     inventory_requirements = serializers.SerializerMethodField()
     request_count = serializers.SerializerMethodField()
@@ -167,6 +171,11 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
 
         return name
 
+    def validate_maintenance_service(self, value):
+        if value is not None and not value.is_active:
+            raise serializers.ValidationError('Choose an active service for maintenance visits.')
+        return value
+
     def validate_estimated_duration(self, value):
         if int(value or 0) <= 0:
             raise serializers.ValidationError('Duration must be greater than zero minutes.')
@@ -288,7 +297,7 @@ class ServiceTypeSerializer(serializers.ModelSerializer):
                   'estimated_duration', 'estimated_cost', 'max_daily_assignments',
                   'procedures', 'required_equipment', 'inspection_procedures',
                   'is_active', 'requires_site_inspection',
-                  'deposit_policy', 'deposit_value',
+                  'deposit_policy', 'deposit_value', 'maintenance_service', 'maintenance_service_name',
                   'request_count', 'ticket_count', 'service_item_count',
                   'maintenance_count', 'usage_count', 'can_delete',
                   'inventory_requirements_count', 'inventory_requirements']
@@ -791,9 +800,10 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
             'scheduling_notes', 'request_date', 'updated_at',
             'auto_ticket_created', 'location', 'sla', 'closure', 'service', 'notes', 'lat', 'lng',
             'locationDesc', 'location_address', 'location_city',
-            'location_province', 'latitude', 'longitude'
+            'location_province', 'latitude', 'longitude', 'maintenance_plan',
         ]
-        read_only_fields = ['request_date', 'updated_at', 'auto_ticket_created']
+        # A visit is linked to its plan only through the plan's book-visit action.
+        read_only_fields = ['request_date', 'updated_at', 'auto_ticket_created', 'maintenance_plan']
         extra_kwargs = {
             'client': {'required': False},
             'service_type': {'required': False},

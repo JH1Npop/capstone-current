@@ -43,7 +43,7 @@ class AdminServicesViewSet(viewsets.ViewSet):
 
     def list(self, request):
         """Get all service types"""
-        services = ServiceType.objects.all()
+        services = ServiceType.objects.select_related('maintenance_service')
         search = request.query_params.get('search') or request.query_params.get('q')
         active = request.query_params.get('active')
 

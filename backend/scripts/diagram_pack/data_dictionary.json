@@ -523,6 +523,14 @@
     "fk": false,
     "null": false,
     "description": "Indicates whether the service type can currently be requested."
+   },
+   {
+    "field": "maintenance_service_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the service type used to book this service's maintenance visits."
    }
   ],
   "description": "Stores the services offered by the company, with their category, estimated cost, and whether they are currently active."
@@ -627,6 +635,14 @@
     "fk": false,
     "null": false,
     "description": "Date and time the request was submitted."
+   },
+   {
+    "field": "maintenance_plan_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": true,
+    "description": "Foreign key referencing the maintenance schedule that this request is the maintenance visit for."
    }
   ],
   "description": "Stores the service requests submitted by clients, including the requested service type, priority, status, and preferred date and time slot."
@@ -1027,6 +1043,14 @@
     "fk": false,
     "null": false,
     "description": "Progress status recorded for the ticket."
+   },
+   {
+    "field": "work_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Day of work the progress entry belongs to, for jobs that run over several days."
    }
   ],
   "description": "Stores the progress status recorded for a service ticket while the job is being carried out."
