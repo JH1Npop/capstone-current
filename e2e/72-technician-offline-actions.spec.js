@@ -1,0 +1,90 @@
+// @ts-check
+import { test, expect } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { loadAuthStateFromBackend, seedAuthState } from './helpers';
+
+// Offline field recording (frontend/src/utils/offlineQueue.js): with no signal, a technician's
+// field action is saved on the phone and sent when the signal returns. If the server then refuses
+// it (here: the office cancelled the job meanwhile), the technician is told instead of it being
+// retried for ever. Pages load with domcontentloaded: map tiles and fonts come from the internet.
+
+const runShell = (script) => {
+  const repoRoot = process.cwd();
+  const python = process.platform === 'win32' ? path.join(repoRoot, 'venv', 'Scripts', 'python.exe') : 'python';
+  return execFileSync(python, [path.join(repoRoot, 'backend', 'manage.py'), 'shell', '-c', script], {
+    cwd: repoRoot, env: { ...process.env, DJANGO_SETTINGS_MODULE: 'afn_service_management.settings_e2e' }, encoding: 'utf8',
+  });
+};
+
+test.describe('Technician offline actions', () => {
+  test.describe.configure({ timeout: 300000 });
+
+  test('72 - an action taken offline is sent later, and a refused one is reported', async ({ browser, request }) => {
+    const stamp = Date.now();
+    const username = `e2e_offline_${stamp}`;
+    const output = runShell([
+      'from django.utils import timezone',
+      'from services.business_time import business_today',
+      'from services.models import ServiceLocation, ServiceRequest, ServiceTicket, ServiceType, TechnicianSkill',
+      'from users.models import User',
+      'client = User.objects.get(username="client_test")',
+      `tech = User.objects.create_user(username="${username}", password="TestPass123!", role="technician", status="active", is_available=False, first_name="Offline", last_name="Tech")`,
+      `service = ServiceType.objects.create(name="E2E Offline ${stamp}", estimated_duration=60)`,
+      'TechnicianSkill.objects.create(technician=tech, service_type=service)',
+      'ids = []',
+      'for label, status in (("roof", "In Progress"), ("shed", "On Hold")):',
+      '    req = ServiceRequest.objects.create(client=client, service_type=service, description=f"Offline {label}", status="In Progress", auto_ticket_created=True)',
+      '    ServiceLocation.objects.create(request=req, address="7 Rizal St, Calamba", city="Calamba", province="Laguna", latitude=14.2117, longitude=121.1653)',
+      '    ids.append(ServiceTicket.objects.create(request=req, technician=tech, scheduled_date=business_today(), status=status, start_time=timezone.now()).id)',
+      'print("IDS", *ids)',
+    ].join('\n'));
+    const [workingId, heldId] = output.match(/IDS (\d+) (\d+)/).slice(1).map(Number);
+    const techAuth = loadAuthStateFromBackend(username);
+    const officeAuth = loadAuthStateFromBackend('admin_test');
+    const ticketOf = async (id) => (await (await request.get(`/api/services/service-tickets/${id}/`, {
+      headers: { Authorization: `Token ${officeAuth.token}` },
+    })).json());
+
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    try {
+      const page = await context.newPage();
+      await seedAuthState(page, techAuth);
+      const queue = page.getByTestId('offline-queue');
+
+      // 1. Saved offline, sent when the signal returns.
+      await page.goto(`/technician/my-jobs?ticketId=${workingId}`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: /Put on Hold/ }).click({ timeout: 30000 });
+      await page.getByPlaceholder('For example: waiting for a replacement breaker').fill('Waiting for a replacement breaker.');
+      await context.setOffline(true);
+      await page.getByRole('button', { name: 'Confirm Hold' }).click();
+      await expect(page.getByText(/No signal: saved on this phone/)).toBeVisible({ timeout: 15000 });
+      await expect(queue).toContainText('1 action saved on this phone');
+      expect((await ticketOf(workingId)).status).toBe('In Progress');
+
+      await context.setOffline(false);
+      await expect(queue).toHaveCount(0, { timeout: 45000 });
+      await expect.poll(async () => (await ticketOf(workingId)).status, { timeout: 30000 }).toBe('On Hold');
+
+      // 2. Saved offline, but the office cancels the job before it is sent: the technician is told.
+      await page.goto(`/technician/my-jobs?ticketId=${heldId}`, { waitUntil: 'domcontentloaded' });
+      const resume = page.getByRole('button', { name: 'Resume Job' }).last();
+      await expect(resume).toBeVisible({ timeout: 30000 });
+      await context.setOffline(true);
+      await resume.click();
+      await expect(queue).toContainText('1 action saved on this phone', { timeout: 15000 });
+
+      const cancelled = await request.post(`/api/services/service-tickets/${heldId}/update_status/`, {
+        headers: { Authorization: `Token ${officeAuth.token}` },
+        data: { status: 'Cancelled', reason: 'Office cancelled: client moved away.' },
+      });
+      expect(cancelled.ok(), await cancelled.text()).toBeTruthy();
+
+      await context.setOffline(false);
+      await expect(page.getByRole('alert').filter({ hasText: 'was not saved' })).toBeVisible({ timeout: 45000 });
+      expect((await ticketOf(heldId)).status).toBe('Cancelled');
+    } finally {
+      await context.close();
+    }
+  });
+});

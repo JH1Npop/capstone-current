@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import BillingPlanPanel from '../sales/BillingPlanPanel';
 import { FiCheckCircle, FiFileText, FiHome, FiXCircle } from 'react-icons/fi';
 import { confirmTurnover, fetchTicketQuotation, fetchTicketTurnover, respondToQuotation } from '../../api/api';
 
@@ -161,13 +162,14 @@ export default function ClientJobDecisions({ ticketId, onChanged, jobCancelled =
               )}
               {Array.isArray(visibleQuotation.deposit_payments) && visibleQuotation.deposit_payments.some((payment) => !payment.is_voided) ? (
                 <ul className="mt-3 space-y-1 border-t border-blue-200 pt-3 text-xs text-slate-600">
-                  {visibleQuotation.deposit_payments.filter((payment) => !payment.is_voided).map((payment) => (
+                  {visibleQuotation.deposit_payments.filter((payment) => !payment.is_voided && (!payment.kind || payment.kind === 'deposit')).map((payment) => (
                     <li key={payment.id}>{formatDate(payment.paid_on)} · {payment.method_label} · {formatMoney(payment.amount)}</li>
                   ))}
                 </ul>
               ) : null}
             </div>
           ) : null}
+          <BillingPlanPanel quotation={visibleQuotation} />
           {visibleQuotation.payment_terms ? <p className="mt-3 text-sm text-slate-600"><span className="font-medium text-slate-800">Payment terms:</span> {visibleQuotation.payment_terms}</p> : null}
           {visibleQuotation.warranty_terms ? <p className="mt-1 text-sm text-slate-600"><span className="font-medium text-slate-800">Warranty:</span> {visibleQuotation.warranty_terms}</p> : null}
 

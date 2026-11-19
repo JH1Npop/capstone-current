@@ -43,7 +43,9 @@ export default function QuotationDepositPanel({ quotation, onUpdated, canManage 
   const jobCancelled = quotation.ticket_status === 'Cancelled';
   const outcome = quotation.deposit_outcome;
   const remaining = Number(quotation.deposit_remaining_amount || 0);
-  const payments = Array.isArray(quotation.deposit_payments) ? quotation.deposit_payments : [];
+  // Progress-billing payments on the same quotation are shown in the Payment schedule panel.
+  const payments = (Array.isArray(quotation.deposit_payments) ? quotation.deposit_payments : [])
+    .filter((payment) => !payment.kind || payment.kind === 'deposit');
   const canRecord = canManage && !jobCancelled && quotation.status === 'Accepted' && remaining > 0;
 
   const submitSettlement = async (event) => {

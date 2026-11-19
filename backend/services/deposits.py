@@ -80,7 +80,12 @@ def quotation_deposit_summary(quotation):
     payments = getattr(quotation, '_prefetched_objects_cache', {}).get('deposit_payments')
     if payments is None:
         payments = quotation.deposit_payments.all()
-    paid = sum((payment.amount for payment in payments if not payment.is_voided), Decimal('0.00'))
+    # Only deposit payments count toward the deposit; progress-billing payments on the same quotation
+    # do not (services/billing.py counts every payment toward the schedule).
+    paid = sum(
+        (payment.amount for payment in payments if not payment.is_voided and payment.kind == 'deposit'),
+        Decimal('0.00'),
+    )
     paid = paid.quantize(MONEY_QUANTUM)
     remaining = max(required - paid, Decimal('0.00'))
     if required <= 0:
@@ -156,7 +161,8 @@ DEPOSIT_OUTCOMES = ('refunded', 'kept')
 
 
 def received_deposit_amount(quotation):
-    """Money received toward the deposit (voided payments excluded)."""
+    """Money received on the quotation before the work (deposit and progress payments, voided ones
+    excluded). After a cancellation the office decides refunded/kept for all of it."""
     return sum(
         (payment.amount for payment in quotation.deposit_payments.all() if not payment.is_voided),
         Decimal('0.00'),

@@ -7524,3 +7524,32 @@ Change ledger:
   - Explorer 60 x 45 seeds 31000+: OK (1,878 events, 225 states). Seeds 52000+: found the two-jobs bug at 52035; after the fix, seeds 52000-52035 x 45: OK (1,127 events, 179 states).
   - `npm run build:frontend`: OK.
   - Playwright specs 15-31 and 47-56: 52 passed, 2 failed (18 assign message, 19 filters click; the run took 8.9 h because the machine slept). 18 and 19 alone: 4 passed.
+
+## Session 2026-11-19 (cont.): progress billing and offline field recording (owner request)
+
+- **Progress billing:**
+  - Migration `services.0072_billing_milestones_payment_kind` (additive): new `BillingMilestone` table (quotation, sort order, label, percent, trigger `acceptance`/`work_start`/`completion`/`handover`/`date`, due date) and `SalesPayment.kind` (`deposit`/`progress`/`sale`; existing quotation payments set to `deposit`, others `sale`; a new quotation payment without an explicit kind is a deposit).
+  - `services/billing.py` works out amounts, due dates (trigger + 7 days or the set date), payment allocation in order and states (upcoming/due/overdue/paid/cancelled).
+  - Endpoints on `QuotationRecordViewSet`: `GET/PUT billing-plan/` (read: `documents.view`, the client, the job's technicians; write: `documents.manage`), `POST progress-payments/`, `GET billing-overdue/` (`documents.manage`).
+  - The schedule is editable until accepted; after acceptance it can be recorded once if none exists, then it is locked; never on a cancelled job.
+  - Progress payments need the deposit paid first and no confirmed sales record, and are capped at the balance.
+  - `quotation_deposit_summary` (and so `ticket_deposit_gate`) counts only deposit payments; `received_deposit_amount` (the cancel refunded/kept decision) counts all quotation money.
+  - Daily `send_after_sales_alerts` sends one client and office reminder per overdue stage.
+  - UI: `components/sales/BillingPlanPanel.jsx` (office in Documents under the deposit panel; client read-only on the request page); Sales Records shows "Overdue payments" for the office; the deposit panel and the client's deposit list show deposit payments only.
+- **Offline field recording:**
+  - `frontend/src/utils/offlineQueue.js` (uses the existing `localforage` dependency; nothing added): arrival, start/pause/finish (with photos), service checklist and inspection report are saved on the phone when the request fails for lack of network and sent in order when online, when a technician page opens, and every 30 s.
+  - A refused action counts as done if the job is already there; otherwise it and the job's later actions show as "not saved" with the server's reason.
+  - `OfflineQueueBanner` shows in the technician Layout. Callers say "No signal: saved on this phone ..." instead of claiming success. Finish Job accepts a checklist still waiting on the phone.
+  - Known limit: recorded times are the server's replay time.
+- **Docs:** `WORKFLOW_STATE_MACHINES.md` (Progress billing, Offline field recording), `ROUTE_API_CAPABILITY_MATRIX.md`, `SYSTEM_POSSIBILITY_COVERAGE.md`.
+- **Not done (needs the owner):**
+  - Migration 0072 is not applied to the local `backend/db.sqlite3` (only test databases).
+  - The paper diagrams (ERD, data dictionary) do not show `billing_milestone` or `sales_payment.kind` yet.
+- **Validation run:**
+  - `test_progress_billing` 8 OK; deposit/cancel/sales/analytics suites 77 OK.
+  - `manage.py test`: 1029 ran, 1 failure (`test_quotation_and_deposit_rules` pins the client's payment fields; `kind` added to the expected set, file and billing tests rerun: 23 OK).
+  - `makemigrations --check`: no changes.
+  - `npm run build:frontend`: OK.
+  - Playwright 71 (billing) passed; 72 (offline: saved then sent; refused one reported) passed.
+  - Playwright regression for the touched screens (specs 04, 05, 12, 24, 25, 35, 36, 40, 41, 42, 52, 53, 54, 59, 60, 62, 71, 72): 71 passed, 1 failed (54: the new support case had no linked request); 54 alone: passed. Watch 54 for a timing race on the Related request select.
+- Committed only; not deployed.

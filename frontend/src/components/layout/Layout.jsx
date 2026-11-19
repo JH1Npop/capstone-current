@@ -3,6 +3,7 @@ import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import { useAuth } from '../../context/AuthContext';
 import OnlineStatusBanner from '../shared/OnlineStatusBanner';
+import OfflineQueueBanner from '../shared/OfflineQueueBanner';
 
 const SystemAssistant = lazy(() => import('../shared/SystemAssistant'));
 const ClientSupportAssistant = lazy(() => import('../shared/ClientSupportAssistant'));
@@ -79,6 +80,7 @@ export default function Layout({ children }) {
           <main className={`min-h-0 flex-1 touch-pan-y overflow-visible px-2 pb-4 pt-1 sm:px-4 md:px-5 lg:overflow-y-auto lg:overscroll-contain lg:px-6 lg:pb-6 lg:pt-1 ${adminWorkspace ? 'admin-workspace-density' : ''} ${showAssistant ? 'max-sm:pb-24' : ''}`}>
             <div className="mx-auto w-full max-w-[1500px]">
               <OnlineStatusBanner />
+              {user?.role === 'technician' ? <OfflineQueueBanner /> : null}
               {children}
             </div>
           </main>

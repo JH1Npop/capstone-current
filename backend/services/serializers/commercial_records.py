@@ -131,7 +131,7 @@ class QuotationRecordSerializer(serializers.ModelSerializer):
 
     # What a client or technician may see of each deposit payment (no staff names, receipt
     # references, office notes or void reasons), as on Purchase Records.
-    PUBLIC_PAYMENT_FIELDS = ('id', 'paid_on', 'method', 'method_label', 'amount', 'is_voided')
+    PUBLIC_PAYMENT_FIELDS = ('id', 'kind', 'paid_on', 'method', 'method_label', 'amount', 'is_voided')
 
     def get_deposit_payments(self, obj):
         payments = obj.deposit_payments.select_related('recorded_by').all()
@@ -323,11 +323,11 @@ class SalesPaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalesPayment
         fields = [
-            'id', 'sales_record', 'quotation', 'amount', 'paid_on', 'method', 'method_label', 'reference', 'notes',
+            'id', 'kind', 'sales_record', 'quotation', 'amount', 'paid_on', 'method', 'method_label', 'reference', 'notes',
             'recorded_by', 'recorded_by_name', 'recorded_at', 'is_voided', 'voided_at', 'void_reason',
         ]
         read_only_fields = [
-            'id', 'sales_record', 'quotation', 'recorded_by', 'recorded_at', 'is_voided', 'voided_at', 'void_reason',
+            'id', 'kind', 'sales_record', 'quotation', 'recorded_by', 'recorded_at', 'is_voided', 'voided_at', 'void_reason',
         ]
 
 

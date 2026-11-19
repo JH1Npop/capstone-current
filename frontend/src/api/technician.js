@@ -1,4 +1,5 @@
 import { api, fetchAllPages, getApiErrorMessage } from './core';
+import { isNetworkFailure, queueAction, registerOfflineAction, runOrQueue } from '../utils/offlineQueue';
 
 const toNumericId = (value, fallback = null) => {
   const numericValue = Number(value);
@@ -129,13 +130,29 @@ export const startJobNavigation = async (ticketId) => {
   }
 };
 
-export const markTechnicianArrival = async (ticketId, { latitude = null, longitude = null } = {}) => {
+// ── Offline field recording (utils/offlineQueue.js) ──
+// These field actions are saved on the phone when there is no signal and sent later. Each "...Now"
+// function sends immediately and throws the raw API error, so the queue can tell "no network" from
+// "refused by the server".
+const jobStatusKey = async (ticketId) => {
+  const { data } = await api.get(`/technician/jobs/${ticketId}/`);
+  return String(data?.status || '').toLowerCase().replace(/[\s/]+/g, '_');
+};
+const reachedAny = (...statuses) => async (ticketId) => statuses.includes(await jobStatusKey(ticketId));
+const AFTER_ARRIVAL = ['arrived_on_site', 'in_progress', 'on_hold', 'inspection_completed', 'completed', 'turned_over_accepted'];
+
+const markTechnicianArrivalNow = async (ticketId, { latitude = null, longitude = null } = {}) => {
+  const payload = {};
+  if (latitude !== null && latitude !== undefined) payload.latitude = latitude;
+  if (longitude !== null && longitude !== undefined) payload.longitude = longitude;
+  const { data } = await api.post(`/technician/jobs/${ticketId}/arrive/`, payload);
+  return data;
+};
+registerOfflineAction('arrive', markTechnicianArrivalNow, reachedAny(...AFTER_ARRIVAL));
+
+export const markTechnicianArrival = async (ticketId, position = {}) => {
   try {
-    const payload = {};
-    if (latitude !== null && latitude !== undefined) payload.latitude = latitude;
-    if (longitude !== null && longitude !== undefined) payload.longitude = longitude;
-    const { data } = await api.post(`/technician/jobs/${ticketId}/arrive/`, payload);
-    return data;
+    return await runOrQueue({ type: 'arrive', ticketId, args: [ticketId, position], label: 'Arrival' });
   } catch (error) {
     throw new Error(getApiErrorMessage(error, 'Unable to mark arrival.'));
   }
@@ -241,8 +258,31 @@ export const fetchTechnicianHistory = async (techName, filters = {}) => {
   }
 };
 
+const STATUS_DONE = {
+  in_progress: ['in_progress', 'inspection_completed', 'completed', 'turned_over_accepted'],
+  on_hold: ['on_hold'],
+  completed: ['completed', 'turned_over_accepted'],
+};
+registerOfflineAction(
+  'job_status',
+  (...args) => updateJobStatusNow(...args),
+  async (ticketId, _jobId, status) => (STATUS_DONE[status] || []).includes(await jobStatusKey(ticketId)),
+);
+const STATUS_LABELS = { in_progress: 'Start job', on_hold: 'Put on hold', completed: 'Finish job' };
+
 export const updateJobStatus = async (jobId, status, notes = '', images = [], inventoryUsage = null) => {
   try {
+    return await runOrQueue({
+      type: 'job_status', ticketId: jobId, args: [jobId, status, notes, images, inventoryUsage],
+      label: STATUS_LABELS[status] || 'Status change',
+    });
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to update job status.'));
+  }
+};
+
+const updateJobStatusNow = async (jobId, status, notes = '', images = [], inventoryUsage = null) => {
+  {
     if (status === 'completed') {
       // Completion photos travel as real files so the server validates and stores them, instead of
       // embedding megabytes of base64 text that exceed the request limit for normal phone photos.
@@ -265,13 +305,23 @@ export const updateJobStatus = async (jobId, status, notes = '', images = [], in
 
     const { data } = await api.post(`/technician/jobs/${jobId}/status/`, payload);
     return data;
-  } catch (error) {
-    throw new Error(getApiErrorMessage(error, 'Unable to update job status.'));
   }
 };
 
+registerOfflineAction('checklist', (...args) => submitChecklistNow(...args));
+
 export const submitChecklist = async (checklist) => {
   try {
+    return await runOrQueue({
+      type: 'checklist', ticketId: checklist?.ticketId || checklist?.jobId, args: [checklist], label: 'Job checklist',
+    });
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to submit checklist.'));
+  }
+};
+
+const submitChecklistNow = async (checklist) => {
+  {
     const formData = new FormData();
     const {
       photos = [],
@@ -316,13 +366,28 @@ export const submitChecklist = async (checklist) => {
 
     const { data } = await api.post('/checklist/', formData);
     return data;
-  } catch (error) {
-    throw new Error(getApiErrorMessage(error, 'Unable to submit checklist.'));
   }
 };
 
+registerOfflineAction(
+  'inspection_report',
+  (...args) => submitInspectionChecklistNow(...args),
+  reachedAny('inspection_completed'),
+);
+
 export const submitInspectionChecklist = async (ticketId, checklistData) => {
+  // The photo callback cannot be saved on the phone; it only matters for an immediate send.
+  const { onPhotosUploaded: _callback, ...savable } = checklistData || {};
   try {
+    return await submitInspectionChecklistNow(ticketId, checklistData);
+  } catch (error) {
+    if (isNetworkFailure(error)) return queueAction('inspection_report', ticketId, [ticketId, savable], 'Inspection report');
+    throw new Error(getApiErrorMessage(error, 'Unable to submit inspection checklist.'));
+  }
+};
+
+const submitInspectionChecklistNow = async (ticketId, checklistData) => {
+  {
     const payload = {
       ticket: ticketId,
       // Service-specific checks; the general checks travel as their own fields below.
@@ -371,13 +436,11 @@ export const submitInspectionChecklist = async (ticketId, checklistData) => {
       await api.post(`/services/service-tickets/${ticketId}/upload_photos/`, photoFormData);
       checklistData.onPhotosUploaded?.();
     }
-    
+
     if (data && data.id) {
       await api.post(`/services/inspections/${data.id}/complete/`);
     }
-    
+
     return data;
-  } catch (error) {
-    throw new Error(getApiErrorMessage(error, 'Unable to submit inspection checklist.'));
   }
 };

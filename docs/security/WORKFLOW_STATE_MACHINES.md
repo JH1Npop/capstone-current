@@ -223,6 +223,45 @@ cannot be later than today in the business timezone
 (`BUSINESS_DISPLAY_TIMEZONE`, UTC+8), so a payment entered between midnight and
 08:00 local time is not mistaken for a future date by the UTC server clock.
 
+### Progress billing (2026-11-19)
+
+A quotation may carry a payment schedule (`BillingMilestone`, 1 to 6 stages whose percentages add up to
+100%, each due on a trigger: quotation acceptance, work start, completion, handover, or a set date).
+Only the agreed stages are stored; `services/billing.py` works out each stage's amount (the last takes
+the rounding remainder), its due date (trigger date + 7 days, or the set date), what is paid (every
+non-voided payment for the job, applied to the stages in order) and its state:
+
+| State | When |
+| --- | --- |
+| `upcoming` | trigger not reached |
+| `due` | trigger reached, money left |
+| `overdue` | past the due date, money left (one client and office reminder per stage from the daily after-sales run) |
+| `paid` | nothing left |
+| `cancelled` | the job was cancelled |
+
+Rules: the office sets or changes the schedule while the quotation is `Draft`, `Sent` or `Rejected`;
+after `Accepted` it may record an agreed (paper) schedule once, before any progress payment, and then it
+is locked; never on a cancelled job. Progress payments (`SalesPayment.kind = 'progress'`) need an
+accepted quotation with a schedule, the required deposit fully paid first (the deposit still unlocks
+dispatch: `quotation_deposit_summary` and `ticket_deposit_gate` count only `kind = 'deposit'`), no
+confirmed sales record (then payments go on the sales record), and at most the remaining balance.
+After a cancellation, the refunded/kept decision (`settle-deposit`) covers all money received on the
+quotation, deposit and progress.
+
+### Offline field recording (2026-11-19)
+
+The technician app saves four field actions on the phone (IndexedDB through `localforage`, photos
+included) when the request fails for lack of network: arrival (with the GPS position taken at the time),
+start/pause/finish (`technician/jobs/{id}/status/`, finish with its photo files), the service checklist
+(`/api/checklist/`) and the inspection report. `frontend/src/utils/offlineQueue.js` sends them in the
+order taken when the browser comes back online, when a technician page opens, and every 30 seconds
+while something waits. The server applies every rule exactly as for a live request. If it refuses an
+action, the action counts as done when the job is already where it would have put it (for example
+already arrived); otherwise that action and the job's later saved actions move to "needs attention"
+with the server's reason and are never retried on their own. Recorded times are the server's time when
+the action arrives, not when it was taken on the phone. Finish Job accepts a checklist that is still
+waiting on the phone (the queue sends it first).
+
 ## Ticket progress records
 
 `TicketProgress` is an append-only operational timeline:

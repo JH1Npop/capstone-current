@@ -1276,6 +1276,43 @@ export const recordQuotationDeposit = async (quotationId, payment) => {
   }
 };
 
+// ── Progress billing: a quotation's payment schedule (services/billing.py) ──
+export const fetchBillingPlan = async (quotationId) => {
+  try {
+    const { data } = await api.get(`/services/quotations/${quotationId}/billing-plan/`);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load the payment schedule.'));
+  }
+};
+
+export const saveBillingPlan = async (quotationId, milestones) => {
+  try {
+    const { data } = await api.put(`/services/quotations/${quotationId}/billing-plan/`, { milestones });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to save the payment schedule.'));
+  }
+};
+
+export const recordProgressPayment = async (quotationId, payment) => {
+  try {
+    const { data } = await api.post(`/services/quotations/${quotationId}/progress-payments/`, payment);
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to record the payment.'));
+  }
+};
+
+export const fetchOverduePayments = async () => {
+  try {
+    const { data } = await api.get('/services/quotations/billing-overdue/');
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to load overdue payments.'));
+  }
+};
+
 export const voidQuotationDepositPayment = async (quotationId, paymentId, reason) => {
   try {
     const { data } = await api.post(`/services/quotations/${quotationId}/void-deposit-payment/`, {

@@ -556,9 +556,11 @@ export default function TechnicianMapNavigation() {
       });
       setArrived(true);
       setJob((current) => current ? { ...current, status: 'arrived_on_site' } : current);
-      setArrivalMessage(result?.validation_result === 'bypassed'
-        ? 'Arrival confirmed. Location validation was bypassed by superadmin.'
-        : 'Arrival confirmed.'
+      setArrivalMessage(result?.queued
+        ? 'No signal: your arrival (with this GPS position) is saved on this phone and sent when you have signal.'
+        : result?.validation_result === 'bypassed'
+          ? 'Arrival confirmed. Location validation was bypassed by superadmin.'
+          : 'Arrival confirmed.'
       );
     } catch (err) {
       setError(err.message || 'Unable to mark arrival.');

@@ -163,7 +163,14 @@ class SalesPayment(models.Model):
         ('other', 'Other'),
     ]
 
+    KIND_CHOICES = [
+        ('deposit', 'Deposit'),        # the pre-service deposit on the quotation (gates dispatch)
+        ('progress', 'Progress'),      # a billing-plan payment made before the sales record exists
+        ('sale', 'Sale'),              # recorded on the sales record after the work
+    ]
+
     id = models.BigAutoField(primary_key=True, db_column='sales_payment_id')
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='sale')
     sales_record = models.ForeignKey(
         SalesRecord,
         on_delete=models.PROTECT,
@@ -209,7 +216,58 @@ class SalesPayment(models.Model):
             ),
         ]
 
+    def save(self, *args, **kwargs):
+        # A new payment on a quotation is the deposit unless it was explicitly recorded as progress.
+        if self._state.adding and self.kind == 'sale' and self.quotation_id:
+            self.kind = 'deposit'
+        super().save(*args, **kwargs)
+
     def __str__(self):
         owner = self.sales_record.record_number if self.sales_record_id else f'Quotation #{self.quotation_id}'
         return f'{owner}: {self.amount} on {self.paid_on}'
+
+
+class BillingMilestone(models.Model):
+    """One stage of a quotation's payment schedule (progress billing), e.g. 30% / 60% / 10%.
+
+    Amounts, due dates and paid status are worked out from the quotation total, the job's dates and
+    the payments received (services/billing.py); only the agreed schedule is stored.
+    """
+
+    TRIGGER_CHOICES = [
+        ('acceptance', 'When the quotation is accepted'),
+        ('work_start', 'When work starts'),
+        ('completion', 'When the work is completed'),
+        ('handover', 'At handover'),
+        ('date', 'On a set date'),
+    ]
+
+    id = models.BigAutoField(primary_key=True, db_column='billing_milestone_id')
+    quotation = models.ForeignKey(
+        'services.QuotationRecord',
+        on_delete=models.CASCADE,
+        related_name='billing_milestones',
+    )
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    label = models.CharField(max_length=120)
+    percent = models.DecimalField(max_digits=5, decimal_places=2)
+    trigger = models.CharField(max_length=20, choices=TRIGGER_CHOICES)
+    due_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(percent__gt=0) & Q(percent__lte=100),
+                name='services_billing_milestone_percent_range',
+            ),
+            models.CheckConstraint(
+                condition=~Q(trigger='date') | Q(due_date__isnull=False),
+                name='services_billing_milestone_date_needs_due_date',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.label} ({self.percent}%)'
 

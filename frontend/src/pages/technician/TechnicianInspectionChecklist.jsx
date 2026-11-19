@@ -311,7 +311,7 @@ export default function TechnicianInspectionChecklist() {
     setMessage('Submitting inspection and site evidence…', 'info');
     const pendingPhotos = photos.filter((photo) => !uploadedPhotosRef.current.has(photo));
     try {
-      await submitInspectionChecklist(ticketId, {
+      const submittedResult = await submitInspectionChecklist(ticketId, {
         notes: techNotes.trim(),
         photos: pendingPhotos,
         onPhotosUploaded: () => pendingPhotos.forEach((photo) => uploadedPhotosRef.current.add(photo)),
@@ -331,7 +331,9 @@ export default function TechnicianInspectionChecklist() {
       });
       localStorage.removeItem(draftKey(ticketId));
       setSubmitted(true);
-      setMessage('Inspection submitted. The office will review it and plan the work.', 'success');
+      setMessage(submittedResult?.queued
+        ? 'No signal: the inspection report and its photos are saved on this phone and sent when you have signal.'
+        : 'Inspection submitted. The office will review it and plan the work.', 'success');
       setTimeout(() => navigate('/technician/dashboard'), 1500);
     } catch (submitError) {
       const errorMessage = submitError.message || 'Failed to submit inspection.';

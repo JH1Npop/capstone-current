@@ -1,4 +1,6 @@
 # Auto-split from services/views.py
+from decimal import Decimal
+
 from services.views.document_locks import KeepFinishedDocumentsMixin, TechniciansLeaveCancelledJobsMixin
 from django.http import FileResponse
 from django.db.models import Subquery
@@ -2769,9 +2771,98 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == 'respond':
             return [permissions.IsAuthenticated()]
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'payments', 'void_payment', 'settle_deposit']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'payments', 'void_payment', 'settle_deposit', 'progress_payments', 'billing_overdue']:
+            return [CanManageDocuments()]
+        if self.action == 'billing_plan' and self.request.method != 'GET':
             return [CanManageDocuments()]
         return [CanAccessDocuments()]
+
+    # ── Progress billing (services/billing.py) ──
+    @action(detail=True, methods=['get', 'put'], url_path='billing-plan')
+    @transaction.atomic
+    def billing_plan(self, request, pk=None):
+        """The payment schedule: read it (office, the client, the job's technicians) or set it (office)."""
+        from services.billing import billing_plan, plan_edit_refusal, validate_plan_rows
+        from services.models import BillingMilestone
+        from users.signals import log_activity
+
+        if request.method == 'GET':
+            return Response(billing_plan(self.get_object()))
+        quotation = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=pk)
+        refusal = plan_edit_refusal(quotation)
+        if refusal:
+            return Response({'detail': refusal}, status=status.HTTP_409_CONFLICT)
+        rows, error = validate_plan_rows(request.data.get('milestones'))
+        if error:
+            return Response({'milestones': [error]}, status=status.HTTP_400_BAD_REQUEST)
+        quotation.billing_milestones.all().delete()
+        BillingMilestone.objects.bulk_create([BillingMilestone(quotation=quotation, **row) for row in rows])
+        log_activity(
+            actor=request.user, category='documents', action='update', target=quotation,
+            message='Payment schedule set: ' + ', '.join(f"{row['label']} {row['percent']}%" for row in rows) + '.',
+        )
+        return Response(billing_plan(quotation))
+
+    @action(detail=True, methods=['post'], url_path='progress-payments')
+    @transaction.atomic
+    def progress_payments(self, request, pk=None):
+        """Record a payment toward the schedule before the sales record is confirmed."""
+        from services.billing import billing_plan, progress_payment_refusal
+
+        quotation = get_object_or_404(
+            self.get_queryset().select_for_update(of=('self',)).select_related('ticket__request'), pk=pk,
+        )
+        serializer = SalesPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refusal = progress_payment_refusal(quotation, serializer.validated_data['amount'])
+        if refusal:
+            return Response({'detail': refusal}, status=status.HTTP_409_CONFLICT)
+        active_sale = quotation.sales_records.filter(status='draft').first()
+        payment = serializer.save(quotation=quotation, sales_record=active_sale, recorded_by=request.user, kind='progress')
+        plan = billing_plan(quotation)
+        create_notification(
+            quotation.client,
+            (
+                f"A payment of PHP {payment.amount:,.2f} was recorded for quotation "
+                f"{quotation.quotation_number}. Remaining balance: PHP {Decimal(plan['balance']):,.2f}."
+            ),
+            'success',
+            title='Payment recorded',
+            ticket=quotation.ticket,
+        )
+        return Response(plan, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], url_path='billing-overdue')
+    def billing_overdue(self, request):
+        """Jobs with an overdue payment stage, most overdue money first (office)."""
+        from services.billing import billing_plan
+
+        rows = []
+        quotations = (
+            self.get_queryset()
+            .filter(status='Accepted', billing_milestones__isnull=False)
+            .exclude(ticket__status='Cancelled')
+            .distinct()
+        )
+        for quotation in quotations:
+            plan = billing_plan(quotation)
+            if Decimal(plan['overdue_amount']) <= 0:
+                continue
+            overdue = [row for row in plan['milestones'] if row['status'] == 'overdue']
+            client = quotation.client
+            rows.append({
+                'quotation_id': quotation.id,
+                'quotation_number': quotation.quotation_number,
+                'ticket_id': quotation.ticket_id,
+                'client_name': (client.get_full_name() or client.username) if client else '',
+                'service': quotation.ticket.request.service_type.name if quotation.ticket.request.service_type else '',
+                'overdue_amount': plan['overdue_amount'],
+                'balance': plan['balance'],
+                'oldest_due_on': min(row['due_on'] for row in overdue),
+                'stages': [row['label'] for row in overdue],
+            })
+        rows.sort(key=lambda row: (-Decimal(row['overdue_amount']), row['oldest_due_on']))
+        return Response(rows)
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -2943,6 +3034,7 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
             quotation=quotation,
             sales_record=active_sale,
             recorded_by=request.user,
+            kind='deposit',
         )
         quotation._prefetched_objects_cache.pop('deposit_payments', None)
         updated = quotation_deposit_summary(quotation)
