@@ -57,6 +57,7 @@ TABLE_ORDER = {
         "inventory_equipmentreturnrequest",
         "inventory_equipmentreturnrequestitem", "services_salesrecord",
         "services_salesrecordline", "services_salespayment",
+        "services_billingmilestone",
     ],
     "After-Sales and Communication": [
         "services_aftersalescase", "services_aftersalescaseevent",

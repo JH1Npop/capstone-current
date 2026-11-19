@@ -2365,6 +2365,14 @@
     "description": "Primary key and unique identifier of the sales payment."
    },
    {
+    "field": "kind",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Kind of payment: deposit, progress payment toward the schedule, or sale payment."
+   },
+   {
     "field": "sales_record_id",
     "type": "INTEGER",
     "pk": false,
@@ -2413,10 +2421,66 @@
     "description": "Reason the payment was voided, if it was cancelled."
    }
   ],
-  "description": "Stores the payments received against a sales record or quotation, with the amount, payment method, reference, and void reason if the payment was cancelled."
+  "description": "Stores the payments received against a sales record or quotation, with the amount, payment method, reference, payment kind (deposit, progress, or sale), and void reason if the payment was cancelled."
  },
  {
   "number": 44,
+  "name": "Billing Milestone",
+  "table": "billing_milestone",
+  "rows": [
+   {
+    "field": "billing_milestone_id",
+    "type": "INTEGER",
+    "pk": true,
+    "fk": false,
+    "null": false,
+    "description": "Primary key and unique identifier of the billing milestone."
+   },
+   {
+    "field": "quotation_id",
+    "type": "INTEGER",
+    "pk": false,
+    "fk": true,
+    "null": false,
+    "description": "Foreign key referencing the quotation record."
+   },
+   {
+    "field": "label",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Name of the payment stage, such as Downpayment or At handover."
+   },
+   {
+    "field": "percent",
+    "type": "DECIMAL",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Share of the quotation total due at this stage, in percent."
+   },
+   {
+    "field": "trigger",
+    "type": "VARCHAR",
+    "pk": false,
+    "fk": false,
+    "null": false,
+    "description": "Job event that makes the stage due, such as acceptance, start of work, handover, or a set date."
+   },
+   {
+    "field": "due_date",
+    "type": "DATE",
+    "pk": false,
+    "fk": false,
+    "null": true,
+    "description": "Fixed due date of the stage when its trigger is a set date."
+   }
+  ],
+  "description": "Stores the stages of a quotation's payment schedule, each with its label, share of the total in percent, the job event that makes it due, and a fixed due date when one is set."
+ },
+ {
+  "number": 45,
   "name": "After Sales Case",
   "table": "after_sales_case",
   "rows": [
@@ -2488,7 +2552,7 @@
   "description": "Stores the after-sales cases opened for a completed ticket, such as follow-ups, maintenance, complaints, and warranty claims, with their priority, status, and due date."
  },
  {
-  "number": 45,
+  "number": 46,
   "name": "After Sales Case Event",
   "table": "after_sales_case_event",
   "rows": [
@@ -2544,7 +2608,7 @@
   "description": "Stores the history of an after-sales case, recording each creation, assignment, and status change with the user who made it."
  },
  {
-  "number": 46,
+  "number": 47,
   "name": "Maintenance Schedule",
   "table": "maintenance_schedule",
   "rows": [
@@ -2632,7 +2696,7 @@
   "description": "Stores the maintenance schedule of a completed ticket, including the last service date, next due date, reminder date, status, and risk level."
  },
  {
-  "number": 47,
+  "number": 48,
   "name": "Customer Support Case",
   "table": "customer_support_case",
   "rows": [
@@ -2704,7 +2768,7 @@
   "description": "Stores the support conversations opened by clients, with their subject, category, priority, and status."
  },
  {
-  "number": 48,
+  "number": 49,
   "name": "Message",
   "table": "message",
   "rows": [
@@ -2760,7 +2824,7 @@
   "description": "Stores the messages exchanged between users, either directly or in a group, optionally linked to a ticket."
  },
  {
-  "number": 49,
+  "number": 50,
   "name": "Notification",
   "table": "notification",
   "rows": [
@@ -2848,7 +2912,7 @@
   "description": "Stores the notifications sent to users, with their title, message, type, status, and whether an email was requested and sent."
  },
  {
-  "number": 50,
+  "number": 51,
   "name": "Service Analytics",
   "table": "service_analytics",
   "rows": [
@@ -2912,7 +2976,7 @@
   "description": "Stores the daily service analytics, including the number of requests, average response and completion times, and satisfaction score."
  },
  {
-  "number": 51,
+  "number": 52,
   "name": "Technician Performance",
   "table": "technician_performance",
   "rows": [
@@ -2968,7 +3032,7 @@
   "description": "Stores the daily performance of each technician, including total work hours and average response and completion times."
  },
  {
-  "number": 52,
+  "number": 53,
   "name": "Demand Forecast",
   "table": "demand_forecast",
   "rows": [
@@ -3008,7 +3072,7 @@
   "description": "Stores the forecasted demand for each service type on a given date, with the confidence level of the forecast."
  },
  {
-  "number": 53,
+  "number": 54,
   "name": "Service Trend",
   "table": "service_trend",
   "rows": [

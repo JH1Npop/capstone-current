@@ -7560,3 +7560,30 @@ Change ledger:
   - Limit: sign-in lives in `sessionStorage`, so offline recording works while the app stays open (or in the background). If it is closed with no signal, the technician must sign in again when there is signal; their saved actions are then sent.
   - `manage.py test`: 1030 OK (7 skipped).
 - **Progress payment list and void (owner request, same day):** every billing-plan response now carries `payments` (the quotation's progress payments, voided ones included). The office gets full details (reference, notes, who recorded it, void reason); clients and technicians get only `QuotationRecordSerializer.PUBLIC_PAYMENT_FIELDS`. `BillingPlanPanel` lists them under "Payments toward this schedule", with **Void** (reason required) for the office, through the existing `void-deposit-payment` endpoint (any quotation payment). Tests: `test_progress_billing` +1 (10 with the deposit suite: 25 OK); spec 71 now also checks the client sees method and amount but not the reference: passed. `npm run build:frontend`: OK.
+
+## Session 2026-11-19 (cont.): paper diagrams refreshed for progress billing
+
+- **Owner request:** "proceed" on the four open items.
+- **Blocked:** applying `services.0072` to local `backend/db.sqlite3` (backup, then migrate) was refused by the auto-mode permission check. Nothing was copied or migrated. It is still open and needs the owner to run it or allow it.
+- **Schema and ERD:**
+  - `services_billingmilestone` was added to the "Inventory and Sales" group (`generate_afn_dbml.py`), to the ERD table order (`generate_afn_chen_drawio.py`), and as "BILLING MILESTONE" (`generate_afn_relationship_map.py`).
+  - `generate_afn_paper_schema.py` gains `EXTRA_COLUMNS`, so `label`, `percent` and `trigger` are kept for that table only. Widening `KEEP_PATTERNS` instead pulled in 5 unrelated columns, so it was not done.
+  - Result: 54 tables, 334 columns, 91 relationships. `sales_payment.kind` is now shown.
+  - ERD: the new entity sits beside `quotation_record`, with 85 crossings (was 84). A 1,500-step `optimize_erd.py 1500 7 3.0 resume` search found no better seating.
+- **Data dictionary:** descriptions were added for `billing_milestone` and its columns and for `sales_payment.kind`. `build_data_dictionary.py` reported no missing descriptions, and the `.docx` was rebuilt (54 tables, 334 rows).
+- **Context:**
+  - The client labels now name the payment schedule and payment due notices.
+  - The administrator labels now name the payment schedule and overdue payments.
+  - Still 44 flows and 0 crossings.
+- **Level 0:**
+  - The 9.0 to Administrator label now reads "financial records, overdue payments, and documents".
+  - A longer wording, tried first, reached the 2.0 box in the preview, so it was reverted. The longest line of each label is kept at its old width.
+  - Still 55 lines and 31 crossings; `check.py` reported 0 issues.
+- **Level 1:** unchanged, because process 3.0 is not affected.
+- **Validation:** `validate.py` on the merged file: ALL STRUCTURAL CHECKS PASSED (ERD 54/91/334 equals the schema; Context vs L0 and L1 vs L0 balance).
+- **Not rendered in diagrams.net.**
+- **Change ledger:**
+  - Tooling: `backend/scripts/{generate_afn_dbml.py, generate_afn_chen_drawio.py, generate_afn_relationship_map.py, generate_afn_paper_schema.py}`, `backend/scripts/diagram_pack/{build_context.py, build_data_dictionary.py, spec_level0.py}`.
+  - Generated: `backend/scripts/diagram_pack/{_erd_source.dbml, erd.xml, erd_grid.json, table_names.json, context.frag, level0.frag, level0.frag.gen.py, data_dictionary.json}`.
+  - Docs: `docs/academic/final_diagrams/{AFN-SERVE-Paper-Schema.dbml, AFN-SERVE-System-Diagrams.drawio, AFN-SERVE-Data-Dictionary.docx}` and this handoff.
+  - No application code changed.

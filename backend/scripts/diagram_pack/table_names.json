@@ -13,6 +13,7 @@
  "services_aftersalescase": "after_sales_case",
  "services_aftersalescaseevent": "after_sales_case_event",
  "services_arrivalvalidationlog": "arrival_validation_log",
+ "services_billingmilestone": "billing_milestone",
  "services_calendarclosure": "calendar_closure",
  "services_demandforecast": "demand_forecast",
  "services_fieldservicereport": "field_service_report",

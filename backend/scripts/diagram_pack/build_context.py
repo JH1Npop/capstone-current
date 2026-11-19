@@ -37,9 +37,9 @@ CLIENT = [
     ('in', 'Service request, service type, location, and schedule preference'),
     ('out', 'Request decision, ticket status, and schedule'),
     ('in', 'Quotation decision and turnover acceptance'),
-    ('out', 'Quotations, documents, deposit balance, and purchase history'),
+    ('out', 'Quotations, documents, deposit balance, payment schedule, and purchase history'),
     ('in', 'Messages, feedback, warranty concern, support case, and maintenance visit booking'),
-    ('out', 'Notifications, case updates, maintenance reminders, and warranty reminders'),
+    ('out', 'Notifications, case updates, payment due notices, maintenance reminders, and warranty reminders'),
 ]
 TECH = [
     ('in', 'Login, profile, and availability'),
@@ -55,8 +55,8 @@ ADMIN = [
     ('out', 'Request and ticket queues, dispatch status, and calendar'),
     ('in', 'Service catalog, SLA rule, skill, and inventory configuration'),
     ('out', 'Stock levels, low-stock alerts, and reservations'),
-    ('in', 'Quotation, deposit, payment, and document actions'),
-    ('out', 'Quotation, payment, and document records'),
+    ('in', 'Quotation, deposit, payment schedule, payment, and document actions'),
+    ('out', 'Quotation, payment schedule, payment, overdue payment, and document records'),
     ('in', 'After-sales, maintenance visit booking, message, report, and audit requests'),
     ('out', 'Dashboards, SLA indicators, reports, overdue and warranty alerts, and audit logs'),
 ]
