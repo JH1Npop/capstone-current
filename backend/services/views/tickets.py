@@ -2778,6 +2778,19 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
         return [CanAccessDocuments()]
 
     # ── Progress billing (services/billing.py) ──
+    def _plan_response(self, quotation):
+        """The schedule plus its progress payments: full details for the office, the safe fields for others."""
+        from services.billing import billing_plan
+        from services.models import SalesPayment
+
+        plan = billing_plan(quotation)
+        payments = SalesPayment.objects.filter(quotation=quotation, kind='progress').select_related('recorded_by').order_by('-paid_on', '-id')
+        rows = SalesPaymentSerializer(payments, many=True).data
+        if not is_admin_workspace_role(self.request.user.role):
+            rows = [{key: row.get(key) for key in self.serializer_class.PUBLIC_PAYMENT_FIELDS} for row in rows]
+        plan['payments'] = rows
+        return plan
+
     @action(detail=True, methods=['get', 'put'], url_path='billing-plan')
     @transaction.atomic
     def billing_plan(self, request, pk=None):
@@ -2787,7 +2800,7 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
         from users.signals import log_activity
 
         if request.method == 'GET':
-            return Response(billing_plan(self.get_object()))
+            return Response(self._plan_response(self.get_object()))
         quotation = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=pk)
         refusal = plan_edit_refusal(quotation)
         if refusal:
@@ -2801,7 +2814,7 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
             actor=request.user, category='documents', action='update', target=quotation,
             message='Payment schedule set: ' + ', '.join(f"{row['label']} {row['percent']}%" for row in rows) + '.',
         )
-        return Response(billing_plan(quotation))
+        return Response(self._plan_response(quotation))
 
     @action(detail=True, methods=['post'], url_path='progress-payments')
     @transaction.atomic
@@ -2830,7 +2843,7 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
             title='Payment recorded',
             ticket=quotation.ticket,
         )
-        return Response(plan, status=status.HTTP_201_CREATED)
+        return Response(self._plan_response(quotation), status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'], url_path='billing-overdue')
     def billing_overdue(self, request):

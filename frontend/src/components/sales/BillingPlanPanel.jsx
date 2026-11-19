@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchBillingPlan, recordProgressPayment, saveBillingPlan } from '../../api/services';
+import { fetchBillingPlan, recordProgressPayment, saveBillingPlan, voidQuotationDepositPayment } from '../../api/services';
 import { getLocalDateInputValue } from '../../utils/date';
 
 // Progress billing: the quotation's payment schedule (e.g. 30% / 60% / 10%). The office sets the
@@ -94,6 +94,22 @@ export default function BillingPlanPanel({ quotation, canManage = false }) {
     }
   };
 
+  const voidPayment = async (entry) => {
+    const reason = window.prompt('Why is this payment being voided? (for example: wrong amount typed)');
+    if (!reason?.trim()) return;
+    setBusy(`void-${entry.id}`);
+    setMessage(null);
+    try {
+      await voidQuotationDepositPayment(quotation.id, entry.id, reason.trim());
+      setPlan(await fetchBillingPlan(quotation.id));
+      setMessage({ tone: 'success', text: 'Payment voided. The balance was updated.' });
+    } catch (error) {
+      setMessage({ tone: 'error', text: error.message });
+    } finally {
+      setBusy('');
+    }
+  };
+
   return (
     <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4" aria-labelledby={`billing-plan-${quotation.id}`} data-testid="billing-plan">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -158,6 +174,32 @@ export default function BillingPlanPanel({ quotation, canManage = false }) {
             <button type="submit" disabled={Boolean(busy)} className="min-h-11 rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60">{busy === 'save' ? 'Saving...' : 'Save schedule'}</button>
           </div>
         </form>
+      ) : null}
+
+      {plan.has_plan && !editing && Array.isArray(plan.payments) && plan.payments.length ? (
+        <div className="mt-4 border-t border-slate-100 pt-3" data-testid="billing-payments">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payments toward this schedule</p>
+          <ul className="mt-2 space-y-2">
+            {plan.payments.map((entry) => (
+              <li key={entry.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs ${entry.is_voided ? 'opacity-60' : ''}`}>
+                <span className="min-w-0">
+                  <span className={`font-semibold text-slate-900 ${entry.is_voided ? 'line-through' : ''}`}>{money(entry.amount)} · {entry.method_label}</span>
+                  <span className="block text-slate-500">
+                    {entry.paid_on}
+                    {entry.reference ? ` · Ref ${entry.reference}` : ''}
+                    {canManage && entry.recorded_by_name ? ` · by ${entry.recorded_by_name}` : ''}
+                    {entry.is_voided ? ` · Voided${entry.void_reason ? `: ${entry.void_reason}` : ''}` : (canManage && entry.notes ? ` · ${entry.notes}` : '')}
+                  </span>
+                </span>
+                {canManage && !entry.is_voided && quotation.ticket_status !== 'Cancelled' ? (
+                  <button type="button" onClick={() => voidPayment(entry)} disabled={Boolean(busy)} className="min-h-11 rounded-lg px-2 font-semibold text-red-700 hover:text-red-800 disabled:opacity-50">
+                    {busy === `void-${entry.id}` ? 'Voiding...' : 'Void'}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       {canPay && !editing ? (

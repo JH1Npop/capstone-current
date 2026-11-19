@@ -247,6 +247,8 @@ dispatch: `quotation_deposit_summary` and `ticket_deposit_gate` count only `kind
 confirmed sales record (then payments go on the sales record), and at most the remaining balance.
 After a cancellation, the refunded/kept decision (`settle-deposit`) covers all money received on the
 quotation, deposit and progress.
+Progress payments are listed with the schedule (office: full details; client: date, method, amount) and are
+voided with a reason through `void-deposit-payment`, like deposits; a voided payment no longer counts.
 
 ### Offline field recording (2026-11-19)
 

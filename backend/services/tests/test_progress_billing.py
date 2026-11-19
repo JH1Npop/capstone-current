@@ -99,6 +99,30 @@ class ProgressBillingTests(JobWalker):
         self.assertEqual(self.pay(job, 7000).status_code, 409)
         self.assertEqual(SalesPayment.objects.get(quotation=job['quote'], amount=Decimal('3500')).kind, 'progress')
 
+    def test_progress_payments_are_listed_and_a_mistaken_one_can_be_voided(self):
+        job = self.job_with_quote()
+        self.set_plan(job)
+        self.step(job, 'quote_accepted')
+        recorded = self.as_(self.office).post(f"/api/services/quotations/{job['quote'].id}/progress-payments/", {
+            'amount': '4000', 'paid_on': business_today().isoformat(), 'method': 'gcash', 'reference': 'GC-777', 'notes': 'Typed 4000, should be 400',
+        }, format='json')
+        self.assertEqual(recorded.status_code, 201)
+        payment = recorded.data['payments'][0]
+        self.assertEqual((payment['amount'], payment['reference'], payment['kind']), ('4000.00', 'GC-777', 'progress'))
+
+        client_view = self.as_(job['client']).get(f"/api/services/quotations/{job['quote'].id}/billing-plan/").data
+        self.assertNotIn('reference', client_view['payments'][0])
+        self.assertNotIn('notes', client_view['payments'][0])
+
+        voided = self.as_(self.office).post(f"/api/services/quotations/{job['quote'].id}/void-deposit-payment/", {
+            'payment_id': payment['id'], 'reason': 'Wrong amount typed.',
+        }, format='json')
+        self.assertEqual(voided.status_code, 200)
+        plan = self.as_(self.office).get(f"/api/services/quotations/{job['quote'].id}/billing-plan/").data
+        self.assertEqual(plan['paid'], '0.00')
+        self.assertTrue(plan['payments'][0]['is_voided'])
+        self.assertEqual(plan['payments'][0]['void_reason'], 'Wrong amount typed.')
+
     def test_an_accepted_schedule_is_locked_but_a_paper_one_can_be_recorded_once(self):
         job = self.job_with_quote()
         self.set_plan(job)

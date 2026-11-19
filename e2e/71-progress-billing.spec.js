@@ -53,7 +53,7 @@ test.describe('Progress billing', () => {
     });
     expect(accepted.ok(), await accepted.text()).toBeTruthy();
     const paid = await request.post(`/api/services/quotations/${quoteId}/progress-payments/`, {
-      headers: office, data: { amount: '10000', paid_on: new Date().toISOString().slice(0, 10), method: 'gcash' },
+      headers: office, data: { amount: '10000', paid_on: new Date().toISOString().slice(0, 10), method: 'gcash', reference: 'GC-SECRET-1' },
     });
     expect(paid.status(), await paid.text()).toBe(201);
     // The downpayment was due a week after acceptance; move acceptance back so it is overdue.
@@ -69,7 +69,12 @@ test.describe('Progress billing', () => {
       await expect(schedule).toContainText('Downpayment');
       await expect(schedule).toContainText('Overdue');
       await expect(schedule).toContainText('Balance');
-      await expect(schedule.getByRole('button', { name: /schedule|Record payment/ })).toHaveCount(0);
+      await expect(schedule.getByRole('button', { name: /schedule|Record payment|Void/ })).toHaveCount(0);
+      // The client sees the payment (method and amount) but not the office's receipt reference.
+      const payments = page.getByTestId('billing-payments');
+      await expect(payments).toContainText('GCash');
+      await expect(payments).toContainText('10,000');
+      await expect(payments).not.toContainText('GC-SECRET-1');
     } finally {
       await context.close();
     }
