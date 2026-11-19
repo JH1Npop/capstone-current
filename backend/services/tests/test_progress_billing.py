@@ -52,6 +52,13 @@ class ProgressBillingTests(JobWalker):
         self.assertEqual(sum(amounts), Decimal(response.data['total']))
         self.assertEqual([row['status'] for row in response.data['milestones']], ['upcoming'] * 3)
 
+    def test_a_quotation_without_a_total_cannot_take_a_schedule(self):
+        job = self.job_with_quote()
+        QuotationRecord.objects.filter(pk=job['quote'].id).update(total_amount='')
+        response = self.set_plan(job)
+        self.assertEqual(response.status_code, 409)
+        self.assertIn('quotation total first', response.data['detail'])
+
     def test_bad_schedules_are_refused(self):
         job = self.job_with_quote()
         for rows, message in [

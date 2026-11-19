@@ -98,7 +98,7 @@ def billing_plan(quotation, *, today=None):
         else:
             due_on = started + timedelta(days=PAYMENT_WINDOW_DAYS) if started else None
 
-        if left <= 0:
+        if left <= 0 and amount > 0:
             state = 'paid'
         elif cancelled:
             state = 'cancelled'
@@ -138,6 +138,9 @@ def billing_plan(quotation, *, today=None):
 
 def plan_edit_refusal(quotation):
     """Why the office cannot change the schedule now, or None."""
+    if quotation_total(quotation) <= 0:
+        # Without a total every stage would be worth 0 and show as paid.
+        return 'Enter the quotation total first; the schedule splits that amount.'
     if quotation.ticket.status == 'Cancelled':
         return 'This job was cancelled, so its payment schedule can no longer change.'
     if quotation.status in EDITABLE_QUOTATION_STATUSES:

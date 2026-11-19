@@ -7553,3 +7553,9 @@ Change ledger:
   - Playwright 71 (billing) passed; 72 (offline: saved then sent; refused one reported) passed.
   - Playwright regression for the touched screens (specs 04, 05, 12, 24, 25, 35, 36, 40, 41, 42, 52, 53, 54, 59, 60, 62, 71, 72): 71 passed, 1 failed (54: the new support case had no linked request); 54 alone: passed. Watch 54 for a timing race on the Related request select.
 - Committed only; not deployed.
+- **Follow-up fixes (same day, after review):**
+  - A payment schedule is refused when the quotation has no total (every stage would have shown "paid"); test added (9 OK).
+  - Offline actions belong to the technician who took them (`ownerId` from the signed-in user); another person signing in on the same phone never sends or sees them.
+  - Spec 72 now also finishes a job with a photo offline: after the signal returns the job is Completed with 1 completion photo stored. Spec 72: passed.
+  - Limit: sign-in lives in `sessionStorage`, so offline recording works while the app stays open (or in the background). If it is closed with no signal, the technician must sign in again when there is signal; their saved actions are then sent.
+  - `manage.py test`: 1030 OK (7 skipped).

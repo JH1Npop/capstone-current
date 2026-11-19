@@ -22,6 +22,18 @@ const executors = {};
 const doneChecks = {};
 let flushing = null;
 
+// Each saved action belongs to the technician who took it. Another person signing in on the same
+// phone never sends (or sees) it; it waits until its owner signs in again.
+const currentUserId = () => {
+  try {
+    const user = JSON.parse(sessionStorage.getItem('afn_user') || 'null');
+    return user?.id != null ? String(user.id) : '';
+  } catch {
+    return '';
+  }
+};
+const isMine = (action) => Boolean(action.ownerId) && action.ownerId === currentUserId();
+
 const notify = () => {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_EVENT));
 };
@@ -56,8 +68,8 @@ const readAll = async (store) => {
   return sortByTime(items);
 };
 
-export const listPendingActions = () => readAll(pending);
-export const listFailedActions = () => readAll(failed);
+export const listPendingActions = async () => (await readAll(pending)).filter(isMine);
+export const listFailedActions = async () => (await readAll(failed)).filter(isMine);
 
 export const dismissFailedAction = async (id) => {
   await failed.removeItem(id);
@@ -69,6 +81,7 @@ export const queueAction = async (type, ticketId, args, label) => {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await pending.setItem(id, {
     id,
+    ownerId: currentUserId(),
     type,
     ticketId: String(ticketId),
     args,
@@ -104,7 +117,7 @@ export const flushOfflineQueue = async () => {
   flushing = (async () => {
     const blockedTickets = new Set();
     let sent = 0;
-    for (const action of await readAll(pending)) {
+    for (const action of (await readAll(pending)).filter(isMine)) {
       if (blockedTickets.has(action.ticketId)) continue;
       const run = executors[action.type];
       if (!run) continue;
@@ -127,7 +140,7 @@ export const flushOfflineQueue = async () => {
         blockedTickets.add(action.ticketId);
         const reason = serverReason(error);
         // This action and the rest of the job's waiting actions need the technician's attention.
-        for (const later of await readAll(pending)) {
+        for (const later of (await readAll(pending)).filter(isMine)) {
           if (later.ticketId !== action.ticketId) continue;
           await failed.setItem(later.id, { ...later, reason: later.id === action.id ? reason : 'Not sent because an earlier action for this job was refused.' });
           await pending.removeItem(later.id);

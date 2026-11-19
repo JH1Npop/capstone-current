@@ -9,6 +9,8 @@ import { loadAuthStateFromBackend, seedAuthState } from './helpers';
 // it (here: the office cancelled the job meanwhile), the technician is told instead of it being
 // retried for ever. Pages load with domcontentloaded: map tiles and fonts come from the internet.
 
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+
 const runShell = (script) => {
   const repoRoot = process.cwd();
   const python = process.platform === 'win32' ? path.join(repoRoot, 'venv', 'Scripts', 'python.exe') : 'python';
@@ -83,6 +85,41 @@ test.describe('Technician offline actions', () => {
       await context.setOffline(false);
       await expect(page.getByRole('alert').filter({ hasText: 'was not saved' })).toBeVisible({ timeout: 45000 });
       expect((await ticketOf(heldId)).status).toBe('Cancelled');
+
+      // 3. Finish Job with a photo while offline: the photo is kept on the phone and arrives later.
+      // (Made now: an earlier active job would turn the second job's button into "Hold or Finish Other Job".)
+      const finishId = Number(runShell([
+        'from django.utils import timezone',
+        'from services.business_time import business_today',
+        'from services.models import ServiceLocation, ServiceRequest, ServiceTicket, ServiceType',
+        'from users.models import User',
+        `tech = User.objects.get(username="${username}")`,
+        `service = ServiceType.objects.get(name="E2E Offline ${stamp}")`,
+        'req = ServiceRequest.objects.create(client=User.objects.get(username="client_test"), service_type=service, description="Offline carport", status="In Progress", auto_ticket_created=True)',
+        'ServiceLocation.objects.create(request=req, address="7 Rizal St, Calamba", city="Calamba", province="Laguna", latitude=14.2117, longitude=121.1653)',
+        'print("ID", ServiceTicket.objects.create(request=req, technician=tech, scheduled_date=business_today(), status="In Progress", start_time=timezone.now()).id)',
+      ].join('\n')).match(/ID (\d+)/)[1]);
+      const checklist = await request.post('/api/checklist/', {
+        headers: { Authorization: `Token ${techAuth.token}` },
+        data: { jobId: finishId, completed: { 0: true }, checklist_items: [{ index: 0, label: 'Do the work', completed: true }], notes: 'Done.', maintenance_required: false },
+      });
+      expect(checklist.ok(), await checklist.text()).toBeTruthy();
+      await page.goto('/technician/my-jobs', { waitUntil: 'domcontentloaded' });
+      const code = `TKT-${String(finishId).padStart(4, '0')}`;
+      const card = page.locator('div.rounded-xl').filter({ has: page.getByRole('button', { name: `Details for ${code}` }) }).first();
+      await card.getByRole('button', { name: 'Finish Job' }).click({ timeout: 30000 });
+      const finish = page.getByRole('dialog', { name: 'Finish Job' });
+      await finish.locator('input[type="file"]').setInputFiles({ name: 'done.png', mimeType: 'image/png', buffer: PNG });
+      await expect(finish.getByText('1 selected')).toBeVisible();
+      await context.setOffline(true);
+      await finish.getByRole('button', { name: 'Finish Job', exact: true }).click();
+      await expect(page.getByText(/No signal: saved on this phone.*finish job/)).toBeVisible({ timeout: 15000 });
+      expect((await ticketOf(finishId)).status).toBe('In Progress');
+
+      await context.setOffline(false);
+      await expect.poll(async () => (await ticketOf(finishId)).status, { timeout: 60000 }).toBe('Completed');
+      const photos = runShell(`from services.models import ServiceTicket\nprint("PHOTOS", len(ServiceTicket.objects.get(pk=${finishId}).completion_proof_images or []))`);
+      expect(Number(photos.match(/PHOTOS (\d+)/)[1])).toBe(1);
     } finally {
       await context.close();
     }
