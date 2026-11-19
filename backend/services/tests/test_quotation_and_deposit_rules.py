@@ -286,7 +286,7 @@ class DepositAfterCancellationTests(QuotationFixture):
         self.cancel_ticket(ticket)
         self.settle(quotation, 'kept', note='Cancellation fee.')
         client_view = self.as_(self.owner).get(f'/api/services/quotations/{quotation.id}/').data
-        self.assertEqual(set(client_view['deposit_payments'][0]), {'id', 'paid_on', 'method', 'method_label', 'amount', 'is_voided'})
+        self.assertEqual(set(client_view['deposit_payments'][0]), {'id', 'kind', 'paid_on', 'method', 'method_label', 'amount', 'is_voided'})
         self.assertEqual(client_view['deposit_outcome']['note'], 'Cancellation fee.')
         self.assertNotIn('recorded_by', client_view['deposit_outcome'])
         office_view = self.as_(self.superadmin).get(f'/api/services/quotations/{quotation.id}/').data

@@ -1,6 +1,6 @@
 Project AFN_SERVE_Paper_Schema {
   database_type: 'PostgreSQL'
-  Note: 'Paper schema: 53 entities; every table is named after its entity and its primary key is <table>_id; relationships and core business attributes. Generated from the active Django models by generate_afn_paper_schema.py; the Chen ERD is generated from this same file.'
+  Note: 'Paper schema: 54 entities; every table is named after its entity and its primary key is <table>_id; relationships and core business attributes. Generated from the active Django models by generate_afn_paper_schema.py; the Chen ERD is generated from this same file.'
 }
 
 Table equipment_return_request {
@@ -135,6 +135,15 @@ Table arrival_validation_log {
   service_longitude decimal(9,6)
 }
 
+Table billing_milestone {
+  billing_milestone_id bigint [pk, increment]
+  quotation_id bigint [not null, ref: > quotation_record.quotation_record_id]
+  label varchar(120) [not null]
+  percent decimal(5,2) [not null]
+  trigger varchar(20) [not null]
+  due_date date
+}
+
 Table calendar_closure {
   calendar_closure_id bigint [pk, increment]
   date date [not null]
@@ -220,6 +229,7 @@ Table quotation_record {
 
 Table sales_payment {
   sales_payment_id bigint [pk, increment]
+  kind varchar(20) [not null]
   sales_record_id bigint [ref: > sales_record.sales_record_id]
   quotation_id bigint [ref: > quotation_record.quotation_record_id]
   amount decimal(14,2) [not null]
@@ -532,6 +542,7 @@ TableGroup "Field Evidence and Documents" {
 }
 
 TableGroup "Inventory, Returns and Sales" {
+  billing_milestone
   equipment_return_request
   equipment_return_request_item
   inventory_category

@@ -122,8 +122,14 @@ const normalizeNextUrl = (nextUrl) => {
   }
 };
 
+// Whole lists are read 200 at a time (the server's maximum page size) instead of the default 10,
+// so a screen with 25,000 jobs makes about 125 requests instead of 2,500. The "next" links keep it.
+const FETCH_ALL_PAGE_SIZE = 200;
+
 export const fetchAllPages = async (url, config = {}) => {
-  const firstResponse = await api.get(url, config);
+  const hasPageSize = /[?&]page_size=/.test(url) || config?.params?.page_size !== undefined;
+  const firstConfig = hasPageSize ? config : { ...config, params: { ...(config.params || {}), page_size: FETCH_ALL_PAGE_SIZE } };
+  const firstResponse = await api.get(url, firstConfig);
   const firstData = firstResponse.data;
   if (!firstData || !Array.isArray(firstData.results)) {
     return extractPaginatedResults(firstData);

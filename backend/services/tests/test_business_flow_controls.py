@@ -244,8 +244,11 @@ class SalesPromptTests(FlowFixture):
         apply_ticket_status_change(service_ticket, 'Completed', changed_by=self.tech, notes='Work finished.')
         self.assertTrue(SalesRecord.objects.filter(ticket=service_ticket, status='draft').exists())
 
+        # A reported inspection visit cannot be closed as Completed at all (it goes through the
+        # office review; flow explorer rule 2026-11-18), so it never drafts a sales record.
         inspection = self.ticket('Inspection Completed', ticket_type='inspection', technician=self.tech)
-        apply_ticket_status_change(inspection, 'Completed', changed_by=self.tech, notes='Inspection only.')
+        with self.assertRaises(ValueError):
+            apply_ticket_status_change(inspection, 'Completed', changed_by=self.tech, notes='Inspection only.')
         self.assertFalse(SalesRecord.objects.filter(ticket=inspection).exists())
 
 

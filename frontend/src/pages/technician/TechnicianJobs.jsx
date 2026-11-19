@@ -69,6 +69,11 @@ const NAVIGATION_READY_STATUSES = new Set([
 ]);
 
 const ROUTE_REVIEW_STATUSES = new Set(['arrived_on_site', 'in_progress', 'on_hold']);
+// A reported inspection visit waits for the office review; the server refuses travel on it.
+const canTravel = (job) => (
+  (NAVIGATION_READY_STATUSES.has(job?.status) || job?.status === 'navigating')
+  && !(job?.status === 'inspection_completed' && job?.ticketType === 'inspection')
+);
 
 export default function TechnicianJobs() {
   const [timelineJob, setTimelineJob] = useState(null);
@@ -410,7 +415,7 @@ export default function TechnicianJobs() {
                       </div>
 
                       <div className="mt-auto flex flex-col gap-2">
-                        {(NAVIGATION_READY_STATUSES.has(job.status) || job.status === 'navigating') && (
+                        {canTravel(job) && (
                           hasDifferentActiveJob(job) ? (
                             <div className="w-full rounded-lg bg-slate-100 px-3 py-2 text-center text-xs font-medium text-slate-500">
                               Hold or finish {formatTicketId(activeJob.ticketId || activeJob.id)} first
@@ -940,7 +945,7 @@ export default function TechnicianJobs() {
                   <FiClock size={16} /> Put on Hold
                 </button>
               )}
-              {NAVIGATION_READY_STATUSES.has(selectedJob.status) || selectedJob.status === 'navigating' ? (
+              {canTravel(selectedJob) ? (
                 hasDifferentActiveJob(selectedJob) ? (
                   <div className="col-span-2 rounded-lg bg-slate-200 px-4 py-2.5 text-center text-sm font-medium text-slate-600">
                     Hold or finish {formatTicketId(activeJob.ticketId || activeJob.id)} before navigating

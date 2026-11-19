@@ -23,6 +23,7 @@ import {
   fetchAdminCalendarEvents,
   fetchServiceTypes,
   rescheduleServiceTicket,
+  declineRescheduleRequest,
   updateAdminCalendarClosure,
 } from '../../api/api';
 import { STATUS_META } from '../../components/ui/StatusBadge';
@@ -557,6 +558,13 @@ export default function AdminCalendar() {
     await loadCalendar();
     setRescheduleTicket(null);
     setSuccessMessage(`${formatTicketId(ticketId)} schedule updated.`);
+  };
+
+  const handleKeepCurrentDate = async (ticketId, notes) => {
+    await declineRescheduleRequest(ticketId, notes);
+    await loadCalendar();
+    setRescheduleTicket(null);
+    setSuccessMessage(`${formatTicketId(ticketId)} keeps its current date. The client was told.`);
   };
 
   const handleApplyAvailability = async ({ startDate, endDate, timeSlot, availabilityStatus, reason }) => {
@@ -1125,6 +1133,7 @@ export default function AdminCalendar() {
         ticket={rescheduleTicket}
         onClose={() => setRescheduleTicket(null)}
         onSubmit={handleRescheduleSubmit}
+        onKeepCurrentDate={handleKeepCurrentDate}
       />
     </Layout>
   );

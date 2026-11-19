@@ -3,6 +3,7 @@
 import hashlib
 import io
 import re
+from xml.sax.saxutils import escape as xml_escape
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.core.files.base import ContentFile
@@ -65,17 +66,59 @@ def _normalize_visible_loop_markers(xml):
     return xml
 
 
-def render_template_bytes(source, context):
+# Settings > Documents text printed at the end of the generated document when the template does
+# not place it itself: the footer on every document, the payment notice on money documents.
+PAYMENT_NOTICE_DOCUMENT_TYPES = {'quotation_proposal', 'installation_contract'}
+
+
+def _settings_paragraphs(context, document_type, template_text):
+    paragraphs = []
+    footer = str(context.get('document_footer') or '').strip()
+    if footer and 'document_footer' not in template_text:
+        paragraphs.append((footer, False))
+    notice = str(context.get('external_payment_notice') or '').strip()
+    if notice and document_type in PAYMENT_NOTICE_DOCUMENT_TYPES and 'external_payment_notice' not in template_text:
+        paragraphs.insert(0, (notice, True))
+    return paragraphs
+
+
+def _append_paragraphs(document_xml, paragraphs):
+    if not paragraphs:
+        return document_xml
+    markup = ''.join(
+        '<w:p><w:pPr><w:spacing w:before="120"/></w:pPr>'
+        f'<w:r><w:rPr>{"<w:i/>" if italic else ""}<w:sz w:val="18"/></w:rPr>'
+        f'<w:t xml:space="preserve">{xml_escape(line)}</w:t></w:r></w:p>'
+        for text, italic in paragraphs
+        for line in text.splitlines() if line.strip()
+    )
+    # Before the final section properties (page size/margins), or else before the end of the body.
+    last_section = document_xml.rfind('<w:sectPr')
+    if last_section != -1 and document_xml.rfind('</w:body>') > last_section:
+        return document_xml[:last_section] + markup + document_xml[last_section:]
+    return document_xml.replace('</w:body>', markup + '</w:body>', 1)
+
+
+def render_template_bytes(source, context, *, document_type=None):
     output = io.BytesIO()
     with ZipFile(source, 'r') as template_archive, ZipFile(output, 'w', compression=ZIP_DEFLATED) as rendered:
-        for entry in template_archive.infolist():
+        entries = template_archive.infolist()
+        template_text = ''.join(
+            template_archive.read(entry.filename).decode('utf-8', errors='ignore')
+            for entry in entries
+            if entry.filename in RENDERABLE_XML_PARTS or re.fullmatch(r'word/(header|footer)\d+\.xml', entry.filename)
+        )
+        for entry in entries:
             content = template_archive.read(entry.filename)
             if entry.filename in RENDERABLE_XML_PARTS or re.fullmatch(r'word/(header|footer)\d+\.xml', entry.filename):
                 xml = _join_split_tokens(content.decode('utf-8'))
                 # "[Client Name]" written in plain words is filled like "{{ client_name }}" (known fields only).
                 xml, _plain_names = convert_plain_names(xml, set(context))
                 xml = _normalize_visible_loop_markers(xml)
-                content = render_text(xml, context).encode('utf-8')
+                xml = render_text(xml, context)
+                if entry.filename == 'word/document.xml':
+                    xml = _append_paragraphs(xml, _settings_paragraphs(context, document_type, template_text))
+                content = xml.encode('utf-8')
             rendered.writestr(entry, content)
     return output.getvalue()
 
@@ -112,7 +155,7 @@ def render_version_preview(version, ticket, *, report_id=None):
     if version.file_format != 'docx':
         raise ValueError('Only DOCX and configured PDF template versions can be test rendered.')
     with version.file.open('rb') as source:
-        return render_template_bytes(source, context), context
+        return render_template_bytes(source, context, document_type=version.template.definition.code), context
 
 
 def _company_context():
@@ -124,6 +167,7 @@ def _company_context():
         'company_contact': '09171460224 / (042)9111107 | afnsunenergyserv@gmail.com',
         'prepared_by': 'C/ENGR. ARVIN F. NAPENAS',
         'prepared_title': 'General Manager',
+        'document_footer': getattr(settings_row, 'document_footer', '') or '',
     }
 
 
@@ -198,7 +242,7 @@ def render_custom_version_preview(version, *, ticket=None, client=None, project=
         custom_values=custom_values,
     )
     with version.file.open('rb') as source:
-        return render_template_bytes(source, context), context
+        return render_template_bytes(source, context, document_type=version.template.definition.code), context
 
 
 def generate_custom_document(instance, *, generated_by=None, template_id=None):
@@ -232,7 +276,7 @@ def generate_custom_document(instance, *, generated_by=None, template_id=None):
         return output
     try:
         with version.file.open('rb') as source:
-            rendered = render_template_bytes(source, context)
+            rendered = render_template_bytes(source, context, document_type=instance.definition.code)
     except Exception as exc:
         DocumentOutput.objects.create(
             definition=instance.definition,
@@ -300,7 +344,7 @@ def render_document_instance_preview(instance, *, template_id=None):
         values = resolve_template_field_values(version, instance.custom_field_values, context)
         return render_pdf_template(version, values), 'pdf'
     with version.file.open('rb') as source:
-        return render_template_bytes(source, context), 'docx'
+        return render_template_bytes(source, context, document_type=instance.definition.code), 'docx'
 
 
 def generate_archived_document(ticket, document_type, *, generated_by=None, report_id=None, template_id=None):
@@ -323,13 +367,13 @@ def generate_archived_document(ticket, document_type, *, generated_by=None, repo
             context = {**context, 'configured_field_values': resolved_values}
         elif version:
             with version.file.open('rb') as source:
-                rendered = render_template_bytes(source, context)
+                rendered = render_template_bytes(source, context, document_type=canonical_type)
         else:
             ensure_template_files()
             template_path = resolve_template_path(canonical_type)
             if not template_path.exists():
                 raise FileNotFoundError(f'Missing document template: {template_path}')
-            rendered = render_template_bytes(template_path, context)
+            rendered = render_template_bytes(template_path, context, document_type=canonical_type)
     except Exception as exc:
         DocumentOutput.objects.create(
             definition=definition, ticket=ticket, template_version=version,

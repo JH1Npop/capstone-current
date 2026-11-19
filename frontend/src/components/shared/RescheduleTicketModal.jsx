@@ -25,7 +25,7 @@ const SummaryPill = ({ label, value }) => (
   </div>
 );
 
-export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
+export default function RescheduleTicketModal({ ticket, onClose, onSubmit, onKeepCurrentDate }) {
   const [form, setForm] = useState({
     scheduledDate: '',
     scheduledTimeSlot: '',
@@ -41,7 +41,10 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
       scheduledDate: ticket.scheduledDate || ticket.date || getTodayKey(),
       scheduledTimeSlot: ticket.scheduledTimeSlot || ticket.time_slot || '',
       scheduledTime: normalizeTimeInput(ticket.scheduledTime || ticket.time),
-      notes: ticket.schedulingNotes || ticket.scheduling_notes || ''
+      // An answer to a client's request needs a fresh reason, not the old scheduling notes.
+      notes: (ticket.rescheduleRequested || ticket.reschedule_requested)
+        ? ''
+        : (ticket.schedulingNotes || ticket.scheduling_notes || '')
     });
     setError('');
     setSubmitting(false);
@@ -54,6 +57,23 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
   const serviceName = ticket.service || ticket.service_type || 'Service';
   const normalizedStatus = String(ticket.status || '').toLowerCase().replace(/\s+/g, '_');
   const canReschedule = !ticket.startTime && !ticket.start_time && !['in_progress', 'completed', 'cancelled'].includes(normalizedStatus);
+  const clientAskedToMove = Boolean(ticket.rescheduleRequested || ticket.reschedule_requested);
+  const clientReason = ticket.rescheduleReason || ticket.reschedule_reason || '';
+  const clientPreferredDate = ticket.preferredDate || '';
+
+  const handleKeepCurrentDate = async () => {
+    if (!form.notes.trim()) {
+      setError('Add a reason so the client knows why the current date stays.');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      await onKeepCurrentDate(ticketId, form.notes.trim());
+    } catch (submitError) {
+      setError(submitError.message || 'Unable to keep the current date.');
+      setSubmitting(false);
+    }
+  };
 
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -109,6 +129,18 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
           <div className="mx-6 mt-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <FiInfo className="mt-0.5 shrink-0 text-amber-600" />
             <p>Only tickets that have not started can be rescheduled.</p>
+          </div>
+        )}
+
+        {clientAskedToMove && (
+          <div className="mx-6 mt-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-testid="client-reschedule-request">
+            <FiInfo className="mt-0.5 shrink-0 text-amber-600" />
+            <div>
+              <p className="font-semibold">The client asked to move this appointment.</p>
+              {clientReason && <p className="mt-1">Reason: {clientReason}</p>}
+              {clientPreferredDate && <p className="mt-1">Date they asked for: {clientPreferredDate}</p>}
+              <p className="mt-1">Save a new schedule, or keep the current date and tell them why.</p>
+            </div>
           </div>
         )}
 
@@ -194,6 +226,16 @@ export default function RescheduleTicketModal({ ticket, onClose, onSubmit }) {
             >
               Dismiss
             </button>
+            {clientAskedToMove && onKeepCurrentDate && (
+              <button
+                type="button"
+                onClick={handleKeepCurrentDate}
+                disabled={submitting}
+                className="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Keep Current Date
+              </button>
+            )}
             <button
               type="submit"
               disabled={!canReschedule || submitting}

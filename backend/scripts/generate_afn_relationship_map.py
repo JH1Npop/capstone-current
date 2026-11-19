@@ -71,6 +71,7 @@ ENTITY_NAMES = {
     "services_salesrecord": "SALES RECORD",
     "services_salesrecordline": "SALES RECORD LINE",
     "services_salespayment": "SALES PAYMENT",
+    "services_billingmilestone": "BILLING MILESTONE",
 }
 
 

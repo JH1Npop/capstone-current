@@ -1,4 +1,6 @@
 # Auto-split from services/views.py
+from decimal import Decimal
+
 from services.views.document_locks import KeepFinishedDocumentsMixin, TechniciansLeaveCancelledJobsMixin
 from django.http import FileResponse
 from django.db.models import Subquery
@@ -50,6 +52,7 @@ from services.views.helpers import (
     preserve_inspection_evidence,
     build_ticket_search_query,
     clear_reschedule_request,
+    record_arrival_validation_log,
     create_notification,
     ensure_ticket_checklist_completed,
     ensure_ticket_completion_proof,
@@ -293,7 +296,7 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
             return [CanViewDocuments()]
         if self.action in ['generate_document', 'update_project_details', 'promote_to_project_profile']:
             return [CanManageDocuments()]
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'update_status', 'reschedule', 'inspection_decision']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'update_status', 'reschedule', 'decline_reschedule', 'inspection_decision']:
             return [CanManageServiceTickets()]
         elif self.action in ['start_work', 'complete_work', 'add_progress', 'add_notes', 'upload_photos', 'request_parts', 'contact_client']:
             return [CanViewTechnicianJobs()]
@@ -1275,6 +1278,7 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
                     return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
             previous_team_ids = get_ticket_team_member_ids(ticket)
+            previous_lead = ticket.technician
             if ticket.assigned_admin_id is None:
                 ticket.assigned_admin = _default_ticket_admin_for_actor(request.user)
             ticket.technician = technician
@@ -1299,16 +1303,24 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
                 assignment_status = 'Ready for Service'
 
             if assignment_status:
+                if assignment_status == 'For Inspection':
+                    dispatch_note = 'Dispatched for site inspection'
+                elif ticket.status == 'On Hold' and previous_lead and previous_lead.pk != technician.pk:
+                    # The office paused the job (for example its lead could not continue) and handed it on.
+                    dispatch_note = (
+                        f'Reassigned from {client_technician_label(previous_lead) or previous_lead.username} '
+                        f'to {client_technician_label(technician) or technician.username}; dispatched for service'
+                    )
+                elif ticket.status == 'On Hold':
+                    dispatch_note = 'Paused job dispatched again for service'
+                else:
+                    dispatch_note = 'Materials ready; dispatched for service'
                 try:
                     apply_ticket_status_change(
                         ticket,
                         assignment_status,
                         changed_by=request.user,
-                        notes=(
-                            'Dispatched for site inspection'
-                            if assignment_status == 'For Inspection'
-                            else 'Materials ready; dispatched for service'
-                        ),
+                        notes=dispatch_note,
                     )
                 except ValueError as exc:
                     transaction.set_rollback(True)
@@ -1841,6 +1853,41 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
                         request=ticket.request,
                     )
             return Response({'success': True, 'message': 'Status updated', 'ticket_id': ticket.id, 'status': resolved_status})
+
+        if resolved_status == 'On Hold':
+            # The office paused started work (for example the lead can no longer continue), so the
+            # job can be reassigned on the Dispatch Board. Everyone on the job hears it.
+            send_user_notification(
+                user=ticket.request.client,
+                title=f"Ticket #{ticket.id} Paused",
+                body=f"Work on ticket #{ticket.id} is paused for now. Our office will confirm when it continues.",
+                notification_type='warning',
+                ticket=ticket,
+                request=ticket.request,
+            )
+            for member in get_ticket_team_members(ticket):
+                if member != request.user:
+                    send_user_notification(
+                        user=member,
+                        title=f"Ticket #{ticket.id} Paused by the Office",
+                        body=f"The office paused ticket #{ticket.id}: {notes}",
+                        notification_type='warning',
+                        ticket=ticket,
+                        request=ticket.request,
+                    )
+            return Response({'success': True, 'message': 'Status updated', 'ticket_id': ticket.id, 'status': resolved_status})
+
+        if resolved_status == 'Arrived on Site':
+            # Office override for a technician whose GPS arrival is blocked (wrong pin, weak signal).
+            record_arrival_validation_log(
+                ticket=ticket,
+                technician=ticket.technician,
+                performed_by=request.user,
+                action='arrival_bypassed',
+                validation_result='bypassed',
+                validation_enabled=True,
+                remarks=f'Office confirmed arrival: {notes}'[:2000],
+            )
 
         send_user_notification(
             user=ticket.request.client,
@@ -2533,6 +2580,64 @@ class ServiceTicketViewSet(TechniciansLeaveCancelledJobsMixin, viewsets.ModelVie
                 'scheduled_time_slot': ticket.scheduled_time_slot,
             })
 
+    @action(detail=True, methods=['post'])
+    def decline_reschedule(self, request, pk=None):
+        """Office answers a client's reschedule request with "keep the current date"."""
+        with transaction.atomic():
+            ticket = self.get_locked_ticket()
+            if not user_can_manage_service_requests(request.user) and not CanManageServiceTickets().has_permission(request, self):
+                raise PermissionDenied('You do not have permission to answer reschedule requests.')
+
+            if not ticket.reschedule_requested:
+                return Response(
+                    {'error': 'This ticket has no open reschedule request.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            notes = str(request.data.get('notes') or '').strip()
+            if not notes:
+                return Response(
+                    {'error': 'Tell the client why the current date stays.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            client_reason = ticket.reschedule_reason or ''
+            clear_reschedule_request(ticket)
+            ticket._activity_reason = notes
+            ticket.save(update_fields=['reschedule_requested', 'reschedule_reason', 'reschedule_requested_at', 'updated_at'])
+
+            # The client's request overwrote the preferred date; put it back in line
+            # with the appointment that is being kept.
+            if ticket.scheduled_date:
+                service_request = ServiceRequest.objects.select_for_update().get(pk=ticket.request_id)
+                service_request.preferred_date = ticket.scheduled_date
+                service_request.preferred_time_slot = ticket.scheduled_time_slot or service_request.preferred_time_slot
+                service_request.save(update_fields=['preferred_date', 'preferred_time_slot', 'updated_at'])
+
+            when = ticket.scheduled_date.isoformat() if ticket.scheduled_date else 'the current date'
+            slot_label = f' ({ticket.scheduled_time_slot})' if ticket.scheduled_time_slot else ''
+            ServiceStatusHistory.objects.create(
+                ticket=ticket,
+                status=ticket.status,
+                changed_by=request.user,
+                notes=f'Reschedule request declined; kept {when}{slot_label}. Client asked: {client_reason or "no reason"}. Office: {notes}',
+            )
+
+            send_user_notification(
+                user=ticket.request.client,
+                title=f"Ticket #{ticket.id} Schedule Unchanged",
+                body=f"Your appointment stays on {when}{slot_label}. {notes}",
+                notification_type='warning',
+                ticket=ticket,
+                request=ticket.request,
+            )
+
+            return Response({
+                'status': 'Reschedule declined',
+                'scheduled_date': ticket.scheduled_date,
+                'scheduled_time_slot': ticket.scheduled_time_slot,
+            })
+
     @action(detail=True, methods=['get'])
     def inventory_summary(self, request, pk=None):
         ticket = self.get_object()
@@ -2666,9 +2771,111 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == 'respond':
             return [permissions.IsAuthenticated()]
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'payments', 'void_payment', 'settle_deposit']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'payments', 'void_payment', 'settle_deposit', 'progress_payments', 'billing_overdue']:
+            return [CanManageDocuments()]
+        if self.action == 'billing_plan' and self.request.method != 'GET':
             return [CanManageDocuments()]
         return [CanAccessDocuments()]
+
+    # ── Progress billing (services/billing.py) ──
+    def _plan_response(self, quotation):
+        """The schedule plus its progress payments: full details for the office, the safe fields for others."""
+        from services.billing import billing_plan
+        from services.models import SalesPayment
+
+        plan = billing_plan(quotation)
+        payments = SalesPayment.objects.filter(quotation=quotation, kind='progress').select_related('recorded_by').order_by('-paid_on', '-id')
+        rows = SalesPaymentSerializer(payments, many=True).data
+        if not is_admin_workspace_role(self.request.user.role):
+            rows = [{key: row.get(key) for key in self.serializer_class.PUBLIC_PAYMENT_FIELDS} for row in rows]
+        plan['payments'] = rows
+        return plan
+
+    @action(detail=True, methods=['get', 'put'], url_path='billing-plan')
+    @transaction.atomic
+    def billing_plan(self, request, pk=None):
+        """The payment schedule: read it (office, the client, the job's technicians) or set it (office)."""
+        from services.billing import billing_plan, plan_edit_refusal, validate_plan_rows
+        from services.models import BillingMilestone
+        from users.signals import log_activity
+
+        if request.method == 'GET':
+            return Response(self._plan_response(self.get_object()))
+        quotation = get_object_or_404(self.get_queryset().select_for_update(of=('self',)), pk=pk)
+        refusal = plan_edit_refusal(quotation)
+        if refusal:
+            return Response({'detail': refusal}, status=status.HTTP_409_CONFLICT)
+        rows, error = validate_plan_rows(request.data.get('milestones'))
+        if error:
+            return Response({'milestones': [error]}, status=status.HTTP_400_BAD_REQUEST)
+        quotation.billing_milestones.all().delete()
+        BillingMilestone.objects.bulk_create([BillingMilestone(quotation=quotation, **row) for row in rows])
+        log_activity(
+            actor=request.user, category='documents', action='update', target=quotation,
+            message='Payment schedule set: ' + ', '.join(f"{row['label']} {row['percent']}%" for row in rows) + '.',
+        )
+        return Response(self._plan_response(quotation))
+
+    @action(detail=True, methods=['post'], url_path='progress-payments')
+    @transaction.atomic
+    def progress_payments(self, request, pk=None):
+        """Record a payment toward the schedule before the sales record is confirmed."""
+        from services.billing import billing_plan, progress_payment_refusal
+
+        quotation = get_object_or_404(
+            self.get_queryset().select_for_update(of=('self',)).select_related('ticket__request'), pk=pk,
+        )
+        serializer = SalesPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refusal = progress_payment_refusal(quotation, serializer.validated_data['amount'])
+        if refusal:
+            return Response({'detail': refusal}, status=status.HTTP_409_CONFLICT)
+        active_sale = quotation.sales_records.filter(status='draft').first()
+        payment = serializer.save(quotation=quotation, sales_record=active_sale, recorded_by=request.user, kind='progress')
+        plan = billing_plan(quotation)
+        create_notification(
+            quotation.client,
+            (
+                f"A payment of PHP {payment.amount:,.2f} was recorded for quotation "
+                f"{quotation.quotation_number}. Remaining balance: PHP {Decimal(plan['balance']):,.2f}."
+            ),
+            'success',
+            title='Payment recorded',
+            ticket=quotation.ticket,
+        )
+        return Response(self._plan_response(quotation), status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], url_path='billing-overdue')
+    def billing_overdue(self, request):
+        """Jobs with an overdue payment stage, most overdue money first (office)."""
+        from services.billing import billing_plan
+
+        rows = []
+        quotations = (
+            self.get_queryset()
+            .filter(status='Accepted', billing_milestones__isnull=False)
+            .exclude(ticket__status='Cancelled')
+            .distinct()
+        )
+        for quotation in quotations:
+            plan = billing_plan(quotation)
+            if Decimal(plan['overdue_amount']) <= 0:
+                continue
+            overdue = [row for row in plan['milestones'] if row['status'] == 'overdue']
+            client = quotation.client
+            rows.append({
+                'quotation_id': quotation.id,
+                'quotation_number': quotation.quotation_number,
+                'ticket_id': quotation.ticket_id,
+                'client_name': (client.get_full_name() or client.username) if client else '',
+                'service': quotation.ticket.request.service_type.name if quotation.ticket.request.service_type else '',
+                'overdue_amount': plan['overdue_amount'],
+                'balance': plan['balance'],
+                'oldest_due_on': min(row['due_on'] for row in overdue),
+                'stages': [row['label'] for row in overdue],
+            })
+        rows.sort(key=lambda row: (-Decimal(row['overdue_amount']), row['oldest_due_on']))
+        return Response(rows)
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -2840,6 +3047,7 @@ class QuotationRecordViewSet(viewsets.ModelViewSet):
             quotation=quotation,
             sales_record=active_sale,
             recorded_by=request.user,
+            kind='deposit',
         )
         quotation._prefetched_objects_cache.pop('deposit_payments', None)
         updated = quotation_deposit_summary(quotation)

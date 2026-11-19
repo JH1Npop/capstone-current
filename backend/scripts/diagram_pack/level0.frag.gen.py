@@ -145,7 +145,7 @@ F = [
     ('p8', 'gemini', 'analytics summary and question', 'B', 'T'),
     ('gemini', 'p8', 'generated explanation', 'T', 'B'),
     ('admin', 'p9', 'quotation, deposit, sales, and document decisions', 'B', 'T'),
-    ('p9', 'admin', 'financial and document records', 'T', 'B'),
+    ('p9', 'admin', 'financial records, overdue payments, and documents', 'T', 'B'),
     ('sadmin', 'p9', 'document and template management', 'B', 'T'),
     ('client', 'p9', 'quotation decision', 'B', 'T'),
     ('p9', 'client', 'quotations, documents, balances, and purchase history', 'T', 'B'),

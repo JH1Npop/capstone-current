@@ -867,9 +867,11 @@ AFN Service Management
         email_sent = False
         if send_email:
             try:
+                from notifications.notification_utils import with_support_line
+
                 send_mail(
                     subject,
-                    message_body,
+                    with_support_line(message_body),
                     settings.DEFAULT_FROM_EMAIL,
                     [client.email],
                     fail_silently=False,

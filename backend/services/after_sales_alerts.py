@@ -12,7 +12,7 @@ from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 
 from notifications.models import Notification
-from notifications.notification_utils import email_notifications_enabled, in_app_notifications_enabled
+from notifications.notification_utils import email_notifications_enabled, in_app_notifications_enabled, with_support_line
 from services.business_time import business_today
 
 from .maintenance import evaluate_warranty_status
@@ -53,7 +53,7 @@ def _send_warranty_email(ticket, client, service_name, days_left):
     try:
         send_mail(
             f"Warranty Reminder - {service_name} warranty ends {ticket.warranty_end_date}",
-            body,
+            with_support_line(body),
             settings.DEFAULT_FROM_EMAIL,
             [client.email],
             fail_silently=False,

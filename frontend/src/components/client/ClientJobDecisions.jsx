@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import BillingPlanPanel from '../sales/BillingPlanPanel';
 import { FiCheckCircle, FiFileText, FiHome, FiXCircle } from 'react-icons/fi';
 import { confirmTurnover, fetchTicketQuotation, fetchTicketTurnover, respondToQuotation } from '../../api/api';
 
@@ -160,13 +162,14 @@ export default function ClientJobDecisions({ ticketId, onChanged, jobCancelled =
               )}
               {Array.isArray(visibleQuotation.deposit_payments) && visibleQuotation.deposit_payments.some((payment) => !payment.is_voided) ? (
                 <ul className="mt-3 space-y-1 border-t border-blue-200 pt-3 text-xs text-slate-600">
-                  {visibleQuotation.deposit_payments.filter((payment) => !payment.is_voided).map((payment) => (
+                  {visibleQuotation.deposit_payments.filter((payment) => !payment.is_voided && (!payment.kind || payment.kind === 'deposit')).map((payment) => (
                     <li key={payment.id}>{formatDate(payment.paid_on)} · {payment.method_label} · {formatMoney(payment.amount)}</li>
                   ))}
                 </ul>
               ) : null}
             </div>
           ) : null}
+          <BillingPlanPanel quotation={visibleQuotation} />
           {visibleQuotation.payment_terms ? <p className="mt-3 text-sm text-slate-600"><span className="font-medium text-slate-800">Payment terms:</span> {visibleQuotation.payment_terms}</p> : null}
           {visibleQuotation.warranty_terms ? <p className="mt-1 text-sm text-slate-600"><span className="font-medium text-slate-800">Warranty:</span> {visibleQuotation.warranty_terms}</p> : null}
 
@@ -247,7 +250,13 @@ export default function ClientJobDecisions({ ticketId, onChanged, jobCancelled =
               </button>
             )}
           </div>
-          {visibleTurnover.status !== 'accepted' ? <p className="mt-3 text-sm text-slate-600">Please confirm that the finished work was handed over to you. If something is wrong, contact our office before confirming.</p> : null}
+          {visibleTurnover.status !== 'accepted' ? <p className="mt-3 text-sm text-slate-600">Please confirm that the finished work was handed over to you. If something is wrong, report it to our office before confirming.</p> : null}
+          <Link
+            to={`/client/support?ticket=${ticketId}&category=complaint&subject=${encodeURIComponent('Problem with the finished work')}`}
+            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Report a problem
+          </Link>
         </section>
       ) : null}
     </div>

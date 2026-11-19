@@ -265,7 +265,11 @@ export default function TechnicianDashboard() {
     setError('');
     setIsStartingJob(true);
     try {
-      await updateJobStatus(currentJob.id, 'in_progress');
+      const started = await updateJobStatus(currentJob.id, 'in_progress');
+      if (started?.queued) {
+        setActionMessage(`No signal: starting ${formatTicketId(currentJob.id)} is saved on this phone and sent when you have signal.`);
+        return;
+      }
       setActionMessage(`${formatTicketId(currentJob.id)} is now in progress.`);
       await loadData({ silent: true });
     } catch (err) {

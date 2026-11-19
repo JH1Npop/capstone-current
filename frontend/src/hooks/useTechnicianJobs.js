@@ -8,8 +8,10 @@ import {
 } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { formatTicketId } from '../utils/roleIds';
+import { listPendingActions } from '../utils/offlineQueue';
 
 // The server accepts these completion photos (services/views/helpers.py).
+const OFFLINE_SAVED = 'No signal: saved on this phone and sent when you have signal';
 const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const MAX_PHOTOS = 20;
@@ -188,6 +190,10 @@ export function useTechnicianJobs() {
         reportError(response.error);
         return;
       }
+      if (response?.queued) {
+        showSuccess(`${OFFLINE_SAVED} (${code}: ${newStatus === 'in_progress' ? (resuming ? 'resume' : 'start') : 'status change'})`);
+        return;
+      }
       await loadJobs();
       showSuccess(newStatus === 'in_progress' ? `${code} ${resuming ? 'resumed' : 'started'}. Work is now in progress.` : `${code} updated.`);
     } catch (statusError) {
@@ -210,7 +216,11 @@ export function useTechnicianJobs() {
     try {
       setIsUpdatingStatus(true);
       setUpdatingJobId(jobId);
-      await updateJobStatus(jobId, 'on_hold', trimmedReason);
+      const held = await updateJobStatus(jobId, 'on_hold', trimmedReason);
+      if (held?.queued) {
+        showSuccess(`${OFFLINE_SAVED} (${formatTicketId(job?.ticketId || jobId)}: put on hold)`);
+        return true;
+      }
       await loadJobs();
       showSuccess(`${formatTicketId(job?.ticketId || jobId)} is on hold. Resume it when you are ready to continue.`);
       return true;
@@ -234,7 +244,10 @@ export function useTechnicianJobs() {
       return;
     }
 
-    if (!completionJob.checklistCompleted) {
+    // A checklist saved on this phone while offline counts: the queue sends it before Finish Job.
+    const checklistWaiting = (await listPendingActions())
+      .some((action) => action.type === 'checklist' && action.ticketId === String(completionJob.id));
+    if (!completionJob.checklistCompleted && !checklistWaiting) {
       setCompletionError('Complete and submit the job checklist before closing this job.');
       return;
     }
@@ -254,13 +267,15 @@ export function useTechnicianJobs() {
           quantity_used: Number(materialUsage[String(reservation.id)] || 0)
         }));
 
-      await updateJobStatus(completionJob.id, 'completed', completionNotes, proofImages.map((image) => image.file), inventoryUsage);
-      await loadJobs();
+      const finished = await updateJobStatus(completionJob.id, 'completed', completionNotes, proofImages.map((image) => image.file), inventoryUsage);
+      if (!finished?.queued) await loadJobs();
       setCompletionJob(null);
       setProofImages([]);
       setCompletionNotes('');
       setMaterialUsage({});
-      showSuccess(`${formatTicketId(completionJob.ticketId || completionJob.id)} completed. It is now in Job History.`);
+      showSuccess(finished?.queued
+        ? `${OFFLINE_SAVED} (${formatTicketId(completionJob.ticketId || completionJob.id)}: finish job with its photos)`
+        : `${formatTicketId(completionJob.ticketId || completionJob.id)} completed. It is now in Job History.`);
     } catch (completeError) {
       setCompletionError(completeError.message || 'Unable to complete job.');
     } finally {

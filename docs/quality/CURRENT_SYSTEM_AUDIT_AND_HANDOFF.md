@@ -7455,3 +7455,154 @@ Change ledger:
   - Conclusion: no functional failures; all failures were network load timeouts that pass on rerun.
 - **Handoff cleanup:** removed 92 stale duplicate "Current objective (latest)" lines.
 - **Release to staging:** see the result lines below.
+  - Aiven host resolved (168.144.217.119) before the push.
+  - Pushed `feature/analytics-decision-workspace` (`391285b`) and merged to `staging-deploy` as `01da732`, pushed.
+  - Verified: staging `/health/ready/` 200; `POST /api/services/maintenance-schedules/1/book-visit/` went 404 to 401, so the new release is live.
+  - Note: the next daily scheduler run will send a one-time catch-up batch of overdue after-sales alerts and warranty reminder emails.
+  - Still open: owner hand-check on phones.
+
+## Session 2026-11-18 (later): office "Keep Current Date" for client reschedule requests
+
+- **Owner request:** the office could only answer a client's reschedule request by setting a new date; add a way to say no.
+- **Backend:** `POST /api/services/service-tickets/{id}/decline_reschedule/` (`services.tickets.manage`, same permission as `reschedule`). It needs an open request and a reason (`notes`). It clears `reschedule_requested/_reason/_requested_at`, keeps the schedule, and resets the request's `preferred_date`/`preferred_time_slot` to the kept appointment (the client's ask had overwritten them). It writes a `ServiceStatusHistory` line ("Reschedule request declined; kept ...") and sends the client a "Schedule Unchanged" notification. The calendar feed (`views_dashboard.py`) now carries `reschedule_reason` while a request is open. No migration.
+- **Frontend:** `RescheduleTicketModal` shows the client's reason and asked-for date, starts with an empty reason when answering a request, and offers **Keep Current Date** (`declineRescheduleRequest` in `api/admin.js`); wired in `AdminServiceTickets` and `AdminCalendar`. `CalendarEventDetailsModal` shows the reason and an "Answer Reschedule Request" button for any ticket with an open request.
+- **Tests:** `services/tests/test_reschedule_decline.py` (5 tests) and `e2e/68-admin-keep-current-date.spec.js`.
+- **Docs:** `ROUTE_API_CAPABILITY_MATRIX.md` (service tickets row), `WORKFLOW_STATE_MACHINES.md` (open item replaced by the rule), `SYSTEM_POSSIBILITY_COVERAGE.md` (row now Covered).
+- **Extra browsers:** a WebKit/Firefox run was tried and dropped: `npx playwright install webkit firefox` failed twice on this connection (download timeout, then stuck at 0 MB). Not configured.
+- **Validation run:**
+  - `manage.py test services.tests.test_reschedule_decline`: 5 OK.
+  - `manage.py test`: 1003 tests OK (7 skipped).
+  - `npm run build:frontend`: OK.
+  - Playwright: spec 68 passed (first run failed only on its own notification lookup, fixed: titles come back as TKT-####); 11.5, 13.A4, 13.S4 passed.
+
+## Session 2026-11-18 (later): dead-end review and office ways out of stuck field work
+
+- **Owner request:** check the flows for dead ends, fix them, and cover them in E2E. Reviewed every request, ticket, quotation/deposit, handover, maintenance and reschedule state against the code. Not dead ends (verified): rejected or expired quotation (office revises), scope change after acceptance (draft sales record stays editable), deposit on a cancelled job (`settle-deposit`), equipment holds on cancel (`release_ticket_reservations`), held job (lead resumes or office re-dispatches), handover problem (client opens a Support case linked to the ticket), maintenance plans, client reschedule (fixed earlier today).
+- **Dead end fixed:** a job `Arrived on Site` or `In Progress` whose lead could not continue could not be reassigned (`ASSIGNABLE_TICKET_STATUSES`), could not be paused by the office (no screen action), and its technician could not be deactivated; the only way out was "Dismiss ticket". Service Tickets now offers **Pause job** (`update_status` → `On Hold`, reason required; client told "Paused" without the internal reason, every lead/crew member told with it) and, for held jobs, **Reassign in Dispatch** (Update Assignment).
+- **Gaps fixed:** **Confirm arrival** (`update_status` → `Arrived on Site`, reason required, writes an `arrival_bypassed` `ArrivalValidationLog` with the office user) for a technician blocked by the GPS radius; **Dismiss ticket** now asks "Client withdrew" (prefix `Client backed out:`, unchanged default) or "Office cancelled (our side)" (prefix `Office cancelled:`).
+- **Files:** `backend/services/views/tickets.py` (`update_status` On Hold and Arrived on Site branches), `frontend/src/api/services.js` (`officeUpdateTicketStatus`, cancel cause), `frontend/src/pages/admin/AdminServiceTickets.jsx`; tests `services/tests/test_office_stuck_job_actions.py` (5) and `e2e/69-office-stuck-job-actions.spec.js`; docs `WORKFLOW_STATE_MACHINES.md`, `ROUTE_API_CAPABILITY_MATRIX.md`, `SYSTEM_POSSIBILITY_COVERAGE.md`. No migration.
+- **Validation run:**
+  - `manage.py test services.tests.test_office_stuck_job_actions`: 5 OK. `manage.py test`: 1008 OK (7 skipped).
+  - `npm run build:frontend`: OK.
+  - Playwright: spec 69 passed. Specs 11, 17, 58-63, 68: 15 passed, 2 failed (11.8 click timeout, 63 `page.goto` timeout). 11.8 alone: passed. 63 alone: failed twice more on `page.goto` to `/technician/map-navigation` waiting for "load"; at the same time `curl` to fonts.googleapis.com failed after 25 s and to tile.openstreetmap.org after 40 s. That page is not touched by this change; 63 passed in the earlier full run today. Recheck 63 on a working connection.
+- Committed only (owner asked to proceed); not deployed to staging.
+
+## Session 2026-11-18 (later): flow explorer (every event, every role, every job type)
+
+- **Owner request:** "try every bit of flow": test every possible event in any order, not just single steps.
+- **New test:** `backend/services/tests/test_flow_explorer.py`. Seeded random walks over all four job types; at each step either the next forward action or any of 33 events (client, lead, crew, a technician not on the job, office; allowed or not). After every event it checks: no 5xx, refused call changes nothing, request matches ticket, closed stays closed, field work has a lead, technician availability, history note on every status change, no open reschedule on closed tickets, crew/outsiders refused, and no dead end (from every new state the job can still be driven to Completed inside a rolled-back savepoint; on failure it prints the seed, the trail and why each forward action was refused). Default 12 walks x 30 steps (about 2-3 minutes); `FLOW_EXPLORER_WALKS` / `FLOW_EXPLORER_STEPS` / `FLOW_EXPLORER_SEED` widen or replay.
+- **Bugs it found, all fixed:**
+  1. A reported inspection visit could be travelled/worked again (technician "Start travel", or office manual status) or set `Ready for Service` / `Awaiting Materials` by hand. That skipped the office review and left an inspection visit that could never finish. `validate_ticket_transition` now lets a reported inspection visit leave only through Review Inspection or a cancel; the technician map and My Jobs no longer offer "Start travel" on it.
+  2. The service checklist (`POST /api/checklist/`) was accepted on an inspection visit; it marked the shared record complete, after which the inspection report's `complete` returned "Inspection completed" without moving the visit (stuck `In Progress`). Now refused on inspection visits; `complete` on an already-complete record still moves an open inspection visit on (repairs existing ones).
+  3. Locked lookups by id answered 500 for an unknown/hidden id (`views/inspection.py` x5, `views/document_templates.py` x3); now 404.
+- **Files:** `backend/services/views/helpers.py`, `backend/services/views/inspection.py`, `backend/services/views/document_templates.py`, `backend/api/views.py`, `frontend/src/pages/technician/TechnicianMapNavigation.jsx`, `frontend/src/pages/technician/TechnicianJobs.jsx`; tests `test_flow_explorer.py`, `test_flow_explorer_findings.py` (6), updated `test_ticket_and_request_state_rules.py` and `test_business_flow_controls.py` (the reported-inspection pairs are now refused); docs `WORKFLOW_STATE_MACHINES.md` ("Flow explorer"), `SYSTEM_POSSIBILITY_COVERAGE.md`.
+- **Validation run:**
+  - First explorer runs: dead end at seed 20261120 (bug 1), 500 on `inspections/1/complete/` (bug 3); 80 walks x 40 steps from seed 7000: 4 dead ends (seeds 7010, 7031, 7054, 7058: bugs 1 and 2).
+  - After the fixes: seeds 7000+ 80 x 40: OK (2,280 events, 91 states checked for dead ends, every ticket status reached); fresh seeds 91000+ 80 x 45: OK (2,496 events, 85 states).
+  - `manage.py test`: 1014 ran, 1 error (`test_business_flow_controls` used the internal helper to close a reported inspection as Completed, now refused by rule 1; test updated, file rerun: 21 OK).
+  - `npm run build:frontend`: OK.
+  - Playwright specs 10 and 32-46 (technician pages and the major flow): 20 passed.
+- Committed only; not deployed to staging.
+
+## Session 2026-11-19: follow-ups 1-4 after the flow explorer
+
+- **Reassign wording:** `assign` from `On Hold` to a different lead now writes "Reassigned from <old> to <new>; dispatched for service" (same lead: "Paused job dispatched again for service"); "Materials ready; dispatched for service" stays for `Awaiting Materials`. Test added to `test_office_stuck_job_actions.py`.
+- **Stuck-visit finder:** `manage.py find_stuck_inspection_visits` (dry-run default) lists (A) inspection visits travelling/on site/working with an already-complete report, and (B) inspection visits in `Ready for Service`/`Awaiting Materials` (review skipped). `--apply` moves A to `Inspection Completed`; B is reported only. Local `backend/db.sqlite3` dry-run: A=0, B=0. Not run on staging (needs a Render shell or the scheduler).
+- **E2E:** `e2e/70-technician-reported-inspection.spec.js`: the server refuses travel on a reported inspection and the map shows "Your inspection report is in..." with no Start button (loads with `domcontentloaded` so slow map tiles do not time it out); 70.2: the client's **Report a problem** on the handover opens Support with a new case filled in (ticket, "Service concern", subject).
+- **Client handover:** `ClientJobDecisions.jsx` adds **Report a problem** (link to `/client/support?ticket=&category=complaint&subject=`); `ClientSupport.jsx` pre-fills a new case from those query parameters.
+- **Validation run:** `test_office_stuck_job_actions` 5 OK; `test_flow_explorer_findings` 6 OK (includes the finder command); `npm run build:frontend` OK; spec 70: 2 passed.
+
+## Session 2026-11-19 (cont.): explorer extended, hourly scheduler, settings wired, bigger pages
+
+- **Flow explorer extended** (`test_flow_explorer.py`): equipment request / approve / reject, handover finalize and client confirm, maintenance plan (finished jobs now start one; book a visit, complete), sales record prepare/confirm, a second job for the same lead and crew (half the walks), and time passing ("a day passes": dates move back a day, then `check_sla_violations`, `auto_assign_tickets`, `send_maintenance_alerts`, `send_after_sales_alerts`; "the scheduler runs": `run_operational_automations --mode frequent`). New rules: reserved stock equals open holds and never exceeds stock; a closed job holds no stock; a technician leads at most one job in the field; a plan has at most one open visit; Turned Over has a finalized handover. Default lowered to 8 walks x 30 steps.
+- **Bug found and fixed:** the office's manual status change could put a lead "in the field" on two jobs (seed 52035: office "In Progress" on the lead's paused job while they worked another). `validate_ticket_transition` now refuses it for every path. `test_ticket_and_request_state_rules` fixture now gives each ticket its own lead (it reused one).
+- **Scheduler (#10, owner: hourly in office hours):** `.github/workflows/daily-operational-automations.yml` adds `43 0-10 * * 1-6` (08:43-18:43 Manila, Mon-Sat) running `--mode frequent` (SLA checks, auto-dispatch); 08:17 keeps `--mode daily`; manual runs choose the mode. Before this, the workflow only ran `--mode daily`, so SLA checks and auto-dispatch never ran on staging. Auto-dispatch still obeys the Auto-dispatch setting. Takes effect once the workflow file is on `main`.
+- **Settings (#11, owner: remove System Name, wire the rest):** System Name removed from the Settings page (value kept in the database). Support Email ends client emails ("Need help? Write to ...", `notifications.notification_utils.with_support_line`: system emails, client notification emails, warranty and maintenance reminders) and shows on the signed-in client Support page (`GET /api/messages/support-cases/contact/`; still not on the public landing endpoint, as `api/test_landing_page.py` requires). Document Footer prints at the end of every DOCX document and External Payment Notice on quotations and contracts (`dynamic_document_generation._settings_paragraphs`), unless the template places the field itself. Note: the staging notice text includes a staff instruction ("Enter the confirmed amount before printing.") that will now print; edit it in Settings if needed.
+- **Paging (#9, partial):** `afn_service_management/pagination.py` (`StandardPagination`: default 10, `?page_size=` up to 200) is the default; `fetchAllPages` asks for 200, so whole-list screens make about 20x fewer requests. Per-screen server paging remains the full fix. Calls that already asked for more (progress 100, location trail 250) now get it (up to 200).
+- **Validation run:**
+  - `manage.py test`: 1021 OK (7 skipped).
+  - Explorer 60 x 45 seeds 31000+: OK (1,878 events, 225 states). Seeds 52000+: found the two-jobs bug at 52035; after the fix, seeds 52000-52035 x 45: OK (1,127 events, 179 states).
+  - `npm run build:frontend`: OK.
+  - Playwright specs 15-31 and 47-56: 52 passed, 2 failed (18 assign message, 19 filters click; the run took 8.9 h because the machine slept). 18 and 19 alone: 4 passed.
+
+## Session 2026-11-19 (cont.): progress billing and offline field recording (owner request)
+
+- **Progress billing:**
+  - Migration `services.0072_billing_milestones_payment_kind` (additive): new `BillingMilestone` table (quotation, sort order, label, percent, trigger `acceptance`/`work_start`/`completion`/`handover`/`date`, due date) and `SalesPayment.kind` (`deposit`/`progress`/`sale`; existing quotation payments set to `deposit`, others `sale`; a new quotation payment without an explicit kind is a deposit).
+  - `services/billing.py` works out amounts, due dates (trigger + 7 days or the set date), payment allocation in order and states (upcoming/due/overdue/paid/cancelled).
+  - Endpoints on `QuotationRecordViewSet`: `GET/PUT billing-plan/` (read: `documents.view`, the client, the job's technicians; write: `documents.manage`), `POST progress-payments/`, `GET billing-overdue/` (`documents.manage`).
+  - The schedule is editable until accepted; after acceptance it can be recorded once if none exists, then it is locked; never on a cancelled job.
+  - Progress payments need the deposit paid first and no confirmed sales record, and are capped at the balance.
+  - `quotation_deposit_summary` (and so `ticket_deposit_gate`) counts only deposit payments; `received_deposit_amount` (the cancel refunded/kept decision) counts all quotation money.
+  - Daily `send_after_sales_alerts` sends one client and office reminder per overdue stage.
+  - UI: `components/sales/BillingPlanPanel.jsx` (office in Documents under the deposit panel; client read-only on the request page); Sales Records shows "Overdue payments" for the office; the deposit panel and the client's deposit list show deposit payments only.
+- **Offline field recording:**
+  - `frontend/src/utils/offlineQueue.js` (uses the existing `localforage` dependency; nothing added): arrival, start/pause/finish (with photos), service checklist and inspection report are saved on the phone when the request fails for lack of network and sent in order when online, when a technician page opens, and every 30 s.
+  - A refused action counts as done if the job is already there; otherwise it and the job's later actions show as "not saved" with the server's reason.
+  - `OfflineQueueBanner` shows in the technician Layout. Callers say "No signal: saved on this phone ..." instead of claiming success. Finish Job accepts a checklist still waiting on the phone.
+  - Known limit: recorded times are the server's replay time.
+- **Docs:** `WORKFLOW_STATE_MACHINES.md` (Progress billing, Offline field recording), `ROUTE_API_CAPABILITY_MATRIX.md`, `SYSTEM_POSSIBILITY_COVERAGE.md`.
+- **Not done (needs the owner):**
+  - Migration 0072 is not applied to the local `backend/db.sqlite3` (only test databases).
+  - The paper diagrams (ERD, data dictionary) do not show `billing_milestone` or `sales_payment.kind` yet.
+- **Validation run:**
+  - `test_progress_billing` 8 OK; deposit/cancel/sales/analytics suites 77 OK.
+  - `manage.py test`: 1029 ran, 1 failure (`test_quotation_and_deposit_rules` pins the client's payment fields; `kind` added to the expected set, file and billing tests rerun: 23 OK).
+  - `makemigrations --check`: no changes.
+  - `npm run build:frontend`: OK.
+  - Playwright 71 (billing) passed; 72 (offline: saved then sent; refused one reported) passed.
+  - Playwright regression for the touched screens (specs 04, 05, 12, 24, 25, 35, 36, 40, 41, 42, 52, 53, 54, 59, 60, 62, 71, 72): 71 passed, 1 failed (54: the new support case had no linked request); 54 alone: passed. Watch 54 for a timing race on the Related request select.
+- Committed only; not deployed.
+- **Follow-up fixes (same day, after review):**
+  - A payment schedule is refused when the quotation has no total (every stage would have shown "paid"); test added (9 OK).
+  - Offline actions belong to the technician who took them (`ownerId` from the signed-in user); another person signing in on the same phone never sends or sees them.
+  - Spec 72 now also finishes a job with a photo offline: after the signal returns the job is Completed with 1 completion photo stored. Spec 72: passed.
+  - Limit: sign-in lives in `sessionStorage`, so offline recording works while the app stays open (or in the background). If it is closed with no signal, the technician must sign in again when there is signal; their saved actions are then sent.
+  - `manage.py test`: 1030 OK (7 skipped).
+- **Progress payment list and void (owner request, same day):** every billing-plan response now carries `payments` (the quotation's progress payments, voided ones included). The office gets full details (reference, notes, who recorded it, void reason); clients and technicians get only `QuotationRecordSerializer.PUBLIC_PAYMENT_FIELDS`. `BillingPlanPanel` lists them under "Payments toward this schedule", with **Void** (reason required) for the office, through the existing `void-deposit-payment` endpoint (any quotation payment). Tests: `test_progress_billing` +1 (10 with the deposit suite: 25 OK); spec 71 now also checks the client sees method and amount but not the reference: passed. `npm run build:frontend`: OK.
+
+## Session 2026-11-19 (cont.): paper diagrams refreshed for progress billing
+
+- **Owner request:** "proceed" on the four open items.
+- **Blocked:** applying `services.0072` to local `backend/db.sqlite3` (backup, then migrate) was refused by the auto-mode permission check. Nothing was copied or migrated. It is still open and needs the owner to run it or allow it.
+- **Schema and ERD:**
+  - `services_billingmilestone` was added to the "Inventory and Sales" group (`generate_afn_dbml.py`), to the ERD table order (`generate_afn_chen_drawio.py`), and as "BILLING MILESTONE" (`generate_afn_relationship_map.py`).
+  - `generate_afn_paper_schema.py` gains `EXTRA_COLUMNS`, so `label`, `percent` and `trigger` are kept for that table only. Widening `KEEP_PATTERNS` instead pulled in 5 unrelated columns, so it was not done.
+  - Result: 54 tables, 334 columns, 91 relationships. `sales_payment.kind` is now shown.
+  - ERD: the new entity sits beside `quotation_record`, with 85 crossings (was 84). A 1,500-step `optimize_erd.py 1500 7 3.0 resume` search found no better seating.
+- **Data dictionary:** descriptions were added for `billing_milestone` and its columns and for `sales_payment.kind`. `build_data_dictionary.py` reported no missing descriptions, and the `.docx` was rebuilt (54 tables, 334 rows).
+- **Context:**
+  - The client labels now name the payment schedule and payment due notices.
+  - The administrator labels now name the payment schedule and overdue payments.
+  - Still 44 flows and 0 crossings.
+- **Level 0:**
+  - The 9.0 to Administrator label now reads "financial records, overdue payments, and documents".
+  - A longer wording, tried first, reached the 2.0 box in the preview, so it was reverted. The longest line of each label is kept at its old width.
+  - Still 55 lines and 31 crossings; `check.py` reported 0 issues.
+- **Level 1:** unchanged, because process 3.0 is not affected.
+- **Validation:** `validate.py` on the merged file: ALL STRUCTURAL CHECKS PASSED (ERD 54/91/334 equals the schema; Context vs L0 and L1 vs L0 balance).
+- **Not rendered in diagrams.net.**
+- **Change ledger:**
+  - Tooling: `backend/scripts/{generate_afn_dbml.py, generate_afn_chen_drawio.py, generate_afn_relationship_map.py, generate_afn_paper_schema.py}`, `backend/scripts/diagram_pack/{build_context.py, build_data_dictionary.py, spec_level0.py}`.
+  - Generated: `backend/scripts/diagram_pack/{_erd_source.dbml, erd.xml, erd_grid.json, table_names.json, context.frag, level0.frag, level0.frag.gen.py, data_dictionary.json}`.
+  - Docs: `docs/academic/final_diagrams/{AFN-SERVE-Paper-Schema.dbml, AFN-SERVE-System-Diagrams.drawio, AFN-SERVE-Data-Dictionary.docx}` and this handoff.
+  - No application code changed.
+
+## Deployment record 2026-11-19
+
+- **Owner approval:** "go" on the local migration, the staging release, and the scheduler on `main`.
+- **Local migration:**
+  - `services.0072_billing_milestones_payment_kind` was applied to `backend/db.sqlite3` with `manage.py migrate services`: OK.
+  - A backup was taken first: `backend/db.sqlite3.backup-before-0072-20261119-220654` (git-ignored).
+- **Pre-release checks (local, run this session):**
+  - `manage.py check`: 0 issues. `manage.py makemigrations --check --dry-run`: No changes detected.
+  - `manage.py test`: Ran 1031 tests, OK (skipped=7).
+  - `npm run build:frontend`: built OK.
+  - `nslookup` of the Aiven host via 8.8.8.8 resolved.
+  - The `origin/staging-deploy` tree equals `391285b` (the branch commit of the last release), so the merge brings only this branch's changes.
+- **Release content:**
+  - Keep Current Date; office Pause job / Reassign / Confirm arrival; office-cancel cause.
+  - Flow explorer fixes: a reported inspection is locked to review; one lead in the field on one job; 404 instead of 500.
+  - Hourly scheduler mode; support email and document footer; lists read 200 at a time.
+  - Progress billing, with the payment list and void; offline field recording; paper diagrams.
+- **Migration on staging:** `services.0072` (additive table plus a `kind` column; existing quotation payments are relabelled `deposit`). It runs in the Render start command.

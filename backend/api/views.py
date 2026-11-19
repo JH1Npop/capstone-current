@@ -502,6 +502,14 @@ def checklist_view(request):
             {'error': 'Start the job before you submit its checklist.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    # The inspection report and the service checklist share one record. A service checklist saved
+    # on an inspection visit marked that record complete, so the report could no longer move the
+    # visit to "Inspection Completed" and the job was stuck (flow explorer finding, 2026-11-18).
+    if ticket.ticket_type == 'inspection':
+        return Response(
+            {'error': 'This is an inspection visit. Submit the inspection report instead of the service checklist.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     completed = _parse_json_field(request.data.get('completed', {}), {}) or {}
     if not isinstance(completed, dict):
         return Response({'completed': 'Checklist completion data must be a JSON object.'}, status=400)

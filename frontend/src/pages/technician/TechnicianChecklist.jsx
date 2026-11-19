@@ -681,7 +681,7 @@ export default function TechnicianChecklist() {
     setMessage('Submitting checklist…', 'info');
 
     try {
-      await submitChecklist({
+      const checklistResult = await submitChecklist({
         jobId: ticketId,
         ticketId,
         serviceType,
@@ -718,9 +718,11 @@ export default function TechnicianChecklist() {
       });
 
       setMessage(
-        followUpRequired
-          ? 'Checklist submitted. The after-sales team will receive a handoff when this job completes. Opening the job so you can finish it…'
-          : 'Checklist submitted. Opening the job so you can finish it…',
+        checklistResult?.queued
+          ? 'No signal: the checklist and its photos are saved on this phone and sent when you have signal. Opening the job…'
+          : followUpRequired
+            ? 'Checklist submitted. The after-sales team will receive a handoff when this job completes. Opening the job so you can finish it…'
+            : 'Checklist submitted. Opening the job so you can finish it…',
         'success',
       );
       localStorage.removeItem(checklistDraftKey(ticketId));

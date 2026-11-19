@@ -80,6 +80,7 @@ TABLE_GROUPS = {
         "services_salesrecord",
         "services_salesrecordline",
         "services_salespayment",
+        "services_billingmilestone",
     },
     "After-Sales and Communication": {
         "services_aftersalescase",

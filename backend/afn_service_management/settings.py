@@ -473,7 +473,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    # 10 per page by default; ?page_size= up to 200 (afn_service_management/pagination.py).
+    'DEFAULT_PAGINATION_CLASS': 'afn_service_management.pagination.StandardPagination',
     'PAGE_SIZE': 10,
     'DEFAULT_RENDERER_CLASSES': (
         [

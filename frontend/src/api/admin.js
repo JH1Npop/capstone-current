@@ -345,6 +345,15 @@ export const fetchInspectionDetails = async (ticketId) => {
   }
 };
 
+export const declineRescheduleRequest = async (ticketId, notes) => {
+  try {
+    const { data } = await api.post(`/services/service-tickets/${ticketId}/decline_reschedule/`, { notes });
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Unable to keep the current date.'));
+  }
+};
+
 export const rescheduleServiceTicket = async (ticketId, schedulingData) => {
   try {
     const payload = {

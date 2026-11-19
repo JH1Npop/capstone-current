@@ -46,6 +46,8 @@ AUDIT_FK = re.compile(
     r"^(created|updated|changed|voided|reviewed|confirmed|client_confirmed|completed|submitted|prepared|generated|"
     r"finalized|uploaded|granted|reopened|recorded|performed|location_validation_updated)_by$"
 )
+# Columns a table needs although their names fall outside KEEP_PATTERNS (widening the pattern pulls in unrelated columns).
+EXTRA_COLUMNS = {"services_billingmilestone": {"label", "percent", "trigger"}}
 # CalendarClosure is a current workflow (admin-controlled closures) the older paper schema omitted.
 EXTRA_TABLE_GROUPS = {"Service Intake, Dispatch and Progress": {"services_calendarclosure"}}
 
@@ -62,6 +64,9 @@ def business_columns(model: type[models.Model]) -> list[models.Field]:
     chosen = []
     for field in model._meta.local_fields:
         if keep(field) or isinstance(field, (models.JSONField, models.BinaryField, models.FileField)):
+            continue
+        if field.column in EXTRA_COLUMNS.get(model._meta.db_table, ()):
+            chosen.append(field)
             continue
         if DROP_PATTERNS.search(field.column) or not KEEP_PATTERNS.search(field.column):
             continue

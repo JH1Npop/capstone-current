@@ -223,6 +223,47 @@ cannot be later than today in the business timezone
 (`BUSINESS_DISPLAY_TIMEZONE`, UTC+8), so a payment entered between midnight and
 08:00 local time is not mistaken for a future date by the UTC server clock.
 
+### Progress billing (2026-11-19)
+
+A quotation may carry a payment schedule (`BillingMilestone`, 1 to 6 stages whose percentages add up to
+100%, each due on a trigger: quotation acceptance, work start, completion, handover, or a set date).
+Only the agreed stages are stored; `services/billing.py` works out each stage's amount (the last takes
+the rounding remainder), its due date (trigger date + 7 days, or the set date), what is paid (every
+non-voided payment for the job, applied to the stages in order) and its state:
+
+| State | When |
+| --- | --- |
+| `upcoming` | trigger not reached |
+| `due` | trigger reached, money left |
+| `overdue` | past the due date, money left (one client and office reminder per stage from the daily after-sales run) |
+| `paid` | nothing left |
+| `cancelled` | the job was cancelled |
+
+Rules: the office sets or changes the schedule while the quotation is `Draft`, `Sent` or `Rejected`;
+after `Accepted` it may record an agreed (paper) schedule once, before any progress payment, and then it
+is locked; never on a cancelled job. Progress payments (`SalesPayment.kind = 'progress'`) need an
+accepted quotation with a schedule, the required deposit fully paid first (the deposit still unlocks
+dispatch: `quotation_deposit_summary` and `ticket_deposit_gate` count only `kind = 'deposit'`), no
+confirmed sales record (then payments go on the sales record), and at most the remaining balance.
+After a cancellation, the refunded/kept decision (`settle-deposit`) covers all money received on the
+quotation, deposit and progress.
+Progress payments are listed with the schedule (office: full details; client: date, method, amount) and are
+voided with a reason through `void-deposit-payment`, like deposits; a voided payment no longer counts.
+
+### Offline field recording (2026-11-19)
+
+The technician app saves four field actions on the phone (IndexedDB through `localforage`, photos
+included) when the request fails for lack of network: arrival (with the GPS position taken at the time),
+start/pause/finish (`technician/jobs/{id}/status/`, finish with its photo files), the service checklist
+(`/api/checklist/`) and the inspection report. `frontend/src/utils/offlineQueue.js` sends them in the
+order taken when the browser comes back online, when a technician page opens, and every 30 seconds
+while something waits. The server applies every rule exactly as for a live request. If it refuses an
+action, the action counts as done when the job is already where it would have put it (for example
+already arrived); otherwise that action and the job's later saved actions move to "needs attention"
+with the server's reason and are never retried on their own. Recorded times are the server's time when
+the action arrives, not when it was taken on the phone. Finish Job accepts a checklist that is still
+waiting on the phone (the queue sends it first).
+
 ## Ticket progress records
 
 `TicketProgress` is an append-only operational timeline:
@@ -356,7 +397,69 @@ path, is tested by `services/tests/test_job_type_cancel_matrix.py`.
   list." (`services/views/document_locks.TechniciansLeaveCancelledJobsMixin`, and the technician job
   actions). Reading the job and its documents still works. Technicians not on the job get the normal
   answer, so nothing about it is revealed.
-- Open: the office has no way to refuse a client's reschedule request except by setting a date.
+- Client reschedule request (`reschedule_requested`): opened by the client (`request_reschedule`, before work starts). The office closes it either with `reschedule` (new date) or with `decline_reschedule` (2026-11-18: reason required; date unchanged; the request's preferred date/slot is reset to the kept appointment; history line and a "Schedule Unchanged" client notification). The client may ask again afterwards.
+
+## Office ways out of stuck field work (2026-11-18)
+
+Dead-end review: a job that had reached `Arrived on Site` or `In Progress` could not be reassigned
+(`ASSIGNABLE_TICKET_STATUSES` stops at `Navigating`/`On Hold`), only the lead could pause it, and the
+office screen had no status action, so its only way out was "Dismiss ticket", and its technician could
+not be deactivated. The office now uses the existing validated `update_status` from Service Tickets:
+
+- **Pause job** (`Navigating`, `Arrived on Site`, `In Progress` → `On Hold`, reason required): the client
+  gets "Ticket #N Paused" (without the internal reason); every lead and crew member gets "Paused by the
+  Office" with the reason. The held job is then reassigned with **Update Assignment** on the Dispatch Board
+  (`assign` from `On Hold` moves it to `Ready for Service`), which also frees the old lead for deactivation.
+- **Confirm arrival** (`Navigating` → `Arrived on Site`, reason required): for a technician blocked by the
+  GPS radius check (wrong pin, weak signal). Writes an `ArrivalValidationLog` row (`arrival_bypassed`,
+  `performed_by` = the office user, remarks "Office confirmed arrival: …").
+- **Dismiss ticket** asks who is cancelling: "Client withdrew" (reason prefix `Client backed out:`, as
+  before) or "Office cancelled (our side)" (prefix `Office cancelled:`), so the history no longer blames
+  the client for the company's decision.
+
+Tests: `services/tests/test_office_stuck_job_actions.py`, `e2e/69-office-stuck-job-actions.spec.js`.
+
+## Flow explorer (2026-11-18)
+
+`services/tests/test_flow_explorer.py` walks jobs of all four types (direct, direct with deposit,
+inspection first, inspection first with deposit) with seeded random events by every role (client,
+lead, crew, a technician not on the job, office), allowed or not, and checks after every event: no 5xx,
+a refused call changes nothing, request status matches the ticket, closed tickets stay closed, field
+work has a lead, technician availability is right, every status change has a history note, closed
+tickets have no open reschedule request, crew/outsiders are refused, and **no dead end**: from every
+new state the job can still be driven to `Completed` (checked inside a rolled-back savepoint). Default
+12 walks x 30 steps in the normal suite; `FLOW_EXPLORER_WALKS`, `FLOW_EXPLORER_STEPS` and
+`FLOW_EXPLORER_SEED` widen or replay a run. Rules it found and that now hold:
+
+- A reported inspection visit (`inspection` type, `Inspection Completed`) leaves that state only through
+  **Review Inspection** (`inspection_decision`, which turns it into the service job first) or a
+  cancellation. Travel/arrival/work on it (a stray "Start travel"), or a manual `Ready for Service` /
+  `Awaiting Materials`, is refused by `validate_ticket_transition`; before, they skipped the review and
+  left an inspection visit that could never finish. The technician map and My Jobs no longer offer
+  "Start travel" on a reported inspection.
+- The service checklist (`POST /api/checklist/`) is refused on an inspection visit ("Submit the inspection
+  report instead"). It used to mark the shared inspection/checklist record complete, after which the
+  report's `complete` answered "Inspection completed" without moving the visit, which stayed
+  `In Progress` forever. `complete` on an already-complete record now still moves an open inspection
+  visit on (repairs existing stuck visits).
+- Locked lookups by id answer 404 instead of 500 for an unknown or hidden record: inspection report
+  `complete`, commissioning/turnover/data-sheet actions in `views/inspection.py`, and the document
+  definition / template delete and version activation in `views/document_templates.py`.
+
+- (2026-11-19) **One lead, one place.** `validate_ticket_transition` refuses moving a ticket into field
+  work (`Navigating`, `Arrived on Site`, `In Progress`) while its lead is already in the field on another
+  ticket ("The lead technician is already on ticket #N ... Pause or finish that job first."). The
+  technician's own buttons already refused it; the office's manual status change did not.
+
+Pinned as plain tests in `services/tests/test_flow_explorer_findings.py`.
+
+The explorer also covers (2026-11-19): equipment requests and the office's approve/reject, the handover
+(finalize, client confirm), the maintenance plan (book a visit, complete), the sales record (prepare,
+confirm), a second job for the same lead and crew, and time passing ("a day passes" moves dates back a
+day and runs the scheduler's SLA, auto-dispatch, maintenance and after-sales commands; "the scheduler
+runs" runs `run_operational_automations --mode frequent`). Extra rules: stock reserved equals the open
+holds and never exceeds stock, a closed job holds no stock, a technician leads at most one job in the
+field, a plan has at most one open visit, and "Turned Over" always has a finalized handover.
 
 
 ## Quotation guards (2026-11-09)

@@ -11,6 +11,7 @@ import SalesPaymentsPanel, { PaymentStatusBadge } from '../../components/sales/S
 import {
   confirmSalesRecord,
   fetchSalesRecord,
+  fetchOverduePayments,
   fetchSalesRecords,
   fetchServiceTickets,
   prepareSalesRecord,
@@ -109,6 +110,7 @@ export default function SalesRecords() {
   const [selectedTicketId, setSelectedTicketId] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(isAdmin ? 'all' : 'confirmed');
+  const [overduePayments, setOverduePayments] = useState([]);
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [draftForm, setDraftForm] = useState({ agreed_total: '', currency_code: 'PHP', notes: '' });
   const [voidReason, setVoidReason] = useState('');
@@ -170,6 +172,8 @@ export default function SalesRecords() {
       ]);
       setRecords(recordRows);
       setTickets(ticketRows);
+      // Overdue payment-schedule stages (progress billing); a failure here must not hide the records.
+      if (isAdmin) fetchOverduePayments().then(setOverduePayments).catch(() => setOverduePayments([]));
       // A notification link (?ticketId=) opens that ticket's record.
       const linked = linkedTicketId ? recordRows.find((record) => Number(record.ticket) === linkedTicketId) : null;
       setSelectedId((current) => (
@@ -381,6 +385,24 @@ export default function SalesRecords() {
                 {card.detail ? <span className="mt-1 block text-xs text-slate-500">{card.detail}</span> : null}
               </button>
             ))}
+          </section>
+        ) : null}
+
+        {isAdmin && overduePayments.length ? (
+          <section className="rounded-xl border border-red-200 bg-red-50/60 p-4 shadow-sm" aria-labelledby="overdue-payments-title" data-testid="overdue-payments">
+            <h2 id="overdue-payments-title" className="font-semibold text-slate-900">Overdue payments ({overduePayments.length})</h2>
+            <p className="mt-1 text-xs text-slate-600">Payment-schedule stages past their due date. Record payments from the quotation in Documents.</p>
+            <ul className="mt-3 divide-y divide-red-100">
+              {overduePayments.map((row) => (
+                <li key={row.quotation_id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                  <span className="min-w-0">
+                    <span className="font-semibold text-slate-900">{formatTicketId(row.ticket_id)} · {row.client_name}</span>
+                    <span className="block text-xs text-slate-600">{row.service} · {row.stages.join(', ')} · due since {row.oldest_due_on}</span>
+                  </span>
+                  <span className="font-semibold tabular-nums text-red-800">{Number(row.overdue_amount).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })}</span>
+                </li>
+              ))}
+            </ul>
           </section>
         ) : null}
 

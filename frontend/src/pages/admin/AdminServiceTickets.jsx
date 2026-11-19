@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
-import { FiCalendar, FiCheck, FiClipboard, FiClock, FiDownload, FiMap, FiPlus, FiRefreshCw, FiX, FiMoreVertical, FiCheckCircle, FiXCircle, FiCheckSquare } from 'react-icons/fi';
+import { FiCalendar, FiCheck, FiClipboard, FiClock, FiDownload, FiMap, FiMapPin, FiPlus, FiRefreshCw, FiX, FiMoreVertical, FiCheckCircle, FiXCircle, FiCheckSquare } from 'react-icons/fi';
 import Layout from '../../components/layout/Layout';
 import { useAuth } from '../../context/AuthContext';
 import useEscapeKey from '../../hooks/useEscapeKey';
@@ -38,8 +38,10 @@ import {
   downloadTicketDocument,
   reverseGeocodeLocation,
   rescheduleServiceTicket,
+  declineRescheduleRequest,
   searchLocations,
-  terminateServiceTicketForClientWithdrawal
+  terminateServiceTicketForClientWithdrawal,
+  officeUpdateTicketStatus
 } from '../../api/api';
 import { CALABARZON_BOUNDS, CALABARZON_CENTER, CALABARZON_MIN_ZOOM, clampToCalabarzon } from '../../utils/mapRegion';
 import { queueActionLabel } from '../../utils/dashboardHelpers';
@@ -81,6 +83,26 @@ const shortSourceLabel = (sourceLabel = '') =>
   String(sourceLabel).replace(/\s+Portal$/i, '').trim() || sourceLabel;
 
 const normalizeStatus = (status) => String(status || '').toLowerCase().replace(/\s+/g, '_');
+// Started work the office may pause (for example the lead can no longer continue) so it can be reassigned.
+const OFFICE_PAUSABLE_STATUSES = new Set(['navigating', 'arrived_on_site', 'in_progress']);
+const OFFICE_ACTION_COPY = {
+  'On Hold': {
+    title: 'Pause this job?',
+    message: 'The job is paused, the client and crew are told, and you can then give it to another technician on the Dispatch Board (Update Assignment).',
+    label: 'Why are you pausing it?',
+    placeholder: 'Example: Lead technician is sick; handing the job to another team.',
+    confirm: 'Pause job',
+    done: 'paused. Reassign it on the Dispatch Board.',
+  },
+  'Arrived on Site': {
+    title: 'Confirm arrival?',
+    message: 'Use this when the technician is at the site but the GPS check blocks them (for example the client\'s map pin is off). It is saved in the arrival log.',
+    label: 'How did you confirm they are on site?',
+    placeholder: 'Example: Client confirmed by phone; map pin is 80 m off.',
+    confirm: 'Confirm arrival',
+    done: 'marked as arrived on site.',
+  },
+};
 const CLOSED_QUEUE_STATUSES = new Set(['completed', 'cancelled']);
 const TERMINABLE_TICKET_STATUSES = new Set([
   'not_started',
@@ -185,6 +207,11 @@ export default function AdminServiceTickets() {
   const [currentPage, setCurrentPage] = useState(1);
   const [terminationTarget, setTerminationTarget] = useState(null);
   const [terminationReason, setTerminationReason] = useState('');
+  const [terminationCause, setTerminationCause] = useState('client');
+  const [officeAction, setOfficeAction] = useState(null); // { ticket, status }
+  const [officeActionReason, setOfficeActionReason] = useState('');
+  const [officeActionError, setOfficeActionError] = useState('');
+  const [officeActionSaving, setOfficeActionSaving] = useState(false);
   const [terminatingTicket, setTerminatingTicket] = useState(false);
   const [terminationError, setTerminationError] = useState('');
   // A job that already holds deposit money: the office says what happens to it while dismissing.
@@ -475,10 +502,18 @@ export default function AdminServiceTickets() {
     setRescheduleMessage(`${formatTicketId(ticketId)} schedule updated.`);
   };
 
+  const handleKeepCurrentDate = async (ticketId, notes) => {
+    await declineRescheduleRequest(ticketId, notes);
+    await loadData();
+    setRescheduleTicket(null);
+    setRescheduleMessage(`${formatTicketId(ticketId)} keeps its current date. The client was told.`);
+  };
+
   const openTerminationDialog = (ticket) => {
     closeTicketActions();
     setTerminationTarget(ticket);
     setTerminationReason('');
+    setTerminationCause('client');
     setTerminationError('');
     setTerminationQuotation(null);
     setTerminationDeposit({ outcome: '', note: '' });
@@ -499,7 +534,9 @@ export default function AdminServiceTickets() {
     if (!terminationTarget) return;
     const details = terminationReason.trim();
     if (details.length < 5) {
-      setTerminationError('Add a short explanation confirming why the client backed out.');
+      setTerminationError(terminationCause === 'office'
+        ? 'Add a short explanation of why the office is cancelling this job.'
+        : 'Add a short explanation confirming why the client backed out.');
       return;
     }
 
@@ -512,7 +549,7 @@ export default function AdminServiceTickets() {
     setTerminatingTicket(true);
     setTerminationError('');
     try {
-      await terminateServiceTicketForClientWithdrawal(terminationTarget.id, details);
+      await terminateServiceTicketForClientWithdrawal(terminationTarget.id, details, terminationCause);
       const dismissedTicketId = terminationTarget.id;
       let depositMessage = '';
       if (terminationDepositReceived > 0 && terminationQuotation) {
@@ -526,12 +563,42 @@ export default function AdminServiceTickets() {
       setTerminationTarget(null);
       setTerminationReason('');
       await loadData();
-      setRescheduleMessage(`${formatTicketId(dismissedTicketId)} dismissed because the client withdrew.${depositMessage}`);
+      setRescheduleMessage(`${formatTicketId(dismissedTicketId)} dismissed because ${terminationCause === 'office' ? 'the office cancelled it' : 'the client withdrew'}.${depositMessage}`);
       setError('');
     } catch (terminationRequestError) {
       setTerminationError(terminationRequestError.message || 'Unable to dismiss the service ticket.');
     } finally {
       setTerminatingTicket(false);
+    }
+  };
+
+  const openOfficeAction = (ticket, status) => {
+    closeTicketActions();
+    setOfficeAction({ ticket, status });
+    setOfficeActionReason('');
+    setOfficeActionError('');
+  };
+
+  const confirmOfficeAction = async () => {
+    if (!officeAction) return;
+    const reason = officeActionReason.trim();
+    if (reason.length < 5) {
+      setOfficeActionError('Add a short reason (at least 5 characters).');
+      return;
+    }
+    setOfficeActionSaving(true);
+    setOfficeActionError('');
+    try {
+      await officeUpdateTicketStatus(officeAction.ticket.id, officeAction.status, reason);
+      const ticketId = officeAction.ticket.id;
+      const copy = OFFICE_ACTION_COPY[officeAction.status];
+      setOfficeAction(null);
+      await loadData();
+      setRescheduleMessage(`${formatTicketId(ticketId)} ${copy.done}`);
+    } catch (actionError) {
+      setOfficeActionError(actionError.message || 'Unable to update the job.');
+    } finally {
+      setOfficeActionSaving(false);
     }
   };
 
@@ -1066,6 +1133,7 @@ export default function AdminServiceTickets() {
         ticket={rescheduleTicket}
         onClose={() => setRescheduleTicket(null)}
         onSubmit={handleRescheduleSubmit}
+        onKeepCurrentDate={handleKeepCurrentDate}
       />
       <InspectionReviewModal
         ticket={inspectionReviewTicket}
@@ -1209,6 +1277,45 @@ export default function AdminServiceTickets() {
                   </button>
                 )}
 
+                {canManageTickets && OFFICE_PAUSABLE_STATUSES.has(normalizeStatus(actionModalTicket.status)) && (
+                  <button
+                    onClick={() => openOfficeAction(actionModalTicket, 'On Hold')}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 px-4 py-3 text-left text-sm font-semibold text-amber-800 transition hover:bg-amber-50"
+                  >
+                    <span className="flex items-center gap-3">
+                      <FiClock className="text-amber-600" size={18} /> Pause job
+                    </span>
+                    <span className="text-xs font-medium text-amber-600">So you can reassign it</span>
+                  </button>
+                )}
+
+                {canManageTickets && normalizeStatus(actionModalTicket.status) === 'navigating' && (
+                  <button
+                    onClick={() => openOfficeAction(actionModalTicket, 'Arrived on Site')}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-surface-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50"
+                  >
+                    <span className="flex items-center gap-3">
+                      <FiMapPin className="text-brand-600" size={18} /> Confirm arrival
+                    </span>
+                    <span className="text-xs font-medium text-slate-400">When GPS check is blocked</span>
+                  </button>
+                )}
+
+                {canDispatch && actionModalTicket.assignedTech && normalizeStatus(actionModalTicket.status) === 'on_hold' && (
+                  <button
+                    onClick={() => {
+                      closeTicketActions();
+                      navigate('/admin/dispatch-board');
+                    }}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-surface-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50"
+                  >
+                    <span className="flex items-center gap-3">
+                      <FiMap className="text-brand-600" size={18} /> Reassign in Dispatch
+                    </span>
+                    <span className="text-xs font-medium text-slate-400">Update Assignment</span>
+                  </button>
+                )}
+
                 {canDispatch && !actionModalTicket.assignedTech && (
                   <button
                     onClick={() => {
@@ -1244,7 +1351,7 @@ export default function AdminServiceTickets() {
       {terminationTarget && (
         <ConfirmationDialog
           title="Dismiss service ticket?"
-          message={`${formatTicketId(terminationTarget.id)} will be closed because the client withdrew. The ticket stays in the audit history, assigned staff are released, and pending inventory reservations are returned.`}
+          message={`${formatTicketId(terminationTarget.id)} will be closed because ${terminationCause === 'office' ? 'the office is cancelling it' : 'the client withdrew'}. The ticket stays in the audit history, assigned staff are released, and pending inventory reservations are returned.`}
           tone="danger"
           icon="warning"
           confirmLabel="Dismiss ticket"
@@ -1254,8 +1361,19 @@ export default function AdminServiceTickets() {
           onCancel={closeTerminationDialog}
           onConfirm={confirmTicketTermination}
         >
+          <fieldset className="mb-3">
+            <legend className="text-sm font-semibold text-slate-700">Who is cancelling?</legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[['client', 'Client withdrew'], ['office', 'Office cancelled (our side)']].map(([value, label]) => (
+                <label key={value} className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm ${terminationCause === value ? 'border-rose-400 font-semibold text-rose-800' : 'border-slate-200 text-slate-700'}`}>
+                  <input type="radio" name="dismiss-cause" value={value} checked={terminationCause === value} onChange={() => { setTerminationCause(value); setTerminationError(''); }} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <label className="block">
-            <span className="text-sm font-semibold text-slate-700">Client backout details</span>
+            <span className="text-sm font-semibold text-slate-700">{terminationCause === 'office' ? 'Why the office is cancelling' : 'Client backout details'}</span>
             <textarea
               value={terminationReason}
               onChange={(event) => {
@@ -1288,6 +1406,34 @@ export default function AdminServiceTickets() {
             </fieldset>
           ) : null}
           {terminationError && <p className="mt-2 text-sm font-medium text-rose-600">{terminationError}</p>}
+        </ConfirmationDialog>
+      )}
+
+      {officeAction && (
+        <ConfirmationDialog
+          title={OFFICE_ACTION_COPY[officeAction.status].title}
+          message={`${formatTicketId(officeAction.ticket.id)}: ${OFFICE_ACTION_COPY[officeAction.status].message}`}
+          tone="warning"
+          icon="warning"
+          confirmLabel={OFFICE_ACTION_COPY[officeAction.status].confirm}
+          cancelLabel="Go back"
+          loading={officeActionSaving}
+          disabled={officeActionReason.trim().length < 5}
+          onCancel={() => { if (!officeActionSaving) setOfficeAction(null); }}
+          onConfirm={confirmOfficeAction}
+        >
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">{OFFICE_ACTION_COPY[officeAction.status].label}</span>
+            <textarea
+              value={officeActionReason}
+              onChange={(event) => { setOfficeActionReason(event.target.value); setOfficeActionError(''); }}
+              rows={3}
+              maxLength={500}
+              placeholder={OFFICE_ACTION_COPY[officeAction.status].placeholder}
+              className="mt-2 w-full resize-none rounded-xl border border-surface-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+            />
+          </label>
+          {officeActionError && <p className="mt-2 text-sm font-medium text-rose-600">{officeActionError}</p>}
         </ConfirmationDialog>
       )}
 

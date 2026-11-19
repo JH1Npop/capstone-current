@@ -12,7 +12,7 @@
 from ._imports import *  # noqa: F403,F405
 from services.business_time import business_today
 from services.models import InspectionChecklist
-from services.views.helpers import ALLOWED_TICKET_TRANSITIONS
+from services.views.helpers import ALLOWED_TICKET_TRANSITIONS, FIELD_WORK_STATUSES
 from users.rbac import REPORTS_VIEW
 
 STATUSES = list(ALLOWED_TICKET_TRANSITIONS)
@@ -28,8 +28,15 @@ class TicketFixture(APITestCase):
     def ticket(self, *, status_value='Not Started', ticket_type='installation', technician=True, service=None, request_status='Approved'):
         req = ServiceRequest.objects.create(client=self.client_user, service_type=service or self.service, description='Rules', status=request_status)
         ServiceLocation.objects.create(request=req, address='Site', city='Cabuyao', province='Laguna', latitude=14.2786, longitude=121.125)
+        # Each ticket gets its own lead: a lead can be in the field on only one job at a time
+        # (validate_ticket_transition), and these tests leave many tickets in field states.
+        lead = None
+        if technician:
+            lead = User.objects.create_user(
+                username=f'rules-tech-{ServiceTicket.objects.count() + 1}', password='x', role='technician', status='active',
+            )
         return ServiceTicket.objects.create(
-            request=req, technician=self.tech if technician else None, scheduled_date=business_today(),
+            request=req, technician=lead, scheduled_date=business_today(),
             status=status_value, ticket_type=ticket_type,
         )
 
@@ -63,6 +70,13 @@ class TicketTransitionMatrixTests(TicketFixture):
                     elif target == 'Completed':
                         # Completion has its own checks (below); the move is refused here without them.
                         self.assertEqual(response.status_code, 400)
+                        self.assertEqual(ticket.status, source)
+                    elif ticket_type == 'inspection' and source == 'Inspection Completed' and target != 'Cancelled':
+                        # A reported visit leaves only through the office review or a cancel
+                        # (flow explorer finding, 2026-11-18).
+                        self.assertEqual(response.status_code, 400)
+                        expected = 'office reviews it next' if target in FIELD_WORK_STATUSES else 'Use Review Inspection'
+                        self.assertIn(expected, response.data['error'])
                         self.assertEqual(ticket.status, source)
                     else:
                         self.assertEqual(response.status_code, 200, response.data)

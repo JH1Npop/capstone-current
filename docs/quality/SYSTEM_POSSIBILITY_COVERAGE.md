@@ -51,8 +51,8 @@ Server test names are `file::test`. `TSE` = `services/tests/test_settings_effect
 | Default Warranty (days) | `maintenance.py` warranty sync when a turnover has no inspection warranty | Gap | Gap | Gap |
 | Company Name, Company Address | server documents, document prefill, Admin Documents header and contract form | `TSE::test_document_prefill_uses_the_company_details_in_settings` | 57 (Documents header and contract form) | Covered (the Admin Documents builder and prefill ignored them) |
 | Currency | contract placeholder in server documents | Gap | Gap | Gap (the Admin Documents contract form keeps its own "Philippine Peso" choice) |
-| Document Footer, External Payment Notice | passed to documents; no template or placeholder prints them | n/a | n/a | Decision: wire in or remove from the page |
-| System Name, Support Email | saved only; nothing reads them | n/a | n/a | Decision: wire in or remove from the page |
+| Document Footer, External Payment Notice | `dynamic_document_generation._settings_paragraphs`: footer at the end of every DOCX document, payment notice on quotations and contracts, unless the template places `{{ document_footer }}` / `{{ external_payment_notice }}` itself | `test_document_settings_text.py` | n/a | Covered (2026-11-19, owner: wire in). PDF templates place fields themselves |
+| System Name, Support Email | Support Email: `with_support_line` ends client emails ("Need help? Write to ..."), `support-cases/contact/` shows it on the signed-in Support page (kept off the public site). System Name: removed from the Settings page (the name is part of the app: logo, legal pages, installed-app name) | `messages_app/test_support_contact.py` | n/a | Covered (2026-11-19, owner decision) |
 | Default Time Zone, Max Technician Assignments | saved, not shown, not used (business time is fixed UTC+8; daily limits come from each service) | n/a | n/a | Recorded; not changed |
 | Location Range Validation (on/off, reason) | `helpers.compute_arrival_validation_result` | `TSE::test_validation_off_lets_a_far_arrival_through_and_on_refuses_it` | 57 | Covered |
 | Allowed Radius | same | `TSE::test_radius_decides_how_close_the_technician_must_be` | Gap (57 uses the default radius) | Server only |
@@ -218,8 +218,14 @@ checks.
 | A technician tries to change a job the office cancelled (travel, arrive, start, hold, proof upload, equipment request, finish, inspection report, field forms) | `TechniciansLeaveCancelledJobsMixin`, `TechnicianJobViewSet.cancelled_job_response` | `CM::CancelledJobForTechniciansTests` | 63 | Covered (proof photos and new field service reports were accepted on a cancelled job; travel replies were misleading, e.g. "Start navigation before marking arrival") |
 | The technician's map for a cancelled job | `TechnicianMapNavigation.jsx` | n/a | 63 | Covered (it said "This job is finished" and linked to Job History) |
 | Another technician learns nothing about a cancelled job that is not theirs | `refuse_technician_change_on_cancelled_job` (own jobs only) | `CM::test_another_technician_learns_nothing_about_the_cancelled_job` | n/a | Server only |
-| The office says "no" to a client's reschedule request | `reschedule` (office can only set a date) | n/a | n/a | **Decision**: there is no "keep the current date" action; the request stays open until the office picks a date or work starts |
+| The office says "no" to a client's reschedule request | `decline_reschedule` | `test_reschedule_decline.py` | 68 | Covered (2026-11-18): "Keep Current Date" (`decline_reschedule`) closes the request with a reason and tells the client |
 | The client declines the handover | `client_confirm` (confirm only) | n/a | n/a | Recorded: the client confirms or contacts support; there is no decline |
+| The lead cannot continue a started job (sick, phone dead, left the company) | `update_status` → `On Hold`, then `assign` | `test_office_stuck_job_actions.py` | 69 | Covered (2026-11-18): **dead end fixed**. Before, a job `Arrived on Site`/`In Progress` could not be reassigned or paused by the office; only "Dismiss ticket" was left, and the technician could not be deactivated. Now **Pause job**, then Update Assignment |
+| The technician is at the site but the GPS arrival check blocks them (wrong pin) | `update_status` → `Arrived on Site`, `ArrivalValidationLog` | `test_office_stuck_job_actions.py` | 69 | Covered (2026-11-18): office **Confirm arrival** with a logged reason; before, the only way was turning location checks off for everyone |
+| Any sequence of events by any role, on any job type (random walks), never breaks a rule or strands a job | all workflow actions | `test_flow_explorer.py` (seeded; widen with `FLOW_EXPLORER_WALKS`) | n/a | Covered (2026-11-18): found a reported inspection that could be travelled/worked again or set Ready for Service by hand (skipping the review, never finishable), a service checklist on an inspection visit that froze it In Progress, and 500s on unknown ids; all fixed, pinned in `test_flow_explorer_findings.py` |
+| The client pays in stages (downpayment, on installation, at handover) | `services/billing.py`, `quotations/{id}/billing-plan/`, `progress-payments/`, `billing-overdue/` | `test_progress_billing.py` (8) | 71 | Covered (2026-11-19): schedule set and locked on acceptance, payments fill stages in order, deposit rule unchanged, overdue list and one reminder per stage, cancelled jobs closed |
+| The technician has no signal on site | `frontend/src/utils/offlineQueue.js`, `api/technician.js` (arrive, status, checklist, inspection report) | n/a (frontend) | 72 | Covered (2026-11-19): saved on the phone, sent when online; a refused action (job cancelled meanwhile) is reported, not retried. Not covered: recorded times are the server's replay time |
+| The company cancels a job (not the client) | dismissal reason prefix | `test_office_stuck_job_actions.py` | 69 | Covered (2026-11-18): "Office cancelled (our side)"; before, every dismissal was recorded as "Client backed out" |
 
 ## 4. Time cases (2026-11-09)
 
@@ -294,7 +300,7 @@ Still slow (not changed; owner decision on priority):
 
 **Decision:** seven screens (Service Tickets, Dispatch Board, Reports, Follow-up Cases, Sales Records,
 Support, the support assistant) load every job through `fetchAllPages('/services/service-tickets/')`,
-ten per request: 25,000 jobs means about 2,500 requests in a row before the screen shows. Client
+ten per request: 25,000 jobs means about 2,500 requests in a row before the screen shows. **2026-11-19:** the default paging now accepts `?page_size=` up to 200 (`afn_service_management/pagination.py`) and `fetchAllPages` asks for 200, so the same 25,000 jobs take about 125 requests; per-screen server paging is still the full fix. Client
 requests, admin users, maintenance schedules, sales records and inventory screens do the same with
 their lists. Each needs its own server paging, search and filters; this is a larger change, best done
 screen by screen after the current fixes are deployed.

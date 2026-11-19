@@ -7,6 +7,7 @@ import DocumentReplacementWizard from '../../components/admin/DocumentReplacemen
 import CustomDocumentWorkspace from '../../components/admin/CustomDocumentWorkspace';
 import DocumentActionCard from '../../components/admin/DocumentActionCard';
 import QuotationDepositPanel from '../../components/sales/QuotationDepositPanel';
+import BillingPlanPanel from '../../components/sales/BillingPlanPanel';
 import StatusBadge from '../../components/ui/StatusBadge';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import { useAuth } from '../../context/AuthContext';
@@ -3931,10 +3932,13 @@ export default function AdminDocuments() {
       messageIsGood={actionMessageIsGood}
     >
       {activeTemplate === 'quotation_proposal' && canManageDocuments ? (
+        <>
           <QuotationDepositPanel
             quotation={quotationRecords[0] || null}
             onUpdated={(updated) => setQuotationRecords([updated])}
           />
+          <BillingPlanPanel quotation={quotationRecords[0] || null} canManage />
+        </>
       ) : null}
     </DocumentActionCard>
   );
