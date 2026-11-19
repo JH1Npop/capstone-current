@@ -7587,3 +7587,22 @@ Change ledger:
   - Generated: `backend/scripts/diagram_pack/{_erd_source.dbml, erd.xml, erd_grid.json, table_names.json, context.frag, level0.frag, level0.frag.gen.py, data_dictionary.json}`.
   - Docs: `docs/academic/final_diagrams/{AFN-SERVE-Paper-Schema.dbml, AFN-SERVE-System-Diagrams.drawio, AFN-SERVE-Data-Dictionary.docx}` and this handoff.
   - No application code changed.
+
+## Deployment record 2026-11-19
+
+- **Owner approval:** "go" on the local migration, the staging release, and the scheduler on `main`.
+- **Local migration:**
+  - `services.0072_billing_milestones_payment_kind` was applied to `backend/db.sqlite3` with `manage.py migrate services`: OK.
+  - A backup was taken first: `backend/db.sqlite3.backup-before-0072-20261119-220654` (git-ignored).
+- **Pre-release checks (local, run this session):**
+  - `manage.py check`: 0 issues. `manage.py makemigrations --check --dry-run`: No changes detected.
+  - `manage.py test`: Ran 1031 tests, OK (skipped=7).
+  - `npm run build:frontend`: built OK.
+  - `nslookup` of the Aiven host via 8.8.8.8 resolved.
+  - The `origin/staging-deploy` tree equals `391285b` (the branch commit of the last release), so the merge brings only this branch's changes.
+- **Release content:**
+  - Keep Current Date; office Pause job / Reassign / Confirm arrival; office-cancel cause.
+  - Flow explorer fixes: a reported inspection is locked to review; one lead in the field on one job; 404 instead of 500.
+  - Hourly scheduler mode; support email and document footer; lists read 200 at a time.
+  - Progress billing, with the payment list and void; offline field recording; paper diagrams.
+- **Migration on staging:** `services.0072` (additive table plus a `kind` column; existing quotation payments are relabelled `deposit`). It runs in the Render start command.
