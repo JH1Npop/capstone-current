@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/layout/Layout';
 import { ListSkeleton } from '../../components/ui/LoadingSkeleton';
-import { createCustomerSupportCase, fetchCustomerSupportCases, fetchMessages, sendMessage } from '../../api/api';
+import { createCustomerSupportCase, fetchCustomerSupportCases, fetchMessages, fetchSupportContact, sendMessage } from '../../api/api';
 import { fetchServiceTickets } from '../../api/services';
 import { useAuth } from '../../context/AuthContext';
 import { FiArchive, FiMessageSquare, FiPlus, FiRefreshCw } from 'react-icons/fi';
@@ -76,6 +76,12 @@ export default function ClientSupport() {
   const [supportMessages, setSupportMessages] = useState([]);
   const [supportForm, setSupportForm] = useState(emptyForm);
   const [supportText, setSupportText] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
+  useEffect(() => {
+    let active = true;
+    fetchSupportContact().then((address) => { if (active) setSupportEmail(address); });
+    return () => { active = false; };
+  }, []);
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [messageSending, setMessageSending] = useState(false);
@@ -271,7 +277,14 @@ export default function ClientSupport() {
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold text-slate-900">Conversation</h3>
+          <div className="min-w-0">
+            <h3 className="text-lg font-semibold text-slate-900">Conversation</h3>
+            {supportEmail ? (
+              <p className="mt-0.5 break-words text-xs text-slate-500" data-testid="support-email">
+                You can also email us at <a href={`mailto:${supportEmail}`} className="font-semibold text-brand-700 underline">{supportEmail}</a>
+              </p>
+            ) : null}
+          </div>
           <div className="flex flex-wrap gap-2">
             {activeSupportCase ? (
               <button

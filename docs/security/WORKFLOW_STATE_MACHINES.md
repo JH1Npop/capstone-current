@@ -405,7 +405,20 @@ new state the job can still be driven to `Completed` (checked inside a rolled-ba
   `complete`, commissioning/turnover/data-sheet actions in `views/inspection.py`, and the document
   definition / template delete and version activation in `views/document_templates.py`.
 
+- (2026-11-19) **One lead, one place.** `validate_ticket_transition` refuses moving a ticket into field
+  work (`Navigating`, `Arrived on Site`, `In Progress`) while its lead is already in the field on another
+  ticket ("The lead technician is already on ticket #N ... Pause or finish that job first."). The
+  technician's own buttons already refused it; the office's manual status change did not.
+
 Pinned as plain tests in `services/tests/test_flow_explorer_findings.py`.
+
+The explorer also covers (2026-11-19): equipment requests and the office's approve/reject, the handover
+(finalize, client confirm), the maintenance plan (book a visit, complete), the sales record (prepare,
+confirm), a second job for the same lead and crew, and time passing ("a day passes" moves dates back a
+day and runs the scheduler's SLA, auto-dispatch, maintenance and after-sales commands; "the scheduler
+runs" runs `run_operational_automations --mode frequent`). Extra rules: stock reserved equals the open
+holds and never exceeds stock, a closed job holds no stock, a technician leads at most one job in the
+field, a plan has at most one open visit, and "Turned Over" always has a finalized handover.
 
 
 ## Quotation guards (2026-11-09)

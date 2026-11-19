@@ -19,6 +19,27 @@ def _normalize_notification_data(data=None):
     return normalized
 
 
+def support_email_address():
+    """Settings > System > Support Email, or '' when it cannot be read."""
+    try:
+        from users.models import AdminSettings
+
+        settings_obj = AdminSettings.objects.order_by('id').first()
+        return (settings_obj.support_email or '').strip() if settings_obj else ''
+    except Exception as exc:
+        logger.warning("Could not read the support email setting: %s", exc)
+        return ''
+
+
+def with_support_line(body):
+    """End a client-facing email with where to get help (the Support Email setting)."""
+    address = support_email_address()
+    text = str(body or '')
+    if not address or address.lower() in text.lower():
+        return text
+    return f"{text.rstrip()}\n\nNeed help? Write to {address}."
+
+
 def notifications_enabled():
     try:
         from users.models import AdminSettings
@@ -150,7 +171,7 @@ def send_system_email(*, subject, body, recipients, html_message=None):
     try:
         sent_count = send_mail(
             subject,
-            body,
+            with_support_line(body),
             settings.DEFAULT_FROM_EMAIL,
             recipient_list,
             fail_silently=False,

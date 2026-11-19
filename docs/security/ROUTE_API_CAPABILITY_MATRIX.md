@@ -63,7 +63,7 @@ messages, notifications, documents, support cases, and history.
 | Ticket progress | Used by request detail/timeline consumers | Owned tickets are read-only; create, edit, and delete are blocked |
 | Service history | `/client/service-history` | Enforced |
 | Purchase records | `/client/purchase-records` | Confirmed records restricted to the owning client; mutations blocked and directly tested |
-| Support | `/client/support` | Enforced; image size, signature, declared type, ownership, and spoofed-content rejection are directly validated |
+| Support | `/client/support` | Enforced; image size, signature, declared type, ownership, and spoofed-content rejection are directly validated. `GET /api/messages/support-cases/contact/` (same `CanAccessClientSupport`) returns the Support Email setting for the signed-in page; the public landing endpoint still does not expose it |
 | Notifications | `/client/notifications` | Enforced |
 | Profile | `/client/profile` | Self-service only |
 

@@ -168,10 +168,6 @@ export default function AdminSettings() {
   };
 
   const saveSettings = async () => {
-    if (!settings.systemName?.trim()) {
-      setMessage({ type: 'error', text: 'System name is required.' });
-      return false;
-    }
     if (!settings.supportEmail?.trim()) {
       setMessage({ type: 'error', text: 'Support email is required.' });
       return false;
@@ -390,17 +386,11 @@ export default function AdminSettings() {
 
               <fieldset disabled={!loading && !settingsLoaded} className="m-0 min-w-0 border-0 p-0">
               <div className="grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-medium text-slate-700">System Name</span>
-                  <input
-                    value={settings.systemName || ''}
-                    onChange={(event) => updateSetting('systemName', event.target.value)}
-                    className={inputClass}
-                    disabled={loading}
-                  />
-                </label>
+                {/* System Name was removed (2026-11-19): the name is part of the app itself (logo, legal
+                    pages, installed-app name); public wording is edited under Landing Page. */}
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Support Email</span>
+                  <span className="block text-xs text-slate-500">Shown on the client Support page and at the end of client emails.</span>
                   <input
                     type="email"
                     value={settings.supportEmail || ''}

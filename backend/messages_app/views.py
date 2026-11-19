@@ -374,6 +374,13 @@ class CustomerSupportCaseViewSet(viewsets.ModelViewSet):
             return [ScopedRateThrottle()]
         return super().get_throttles()
 
+    @action(detail=False, methods=['get'])
+    def contact(self, request):
+        """Settings > System > Support Email for the signed-in Support page (kept off the public site)."""
+        from notifications.notification_utils import support_email_address
+
+        return Response({'supportEmail': support_email_address()})
+
     def get_queryset(self):
         user = self.request.user
         role = getattr(user, 'role', None)

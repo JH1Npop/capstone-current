@@ -2,9 +2,18 @@ name: Daily operational automations
 
 on:
   schedule:
-    # GitHub schedules use UTC. 00:17 UTC is 08:17 in Asia/Manila (UTC+8).
+    # GitHub schedules use UTC. 00:17 UTC is 08:17 in Asia/Manila (UTC+8): daily reminders.
     - cron: '17 0 * * *'
+    # Hourly during office hours, 08:43-18:43 Manila, Monday to Saturday: SLA checks and
+    # auto-dispatch (the "frequent" group), so an urgent morning job is not left until tomorrow.
+    - cron: '43 0-10 * * 1-6'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Automation group to run
+        type: choice
+        options: [daily, frequent, all]
+        default: daily
 
 permissions:
   contents: read
@@ -97,6 +106,9 @@ jobs:
         working-directory: backend
         run: python manage.py check
 
-      - name: Run daily reminders and operational maintenance
+      - name: Run the scheduled automation group
         working-directory: backend
-        run: python manage.py run_operational_automations --mode daily
+        env:
+          # The hourly schedule runs the frequent group; the 08:17 schedule runs the daily group.
+          RUN_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event.schedule == '43 0-10 * * 1-6' && 'frequent' || 'daily') }}
+        run: python manage.py run_operational_automations --mode "$RUN_MODE"

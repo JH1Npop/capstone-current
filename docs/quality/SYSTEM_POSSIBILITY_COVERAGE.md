@@ -51,8 +51,8 @@ Server test names are `file::test`. `TSE` = `services/tests/test_settings_effect
 | Default Warranty (days) | `maintenance.py` warranty sync when a turnover has no inspection warranty | Gap | Gap | Gap |
 | Company Name, Company Address | server documents, document prefill, Admin Documents header and contract form | `TSE::test_document_prefill_uses_the_company_details_in_settings` | 57 (Documents header and contract form) | Covered (the Admin Documents builder and prefill ignored them) |
 | Currency | contract placeholder in server documents | Gap | Gap | Gap (the Admin Documents contract form keeps its own "Philippine Peso" choice) |
-| Document Footer, External Payment Notice | passed to documents; no template or placeholder prints them | n/a | n/a | Decision: wire in or remove from the page |
-| System Name, Support Email | saved only; nothing reads them | n/a | n/a | Decision: wire in or remove from the page |
+| Document Footer, External Payment Notice | `dynamic_document_generation._settings_paragraphs`: footer at the end of every DOCX document, payment notice on quotations and contracts, unless the template places `{{ document_footer }}` / `{{ external_payment_notice }}` itself | `test_document_settings_text.py` | n/a | Covered (2026-11-19, owner: wire in). PDF templates place fields themselves |
+| System Name, Support Email | Support Email: `with_support_line` ends client emails ("Need help? Write to ..."), `support-cases/contact/` shows it on the signed-in Support page (kept off the public site). System Name: removed from the Settings page (the name is part of the app: logo, legal pages, installed-app name) | `messages_app/test_support_contact.py` | n/a | Covered (2026-11-19, owner decision) |
 | Default Time Zone, Max Technician Assignments | saved, not shown, not used (business time is fixed UTC+8; daily limits come from each service) | n/a | n/a | Recorded; not changed |
 | Location Range Validation (on/off, reason) | `helpers.compute_arrival_validation_result` | `TSE::test_validation_off_lets_a_far_arrival_through_and_on_refuses_it` | 57 | Covered |
 | Allowed Radius | same | `TSE::test_radius_decides_how_close_the_technician_must_be` | Gap (57 uses the default radius) | Server only |
@@ -298,7 +298,7 @@ Still slow (not changed; owner decision on priority):
 
 **Decision:** seven screens (Service Tickets, Dispatch Board, Reports, Follow-up Cases, Sales Records,
 Support, the support assistant) load every job through `fetchAllPages('/services/service-tickets/')`,
-ten per request: 25,000 jobs means about 2,500 requests in a row before the screen shows. Client
+ten per request: 25,000 jobs means about 2,500 requests in a row before the screen shows. **2026-11-19:** the default paging now accepts `?page_size=` up to 200 (`afn_service_management/pagination.py`) and `fetchAllPages` asks for 200, so the same 25,000 jobs take about 125 requests; per-screen server paging is still the full fix. Client
 requests, admin users, maintenance schedules, sales records and inventory screens do the same with
 their lists. Each needs its own server paging, search and filters; this is a larger change, best done
 screen by screen after the current fixes are deployed.

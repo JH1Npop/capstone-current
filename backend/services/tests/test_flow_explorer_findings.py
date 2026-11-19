@@ -91,6 +91,26 @@ class FlowExplorerFindingsTests(JobWalker):
         job['ticket'].refresh_from_db()
         self.assertEqual(job['ticket'].status, 'Inspection Completed')
 
+    def test_the_office_cannot_put_a_lead_on_a_second_job_while_they_work_on_one(self):
+        """Seed 52035: office "In Progress" on the lead's paused job while they worked on another."""
+        first = self.new_job('direct')
+        for stage in ('pending', 'approved', 'svc_assigned', 'svc_navigating', 'svc_arrived', 'svc_in_progress', 'svc_on_hold'):
+            self.step(first, stage)
+        second = self.new_job('direct')
+        second['lead'], second['crew'] = first['lead'], first['crew']
+        from services.models import TechnicianSkill
+        TechnicianSkill.objects.get_or_create(technician=first['lead'], service_type=second['service'])
+        for stage in ('pending', 'approved', 'svc_assigned', 'svc_navigating', 'svc_arrived', 'svc_in_progress'):
+            self.step(second, stage)
+
+        response = self.as_(self.office).post(f"/api/services/service-tickets/{first['ticket'].id}/update_status/", {
+            'status': 'In Progress', 'reason': 'Resume it.',
+        }, format='json')
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn(f"already on ticket #{second['ticket'].id}", response.data['error'])
+        first['ticket'].refresh_from_db()
+        self.assertEqual(first['ticket'].status, 'On Hold')
+
     def test_completing_an_inspection_report_you_cannot_see_answers_404_not_500(self):
         job = self.reported_inspection()
         report = InspectionChecklist.objects.get(ticket=job['ticket'])

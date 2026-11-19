@@ -301,7 +301,7 @@ GENERAL_SERVICE_NAME = 'General Services'
 
 def send_notification_email(user, subject, message):
     """Helper function to send email notifications (only while Email Alerts are on)."""
-    from notifications.notification_utils import email_notifications_enabled
+    from notifications.notification_utils import email_notifications_enabled, with_support_line
 
     if not email_notifications_enabled():
         return
@@ -311,6 +311,8 @@ def send_notification_email(user, subject, message):
 
     recipient_email = user.email
     user_id = user.id
+    if getattr(user, 'role', None) == 'client':
+        message = with_support_line(message)
 
     def deliver():
         try:
@@ -1358,6 +1360,23 @@ def validate_ticket_transition(ticket, new_status, *, allow_same=False):
     # "in progress" with no technician (the client would see work that nobody is doing).
     if normalized_status in FIELD_WORK_STATUSES and not ticket.technician_id:
         raise ValueError('Assign a technician before moving this ticket into field work.')
+
+    # One lead, one place: the technician's own buttons already refuse a second active job, but the
+    # office's manual status change did not, so a lead could be "working" on two jobs at once.
+    # Found by the flow explorer, 2026-11-19.
+    if normalized_status in FIELD_WORK_STATUSES and ticket.status not in FIELD_WORK_STATUSES and ticket.pk:
+        other = (
+            ServiceTicket.objects
+            .filter(technician_id=ticket.technician_id, status__in=FIELD_WORK_STATUSES)
+            .exclude(pk=ticket.pk)
+            .order_by('id')
+            .first()
+        )
+        if other is not None:
+            raise ValueError(
+                f'The lead technician is already on ticket #{other.id} ({other.status}). '
+                'Pause or finish that job first.'
+            )
 
     # A reported inspection visit leaves "Inspection Completed" only through the office review
     # (which turns it into the service job first) or a cancellation. Travelling or working on it

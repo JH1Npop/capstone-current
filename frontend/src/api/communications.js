@@ -106,6 +106,15 @@ export const fetchCustomerSupportCases = async () => {
   }
 };
 
+export const fetchSupportContact = async () => {
+  try {
+    const { data } = await api.get('/messages/support-cases/contact/');
+    return data?.supportEmail || '';
+  } catch {
+    return '';
+  }
+};
+
 export const createCustomerSupportCase = async (caseData) => {
   try {
     const { data } = await api.post('/messages/support-cases/', {

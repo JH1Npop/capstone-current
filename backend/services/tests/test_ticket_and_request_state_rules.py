@@ -28,8 +28,15 @@ class TicketFixture(APITestCase):
     def ticket(self, *, status_value='Not Started', ticket_type='installation', technician=True, service=None, request_status='Approved'):
         req = ServiceRequest.objects.create(client=self.client_user, service_type=service or self.service, description='Rules', status=request_status)
         ServiceLocation.objects.create(request=req, address='Site', city='Cabuyao', province='Laguna', latitude=14.2786, longitude=121.125)
+        # Each ticket gets its own lead: a lead can be in the field on only one job at a time
+        # (validate_ticket_transition), and these tests leave many tickets in field states.
+        lead = None
+        if technician:
+            lead = User.objects.create_user(
+                username=f'rules-tech-{ServiceTicket.objects.count() + 1}', password='x', role='technician', status='active',
+            )
         return ServiceTicket.objects.create(
-            request=req, technician=self.tech if technician else None, scheduled_date=business_today(),
+            request=req, technician=lead, scheduled_date=business_today(),
             status=status_value, ticket_type=ticket_type,
         )
 
